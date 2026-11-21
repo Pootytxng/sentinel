@@ -84,13 +84,23 @@ function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | nu
   if (f.id === "background-load" && f.evidence.some((e) => e.code.startsWith("load-") && e.args.how === "high")) {
     return t("paramedic.finding.backgroundLoad.measured");
   }
-  // Support that is only "already open when the game started" (no start was seen): the heading says that, not "started".
+  // Support in the judged session that is only "already open when the game started" (no start was seen in it; starts
+  // seen in other sessions are said on their own lines): the heading says that, not "started".
   if (
     f.id === "background-load" &&
     f.evidence.some((e) => e.code === "already-running") &&
-    !f.evidence.some((e) => e.code.startsWith("starts-seen"))
+    !f.evidence.some((e) => e.code === "starts-seen")
   ) {
     return t("paramedic.finding.backgroundLoad.open");
+  }
+  // Starts seen only in a partly measured session or in another game's sessions, none in the rough session(s)
+  // being judged ("starts-seen"): the heading says they were nearby, not that they happened while you played.
+  if (
+    f.id === "background-load" &&
+    !f.evidence.some((e) => e.code === "starts-seen") &&
+    f.evidence.some((e) => e.code === "starts-seen-partial" || e.code === "starts-seen-other")
+  ) {
+    return t("paramedic.finding.backgroundLoad.nearby");
   }
   // Installs carry a day, never a time of day: the heading names the day.
   if (f.id === "program-installed") {
@@ -694,12 +704,13 @@ function Evidence({ list, ctx, hideInstallAt }: { list: ParamedicEvidence[]; ctx
 }
 
 /** The steps for one candidate; they sit inside its row, which opens on a tap. */
-function FixBlock({ fix, ctx }: { fix: ParamedicFix; ctx: Ctx }) {
+function FixBlock({ fix, ctx, possible }: { fix: ParamedicFix; ctx: Ctx; possible: boolean }) {
   const steps = stepLines(fix, ctx);
   if (steps.length > 0) {
     return (
       <div>
-        <p className="gl-row-title">{ctx.t("paramedic.fix.title")}</p>
+        {/* Under a suspect that is only possible the steps are a way to find out, not a fix to make on a maybe. */}
+        <p className="gl-row-title">{possible ? ctx.t("paramedic.fix.titleTest") : ctx.t("paramedic.fix.title")}</p>
         <ol className="gl-para-lines gl-para-steps">
           {steps.map((s, i) => (
             <li key={i}>{s}</li>
@@ -878,7 +889,7 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
             </div>
           )}
           {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
-          {!recovered && <FixBlock fix={f.fix} ctx={ctx} />}
+          {!recovered && <FixBlock fix={f.fix} ctx={ctx} possible={f.confidence === "possible"} />}
           {!recovered && f === d.findings[0] && f.confidence !== "possible" && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
         </div>
       )}
@@ -1168,11 +1179,13 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
   const [more, setMore] = useState(false);
+  const [scrolls, setScrolls] = useState(false);
   // Every press of the door starts the first look over (its question, not an answer from before the user played).
   const [round, setRound] = useState(0);
   // "Something else? Answer a few questions": the first-look questions open in the card, in place of the measured
   // answer (which "Back" and "Check again" bring back). Nothing here is stored.
   const [questions, setQuestions] = useState(false);
+  const [lookAsking, setLookAsking] = useState(false);
   // Bumped when the card is closed or asks anew, so an answer to an earlier ask is dropped.
   const gen = useRef(0);
   const doorRef = useRef<HTMLButtonElement>(null);
@@ -1239,6 +1252,9 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
   const showQuestions = questions;
   const open = answer != null || showQuestions;
   const busy = view.kind === "busy";
+  // While the card is still asking ("Which game?", "When did it start?") there is nothing to check again: the
+  // green button waits until an answer, measured or first-look, is showing.
+  const hideCheck = lookAsking && (showQuestions || (answer != null && firstLookApplies(answer)));
   // The questions are open over a check that is still running: nothing there is dimmed or inert.
   const dim = busy && !showQuestions;
   // Escape closes the open card from anywhere inside it, exactly when "Close" is offered (an answer, the open
@@ -1258,6 +1274,8 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
   const measure = useCallback(() => {
     const el = scrollRef.current;
     setMore(!!el && el.scrollHeight - el.scrollTop - el.clientHeight > MORE_SLACK_PX);
+    // A region that never scrolls has no hint to reserve room for.
+    setScrolls(!!el && el.scrollHeight - el.clientHeight > MORE_SLACK_PX);
   }, []);
   useEffect(() => {
     if (!questions && backFocus.current) {
@@ -1266,6 +1284,13 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
     }
   }, [questions]);
+  // The button that was just pressed leaves while the questions are asked: if focus was on it, it moves into the
+  // card (the first question's heading takes it when it can; otherwise the answer region), never to the page.
+  useEffect(() => {
+    if (!hideCheck) return;
+    const a = document.activeElement;
+    if (!a || a === document.body) scrollRef.current?.focus();
+  }, [hideCheck]);
   useEffect(() => {
     measure();
     const el = scrollRef.current;
@@ -1282,17 +1307,19 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
         <p className="gl-card-sub">{noGames ? t("paramedic.firstLook.door.sub") : t("paramedic.door.sub")}</p>
         <div className="gl-para-actions">
           {/* Busy: aria-disabled, not disabled, so keyboard focus is not lost; a click while busy is ignored. */}
-          <button
-            ref={doorRef}
-            type="button"
-            className="gl-cta"
-            aria-disabled={busy}
-            onClick={() => {
-              if (view.kind !== "busy") ask(0);
-            }}
-          >
-            {view.kind === "done" || view.kind === "failed" || view.kind === "still" || (busy && view.prev) ? t("paramedic.door.again") : t("paramedic.door.button")}
-          </button>
+          {!hideCheck && (
+            <button
+              ref={doorRef}
+              type="button"
+              className="gl-cta"
+              aria-disabled={busy}
+              onClick={() => {
+                if (view.kind !== "busy") ask(0);
+              }}
+            >
+              {view.kind === "done" || view.kind === "failed" || view.kind === "still" || (busy && view.prev) ? t("paramedic.door.again") : t("paramedic.door.button")}
+            </button>
+          )}
           {(view.kind === "done" || questions) && (
             <button type="button" className="gl-ghost" onClick={close}>
               {t("paramedic.door.close")}
@@ -1333,13 +1360,13 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
           >
             <div className="gl-para-body" aria-live="polite">
               {showQuestions ? (
-                <ParamedicFirstLook key={`questions-${round}`} games={games} elsewhere />
+                <ParamedicFirstLook key={`questions-${round}`} games={games} elsewhere onAsking={setLookAsking} />
               ) : answer && ctx ? (
                 <>
                   {/* No usable history: with no game recorded the first look is the whole answer; with a game that
                       has too few sessions it follows the measured "can't tell yet". */}
                   {!(answer.state.kind === "cant-tell" && answer.state.why.kind === "no-sessions") && <Answer d={answer} ctx={ctx} />}
-                  {firstLookApplies(answer) && <ParamedicFirstLook key={round} measured={firstLookMeasured(answer, ctx.game)} games={games} />}
+                  {firstLookApplies(answer) && <ParamedicFirstLook key={round} measured={firstLookMeasured(answer, ctx.game)} games={games} onAsking={setLookAsking} />}
                   {answer.mixed_sessions.length > 0 && (
                     <p className="gl-para-note" data-testid="paramedic-mixed">
                       {t("paramedic.problem.mixed", { count: answer.mixed_sessions.length, dates: answer.mixed_sessions.map((s) => dates.day(s)).join(", ") })}
@@ -1355,9 +1382,10 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
               {t("paramedic.door.looking")}
             </p>
           )}
-          {/* The hint is its own strip under the scroll region, never over its last row. */}
-          {more && !showQuestions && (
-            <div className="gl-para-more" aria-hidden="true" data-testid="paramedic-more">
+          {/* The hint is its own strip under the scroll region, never over its last row. At the end of the region it
+              is hidden, not removed: its space stays reserved so nothing moves when the last row is reached. */}
+          {!showQuestions && scrolls && (
+            <div className="gl-para-more" aria-hidden="true" data-testid="paramedic-more" data-shown={more ? "true" : "false"} style={more ? undefined : { visibility: "hidden" }}>
               <ChevronDown />
               <span>{t("paramedic.card.moreBelow")}</span>
             </div>

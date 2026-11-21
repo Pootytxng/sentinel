@@ -4,7 +4,7 @@
 // first, says what it could not see, and claims no measurement: nothing here is called a problem or a
 // cause, and nothing is ordered by likelihood. Nothing about the answer is stored. The engine returns
 // codes and numbers; every sentence is a locale string (`paramedic.firstLook.*`), every key literal.
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { ParamedicDiagnosis, ParamedicLimit } from "../../types";
@@ -562,7 +562,14 @@ export function ParamedicFirstLook({
   measured = null,
   games = [],
   elsewhere = false,
-}: { measured?: FirstLookMeasured; games?: RecordedGame[]; elsewhere?: boolean } = {}) {
+  onAsking,
+}: {
+  measured?: FirstLookMeasured;
+  games?: RecordedGame[];
+  elsewhere?: boolean;
+  /** Told whether the card is still asking ("Which game?", "When did it start?") or has an answer or an outcome to show. */
+  onAsking?: (asking: boolean) => void;
+} = {}) {
   const { t } = useTranslation();
   const dates = useDates();
   const [step, setStep] = useState<Step>({ kind: "pick" });
@@ -598,6 +605,12 @@ export function ParamedicFirstLook({
   // Each step's heading takes keyboard focus, so a screen reader starts at the new step. When the measured answer
   // is already on screen above (a game with too few sessions), the first look does not take focus past it on mount.
   const mounted = useRef(false);
+  const asking = step.kind === "pick" || step.kind === "ask";
+  // Before paint, so the card's green button never flashes while the questions are showing.
+  useLayoutEffect(() => {
+    onAsking?.(asking);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the step only
+  }, [asking]);
   useEffect(() => {
     const first = !mounted.current;
     mounted.current = true;

@@ -1489,9 +1489,15 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     sizes(region, { scrollHeight: 900, clientHeight: 448, scrollTop: 447 });
     fireEvent.scroll(region);
     expect(screen.queryByTestId("paramedic-more")).not.toBeNull();
+    // At the end the strip is hidden, not removed: its space stays, so the card does not grow 23 px and jump.
+    expect(screen.getByTestId("paramedic-more").getAttribute("data-shown")).toBe("true");
+    expect((screen.getByTestId("paramedic-more") as HTMLElement).style.visibility).toBe("");
     sizes(region, { scrollHeight: 900, clientHeight: 448, scrollTop: 448 });
     fireEvent.scroll(region);
-    expect(screen.queryByTestId("paramedic-more")).toBeNull();
+    expect(screen.queryByTestId("paramedic-more"), "kept in the layout at the end").not.toBeNull();
+    expect(screen.getByTestId("paramedic-more").getAttribute("data-shown")).toBe("false");
+    expect((screen.getByTestId("paramedic-more") as HTMLElement).style.visibility).toBe("hidden");
+    expect(screen.getByTestId("paramedic-more").getAttribute("aria-hidden")).toBe("true");
     // Content that fits has nothing below it.
     sizes(region, { scrollHeight: 300, clientHeight: 448, scrollTop: 0 });
     fireEvent.scroll(region);
@@ -1570,7 +1576,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(localStorage.length).toBe(0);
   });
 
-  it("'Back to the answer' returns to the measured answer without asking again; 'Check again' does ask, and also returns to it", async () => {
+  it("'Back to the answer' returns to the measured answer without asking again; the questions offer no 'Check again'", async () => {
     answer.value = base;
     render(<ParamedicCard />);
     fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
@@ -1585,10 +1591,9 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(diagnoseCalls().length).toBe(1);
     fireEvent.click(link() as HTMLElement);
     await waitFor(() => expect(picker()).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
-    await waitFor(() => expect(diagnoseCalls().length).toBe(2));
-    await waitFor(() => expect(rows().length).toBe(1));
-    expect(picker()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Check again" }), "nothing to check again while a game is being picked").toBeNull();
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+    expect(diagnoseCalls().length).toBe(1);
   });
 
   it("the way out to the questions is in every state of the card but the idle one, and opens the questions there too: first check, failed and slow", async () => {
@@ -2015,5 +2020,98 @@ describe("ParamedicCard: the verdict line and the order when load leads", () => 
     await ask({ ...base, why_first: null, findings: [find("setting-drift", { fix: steps("setting-drift") })] });
     await waitFor(() => expect(rows().length).toBe(1));
     expect(screen.getByText(/^Check it, play/)).toBeTruthy();
+  });
+});
+describe("ParamedicCard: honest headings, test-not-fix steps and a button that waits for an answer", () => {
+  const m = (code: string, args: Record<string, string>): F["evidence"][number] => ({ kind: "measured", code, args, against: false, source: "sessions" });
+  const showing = async (evidence: F["evidence"], confidence: F["confidence"] = "possible") => {
+    await ask({ ...base, why_first: null, findings: [find("background-load", { confidence, evidence, fix: steps("background-load") })] });
+    await waitFor(() => expect(rows().length).toBe(1));
+  };
+
+  it("starts seen only in a partly measured session or another game's sessions say 'nearby sessions', not 'while you played'", async () => {
+    await showing([m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "cargo" }), m("starts-seen-other", { count: "1", otherGame: "PBZ", names: "cargo", date: "2026-11-19T10:00:00Z" })]);
+    expect(rows()[0].textContent).toMatch(/Other programs were starting in nearby sessions/);
+    expect(rows()[0].textContent).not.toMatch(/started while you played/);
+    openAll();
+    expect(screen.getByText(/Programs were seen starting in a partly measured/)).toBeTruthy();
+    cleanup();
+    await showing([m("starts-seen-other", { count: "1", otherGame: "PBZ", names: "", date: "2026-11-19T10:00:00Z" })]);
+    expect(rows()[0].textContent).toMatch(/Other programs were starting in nearby sessions/);
+  });
+
+  it("starts recorded in the judged rough session keep 'started while you played', even with other sessions beside them", async () => {
+    await showing([m("starts-seen", { count: "1", names: "" }), m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "" })]);
+    expect(rows()[0].textContent).toMatch(/Other programs started while you played/);
+    expect(rows()[0].textContent).not.toMatch(/nearby sessions/);
+  });
+
+  it("a program already open in the judged session keeps its own heading when other sessions also had starts", async () => {
+    await showing([m("already-running", { id: "obs-studio", name: "OBS Studio" }), m("starts-seen-other", { count: "1", otherGame: "PBZ", names: "", date: "2026-11-19T10:00:00Z" })]);
+    expect(rows()[0].textContent).toMatch(/Other programs were already open when you started playing/);
+  });
+
+  it("the steps under a Possible suspect are 'How to test this'; under a Likely one they stay 'How to fix it'", async () => {
+    await showing([m("starts-seen", { count: "1", names: "" })], "possible");
+    openAll();
+    expect(screen.getByText("How to test this")).toBeTruthy();
+    expect(screen.queryByText("How to fix it")).toBeNull();
+    cleanup();
+    await showing([m("starts-seen", { count: "1", names: "" })], "likely");
+    openAll();
+    expect(screen.getByText("How to fix it")).toBeTruthy();
+    expect(screen.queryByText("How to test this")).toBeNull();
+  });
+
+  const firstLook = {
+    told: { since: "today", from: "2026-11-20T00:00:00Z", to: "2026-11-20T12:00:00Z", hours: 12 },
+    game: null,
+    changes_listed: true,
+    touch_games: [],
+    other_changes: [],
+    none: [],
+    game_files_since: null,
+    crashes: null,
+    crashes_none: false,
+    looks_off: [],
+    mods_none: false,
+    mods_settings_only: [],
+    facts: [],
+    compy_changes: [],
+    limits: [],
+    read_all: true,
+    method: "paramedic-first-look-v1",
+  };
+  const checkAgain = () => screen.queryByRole("button", { name: "Check again" });
+
+  it("no 'Check again' while the card is still asking which game and when; it appears with the first-look answer", async () => {
+    answer.value = { ...base, state: { kind: "cant-tell", why: { kind: "no-sessions" } }, findings: [] };
+    answer.byCmd = { paramedic_list_games: { read: true, complete: true, games: [] }, paramedic_first_look: firstLook };
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    expect(checkAgain()).toBeNull();
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+    // Focus still goes to the question's heading.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Which game?" })), { timeout: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "Another game, or the whole PC" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy(), { timeout: 3000 });
+    expect(checkAgain()).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    await waitFor(() => expect(screen.getByTestId("first-look-told")).toBeTruthy(), { timeout: 3000 });
+    expect(checkAgain()).toBeTruthy();
+  });
+
+  it("a measured answer still has 'Check again'; 'Something else?' hides it while asking and Back brings it back", async () => {
+    answer.value = base;
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(checkAgain()).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Something else? Answer a few questions" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    expect(checkAgain()).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Back to the answer" }));
+    expect(checkAgain()).toBeTruthy();
   });
 });
