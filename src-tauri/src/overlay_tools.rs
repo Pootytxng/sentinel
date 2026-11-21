@@ -18,8 +18,6 @@
 //!   - Honest "nothing found" — only claimed when the process scan actually ran (saw >0 processes).
 //!   - Mutates nothing; spawns nothing.
 
-use sysinfo::System;
-
 /// One curated overlay/OSD tool. `process` is the exact image name (with `.exe`), matched
 /// case-insensitively.
 #[derive(PartialEq, Debug)]
@@ -112,16 +110,10 @@ pub(crate) fn build_overlay_scan(process_names: &[String]) -> OverlayScan {
 /// Enumerate running process image names (read-only). Returns the names so the pure builder can do
 /// the matching. A failed/empty scan yields an empty list, so the surface degrades gracefully.
 fn running_process_names() -> Vec<String> {
-    let mut sys = System::new();
-    sys.refresh_processes_specifics(
-        sysinfo::ProcessesToUpdate::All,
-        true,
-        sysinfo::ProcessRefreshKind::nothing(),
-    );
-    sys.processes()
-        .values()
-        .map(|p| p.name().to_string_lossy().into_owned())
-        .collect()
+    // Handle-free: one system snapshot, no process is opened (docs/ARCHITECTURE_LOCKS.md, games).
+    crate::other_load::read_process_rows()
+        .map(|rows| rows.iter().map(crate::other_load::ProcRow::label).collect())
+        .unwrap_or_default()
 }
 
 /// Collect the live, read-only overlay-tool scan (enumerate processes → match the catalog).

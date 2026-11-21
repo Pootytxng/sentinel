@@ -244,8 +244,7 @@ pub(crate) struct MemoryPressure {
     pub top_consumers: Vec<MemConsumer>,
 }
 
-// Reused across polls (sysinfo recommends one System); memory-only process
-// refresh keeps it cheap.
+// Reused across polls (sysinfo recommends one System); memory totals only, it never refreshes processes.
 fn mem_pressure_system() -> &'static Mutex<System> {
     static SYS: OnceLock<Mutex<System>> = OnceLock::new();
     SYS.get_or_init(|| Mutex::new(System::new()))
@@ -300,16 +299,12 @@ pub(crate) fn get_memory_pressure() -> MemoryPressure {
     // Only pay for the full process scan when there's actually a warning to show. When RAM is fine
     // (the common case) this stays cheap — just the memory totals, no per-process enumeration.
     let top_consumers = if used_pct >= 80 {
-        sys.refresh_processes_specifics(
-            sysinfo::ProcessesToUpdate::All,
-            true,
-            sysinfo::ProcessRefreshKind::nothing().with_memory(),
-        );
+        // Handle-free snapshot (no process is opened). If it cannot be read the list is empty:
+        // "couldn't list" shows no rows, never invented ones.
         // Group working sets by process name (e.g. all Chrome helpers into one row).
         let mut by_name: HashMap<String, u64> = HashMap::new();
-        for p in sys.processes().values() {
-            let name = p.name().to_string_lossy().into_owned();
-            *by_name.entry(name).or_insert(0) += p.memory();
+        for p in crate::other_load::read_process_rows().unwrap_or_default() {
+            *by_name.entry(p.label()).or_insert(0) += p.working_set;
         }
         let mut v: Vec<MemConsumer> = by_name
             .into_iter()
@@ -1217,7 +1212,6 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 crate::session_boundary::Tracker::open_at(0, LiveSession::begin(started_at, active_changes, 0));
             // P5-enough: a new capture starts from nothing, never the last capture's count.
             *lock_progress() = None;
-            let mut proc_sys = System::new();
             while capture_live(generation) {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 if !capture_live(generation) {
@@ -1395,19 +1389,15 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // enumeration gives the session's one start snapshot (which KNOWN programs were
                 // already running; ids only, `running_at_start.rs`) on the first tick a frame
                 // names the process, and counts the ticks/starts the diff could not list.
-                proc_sys.refresh_processes_specifics(
-                    sysinfo::ProcessesToUpdate::All,
-                    true,
-                    sysinfo::ProcessRefreshKind::nothing(),
-                );
-                let total_procs = u32::try_from(proc_sys.processes().len()).unwrap_or(u32::MAX);
-                let names: std::collections::HashSet<String> = proc_sys
-                    .processes()
-                    .values()
-                    .map(|p| p.name().to_string_lossy().into_owned())
-                    .collect();
-                let started = live.watch.observe(names, total_procs, at_cap, elapsed, tick_game.is_some());
-                live.events.extend(started);
+                // Handle-free snapshot: opens no process. A tick whose snapshot cannot be read is
+                // skipped, never fed in as an empty list.
+                if let Some(rows) = crate::other_load::read_process_rows() {
+                    let total_procs = u32::try_from(rows.len()).unwrap_or(u32::MAX);
+                    let names: std::collections::HashSet<String> =
+                        rows.iter().map(crate::other_load::ProcRow::label).collect();
+                    let started = live.watch.observe(names, total_procs, at_cap, elapsed, tick_game.is_some());
+                    live.events.extend(started);
+                }
             }
             // Monitoring stopped (or the helper went away): a session still open ends with the wall
             // time since it began, as every session always has.

@@ -328,6 +328,122 @@ pub(crate) fn read_process_names() -> Option<Vec<String>> {
     }
     parse_process_names(&buf)
 }
+
+// More SYSTEM_PROCESS_INFORMATION (x64) fields, confirmed against ntapi 0.4.3 `ntexapi.rs`:
+// NumberOfThreads at 4, InheritedFromUniqueProcessId right after UniqueProcessId, WorkingSetSize after
+// PeakWorkingSetSize (PageFaultCount is a ULONG padded to 8 before it). All of them sit in the snapshot
+// buffer: reading them opens no process.
+const OFF_THREADS: usize = 4;
+const OFF_PPID: usize = 88;
+const OFF_WORKING_SET: usize = 144;
+const ROW_MIN: usize = OFF_WORKING_SET + 8;
+const _: () = assert!(OFF_PPID == OFF_PID + 8 && ROW_MIN == 152);
+
+/// One process as the handle-free snapshot describes it. Everything here comes from the snapshot buffer;
+/// nothing needs a process handle. NOT available without a handle (and so not here): full exe path,
+/// command line, user, environment, per-process disk I/O. A caller that wants those gets "unknown".
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProcRow {
+    pub pid: u32,
+    pub parent: u32,
+    /// The image name as Windows holds it, or `None` when the snapshot has none (or it cannot be read
+    /// safely). See [`ProcRow::label`].
+    pub name: Option<String>,
+    pub threads: u32,
+    /// Working set in bytes (the figure sysinfo called `memory()`).
+    pub working_set: u64,
+    /// Creation time, 100 ns units (FILETIME). With `pid` it identifies one process lifetime.
+    pub create_time: i64,
+    /// Kernel + user time, 100 ns units.
+    pub cpu_100ns: u64,
+}
+
+impl ProcRow {
+    /// The name to show or match: the image name, else the labels sysinfo used for a process the snapshot
+    /// gives no name (Idle, System, "<no name> Process N"), so a displayed list reads as it did.
+    pub(crate) fn label(&self) -> String {
+        match (&self.name, self.pid) {
+            (Some(n), _) => n.clone(),
+            (None, 0) => "Idle".to_owned(),
+            (None, 4) => "System".to_owned(),
+            (None, p) => format!("<no name> Process {p}"),
+        }
+    }
+}
+
+/// PURE over the snapshot bytes: every process, with the fields above. `None` when the entry chain is
+/// malformed or an entry is too short to hold them (unread, never partial). An unreadable name becomes
+/// `name: None`; the entry is kept so counts stay complete.
+pub(crate) fn parse_process_rows(buf: &[u8]) -> Option<Vec<ProcRow>> {
+    let base = buf.as_ptr() as usize;
+    let mut out = Vec::new();
+    let mut off = 0usize;
+    for _ in 0..100_000 {
+        let next = u32::from_le_bytes(rd(buf, off + OFF_NEXT)?) as usize;
+        if off + ROW_MIN > buf.len() {
+            return None;
+        }
+        let user = i64::from_le_bytes(rd(buf, off + OFF_USER)?).max(0) as u64;
+        let kernel = i64::from_le_bytes(rd(buf, off + OFF_KERNEL)?).max(0) as u64;
+        out.push(ProcRow {
+            pid: u64::from_le_bytes(rd(buf, off + OFF_PID)?) as u32,
+            parent: u64::from_le_bytes(rd(buf, off + OFF_PPID)?) as u32,
+            name: entry_name(buf, base, off),
+            threads: u32::from_le_bytes(rd(buf, off + OFF_THREADS)?),
+            working_set: u64::from_le_bytes(rd(buf, off + OFF_WORKING_SET)?),
+            create_time: i64::from_le_bytes(rd(buf, off + OFF_CREATE)?),
+            cpu_100ns: user.saturating_add(kernel),
+        });
+        if next == 0 {
+            return Some(out);
+        }
+        if next < ROW_MIN {
+            return None;
+        }
+        off = off.checked_add(next)?;
+    }
+    None
+}
+
+/// One handle-free snapshot as rows (no process is opened). `None` on any failure: unread, never empty.
+pub(crate) fn read_process_rows() -> Option<Vec<ProcRow>> {
+    let mut buf = Vec::new();
+    if !take_process_snapshot(&mut buf) {
+        return None;
+    }
+    parse_process_rows(&buf)
+}
+
+/// PURE: each process in `cur`'s CPU use over the time between two snapshots, as a percentage of the whole
+/// machine (0 to 100, summed over `cores`): `cpu time grown / (wall time * cores)`. `wall_100ns` is the
+/// elapsed wall time between the two snapshots in 100 ns units.
+/// - No earlier snapshot (`prev` is `None`): every value is `None` (unknown), never 0.
+/// - A process absent from `prev`, or with the same pid but a different creation time (pid reuse), has no
+///   baseline: `None`. A process in `prev` but not in `cur` is dropped (the result follows `cur`).
+/// - A CPU time that went backwards, zero wall time or zero cores: `None`.
+#[cfg_attr(not(test), allow(dead_code))] // the sanctioned replacement for sysinfo's cpu_usage; no caller needs it yet
+pub(crate) fn process_cpu_percent(
+    prev: Option<&[ProcRow]>,
+    cur: &[ProcRow],
+    wall_100ns: u64,
+    cores: u32,
+) -> Vec<(u32, Option<f64>)> {
+    cur.iter()
+        .map(|c| {
+            let pct = (|| {
+                let p = prev?
+                    .iter()
+                    .find(|p| p.pid == c.pid && p.create_time == c.create_time)?;
+                if wall_100ns == 0 || cores == 0 || c.cpu_100ns < p.cpu_100ns {
+                    return None;
+                }
+                let used = (c.cpu_100ns - p.cpu_100ns) as f64;
+                Some((used / (wall_100ns as f64 * cores as f64) * 100.0).clamp(0.0, 100.0))
+            })();
+            (c.pid, pct)
+        })
+        .collect()
+}
 // ---------------------------------------------------------------------------------------------
 // Windows readers
 // ---------------------------------------------------------------------------------------------
@@ -956,6 +1072,95 @@ mod tests {
         assert_eq!(parse_game_processes(&bad, "rob run"), Some(vec![]));
     }
 
+    fn row(pid: u32, create: i64, cpu: u64) -> ProcRow {
+        ProcRow {
+            pid,
+            parent: 0,
+            name: Some("x.exe".into()),
+            threads: 1,
+            working_set: 0,
+            create_time: create,
+            cpu_100ns: cpu,
+        }
+    }
+
+    #[test]
+    fn the_row_parser_reads_every_field_from_the_snapshot_bytes() {
+        const ENTRY: usize = 256; // the fixture's entry size
+        let mut buf = snapshot(&[(4, "System", 1, 0, 50), (1234, "Game.exe", 77, 600, 400)]);
+        let put = |buf: &mut Vec<u8>, i: usize, off: usize, v: &[u8]| {
+            buf[i * ENTRY + off..i * ENTRY + off + v.len()].copy_from_slice(v)
+        };
+        put(&mut buf, 1, OFF_THREADS, &9u32.to_le_bytes());
+        put(&mut buf, 1, OFF_PPID, &(500u64).to_le_bytes());
+        put(&mut buf, 1, OFF_WORKING_SET, &(123_456_789u64).to_le_bytes());
+        let rows = parse_process_rows(&buf).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            rows[1],
+            ProcRow {
+                pid: 1234,
+                parent: 500,
+                name: Some("Game.exe".into()),
+                threads: 9,
+                working_set: 123_456_789,
+                create_time: 77,
+                cpu_100ns: 1000,
+            }
+        );
+        assert_eq!(rows[0].cpu_100ns, 50);
+        // A corrupt or short buffer is unread, never partial.
+        assert_eq!(parse_process_rows(&buf[..100]), None);
+        assert_eq!(parse_process_rows(&[]), None);
+        // An unreadable name keeps the entry (counts stay complete) and shows sysinfo's old labels.
+        let mut bad = buf.clone();
+        put(&mut bad, 0, OFF_NAME_PTR, &7u64.to_le_bytes());
+        let rows = parse_process_rows(&bad).unwrap();
+        assert_eq!((rows.len(), rows[0].name.clone()), (2, None));
+        assert_eq!(rows[0].label(), "System"); // pid 4
+        assert_eq!(rows[1].label(), "<no name> Process 1234"); // every pointer is foreign to the clone
+        let unnamed = ProcRow { pid: 77, name: None, ..row(77, 1, 1) };
+        assert_eq!(unnamed.label(), "<no name> Process 77");
+    }
+
+    #[test]
+    fn cpu_percent_is_unknown_on_the_first_sample_never_zero() {
+        let cur = [row(10, 1, 5_000)];
+        assert_eq!(process_cpu_percent(None, &cur, 10_000_000, 4), vec![(10, None)]);
+    }
+
+    #[test]
+    fn cpu_percent_is_the_cpu_time_growth_over_wall_time_and_cores() {
+        let prev = [row(10, 1, 1_000), row(11, 1, 0)];
+        // 1 s of wall time on 4 cores; pid 10 used 1 s of CPU (25% of the machine), pid 11 none.
+        let cur = [row(10, 1, 1_000 + 10_000_000), row(11, 1, 0)];
+        let got = process_cpu_percent(Some(&prev), &cur, 10_000_000, 4);
+        assert_eq!(got, vec![(10, Some(25.0)), (11, Some(0.0))]);
+        // Never above the whole machine, even with a sloppy wall clock.
+        let hot = [row(10, 1, 1_000 + 90_000_000)];
+        assert_eq!(process_cpu_percent(Some(&prev), &hot, 10_000_000, 4), vec![(10, Some(100.0))]);
+    }
+
+    #[test]
+    fn cpu_percent_drops_gone_processes_and_does_not_trust_a_reused_pid() {
+        let prev = [row(10, 1, 100), row(11, 1, 100), row(12, 1, 100)];
+        // 11 is gone (dropped), 12's pid was reused by a new process (different create time: unknown),
+        // 13 is new (unknown), 10 continues.
+        let cur = [row(10, 1, 100 + 5_000_000), row(12, 2, 3), row(13, 3, 9)];
+        let got = process_cpu_percent(Some(&prev), &cur, 10_000_000, 1);
+        assert_eq!(got, vec![(10, Some(50.0)), (12, None), (13, None)]);
+    }
+
+    #[test]
+    fn cpu_percent_is_unknown_when_the_inputs_cannot_support_a_number() {
+        let prev = [row(10, 1, 500)];
+        let cur = [row(10, 1, 400)]; // CPU time went backwards
+        assert_eq!(process_cpu_percent(Some(&prev), &cur, 10_000_000, 4), vec![(10, None)]);
+        let cur = [row(10, 1, 900)];
+        assert_eq!(process_cpu_percent(Some(&prev), &cur, 0, 4), vec![(10, None)]);
+        assert_eq!(process_cpu_percent(Some(&prev), &cur, 10_000_000, 0), vec![(10, None)]);
+    }
+
     #[test]
     fn engine_pid_parses_the_instance_name() {
         assert_eq!(
@@ -1247,5 +1452,144 @@ mod tests {
         }
         let _ = child.kill();
         let _ = child.wait();
+    }
+}
+
+/// Permanent guard (docs/ARCHITECTURE_LOCKS.md, "Boundaries that remain absolute": no game-memory read).
+/// A sysinfo process refresh opens every running process, a protected game included, with
+/// PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, and `refresh_all` after `System::new_all` reads their
+/// memory. No production code in this crate may use one: running programs come from the handle-free
+/// snapshot in this file ([`read_process_rows`]). This scans EVERY `.rs` file under `src-tauri/src`.
+#[cfg(test)]
+mod process_refresh_guard {
+    use std::path::{Path, PathBuf};
+
+    const FORBIDDEN: &[&str] = &[
+        "new_all",
+        "refresh_all",
+        "refresh_processes",
+        "ProcessRefreshKind",
+        "ProcessesToUpdate",
+        ".processes(",
+        ".process(",
+        "with_processes",
+    ];
+
+    /// Production text only. Drops every `#[cfg(test)]` item and every line that starts with `//` (so a
+    /// comment can neither trip nor satisfy the guard). An item that follows the attribute is dropped through
+    /// its closing line at the SAME indent (`}`, `};`, `});`), or through its own line when that ends
+    /// in `;`. Anything else, including a comment, stays scanned.
+    fn production_text(src: &str) -> String {
+        let mut out = Vec::new();
+        let mut skip_indent: Option<usize> = None;
+        let mut item_started = false;
+        for line in src.lines() {
+            let indent = line.len() - line.trim_start().len();
+            if let Some(ind) = skip_indent {
+                let t = line.trim_start();
+                if t.starts_with("#[") && !item_started {
+                    continue; // further attributes on the same test item
+                }
+                if !item_started {
+                    item_started = true;
+                    if t.trim_end().ends_with(';') {
+                        skip_indent = None; // a one-line item
+                    }
+                    continue;
+                }
+                if indent == ind && t.starts_with(['}', ')']) {
+                    skip_indent = None;
+                }
+                continue;
+            }
+            if line.trim() == "#[cfg(test)]" {
+                skip_indent = Some(indent);
+                item_started = false;
+                continue;
+            }
+            if line.trim_start().starts_with("//") {
+                continue;
+            }
+            out.push(line);
+        }
+        out.join("\n")
+    }
+
+    fn violations(text: &str) -> Vec<&'static str> {
+        let mut v: Vec<&'static str> = FORBIDDEN.iter().copied().filter(|p| text.contains(p)).collect();
+        // `RefreshKind::everything()` includes processes; the Cpu/Memory kinds of the same name do not.
+        if text.match_indices("RefreshKind::everything").any(|(i, _)| {
+            let before = &text[..i];
+            !before.ends_with("Cpu") && !before.ends_with("Memory")
+        }) {
+            v.push("RefreshKind::everything");
+        }
+        v
+    }
+
+    fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
+        for e in std::fs::read_dir(dir).expect("read src dir").flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                rs_files(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+
+    #[test]
+    fn no_production_file_refreshes_processes_through_sysinfo() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        rs_files(&root, &mut files);
+        assert!(files.len() > 50, "the scan must really see the source tree, saw {}", files.len());
+        let mut bad = Vec::new();
+        let mut scanned_monitoring = false;
+        for f in &files {
+            // An out-of-line test module (`#[cfg(test)] mod tests;`) is a whole file of fixtures.
+            if f.file_name().is_some_and(|n| n == "tests.rs") {
+                continue;
+            }
+            let src = std::fs::read_to_string(f).expect("read source");
+            let prod = production_text(&src);
+            if f.ends_with("monitoring.rs") {
+                scanned_monitoring = prod.contains("fn get_memory_pressure");
+            }
+            let v = violations(&prod);
+            if !v.is_empty() {
+                bad.push(format!("{}: {v:?}", f.strip_prefix(&root).unwrap_or(f).display()));
+            }
+        }
+        assert!(scanned_monitoring, "monitoring.rs production text must have been kept");
+        assert!(
+            bad.is_empty(),
+            "sysinfo process refreshes open every process (a game included); use other_load::read_process_rows:\n{}",
+            bad.join("\n")
+        );
+    }
+
+    #[test]
+    fn the_guard_is_not_vacuous() {
+        assert_eq!(violations("let mut s = sysinfo::System::new_all();"), vec!["new_all"]);
+        assert_eq!(violations("sys.refresh_all();"), vec!["refresh_all"]);
+        assert_eq!(
+            violations("sys.refresh_processes_specifics(ProcessesToUpdate::All, true, k);"),
+            vec!["refresh_processes", "ProcessesToUpdate"]
+        );
+        assert_eq!(violations("for p in sys.processes().values() {}"), vec![".processes("]);
+        assert_eq!(violations("RefreshKind::nothing().with_processes(k)"), vec!["with_processes"]);
+        assert_eq!(violations("System::new_with_specifics(RefreshKind::everything())"), vec!["RefreshKind::everything"]);
+        assert!(violations("RefreshKind::nothing().with_cpu(CpuRefreshKind::everything())").is_empty());
+        // A comment can neither hide code nor count as code.
+        assert!(violations(&production_text("// sys.refresh_all();\n/// System::new_all()\nfn a() {}")).is_empty());
+        assert_eq!(violations(&production_text("fn a() { sys.refresh_all(); } // fine")), vec!["refresh_all"]);
+        // A test item is dropped; the production code after it is still scanned.
+        let t = "#[cfg(test)]\nmod t {\n    fn b() { sys.refresh_all(); }\n}\nfn c() { System::new_all(); }";
+        assert_eq!(violations(&production_text(t)), vec!["new_all"]);
+        let one = "#[cfg(test)]\nuse crate::x::Y;\nfn c() { sys.refresh_all(); }";
+        assert_eq!(violations(&production_text(one)), vec!["refresh_all"]);
+        let nested = "    #[cfg(test)]\n    fn t() {\n        let _ = 1;\n    }\n    fn p() { sys.refresh_all(); }";
+        assert_eq!(violations(&production_text(nested)), vec!["refresh_all"]);
     }
 }

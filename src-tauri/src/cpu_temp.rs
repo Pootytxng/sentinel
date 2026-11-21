@@ -689,16 +689,10 @@ where
 /// Enumerate running process image names (read-only). Empty on failure, so the surface degrades to
 /// "we don't know" rather than to a false claim.
 fn running_process_names() -> Vec<String> {
-    let mut sys = sysinfo::System::new();
-    sys.refresh_processes_specifics(
-        sysinfo::ProcessesToUpdate::All,
-        true,
-        sysinfo::ProcessRefreshKind::nothing(),
-    );
-    sys.processes()
-        .values()
-        .map(|p| p.name().to_string_lossy().into_owned())
-        .collect()
+    // Handle-free: one system snapshot, no process is opened (docs/ARCHITECTURE_LOCKS.md, games).
+    crate::other_load::read_process_rows()
+        .map(|rows| rows.iter().map(crate::other_load::ProcRow::label).collect())
+        .unwrap_or_default()
 }
 
 /// The live read-only sensor-source scan behind the CPU-temp offer.
