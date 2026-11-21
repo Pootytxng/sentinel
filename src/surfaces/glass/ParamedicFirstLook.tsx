@@ -951,7 +951,7 @@ export function ParamedicFirstLook({
               )}
             </div>
           )}
-      <RunningNow r={a.running_now} game={gameName} t={t} />
+      {a.running_now && <RunningNow r={a.running_now} game={gameName} t={t} />}
       {a.changes_listed && (
         <>
           {a.compy_changes.length > 0 && (

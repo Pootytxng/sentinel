@@ -65,7 +65,9 @@ pub(crate) fn from_names<'a>(names: impl IntoIterator<Item = &'a str>) -> Runnin
     let mut seen = std::collections::HashSet::new();
     for n in names {
         total = total.saturating_add(1);
-        if let Some(p) = lookup(n) {
+        // The snapshot's image names carry ".exe" (`other_load::name_key` strips it defensively, so a name
+        // without it is possible); the table's images all do. A name with no extension is tried with ".exe" too.
+        if let Some(p) = lookup(n).or_else(|| (!n.contains('.')).then(|| lookup(&format!("{n}.exe"))).flatten()) {
             seen.insert(p.id);
         }
     }
@@ -76,7 +78,11 @@ pub(crate) fn from_names<'a>(names: impl IntoIterator<Item = &'a str>) -> Runnin
 pub(crate) fn out(read: &RunningRead) -> RunningNowOut {
     match read {
         RunningRead::NotRead => RunningNowOut::not_read(),
-        RunningRead::Unavailable(why) => RunningNowOut { state: *why, programs: Vec::new(), more: 0 },
+        RunningRead::Unavailable(why) => {
+            // `why` is `&&'static str` here; copy the inner reference out so the code keeps its 'static lifetime.
+            let state = std::convert::identity::<&'static str>(*why);
+            RunningNowOut { state, programs: Vec::new(), more: 0 }
+        }
         // A Windows PC always has processes: an empty listing is a failed read, never "nothing running".
         RunningRead::Read(r) if r.total == 0 => RunningNowOut { state: "unread", programs: Vec::new(), more: 0 },
         RunningRead::Read(r) if r.ids.is_empty() => RunningNowOut { state: "none", programs: Vec::new(), more: 0 },
@@ -107,6 +113,15 @@ mod tests {
         let r = from_names(["System", "explorer.exe", "MEDAL.EXE", "notmedal.exe", "Discord.exe", "my-secret-tool.exe", "obs64.exe"]);
         assert_eq!(r.total, 7);
         assert_eq!(r.ids, vec!["medal", "obs-studio", "discord"], "table order, once each");
+    }
+
+    /// Snapshot names may or may not carry ".exe": both forms match, and a near-miss still does not.
+    #[test]
+    fn a_name_matches_with_or_without_the_exe_extension_and_never_by_prefix() {
+        assert_eq!(from_names(["Medal.exe"]).ids, vec!["medal"]);
+        assert_eq!(from_names(["Medal"]).ids, vec!["medal"]);
+        assert_eq!(from_names(["OBS64", "discord.EXE"]).ids, vec!["obs-studio", "discord"]);
+        assert!(from_names(["notmedal", "medalx.exe", "Medal.exe.bak", "System", "Registry"]).ids.is_empty());
     }
 
     #[test]
