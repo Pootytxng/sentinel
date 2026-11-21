@@ -264,7 +264,13 @@ describe("comp fidelity — Live, matched against 02-live-approved.png", () => {
     expect(post, "never reads as 'no overlay' next to an OVERLAY control").not.toMatch(/no [^.]*overlay/i);
     expect(en.play.etwHonestyPost, "the Play room's line says the same").toContain("Compy's overlay is a separate window on top");
     expect(en.play.etwHonestyPost).not.toMatch(/no [^.]*overlay|nothing added/i);
-    expect(post, "the no-driver fact").toMatch(/driver/i);
+    // Compy installs no driver, but it recommends and can start LibreHardwareMonitor, whose own driver
+    // IS installed while it runs (cpu_temp.rs launch_sensor_app): so the claim is about Compy's act,
+    // never the passive "no driver is installed" (review r1 B3).
+    expect(post, "the no-driver fact, about Compy's own act").toContain("Compy installs no driver deep in Windows");
+    expect(en.play.etwHonestyPost).toContain("Compy installs no driver deep in Windows");
+    expect(post).not.toMatch(/no driver (is |installed)/i);
+    expect(en.play.etwHonestyPost).not.toMatch(/no driver (is |installed)/i);
     // The old "Safe with anti-cheat" promised an outcome Compy cannot know (src/i18n/game-safety-claims.test.ts).
     // What the line may say is how frames are measured and that Compy cannot speak for any anti-cheat.
     expect(post, "how frames are measured").toContain("Frame timing is read from Windows, not from inside the game");

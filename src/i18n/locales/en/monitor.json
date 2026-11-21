@@ -96,7 +96,7 @@
     "cpuLabel": "CPU load",
     "ramLabel": "RAM",
     "etwEmph": "Watched from outside your game",
-    "etwHonestyPost": " · no hooks or code injected into it, and no driver installed deep in Windows. Compy's overlay is a separate window on top. Frame timing is read from Windows, not from inside the game. Compy can't promise how any anti-cheat will react.",
+    "etwHonestyPost": " · no hooks or code injected into it, and Compy installs no driver deep in Windows. Compy's overlay is a separate window on top. Frame timing is read from Windows, not from inside the game. Compy can't promise how any anti-cheat will react.",
     "narrative": {
       "eyebrow": "Session monitor",
       "readyHeadline": "Ready when you are",
@@ -195,7 +195,7 @@
     "adminDeclined": "Administrator permission was declined — tap “Start FPS capture” to allow it.",
     "capturingHint": "Capturing… launch or focus a DX11/DX12 game to see frames (Vulkan/OpenGL aren't counted yet).",
     "etwEmph": "Watched from outside your game",
-    "etwHonestyPost": " — nothing is injected into it, and no driver is installed deep in Windows. Compy's overlay is a separate window on top. Frame timing is read from Windows, not from inside the game. Compy can't promise how any anti-cheat will react.",
+    "etwHonestyPost": " — nothing is injected into it, and Compy installs no driver deep in Windows. Compy's overlay is a separate window on top. Frame timing is read from Windows, not from inside the game. Compy can't promise how any anti-cheat will react.",
     "inGameOverlayTitle": "In-game overlay",
     "hideOverlay": "Hide overlay",
     "showOverlay": "Show overlay",

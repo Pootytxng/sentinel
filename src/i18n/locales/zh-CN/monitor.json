@@ -96,7 +96,7 @@
     "cpuLabel": "CPU 占用",
     "ramLabel": "内存",
     "etwEmph": "从游戏外部观察",
-    "etwHonestyPost": " · 不向游戏注入钩子或代码，也不在 Windows 底层安装驱动。Compy 的浮层是叠在游戏上方的独立窗口。帧时间读取自 Windows，而不是游戏内部。Compy 无法承诺任何反作弊系统会作何反应。",
+    "etwHonestyPost": " · 不向游戏注入钩子或代码，也不会由 Compy 在 Windows 底层安装驱动。Compy 的浮层是叠在游戏上方的独立窗口。帧时间读取自 Windows，而不是游戏内部。Compy 无法承诺任何反作弊系统会作何反应。",
     "narrative": {
       "eyebrow": "会话监测",
       "readyHeadline": "随时可以开始",
@@ -195,7 +195,7 @@
     "adminDeclined": "管理员权限被拒绝——点击“开始 FPS 采集”即可重新授权。",
     "capturingHint": "采集中……启动或切换到 DX11/DX12 游戏即可看到帧数（暂不支持 Vulkan/OpenGL）。",
     "etwEmph": "从游戏外部观察",
-    "etwHonestyPost": "——不向其中注入任何东西，也不会安装深入 Windows 底层的驱动。Compy 的浮层是叠在游戏上方的独立窗口。帧时间读取自 Windows，而不是游戏内部。Compy 无法承诺任何反作弊系统会作何反应。",
+    "etwHonestyPost": "——不向其中注入任何东西，也不会由 Compy 在 Windows 底层安装驱动。Compy 的浮层是叠在游戏上方的独立窗口。帧时间读取自 Windows，而不是游戏内部。Compy 无法承诺任何反作弊系统会作何反应。",
     "inGameOverlayTitle": "游戏内浮层",
     "hideOverlay": "隐藏浮层",
     "showOverlay": "显示浮层",
