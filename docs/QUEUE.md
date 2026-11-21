@@ -2,25 +2,33 @@
 One writer per scope: each item below runs on its own branch or worktree; do not touch another writer's scope.
 Changes to privilege, rollback or measurement code get an independent review before they land.
 No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md for the check).
+The push check can fail on a vitest 15 s timeout when several builds share the PC (one retry passed; not a code failure). A push is confirmed only by the "main -> main" line.
 
 ## NOW (in flight, each on its own branch)
 - [ ] Security slice 1: system tools by absolute path, pinned child environment — closes planted-tool and inherited-environment risk (claude/m1-hard-1; reviewed and green, waiting for the owner's direct go-ahead to push)
+- [ ] Handles audit: every remaining sysinfo all-process listing replaced by the handle-free snapshot, plus a permanent guard (claude/g2-handles 8b9e3101; in safety review)
+- [ ] Name each drifted setting: "now X; Compy last recorded Y" (claude/n1-drift 5b9168a1; review fixes B1-B6 being applied: Home shows a short form only, driver age is not drift)
+- [ ] Parked: capture without elevation when the account is in "Performance Log Users" (claude/d1s1-capture e95c81de, verified); waits behind claude/m1-hard-1 c5e4b3af and needs a rebase over g2-handles (monitoring.rs)
 
 ## NEXT (in order)
-- [ ] Install current main and check it in the real app (only while the owner is away): a backup file now appears beside the change history; focus stays in the card after "Check again"; the Home tile reads "Worth a look" with "Known"
-- [ ] Measuring without the ritual (design `_train\d1-capture-design.md`): slice 1 starts capture with no admin prompt when the account is already in Windows' "Performance Log Users" group; slice 2 asks "Measure this session?" when a game starts. The one-time group grant itself waits for the owner (it changes a security group on the account)
-- [ ] Problems room: group identical incidents (25 blocks today, each "Weak signal / not proven cause / Unknown") into one summary with the list behind it — every panel persona flagged it
-- [ ] Name the setting in "a setting Compy applied is no longer on" (needs a read-only ledger reader + a name on the drift record) — raised: the panel read it as the undo tool losing track of its own change
-- [ ] Power plan row: a Windows default (Balanced) or the user's own custom plan is a fact, not a thing worth a look; "can reduce latency" in its detail is unmeasured
-- [ ] One vocabulary for how sure Compy is (design `_train\d3-vocabulary-design.md`, in progress): Problems room says Weak/Partial/Strong signal, the card Possible/Likely, tiles Known/Likely/Unknown; a lowest-level pattern shows "Unknown" beside an observation; SessionDebrief says "Prime suspect"
-- [ ] Clear my data in Settings (design `_train\d4-clear-data-design.md`, in progress) — must not strand applied changes without an undo
+- [ ] Install current main and run the look-only checks (only while the owner is away; blocked 2026-11-21: the PC was not idle): what the card says about the four rough ROB RUN sessions after the Nov 19 driver update; history.json.bak; the grouped Problems room
+- [ ] Handles audit S5: the direct query-only opens of the game (fps.rs ~520/~643, monitoring.rs ~896)
+- [ ] Remove or rewrite the #[ignore] test in running_at_start.rs (~1180) that opens every process
+- [ ] Paramedic card: drift evidence lines name the setting (driftApplied/driftOther)
+- [ ] One vocabulary for how sure Compy is, slice 1 = types only (design `_train\d3-vocabulary-design.md`): Problems room says Weak/Partial/Strong signal, the card Possible/Likely, tiles Known/Likely/Unknown; a lowest-level pattern shows "Unknown" beside an observation; SessionDebrief says "Prime suspect"
+- [ ] Clear my data in Settings, slice 2 (design `_train\d4-clear-data-design.md`) — must not strand applied changes without an undo
+- [ ] Capture slice 2 (design `_train\d1-capture-design.md`): ask "Measure this session?" when a game starts. The one-time group grant itself waits for the owner (it changes a security group on the account)
+- [ ] PRIVACY.md additions (`_train\d4i-privacy-additions.md`, `_train\d1s1-privacy-line.txt`)
+- [ ] tauri.conf.json description drops "safe"
+- [ ] Export follow-ups: one stock power-plan GUID table; apostrophe and 8.3 path cases; number the ledger ids
+- [ ] Backend incident headline tail and values reach the screen as raw English (zh-CN users see English): move to i18n
+- [ ] Self-delimiting stamp marker for verify-release-state
 - [ ] Problems room follow-ups: the heading "What this points to" sits above a "can't tell" sentence; "Did this help?" answers match by rule only; a time limit on the Event Log reader; the fixed 85°C line is never compared with this card's sessions that did not crash; thermal-trend patterns reach Medium on an unmeasured "well past normal variation"
-- [ ] Pattern text built in Rust reaches the screen as raw English (zh-CN users see English): move to i18n
 - [ ] Card: opening it pushes the lower half of Home below the fold; the questions view has no "More below" cue; Escape from a disclosure
 - [ ] The app says three things about what leaves the PC (site: "sends nothing"; site: "checks GitHub"; app footer: "signed update check only"): one true sentence in the app; the site is the owner's
 - [ ] Layer 2 design is written and parked (`_train\d2-layer2-design.md`); not before Layer 1 ships
 - [ ] first look: drift notices ('turned off outside Compy') and changes undone inside the window
-- [ ] first look S4-S7 (programs running now; crash before/after line; start measuring + one-session statement; local store for answers)
+- [ ] first look S6-S7 (start measuring + one-session statement; local store for answers)
 - [ ] Group a crash-and-relaunch into one sitting for baselines, noise bands and real-play counts — a crash and relaunch no longer counts as two independent sessions
 - [ ] Paramedic: sessions flagged Suspected (`session_boundary::suspected_splice`) are not judged; a note says why — an old two-game row never poisons a diagnosis
 - [ ] Crash line: say when more reports matched the program name but ran from another folder (8.3 names, \\?\ paths, junctions)
@@ -36,7 +44,6 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - [ ] Baseline keyed by frame cap, refresh rate and resolution — a changed cap no longer looks like a slowdown
 - [ ] First-run and empty states for a new user — a new PC gets a clear first screen, not blank cards
 - [ ] Signing, privacy policy and EULA — the installer is signed and the legal text is published
-- [ ] Export Snapshot: redact process-start program names that are not on the known-programs list
 - [ ] verify the NVIDIA / AMD overlay and Game Bar image names on real installs
 
 ## LATER
@@ -47,6 +54,9 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 
 ## Waiting on the owner
 - Say "land the security slice" (claude/m1-hard-1).
+- Leave the PC idle for a few minutes so the install and look-only checks can run (blocked 2026-11-21: input every few seconds).
+- Website lines that make the same game and anti-cheat claims, with suggested wording in `_train\c3-site-claims.md` (the EULA line needs a lawyer).
+- ROB RUN driver-rollback test: four rough sessions in a row since the Nov 19 driver update; cause not settled.
 - Start the code-signing identity check now (memo `_train\r1-signing-memo.md`: lead time up to 30 business days; individuals in the US or Canada).
 - Decide: is 2026-12-11 a free invite-only beta rather than a paid launch (business memo `_train\m2-business-memo.md`; roadmap "Date risk": the date does not fit serially)?
 - Decide: pricing. The memo proposes a free Paramedic with a one-time Pro; the 2026-08-22 ruling was a subscription; the panel accepted only a one-time price (project doc `claude/CONSUMER_PANEL_2026-11-20.md`).
@@ -64,6 +74,15 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee"; a strength above the lowest needs two independent supports and no contradicting evidence (in the Paramedic's code and now the Problems room's; not yet written in the constitution); the full health check shows no score ring (removed 2026-11-20, one revert restores it).
 
 ## Done (newest first)
+- 2026-11-21 - In-app game claims corrected: "Never touches your games" and "Safe with anti-cheat" replaced by what the code proves (glossary, export report, Leftovers and tweaks text too); permanent guard src/i18n/game-safety-claims.test.ts scans locale files, src/data and Rust strings c4a5b168, 4b2c13d6, e63c482c
+- 2026-11-21 - Export report redaction: other programs' names, Windows user and computer names (whole word), custom power plan names and paths; PRIVACY.md paragraph rewritten; two privacy review rounds 64f63c87
+- 2026-11-21 - Problems room shows identical crash records as one group ("...N times in the Windows records Compy read...", limit note on every group, "Show each one") 17a688d3, c0257d8c
+- 2026-11-21 - First look: "Running right now" from a handle-free process list; crash records split before and after the earliest change adfd664c
+- 2026-11-21 - RELEASE_STATE citations re-anchored 965eb473
+- 2026-11-21 - Inventory of everything Compy stores, plus a guard that keeps it complete 3870b609, d3126dd0
+- 2026-11-21 - Power plan flagged only when it is Windows "Power saver" b0f0f439, a8954500
+- 2026-11-21 - Orphan-key and affordance guards moved into the push check fce1ef2d
+- 2026-11-21 - SAFETY: hardware sweep no longer reads other processes' memory at start-up (ARCHITECTURE_LOCKS game-memory rule) 73b1fbe8, 755a94d9
 - 2026-11-20 - Roadmap rewritten around the Paramedic, with an honest date-risk section (docs/product/ROADMAP.md)
 - 2026-11-20 - Card wording: a suspect title no longer asserts what was only seen in other sessions; "How to test this" under a Possible suspect; no "Check again" before an answer; focus stays in the card efc96dea
 - 2026-11-20 - Cross-game pattern lines and Home interview lines no longer rule out the PC or add to what the user said; a single comparison shows at the lowest level; home.json is in the wording scan 478f8d42
@@ -93,6 +112,7 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-21 session: landed the game-claims correction, export redaction, grouped crash records, first-look running-now, power-plan and hardware-sweep safety fixes (listed under Done; each reviewed, each through the push check). Install of current main and look-only checks blocked at 06:00 PT (PC not idle); installed build is still 4115e40e. g2-handles and n1-drift in review; d1s1-capture parked.
 - 2026-11-20 desk-install session 4: built and installed main 4115e40e, proved at runtime, stamped in RELEASE_STATE; look-only checks (new-user sandbox, then real data) in _train\view-1120e.
 - 2026-11-20 afternoon session: landed 0cc3a30e, fec63809, cb8afffe, abbad9bc, b8f782d7 (each reviewed, each through the push check). Look-only check of 5f4cad34 on the owner's data ran (_train\view-1120d\report-2.md); the brand-new-user half did NOT run (owner came back to the PC). Affordance baseline re-recorded: the score ring's entries and the header button retired by the coordinator, reported to the owner, reversible.
 - 2026-11-20 desk-install session 3: built and installed main 5f4cad34, proved at runtime, stamped in RELEASE_STATE; look-only checks of the Home card (real data and new-user sandbox) in _train\view-1120d.
