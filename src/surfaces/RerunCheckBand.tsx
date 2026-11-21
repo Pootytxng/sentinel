@@ -91,13 +91,13 @@ export function RerunCheckBand({
       : noneGraded
         ? t("optimize.rerunCheckBand.lastNoneGraded", { age })
         : unread > 0
-        ? t("optimize.rerunCheckBand.lastCleanPartial", {
-            age,
-            green: snap.green,
-            total: snap.total,
-            unknown: unread,
-          })
-        : t("optimize.rerunCheckBand.lastClean", { age, count: snap.green });
+          ? t("optimize.rerunCheckBand.lastCleanPartial", {
+              age,
+              green: snap.green,
+              total: snap.total,
+              unknown: unread,
+            })
+          : t("optimize.rerunCheckBand.lastClean", { age, count: snap.green });
   } else {
     // Fallback: no stored snapshot yet — LIVE counts, NO age.
     const total = readiness?.checks.length ?? 0;
@@ -109,13 +109,17 @@ export function RerunCheckBand({
     const attention = readiness?.attention_count ?? 0;
     warn = attention > 0;
     unreadSaid = !warn && unread > 0 && graded > 0;
+    // Nothing recorded and no readiness read: a check has not run, which is not the same as one that graded zero.
+    const notRun = !readiness || readiness.checks.length === 0;
     sentence = warn
       ? t("optimize.rerunCheckBand.flagged", { count: attention, total: graded })
-      : graded === 0
-        ? t("optimize.rerunCheckBand.noneGraded")
-        : unread > 0
-        ? t("optimize.rerunCheckBand.cleanPartial", { measured: graded, total, unknown: unread })
-        : t("optimize.rerunCheckBand.clean", { count: graded });
+      : notRun
+        ? t("optimize.rerunCheckBand.notRun")
+        : graded === 0
+          ? t("optimize.rerunCheckBand.noneGraded")
+          : unread > 0
+            ? t("optimize.rerunCheckBand.cleanPartial", { measured: graded, total, unknown: unread })
+            : t("optimize.rerunCheckBand.clean", { count: graded });
   }
   // Every line says what it did not count: the unread checks (unless the sentence already did) and
   // the advisory ones, flagged or not.

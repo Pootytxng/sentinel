@@ -393,6 +393,7 @@
     "checking": "正在检测你的电脑…",
     "clean_other": "全部 {{count}} 项检测都正常",
     "cleanPartial": "{{total}} 项检测中有 {{measured}} 项正常 · {{unknown}} 项无法测量",
+    "notRun": "还没有运行完整检测",
     "noneGraded": "没有检测项被评级",
     "lastNoneGraded": "上次完整检测（{{age}}） · 没有检测项被评级",
     "flagged_other": "{{total}} 项检测中有 {{count}} 项需要查看",

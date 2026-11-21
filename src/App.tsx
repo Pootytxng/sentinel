@@ -1655,6 +1655,7 @@ function App() {
                 priorities={priorities}
                 sessions={sessions}
                 pendingCare={pendingCare}
+                onOpenCareIncident={openCareIncident}
                 onDismissCareIncident={dismissCareIncident}
                 onOpenGame={(key) => {
                   setGamesFocus(key);

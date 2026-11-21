@@ -97,6 +97,7 @@ function home(sessions: SessionSummary[], pendingCare: PendingCareIncident | nul
       priorities={null}
       sessions={sessions}
       pendingCare={pendingCare}
+      onOpenCareIncident={vi.fn()}
       onDismissCareIncident={vi.fn()}
       onOpenGame={vi.fn()}
       onOpenLive={vi.fn()}

@@ -420,6 +420,7 @@
     "clean_one": "The one check looks good",
     "clean_other": "All {{count}} checks look good",
     "cleanPartial": "{{measured}} of {{total}} checks look good · {{unknown}} couldn't be measured",
+    "notRun": "No full check has run yet",
     "noneGraded": "No checks were graded",
     "lastNoneGraded": "Last full check {{age}} · no checks were graded",
     "flagged_one": "{{count}} of {{total}} checks needs a look",

@@ -299,3 +299,33 @@ describe("RerunCheckBand - nothing graded", () => {
     expect(line()).not.toContain("No checks were graded");
   });
 });
+
+describe("RerunCheckBand - a check that has not run is not a check that graded nothing", () => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
+  it("no snapshot and no readiness: says no full check has run, never 'No checks were graded'", () => {
+    render(<RerunCheckBand readiness={null} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("No full check has run yet");
+    expect(line()).not.toMatch(/No checks were graded|All 0|0 checks/);
+    cleanup();
+    render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("No full check has run yet");
+    expect(line()).not.toContain("No checks were graded");
+  });
+
+  it("zh-CN keeps the two apart too", async () => {
+    await i18n.changeLanguage("zh-CN");
+    render(<RerunCheckBand readiness={null} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("\u8fd8\u6ca1\u6709\u8fd0\u884c\u5b8c\u6574\u68c0\u6d4b");
+    expect(line()).not.toContain("\u6ca1\u6709\u68c0\u6d4b\u9879\u88ab\u8bc4\u7ea7");
+  });
+
+  it("a check that ran and graded zero still says so", () => {
+    const r = readiness({ checks: [chk("advisory")], advisory_count: 1 });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("No checks were graded \u00b7 1 advisory, not graded");
+    expect(line()).not.toContain("No full check has run yet");
+  });
+});

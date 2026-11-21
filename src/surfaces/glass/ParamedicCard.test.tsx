@@ -6,10 +6,11 @@ import { render, screen, fireEvent, cleanup, waitFor, within, act } from "@testi
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const answer = vi.hoisted(() => ({ value: null as unknown, calls: [] as unknown[][], busyFirst: 0, reject: "", gate: null as Promise<void> | null }));
+const answer = vi.hoisted(() => ({ value: null as unknown, calls: [] as unknown[][], busyFirst: 0, reject: "", gate: null as Promise<void> | null, byCmd: null as Record<string, unknown> | null }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => {
     answer.calls.push(args);
+    if (answer.byCmd && String(args[0]) in answer.byCmd) return Promise.resolve(answer.byCmd[String(args[0])]);
     // A test holds the answer back (to look at the card while it is still asking) by setting a gate.
     if (answer.gate) return answer.gate.then(() => answer.value);
     if (answer.busyFirst > 0) {
@@ -32,6 +33,7 @@ afterEach(() => {
   answer.busyFirst = 0;
   answer.reject = "";
   answer.gate = null;
+  answer.byCmd = null;
 });
 
 const ref = (at: string): ParamedicSessionRef => ({
@@ -1538,22 +1540,6 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(rule(':root[data-v2="on"] .v2-content:has(.gl-room[data-room="home"])')).toMatch(/scrollbar-gutter:\s*stable/);
   });
 
-  it("asked from outside (launch), the card asks once, takes focus, and does not ask again for the same press", async () => {
-    answer.value = base;
-    const { rerender } = render(<ParamedicCard launch={0} />);
-    expect(answer.calls.length).toBe(0);
-    rerender(<ParamedicCard launch={1} />);
-    await waitFor(() => expect(rows().length).toBe(1));
-    expect(answer.calls.length).toBe(1);
-    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
-    // The same press again changes nothing; another press with an answer showing only moves focus back.
-    rerender(<ParamedicCard launch={1} />);
-    (screen.getByRole("button", { name: "Close" }) as HTMLElement).focus();
-    rerender(<ParamedicCard launch={2} />);
-    expect(answer.calls.length).toBe(1);
-    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
-  });
-
   const link = () => screen.queryByRole("button", { name: "Something else? Answer a few questions" });
   const picker = () => screen.queryByRole("heading", { name: "Which game?" });
   const diagnoseCalls = () => answer.calls.filter((c) => c[0] === "paramedic_diagnose");
@@ -1700,41 +1686,86 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     await waitFor(() => expect(scrollRegion().getAttribute("aria-busy")).toBe("false"));
   });
 
-  it("launched for a recorded game, it asks for that game and shows its measured answer", async () => {
-    answer.value = base;
-    const { rerender } = render(<ParamedicCard launch={0} games={[{ process: "game-a", name: "Game A" }]} />);
-    rerender(<ParamedicCard launch={1} launchGame={{ process: "game-a", name: "Game A" }} games={[{ process: "game-a", name: "Game A" }]} />);
-    await waitFor(() => expect(rows().length).toBe(1));
-    expect(diagnoseCalls()[0][1]).toEqual({ complaint: "unknown", game: "game-a" });
-    expect(picker()).toBeNull();
-    // "Check again" keeps asking about that game.
-    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
-    await waitFor(() => expect(diagnoseCalls().length).toBe(2));
-    expect(diagnoseCalls()[1][1]).toEqual({ complaint: "unknown", game: "game-a" });
-  });
-
-  it("launched for a recorded game with too few sessions, the first look starts with that game already chosen", async () => {
-    answer.value = { ...base, findings: [], problem: null, state: { kind: "cant-tell", why: { kind: "no-sessions" } } };
-    const g = { process: "game-a", name: "Game A" };
-    const { rerender } = render(<ParamedicCard launch={0} games={[g]} />);
-    rerender(<ParamedicCard launch={1} launchGame={g} games={[g]} />);
-    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
-    expect(picker()).toBeNull();
-    expect(screen.getByTestId("first-look-chosen").textContent).toBe("Looking at Game A.");
-  });
-
-  it("launched with no game to name, it opens the card's own game question and asks nothing about a game", async () => {
-    answer.value = base;
-    const { rerender } = render(<ParamedicCard launch={0} games={[{ process: "game-a", name: "Game A" }]} />);
-    rerender(<ParamedicCard launch={1} launchGame="pick" games={[{ process: "game-a", name: "Game A" }]} />);
+  it("'Something else?' while the first check is still running opens usable questions: nothing dimmed or inert, no status over them", async () => {
+    answer.gate = new Promise<void>(() => {});
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(link()).toBeTruthy());
+    fireEvent.click(link() as HTMLElement);
     await waitFor(() => expect(picker()).toBeTruthy());
-    expect(diagnoseCalls().length).toBe(0);
-    expect(rows().length).toBe(0);
-    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Which game?" }));
-    // Escape closes it, and focus goes back to the bar's button even though no answer was ever on screen.
-    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
+    const region = scrollRegion();
+    expect(region.hasAttribute("inert")).toBe(false);
+    expect(region.getAttribute("aria-busy")).toBe("false");
+    expect(region.hasAttribute("data-busy")).toBe(false);
+    expect(region.parentElement!.querySelector(".gl-para-status")).toBeNull();
+    // A picker button works while the check is still running.
+    const whole = screen.getByRole("button", { name: "Another game, or the whole PC" });
+    fireEvent.click(whole);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
+    expect(screen.getByTestId("first-look-chosen").textContent).toBe("Looking at the whole PC, not one game.");
+  });
+
+  it("with the questions open over a running check, Close is offered and Escape does the same thing", async () => {
+    answer.gate = new Promise<void>(() => {});
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(link()).toBeTruthy());
+    fireEvent.click(link() as HTMLElement);
+    await waitFor(() => expect(picker()).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Another game, or the whole PC" }), { key: "Escape" });
     expect(picker()).toBeNull();
+    expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+  });
+
+  it("'Back to the answer' puts focus on the answer, so Escape still closes the card", async () => {
+    answer.value = base;
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    fireEvent.click(link() as HTMLElement);
+    await waitFor(() => expect(picker()).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Back to the answer" }));
+    await waitFor(() => expect(document.activeElement).toBe(scrollRegion()));
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
+    expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
+  });
+
+  it("the first look's answer, reached from a card that has history, still carries the privacy line", async () => {
+    answer.value = base;
+    answer.byCmd = {
+      paramedic_list_games: { read: true, complete: true, games: [] },
+      paramedic_first_look: {
+        told: { since: "today", from: "2026-11-20T00:00:00Z", to: "2026-11-20T12:00:00Z", hours: 12 },
+        game: null,
+        changes_listed: true,
+        touch_games: [],
+        other_changes: [],
+        none: [],
+        game_files_since: null,
+        crashes: null,
+        crashes_none: false,
+        looks_off: [],
+        mods_none: false,
+        mods_settings_only: [],
+        facts: [],
+        compy_changes: [],
+        limits: [],
+        read_all: true,
+        method: "paramedic-first-look-v1",
+      },
+    };
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    fireEvent.click(link() as HTMLElement);
+    await waitFor(() => expect(picker()).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Another game, or the whole PC" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    await waitFor(() => expect(screen.getByTestId("first-look-told")).toBeTruthy());
+    expect(screen.getByTestId("first-look-privacy").textContent).toMatch(/doesn't save it or send it anywhere/);
   });
 
   it("the new strings read in both languages with the same keys", () => {

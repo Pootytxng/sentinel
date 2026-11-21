@@ -78,6 +78,7 @@ function home(over: Partial<Parameters<typeof HomeGlass>[0]> = {}) {
     priorities: null,
     sessions: [session({})],
     pendingCare: null,
+    onOpenCareIncident: vi.fn(),
     onDismissCareIncident: vi.fn(),
     onOpenGame: vi.fn(),
     onOpenLive: vi.fn(),
@@ -183,7 +184,8 @@ describe("Health summary (glass redesign)", () => {
     expect(within(band).getByText("Elden Ring closed unexpectedly")).toBeTruthy();
     // The checks card speaks for the checks only, so it cannot contradict the answer's count.
     expect(screen.getByRole("button", { name: /Windows setup/ }).textContent).toContain("No check needs a look");
-    expect(within(band).getByRole("button", { name: "Find out why" })).toBeTruthy();
+    fireEvent.click(within(band).getByRole("button", { name: "Find out why" }));
+    expect(p.onOpenCareIncident).toHaveBeenCalledWith("inc-1");
     fireEvent.click(within(band).getByRole("button", { name: "Not now" }));
     expect(p.onDismissCareIncident).toHaveBeenCalledWith("inc-1");
   });
@@ -645,8 +647,6 @@ describe("Home: one entry point for 'something's wrong'", () => {
     ...over,
   });
   const measured = () => diag({ kind: "nothing-wrong", sessions_checked: 3 });
-  const tooFew = () => diag({ kind: "cant-tell", why: { kind: "no-sessions" } });
-  const diagnoseArgs = () => scan.calls.filter((c) => c.cmd === "paramedic_diagnose").map((c) => c.args);
   const quiet = (p: ReturnType<typeof home>) => {
     for (const k of ["onOpenGame", "onOpenLive", "onRunCheck", "onSeeChecks", "onOpenDetails", "onDismissCareIncident"] as const) {
       expect(p[k], k).not.toHaveBeenCalled();
@@ -663,69 +663,18 @@ describe("Home: one entry point for 'something's wrong'", () => {
     }
   });
 
-  it("with the crash banner showing, Home still has exactly one primary action, and 'Find out why' is not it", () => {
-    home({ pendingCare: care });
+  it("with the crash banner showing, Home still has exactly one primary action; the banner's 'Find out why' is not primary and still opens the incident", () => {
+    const p = home({ pendingCare: care });
     const door = within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" });
     expect([...document.body.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
     const band = screen.getByRole("group", { name: "Needs a look" });
     expect(within(band).getByRole("button", { name: "Find out why" }).className).toBe("gl-ghost");
     expect(within(band).getByRole("button", { name: "Not now" }).className).toBe("gl-ghost");
-    // The banner's own text is as it was.
+    // The banner's own text is as it was, and the button still goes to the crash record, not to the card.
     expect(within(band).getByText("Elden Ring closed unexpectedly")).toBeTruthy();
-  });
-
-  it("'Find out why' opens the card for the banner's game and shows its measured answer; nothing navigates", async () => {
-    scan.diagnose = measured();
-    const p = home({ pendingCare: care });
-    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
-    await waitFor(() => expect(screen.getByText("Nothing looks wrong")).toBeTruthy());
-    expect(diagnoseArgs()).toEqual([{ complaint: "unknown", game: "eldenring.exe" }]);
-    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
-    quiet(p);
-    // The banner is still there until the user says "Not now".
-    expect(screen.getByRole("group", { name: "Needs a look" })).toBeTruthy();
-  });
-
-  it("'Find out why' for a game with too few sessions opens the first look with that game already chosen", async () => {
-    scan.diagnose = tooFew();
-    const p = home({ pendingCare: care });
-    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
-    expect(screen.getByTestId("first-look-chosen").textContent).toBe("Looking at eldenring.");
-    expect(screen.queryByRole("heading", { name: "Which game?" })).toBeNull();
-    expect(diagnoseArgs()).toEqual([{ complaint: "unknown", game: "eldenring.exe" }]);
-    quiet(p);
-  });
-
-  it("'Find out why' with a game that cannot be matched opens the card's game question and never guesses", async () => {
-    const p = home({ pendingCare: { ...care, app_label: "Some Other Program" } });
-    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
-    expect(diagnoseArgs()).toEqual([]);
-    expect(screen.getByRole("button", { name: "Another game, or the whole PC" })).toBeTruthy();
-    quiet(p);
-    cleanup();
-    // No name at all from Windows: the same.
-    home({ pendingCare: { ...care, app_label: null } });
-    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
-    cleanup();
-    // Two recorded games that both fit the name: not one of them.
-    home({
-      pendingCare: care,
-      sessions: [session({ process_name: "eldenring.exe" }), session({ process_name: "Elden Ring.exe", started_at: "2026-10-28T20:00:00Z" })],
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
-    expect(diagnoseArgs()).toEqual([]);
-  });
-
-  it("with no recorded game and the crash banner, 'Find out why' opens the card's game question", async () => {
-    const p = home({ sessions: [], pendingCare: care });
-    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
-    expect(diagnoseArgs()).toEqual([]);
-    quiet(p);
+    fireEvent.click(within(band).getByRole("button", { name: "Find out why" }));
+    expect(p.onOpenCareIncident).toHaveBeenCalledWith("inc-1");
+    expect(invoked).not.toContain("paramedic_diagnose");
   });
 
   it("with no recorded game the card is still mounted (day-one first look) and says what it is for; nothing is read until the user asks", async () => {

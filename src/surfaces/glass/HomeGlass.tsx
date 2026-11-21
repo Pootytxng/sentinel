@@ -15,7 +15,7 @@ import { gameLibrary } from "../../data/game-library";
 import { knownFps } from "../../lib/session-metrics";
 import { wordFromBand, confidenceWordKey } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
-import { ParamedicCard, type LaunchGame } from "./ParamedicCard";
+import { ParamedicCard } from "./ParamedicCard";
 import { useDates } from "./GamesRoom";
 import { NavGlyph } from "../../design/NavGlyph";
 import { careHeadline, incidentKindLabel, incidentWhen, readinessWords } from "../../data/backend-words";
@@ -29,15 +29,6 @@ const Arrow = () => (
   </span>
 );
 
-/** The recorded game a crash's app name stands for: exactly one match by name or program name, else null (never a guess). */
-function crashGame(label: string | null, recorded: { process: string; name: string }[]): { process: string; name: string } | null {
-  const norm = (s: string) => s.toLowerCase().replace(/\.exe$/, "").replace(/[^a-z0-9]/g, "");
-  const want = label ? norm(label) : "";
-  if (!want) return null;
-  const hits = recorded.filter((g) => norm(g.name) === want || norm(g.process) === want);
-  return hits.length === 1 ? hits[0] : null;
-}
-
 function greetingKey(now: Date): string {
   const h = now.getHours();
   return h >= 5 && h < 12 ? "morning" : h >= 12 && h < 18 ? "afternoon" : "evening";
@@ -48,6 +39,7 @@ export function HomeGlass({
   priorities,
   sessions,
   pendingCare,
+  onOpenCareIncident,
   onDismissCareIncident,
   onOpenGame,
   onOpenLive,
@@ -60,6 +52,7 @@ export function HomeGlass({
   priorities: Priorities | null;
   sessions: SessionSummary[];
   pendingCare: PendingCareIncident | null;
+  onOpenCareIncident: (incidentId: string) => void;
   onDismissCareIncident: (incidentId: string) => void;
   /** Opens Games; a key opens that game's page. */
   onOpenGame: (key: string | null) => void;
@@ -81,9 +74,7 @@ export function HomeGlass({
   // Nothing on this page may then speak as if one was measured (round-2 review, 2026-10-31).
   const anyMeasured = sessions.some((s) => knownFps(s.avg_fps) != null);
   const [chartKey, setChartKey] = useState<string | null>(games[0]?.key ?? null);
-  // The crash banner's "Find out why" raises this; the Paramedic card opens for that game and takes focus.
-  const [launch, setLaunch] = useState(0);
-  const [launchGame, setLaunchGame] = useState<LaunchGame | null>(null);
+
   useEffect(() => {
     if (!games.some((g) => g.key === chartKey)) setChartKey(games[0]?.key ?? null);
   }, [games, chartKey]);
@@ -206,7 +197,7 @@ export function HomeGlass({
 
       {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; nothing is read on mount. Always
           mounted: a new user or a new game gets the first look (what changed on this PC), not a hidden door. */}
-      <ParamedicCard launch={launch} launchGame={launchGame} noGames={noGames} games={recorded} />
+      <ParamedicCard noGames={noGames} games={recorded} />
 
       {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
           never the accent fill, which on this page means "your most recent game". */}
@@ -220,16 +211,9 @@ export function HomeGlass({
             <button type="button" className="gl-ghost" onClick={() => onDismissCareIncident(pendingCare.incident_id)}>
               {t("home.glass.care.later")}
             </button>
-            {/* Not a second primary: Home's one primary is the Paramedic card's own button. This opens that card for the
-                crash's game, or its game question when the game cannot be matched. */}
-            <button
-              type="button"
-              className="gl-ghost"
-              onClick={() => {
-                setLaunchGame(crashGame(pendingCare.app_label, recorded) ?? "pick");
-                setLaunch((n) => n + 1);
-              }}
-            >
+            {/* Quiet, not a second primary: Home's one primary action is the Paramedic card's own button. This still
+                opens the crash record itself (the Problems room, on this incident). */}
+            <button type="button" className="gl-ghost" onClick={() => onOpenCareIncident(pendingCare.incident_id)}>
               {t("home.glass.care.find")}
             </button>
           </span>

@@ -557,17 +557,16 @@ function crashSentence(c: NonNullable<ParamedicFirstLook["crashes"]>, game: stri
 }
 
 /** `elsewhere`: opened from a card that already has a measured answer, so the lead does not say there are no earlier sessions.
- *  `initialGame`: a game already chosen (the crash banner's "Find out why"): the flow starts at "When did it start?". */
+ */
 export function ParamedicFirstLook({
   measured = null,
   games = [],
-  initialGame = null,
   elsewhere = false,
-}: { measured?: FirstLookMeasured; games?: RecordedGame[]; initialGame?: RecordedGame | null; elsewhere?: boolean } = {}) {
+}: { measured?: FirstLookMeasured; games?: RecordedGame[]; elsewhere?: boolean } = {}) {
   const { t } = useTranslation();
   const dates = useDates();
-  const [step, setStep] = useState<Step>(initialGame ? { kind: "ask", chosen: null } : { kind: "pick" });
-  const [game, setGame] = useState<Pick | null>(initialGame ? { kind: "seen", process: initialGame.process, name: initialGame.name } : null);
+  const [step, setStep] = useState<Step>({ kind: "pick" });
+  const [game, setGame] = useState<Pick | null>(null);
   const [steam, setSteam] = useState<Listing>("loading");
   const [showAll, setShowAll] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);

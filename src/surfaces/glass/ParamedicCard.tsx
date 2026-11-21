@@ -1163,16 +1163,7 @@ type View =
 /** The answer region counts as "more below" when more than this many px are still hidden under its bottom edge. */
 const MORE_SLACK_PX = 4;
 
-/** What a launch from outside asks for: a recorded game (its measured answer, or the first look with that game
- *  already chosen), or "pick" (the card's own game question). Nothing set: the usual measured check. */
-export type LaunchGame = RecordedGame | "pick";
-
-export function ParamedicCard({
-  launch = 0,
-  launchGame = null,
-  noGames = false,
-  games = [],
-}: { launch?: number; launchGame?: LaunchGame | null; noGames?: boolean; games?: RecordedGame[] } = {}) {
+export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boolean; games?: RecordedGame[] } = {}) {
   const { t } = useTranslation();
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
@@ -1182,15 +1173,14 @@ export function ParamedicCard({
   // "Something else? Answer a few questions": the first-look questions open in the card, in place of the measured
   // answer (which "Back" and "Check again" bring back). Nothing here is stored.
   const [questions, setQuestions] = useState(false);
-  // A game chosen from outside (the crash banner): the first look starts after its game question.
-  const [preset, setPreset] = useState<RecordedGame | null>(null);
-  const target = useRef<string | null>(null);
+  // Bumped when the card is closed or asks anew, so an answer to an earlier ask is dropped.
   const gen = useRef(0);
   const doorRef = useRef<HTMLButtonElement>(null);
-  const sectionRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const timer = useRef<number | undefined>(undefined);
   const refocus = useRef(false);
+  // "Back to the answer": focus goes to the answer, so the keyboard (and Escape) still works inside the card.
+  const backFocus = useRef(false);
 
   // After unmount nothing may run again: the retry timer is cleared and a late answer is dropped.
   const alive = useRef(true);
@@ -1209,7 +1199,7 @@ export function ParamedicCard({
     }
   }, [view.kind]);
 
-  const ask = (attempt: number, game: string | null = target.current) => {
+  const ask = (attempt: number) => {
     if (attempt === 0) {
       setRound((r) => r + 1);
       setQuestions(false);
@@ -1218,7 +1208,7 @@ export function ParamedicCard({
     const mine = gen.current;
     // Pressing "Check again" keeps the answer on screen (dimmed) so the card does not collapse and jump the page.
     setView((v) => ({ kind: "busy", prev: v.kind === "done" ? v.d : v.kind === "busy" ? v.prev : null }));
-    invoke<ParamedicDiagnosis | null>("paramedic_diagnose", { complaint: "unknown", game })
+    invoke<ParamedicDiagnosis | null>("paramedic_diagnose", { complaint: "unknown", game: null })
       .then((d) => {
         if (alive.current && mine === gen.current) setView(d ? { kind: "done", d } : { kind: "failed" });
       })
@@ -1228,42 +1218,17 @@ export function ParamedicCard({
           setView({ kind: "failed" });
         } else if (attempt < BUSY_RETRIES) {
           // Another diagnosis is still running: keep saying "still checking" and ask again shortly.
-          timer.current = window.setTimeout(() => ask(attempt + 1, game), BUSY_RETRY_MS);
+          timer.current = window.setTimeout(() => ask(attempt + 1), BUSY_RETRY_MS);
         } else {
           setView({ kind: "still" });
         }
       });
   };
 
-  // The crash banner's "Find out why" raises `launch`: keyboard focus moves to the card and it opens for the banner's
-  // game (`launchGame`); with no game named it runs the usual check (when it is not already asking or showing one).
-  const startedFrom = useRef(0);
-  useEffect(() => {
-    if (!launch || launch === startedFrom.current) return;
-    startedFrom.current = launch;
-    const el = sectionRef.current;
-    el?.focus();
-    el?.scrollIntoView?.({ block: "nearest" });
-    if (launchGame === "pick") {
-      // The game is not known: the card's own game question, not a guess.
-      target.current = null;
-      setPreset(null);
-      setRound((r) => r + 1);
-      setQuestions(true);
-    } else if (launchGame) {
-      target.current = launchGame.process;
-      setPreset(launchGame);
-      ask(0, launchGame.process);
-    } else if (view.kind === "idle" || view.kind === "failed" || view.kind === "still") ask(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the counter only
-  }, [launch]);
-
   const close = () => {
     window.clearTimeout(timer.current);
     gen.current += 1;
-    target.current = null;
     refocus.current = true;
-    setPreset(null);
     setQuestions(false);
     setView({ kind: "idle" });
     doorRef.current?.focus();
@@ -1274,10 +1239,13 @@ export function ParamedicCard({
   const showQuestions = questions;
   const open = answer != null || showQuestions;
   const busy = view.kind === "busy";
-  // Escape closes the open card from anywhere inside it, except inside a disclosure that is open (a row, a fold,
-  // "Show more"), where it keeps its normal job, and while a check is running (Close is not offered then either).
+  // The questions are open over a check that is still running: nothing there is dimmed or inert.
+  const dim = busy && !showQuestions;
+  // Escape closes the open card from anywhere inside it, exactly when "Close" is offered (an answer, the open
+  // questions) and also after a failed or slow check; but not inside a disclosure that is open (a row, a fold,
+  // "Show more"), where it keeps its normal job, and not while "Check again" is running over an answer.
   const onKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
-    if (e.key !== "Escape" || e.defaultPrevented || busy) return;
+    if (e.key !== "Escape" || e.defaultPrevented) return;
     if (!(view.kind === "done" || view.kind === "failed" || view.kind === "still" || showQuestions)) return;
     for (let n = e.target as HTMLElement | null; n && n !== e.currentTarget; n = n.parentElement) {
       if (n.getAttribute("aria-expanded") === "true" || n.querySelector(":scope > [aria-expanded=\"true\"]")) return;
@@ -1292,6 +1260,13 @@ export function ParamedicCard({
     setMore(!!el && el.scrollHeight - el.scrollTop - el.clientHeight > MORE_SLACK_PX);
   }, []);
   useEffect(() => {
+    if (!questions && backFocus.current) {
+      backFocus.current = false;
+      scrollRef.current?.focus();
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    }
+  }, [questions]);
+  useEffect(() => {
     measure();
     const el = scrollRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -1302,7 +1277,7 @@ export function ParamedicCard({
   }, [answer, measure]);
 
   return (
-    <section ref={sectionRef} tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
+    <section tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
       <div className="gl-card-top">
         <p className="gl-card-sub">{noGames ? t("paramedic.firstLook.door.sub") : t("paramedic.door.sub")}</p>
         <div className="gl-para-actions">
@@ -1347,11 +1322,12 @@ export function ParamedicCard({
             className="gl-para-scroll"
             role="region"
             aria-label={t("paramedic.card.scrollLabel")}
-            aria-busy={busy}
+            aria-busy={dim}
             // The old answer is not interactive or focusable while "Check again" is running: it is dimmed,
-            // announced as busy, and out of reach until the new one replaces it.
-            inert={busy}
-            data-busy={busy ? "true" : undefined}
+            // announced as busy, and out of reach until the new one replaces it. The questions are not the old
+            // answer: they stay usable while a check runs.
+            inert={dim}
+            data-busy={dim ? "true" : undefined}
             tabIndex={0}
             onScroll={measure}
           >
@@ -1360,21 +1336,21 @@ export function ParamedicCard({
                 <ParamedicFirstLook key={`questions-${round}`} games={games} elsewhere />
               ) : answer && ctx ? (
                 <>
-              {/* No usable history: with no game recorded the first look is the whole answer; with a game that
-                  has too few sessions it follows the measured "can't tell yet". */}
-              {!(answer.state.kind === "cant-tell" && answer.state.why.kind === "no-sessions") && <Answer d={answer} ctx={ctx} />}
-              {firstLookApplies(answer) && <ParamedicFirstLook key={round} measured={firstLookMeasured(answer, ctx.game)} games={games} initialGame={preset} />}
-              {answer.mixed_sessions.length > 0 && (
-                <p className="gl-para-note" data-testid="paramedic-mixed">
-                  {t("paramedic.problem.mixed", { count: answer.mixed_sessions.length, dates: answer.mixed_sessions.map((s) => dates.day(s)).join(", ") })}
-                </p>
-              )}
-              {!firstLookApplies(answer) && <p className="gl-para-note">{t("paramedic.footer")}</p>}
+                  {/* No usable history: with no game recorded the first look is the whole answer; with a game that
+                      has too few sessions it follows the measured "can't tell yet". */}
+                  {!(answer.state.kind === "cant-tell" && answer.state.why.kind === "no-sessions") && <Answer d={answer} ctx={ctx} />}
+                  {firstLookApplies(answer) && <ParamedicFirstLook key={round} measured={firstLookMeasured(answer, ctx.game)} games={games} />}
+                  {answer.mixed_sessions.length > 0 && (
+                    <p className="gl-para-note" data-testid="paramedic-mixed">
+                      {t("paramedic.problem.mixed", { count: answer.mixed_sessions.length, dates: answer.mixed_sessions.map((s) => dates.day(s)).join(", ") })}
+                    </p>
+                  )}
+                  {!firstLookApplies(answer) && <p className="gl-para-note">{t("paramedic.footer")}</p>}
                 </>
               ) : null}
             </div>
           </div>
-          {busy && (
+          {dim && (
             <p className="gl-para-status" role="status">
               {t("paramedic.door.looking")}
             </p>
@@ -1392,7 +1368,10 @@ export function ParamedicCard({
           way out to the questions is never hidden behind the check. */}
       {questions && answer && (
         <div className="gl-para-foot">
-          <button type="button" className="gl-ghost" onClick={() => setQuestions(false)}>
+          <button type="button" className="gl-ghost" onClick={() => {
+              backFocus.current = true;
+              setQuestions(false);
+            }}>
             {t("paramedic.card.back")}
           </button>
         </div>
