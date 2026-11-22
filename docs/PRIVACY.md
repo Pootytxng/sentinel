@@ -271,7 +271,7 @@ the window keeps of its own (your settings for how Compy looks and behaves, whic
 consents, dismissed recommendations and text you typed and did not send). Your Compy Pro licence goes only if
 you tick the box for it; you then need the licence key to activate Compy Pro again. Before you confirm, the
 screen says that afterwards there is no record of what Compy changed, that clearing does not undo changes, that
-files an admin helper left behind are deleted too, and that if Compy is closed part way its next start finishes
+files an admin helper left behind more than an hour ago are deleted too, and that if Compy is closed part way its next start finishes
 without asking. It refuses, and deletes nothing, while any change Compy made is still in place, because the
 change history is the only way to undo it; it names those changes and offers to undo them first, one at a time,
 newest first, through the same undo as the Undo button, stopping at the first one that can't be undone and never
@@ -280,11 +280,15 @@ was set aside, while a Trial or Gaming Mode may still have a change on, or for t
 history". Before the first file goes it writes a small record (`clear-intent.json`) of exactly which files you
 confirmed. If Compy is closed part way, its next start makes one attempt to finish: it deletes only files on
 that record that have not changed since, and otherwise stops and asks you to confirm again. If that record
-can't be read, Compy deletes nothing and tells you to delete `clear-intent.json` from `%APPDATA%\Compy` yourself.
+can't be read, Compy deletes nothing and "Clear everything" stays unavailable until you close Compy, delete
+`clear-intent.json` from `%APPDATA%\Compy` and open Compy again.
 It never removes the `%APPDATA%\Compy` folder itself, so an older `%APPDATA%\Sentinel` folder is not copied back
-in (Compy never touches that folder either; it may hold older play history). Compy deletes the files directly,
-not to the Recycle Bin, and keeps no copy of them. Afterwards it asks you to close and open it again; it then
-starts as if it was just installed. Still on this PC afterwards: Compy itself, your window size and position,
+in (Compy never touches that folder either; it may hold older play history). Working files less than an hour old
+are kept, and a change-history working file that recent makes it refuse. Compy deletes the files directly, not
+to the Recycle Bin, and keeps no copy of them. Clearing everything sends nothing. Afterwards it asks you to close
+and open it again; it then starts as if it was just installed (your licence stays unless you ticked its box).
+Reports you copied outside Compy's `exports` folder stay where you put them. Still on this PC afterwards: Compy
+itself, your window size and position,
 the window's own browser folder (`%LOCALAPPDATA%\gg.compy.app\EBWebView`: its cache, and removed values may stay
 in its files until the browser tidies them), files Compy didn't create, and Windows' own crash and update
 records.
