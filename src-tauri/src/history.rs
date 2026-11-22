@@ -2958,6 +2958,9 @@ pub(crate) struct AppliedChangesSummary {
     /// as `drifted_titles`, so a surface can say when the user turned a drifted change on from the
     /// ledger's own stamp, never from a scan time.
     pub(crate) drifted_applied_at: Vec<String>,
+    /// The rec id of each of those changes, in the same order as drifted_titles: a drift notice matches a change
+    /// by this id (two changes can share a title), and keeps the title only to name it.
+    pub(crate) drifted_recs: Vec<String>,
     /// CR-outside-followups (b): changes that read off because the user chose to keep what was set
     /// outside Compy (a usable "changed outside Compy" record whose state the live read still
     /// shows). Never part of `externally_reverted`: Game Readiness does not flag them. Only the
@@ -3227,7 +3230,7 @@ fn summarize_checked(
     for (i, c) in history.iter().enumerate() {
         latest.insert(c.rec_id.as_str(), i); // later entries overwrite earlier → newest wins
     }
-    let mut drifted: Vec<(String, String)> = Vec::new();
+    let mut drifted: Vec<(String, String, String)> = Vec::new();
     for &i in latest.values() {
         let c = &history[i];
         s.total += 1;
@@ -3246,12 +3249,16 @@ fn summarize_checked(
                 s.kept_outside_plan |= c.rec_id == "power-ultimate";
             } else {
                 s.externally_reverted += 1;
-                drifted.push((c.rec_title.clone(), c.applied_at.clone()));
+                drifted.push((c.rec_title.clone(), c.applied_at.clone(), c.rec_id.clone()));
             }
         }
     }
     drifted.sort(); // HashMap order is random — keep the named list stable
-    (s.drifted_titles, s.drifted_applied_at) = drifted.into_iter().unzip();
+    for (title, at, rec) in drifted {
+        s.drifted_titles.push(title);
+        s.drifted_applied_at.push(at);
+        s.drifted_recs.push(rec);
+    }
     s.kept_outside_titles.sort();
     s
 }

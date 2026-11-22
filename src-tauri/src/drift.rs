@@ -44,48 +44,49 @@ pub(crate) struct DriftState {
     /// the UI passed when the change was applied, so a startup-entry change can carry a typed entry name.
     #[serde(default)]
     noticed_titles: HashMap<String, Vec<KeptTitle>>,
-    /// f1-follow (additive): how many scans read the check off while its notice has stood (a notice that was
-    /// already standing when this was first kept counts the earlier reading too). A notice that ends having
-    /// been read off only once, or for under `MIN_NOTICE_MINUTES`, was a blip and leaves no cleared record.
-    #[serde(default)]
-    attention_reads: HashMap<String, u32>,
 }
 
 /// How long a cleared record is kept.
 pub(crate) const CLEARED_KEEP_DAYS: i64 = 30;
 /// Most titles kept for one setting.
 const KEPT_TITLES: usize = 8;
-/// A notice must have stood this long, across at least `MIN_NOTICE_READS` scans, before its end is kept. Scans
-/// are not periodic (app start, the health check, after an apply), so this is measured from the first reading
-/// and a second reading may come minutes or days later; a blip that one scan reads and the next does not is
-/// dropped.
+/// A notice must have stood this long, from the scan that first read the check off to the scan that reads it
+/// ready again, before its end is kept. That is the whole rule, and it is named for what it does: scans are not
+/// periodic (app start scans twice within seconds, then the health check, then after an apply), so counting
+/// "reads" would only count app starts. A reading that the next scan reverses within minutes is dropped.
 pub(crate) const MIN_NOTICE_MINUTES: i64 = 5;
-pub(crate) const MIN_NOTICE_READS: u32 = 2;
 
 /// A title of an applied change, and when Compy first read it as off under the notice.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct KeptTitle {
     pub title: String,
+    /// The change's own id (its ledger `rec_id`), when the scan had it. A change is matched by this, never by
+    /// its title (two changes can share a title); the title only names it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rec: Option<String>,
     pub at: String,
 }
 
-/// Folds the titles one scan read into the ones already kept for a standing notice: no blanks, no repeats,
+/// Folds the titles one scan read (`recs` beside them, same order, when the scan had the ids) into the ones
+/// already kept for a standing notice: no blanks, no repeats (the same id, else the same title, is one change),
 /// in the order first seen (each with the scan that first saw it), at most `KEPT_TITLES`.
-fn merge_titles(kept: &mut Vec<KeptTitle>, read: &[String], now: &str) {
-    for t in read {
+fn merge_titles(kept: &mut Vec<KeptTitle>, read: &[String], recs: &[String], now: &str) {
+    for (i, t) in read.iter().enumerate() {
         let t = t.trim();
-        if !t.is_empty() && kept.len() < KEPT_TITLES && !kept.iter().any(|k| k.title == t) {
-            kept.push(KeptTitle { title: t.to_string(), at: now.to_string() });
+        let rec = recs.get(i).map(|r| r.trim()).filter(|r| !r.is_empty());
+        let same = |k: &KeptTitle| match (&k.rec, rec) {
+            (Some(a), Some(b)) => a == b,
+            _ => k.title == t,
+        };
+        if !t.is_empty() && kept.len() < KEPT_TITLES && !kept.iter().any(same) {
+            kept.push(KeptTitle { title: t.to_string(), rec: rec.map(String::from), at: now.to_string() });
         }
     }
 }
 
-/// True when a notice that ends now stood long enough, over enough scans, to be a real change and not a blip.
+/// True when a notice that ends now stood at least `MIN_NOTICE_MINUTES`, so it was a real change and not a blip.
 /// A stamp that cannot be read as a time is not a reason to drop the record.
-fn notice_held(noticed: &str, reads: u32, now: &str) -> bool {
-    if reads < MIN_NOTICE_READS {
-        return false;
-    }
+fn notice_held(noticed: &str, now: &str) -> bool {
     match (chrono::DateTime::parse_from_rfc3339(noticed), chrono::DateTime::parse_from_rfc3339(now)) {
         (Ok(a), Ok(b)) => b.signed_duration_since(a) >= chrono::Duration::minutes(MIN_NOTICE_MINUTES),
         _ => true,
@@ -131,7 +132,6 @@ impl DriftState {
             || self.last_good.contains_key(id)
             || self.noticed_at.contains_key(id)
             || self.noticed_titles.contains_key(id)
-            || self.attention_reads.contains_key(id)
             || self.labels.contains_key(id)
             || self.last_ready_seen.contains_key(id)
             || self.last_ready_value.contains_key(id)
@@ -149,6 +149,11 @@ pub(crate) struct Seen {
     /// The applied-changes row only: the titles of the changes whose live check reads On now. Used when the
     /// notice ends, to keep only the titles that really came back on.
     pub on_titles: Vec<String>,
+    /// The rec id of each of `titles` (same order), when the scan had them.
+    pub recs: Vec<String>,
+    /// The rec ids of the changes whose live check reads On now. A noticed change that has an id is matched
+    /// against these; `on_titles` is used only for a kept title that has no id.
+    pub on_recs: Vec<String>,
 }
 
 /// Checks that reach Attention by time passing alone, with nothing on the PC changing (a driver
@@ -271,7 +276,6 @@ pub(crate) fn detect_seen(
             state.last_good.remove(id);
             state.noticed_at.remove(id);
             state.noticed_titles.remove(id);
-            state.attention_reads.remove(id);
             state.labels.remove(id);
             state.last_ready_seen.remove(id);
             state.last_ready_value.remove(id);
@@ -283,15 +287,20 @@ pub(crate) fn detect_seen(
                 state.last_good.insert(id.clone(), true);
                 // The notice ends here, but the fact that it ended is kept (one entry per check).
                 let noticed_titles = state.noticed_titles.remove(id).unwrap_or_default();
-                let reads = state.attention_reads.remove(id).unwrap_or(0);
                 if let Some(noticed) = state.noticed_at.remove(id) {
-                    // A blip (read off by one scan, or for minutes) leaves nothing. For the applied-changes row,
+                    // A blip (a notice reversed within minutes) leaves nothing. For the applied-changes row,
                     // "ready" is also reached by a rollback, by keeping what was set outside Compy, or with an empty
                     // ledger: only the noticed titles that read On now were turned back on.
-                    if notice_held(&noticed, reads, now) {
+                    if notice_held(&noticed, now) {
                         let toggle = id == "applied-changes";
                         let titles: Vec<KeptTitle> = if toggle {
-                            noticed_titles.into_iter().filter(|k| read.on_titles.iter().any(|o| o.trim() == k.title)).collect()
+                            noticed_titles
+                                .into_iter()
+                                .filter(|k| match &k.rec {
+                                    Some(r) => read.on_recs.iter().any(|o| o.trim() == r),
+                                    None => read.on_titles.iter().any(|o| o.trim() == k.title),
+                                })
+                                .collect()
                         } else {
                             Vec::new()
                         };
@@ -315,18 +324,21 @@ pub(crate) fn detect_seen(
             }
             // Attention while the check was previously good = a regression (a drift).
             "attention" if state.last_good.get(id).copied().unwrap_or(false) => {
-                let standing = state.noticed_at.contains_key(id);
                 let noticed = state
                     .noticed_at
                     .entry(id.clone())
                     .or_insert_with(|| now.to_string())
                     .clone();
-                // A notice already standing was read off at least once before this scan.
-                let reads = state.attention_reads.entry(id.clone()).or_insert(u32::from(standing));
-                *reads = reads.saturating_add(1);
                 state.labels.insert(id.clone(), label.clone());
                 if !read.titles.is_empty() {
-                    merge_titles(state.noticed_titles.entry(id.clone()).or_default(), &read.titles, now);
+                    let kept = state.noticed_titles.entry(id.clone()).or_default();
+                    // The first titles kept for a notice carry the notice's own time, never this scan's: a notice
+                    // already standing when no title had been kept (written by a build that kept none, or by a scan
+                    // that could not read them) would otherwise move its date to the day of this scan. That makes
+                    // the notice date always the first thing the card prints for the setting. Later titles carry
+                    // the scan that first saw them.
+                    let stamp = if kept.is_empty() { noticed.as_str() } else { now };
+                    merge_titles(kept, &read.titles, &read.recs, stamp);
                 }
                 drifts.push(Drift {
                     id: id.clone(),
@@ -990,25 +1002,63 @@ mod drift_tests {
         assert_eq!(s.cleared["vrr"].cleared_at, day(5, 0));
     }
 
-    /// A reading that one scan makes and the next does not is a blip: it writes no record. So is a notice read
-    /// twice inside `MIN_NOTICE_MINUTES`.
+    /// The rule is "the notice stood at least `MIN_NOTICE_MINUTES`", nothing about how many scans saw it (app
+    /// start scans twice within seconds, so a read count would only count app starts).
     #[test]
-    fn a_one_reading_blip_or_a_few_minutes_writes_no_record() {
+    fn a_notice_reversed_within_five_minutes_writes_no_record_and_one_that_stood_five_does() {
         let (_d, s) = detect(&[obs("vrr", "ready")], &DriftState::default(), NOV10);
-        let (_d, s) = detect(&[obs("vrr", "attention")], &s, NOV19);
-        let (_d, s) = detect(&[obs("vrr", "ready")], &s, NOV19B);
-        assert!(s.cleared.is_empty() && s.attention_reads.is_empty() && s.noticed_titles.is_empty());
-        // Two readings two minutes apart.
+        // One reading, reversed a minute later.
         let (_d, s) = detect(&[obs("vrr", "attention")], &s, "2026-11-20T10:00:00Z");
-        let (_d, s) = detect(&[obs("vrr", "attention")], &s, "2026-11-20T10:02:00Z");
-        let (_d, s) = detect(&[obs("vrr", "ready")], &s, "2026-11-20T10:03:00Z");
+        let (_d, s) = detect(&[obs("vrr", "ready")], &s, "2026-11-20T10:01:00Z");
+        assert!(s.cleared.is_empty() && s.noticed_titles.is_empty() && s.noticed_at.is_empty());
+        // Many readings (two at start within seconds, and more) inside four minutes 59 seconds: still a blip.
+        let (_d, s) = detect(&[obs("vrr", "attention")], &s, "2026-11-20T11:00:00Z");
+        let (_d, s) = detect(&[obs("vrr", "attention")], &s, "2026-11-20T11:00:05Z");
+        let (_d, s) = detect(&[obs("vrr", "attention")], &s, "2026-11-20T11:02:00Z");
+        let (_d, s) = detect(&[obs("vrr", "ready")], &s, "2026-11-20T11:04:59Z");
         assert!(s.cleared.is_empty(), "under five minutes is a blip however many scans saw it");
+        // Exactly five minutes, read off by a single scan: kept.
+        let (_d, s) = detect(&[obs("vrr", "attention")], &s, "2026-11-20T12:00:00Z");
+        let (_d, s) = detect(&[obs("vrr", "ready")], &s, "2026-11-20T12:05:00Z");
+        assert_eq!(s.cleared["vrr"].noticed_at, "2026-11-20T12:00:00Z");
     }
 
-    /// The owner's applied-changes count flapped 13 <-> 14 on Nov 11: each time a scan read it off once and the
-    /// next read it on. None of it is a record of the setting having been off.
+    /// The owner's drift.json shape: a notice a build from before this field was kept wrote on Nov 19, with no
+    /// titles saved. The first scan by the new build must neither move that date nor drop the notice.
     #[test]
-    fn the_owners_flapping_on_count_on_nov_11_writes_nothing() {
+    fn a_standing_notice_from_an_older_build_keeps_its_date_on_the_first_scan_and_its_title() {
+        let owner = r#"{"last_good":{"applied-changes":true},"noticed_at":{"applied-changes":"2026-11-19T20:49:30Z"},
+            "labels":{"applied-changes":"Changes Compy applied"},"last_ready_seen":{"applied-changes":"2026-11-19T20:37:00Z"}}"#;
+        let prior: DriftState = serde_json::from_str(owner).expect("the older file loads");
+        let scan = "2026-11-22T10:02:00Z";
+        let (d, s1) = detect_seen(&[obs("applied-changes", "attention")], &titled(&["Trim Windows visual effects"]), &prior, scan);
+        assert_eq!(d[0].noticed_at, "2026-11-19T20:49:30Z", "the card's date is still the one the older build wrote");
+        assert_eq!(s1.noticed_at["applied-changes"], "2026-11-19T20:49:30Z");
+        assert_eq!(s1.noticed_titles["applied-changes"][0].at, "2026-11-19T20:49:30Z", "the title carries the notice time, not the upgrade scan");
+        // A notice whose first scans read no titles at all stamps the first it later reads with the notice time too.
+        let (_d, bare) = detect_seen(&[obs("applied-changes", "attention")], &HashMap::new(), &prior, "2026-11-21T09:00:00Z");
+        assert!(bare.noticed_titles.is_empty());
+        let (_d, late) = detect_seen(&[obs("applied-changes", "attention")], &titled(&["Trim Windows visual effects"]), &bare, scan);
+        assert_eq!(late.noticed_titles["applied-changes"][0].at, "2026-11-19T20:49:30Z");
+        // A later new-build scan that names a second title does stamp it with its own scan.
+        let (_d, s1b) = detect_seen(&[obs("applied-changes", "attention")], &titled(&["Trim Windows visual effects", "Enable Windows Game Mode"]), &s1, "2026-11-22T10:03:00Z");
+        assert_eq!(s1b.noticed_titles["applied-changes"][1].at, "2026-11-22T10:03:00Z");
+        assert_eq!(s1b.noticed_titles["applied-changes"][0].at, "2026-11-19T20:49:30Z");
+        // Turned back on three minutes later: kept (a notice that already stood for days is established), not re-dated.
+        let (_d, s2) = detect_seen(&[obs("applied-changes", "ready")], &on(&["Trim Windows visual effects"]), &s1, "2026-11-22T10:05:00Z");
+        let c = s2.cleared.get("applied-changes").expect("a notice that stood since Nov 19 is not a blip");
+        assert_eq!((c.noticed_at.as_str(), c.back_on), ("2026-11-19T20:49:30Z", true));
+        assert_eq!(c.titles[0].at, "2026-11-19T20:49:30Z");
+        // Even a first scan that reads it ready (nothing named yet) does not drop the notice's end.
+        let (_d, s3) = detect_seen(&[obs("applied-changes", "ready")], &on(&["Trim Windows visual effects"]), &prior, scan);
+        assert_eq!(s3.cleared["applied-changes"].noticed_at, "2026-11-19T20:49:30Z");
+        assert!(!s3.cleared["applied-changes"].back_on, "no title was kept, so it is not said to be back on");
+    }
+
+    /// A flapping reading (the owner's applied-changes On count went 13 <-> 14 on Nov 11): a scan reads it off and
+    /// the next, a minute later, reads it on, again and again. None of it is a record of the setting being off.
+    #[test]
+    fn a_setting_read_off_then_on_a_minute_later_again_and_again_writes_nothing() {
         let day = |h: u32, m: u32| format!("2026-11-11T{h:02}:{m:02}:00Z");
         let (_d, mut s) = detect(&[obs("applied-changes", "ready")], &DriftState::default(), &day(8, 0));
         for (h, m) in [(9, 40), (10, 30), (11, 20), (13, 5)] {
@@ -1023,7 +1073,7 @@ mod drift_tests {
             let (_d, s2) = detect_seen(&[obs("applied-changes", "ready")], &m2, &s1, &day(h, m + 1));
             s = s2;
         }
-        assert!(s.cleared.is_empty() && s.noticed_titles.is_empty() && s.attention_reads.is_empty(), "no record, no title, no read count left behind");
+        assert!(s.cleared.is_empty() && s.noticed_titles.is_empty(), "no record and no title left behind");
         assert!(records_from(&s).is_empty());
     }
 
@@ -1064,7 +1114,7 @@ mod drift_tests {
         assert_eq!(s.noticed_titles["applied-changes"].len(), 2);
         // Read ready again with both On: the titles move into the cleared entry and out of the standing record.
         let (_d, s) = detect_seen(&[obs("applied-changes", "ready")], &on(&["Enable Windows Game Mode", "Trim Windows visual effects"]), &s, NOV21);
-        assert!(s.noticed_titles.is_empty() && s.attention_reads.is_empty());
+        assert!(s.noticed_titles.is_empty());
         let c = &s.cleared["applied-changes"];
         assert!(c.back_on);
         assert_eq!(kept(&c.titles), vec!["Trim Windows visual effects".to_string(), "Enable Windows Game Mode".to_string()]);
@@ -1083,7 +1133,7 @@ mod drift_tests {
         // Never more than KEPT_TITLES.
         let many: Vec<String> = (0..20).map(|i| format!("Change {i}")).collect();
         let mut held = Vec::new();
-        merge_titles(&mut held, &many, NOV19);
+        merge_titles(&mut held, &many, &[], NOV19);
         assert_eq!(held.len(), KEPT_TITLES);
     }
 
@@ -1120,6 +1170,50 @@ mod drift_tests {
         assert_eq!((t[1].title.as_str(), t[1].at.as_str()), ("Trim Windows visual effects", "2026-11-20T09:00:00Z"));
     }
 
+    /// Two changes can share a title (a catalog title that changed, or two entries a user named alike): "back on" is
+    /// decided by the change's id, and the title only names it.
+    #[test]
+    fn back_on_matches_a_change_by_its_id_and_not_by_its_title() {
+        let off = |recs: &[&str]| {
+            let mut m = HashMap::new();
+            m.insert(
+                "applied-changes".to_string(),
+                Seen { titles: recs.iter().map(|_| "Trim Windows visual effects".to_string()).collect(), recs: recs.iter().map(|r| r.to_string()).collect(), ..Seen::default() },
+            );
+            m
+        };
+        let back = |on_recs: &[&str], on_titles: &[&str]| {
+            let mut m = HashMap::new();
+            m.insert(
+                "applied-changes".to_string(),
+                Seen { on_recs: on_recs.iter().map(|r| r.to_string()).collect(), on_titles: on_titles.iter().map(|r| r.to_string()).collect(), ..Seen::default() },
+            );
+            m
+        };
+        let (_d, s) = detect(&[obs("applied-changes", "ready")], &DriftState::default(), NOV10);
+        let (_d, s) = detect_seen(&[obs("applied-changes", "attention")], &off(&["visual-effects", "visual-effects-2"]), &s, NOV19);
+        let (_d, s) = detect_seen(&[obs("applied-changes", "attention")], &off(&["visual-effects", "visual-effects-2"]), &s, NOV19B);
+        assert_eq!(s.noticed_titles["applied-changes"].len(), 2, "two changes with one title are two changes");
+        // Only one of them reads On: one title kept, whatever the shared title reads.
+        let (_d, one) = detect_seen(&[obs("applied-changes", "ready")], &back(&["visual-effects"], &["Trim Windows visual effects"]), &s, NOV21);
+        let c = &one.cleared["applied-changes"];
+        assert_eq!((c.titles.len(), c.back_on), (1, true));
+        assert_eq!(c.titles[0].rec.as_deref(), Some("visual-effects"), "the one whose id reads On");
+        // The title reads On but no kept change's id does: not back on.
+        let (_d, none) = detect_seen(&[obs("applied-changes", "ready")], &back(&["another-change"], &["Trim Windows visual effects"]), &s, NOV21);
+        assert!(none.cleared["applied-changes"].titles.is_empty() && !none.cleared["applied-changes"].back_on, "a title is not a match when the id is known");
+        // A kept title with no id (a scan that had none) falls back to the title.
+        let mut m = HashMap::new();
+        m.insert("applied-changes".to_string(), Seen { titles: vec!["Trim Windows visual effects".into()], ..Seen::default() });
+        let (_d, t) = detect(&[obs("applied-changes", "ready")], &DriftState::default(), NOV10);
+        let (_d, t) = detect_seen(&[obs("applied-changes", "attention")], &m, &t, NOV19);
+        let (_d, t) = detect_seen(&[obs("applied-changes", "ready")], &back(&[], &["Trim Windows visual effects"]), &t, NOV21);
+        assert_eq!(t.cleared["applied-changes"].titles.len(), 1);
+        // The id is saved with the title and is not written when there is none.
+        assert!(serde_json::to_string(&one).unwrap().contains("\"rec\":\"visual-effects\""));
+        assert!(!serde_json::to_string(&t).unwrap().contains("\"rec\""));
+    }
+
     #[test]
     fn a_record_older_than_thirty_days_is_pruned_and_one_inside_is_kept() {
         let rec = |n: &str, c: &str| ClearedDrift { noticed_at: n.into(), cleared_at: c.into(), last_ready_at: None, titles: Vec::new(), back_on: true };
@@ -1141,7 +1235,7 @@ mod drift_tests {
     fn an_old_file_without_the_field_loads_and_a_newer_file_loads_in_an_older_shape() {
         let old = r#"{"last_good":{"vrr":true},"noticed_at":{},"labels":{}}"#;
         let s: DriftState = serde_json::from_str(old).expect("an older drift.json still loads");
-        assert!(s.cleared.is_empty() && s.attention_reads.is_empty());
+        assert!(s.cleared.is_empty());
         // The record round-trips, and an entry written without its optional earlier bound still loads.
         let s1 = off_for_an_hour("vrr");
         let (_d, s2) = detect(&[obs("vrr", "ready")], &s1, "2026-11-22T00:00:00Z");

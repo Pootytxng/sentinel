@@ -1264,7 +1264,8 @@ export default function Fix({
           <p className="fix-refuse-intro">
             {t("optimize.fix.driftedIntro", { count: drifted.length })}
           </p>
-          <ul className="fix-list">
+          {/* data-focus-target: the card's "turn it back on" request lands on the first switch here (OptimizeStation). */}
+          <ul className="fix-list" data-focus-target="applied-changes">
             {drifted.map((rec) => (
               <SlimFixRow
                 key={rec.id}

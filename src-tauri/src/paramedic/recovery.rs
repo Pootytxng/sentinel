@@ -245,7 +245,8 @@ pub(super) struct Gap {
     /// ("build", "count"): no change can be said to be absent where Compy has nothing to compare.
     unread: Vec<&'static str>,
     /// The difference in the count of changes that are on is the setting being turned back on, not another change
-    /// (a cleared applied-changes record falls in the stretch and the count returned to the baseline's).
+    /// (a cleared applied-changes record falls in the stretch and the rise is what turning those changes back on
+    /// explains: see `restore_explains_count`).
     count_explained: bool,
 }
 
@@ -367,18 +368,22 @@ fn gap_of(c: &Ctx, rec: &[&SessionFacts]) -> Gap {
 
 /// The count of changes that are on rose between the last rough session and the first normal one. It is the
 /// setting being turned back on, and not another change, only when a cleared applied-changes record that read On
-/// again falls in that stretch, the count rose by no more than the changes it read back On, and it is now what
-/// it was before the rough sessions began.
+/// again falls in that stretch (`lo < cleared_at <= hi`) and the rise is what turning those changes back on
+/// explains: it equals the number of changes the record read back On (the count can also have flapped, as the
+/// owner's did 13 <-> 14), or it is smaller and the count is now exactly what it was before the rough sessions
+/// began. A rise beyond the number restored is a real second change. A net-zero mix (restore one, apply one,
+/// undo one) cannot be told apart by a count alone; that limit already existed.
 fn restore_explains_count(c: &Ctx, lo: DateTime<Utc>, hi: DateTime<Utc>, rough: usize, recovered: usize) -> bool {
-    let Some(before) = c.baseline_newest.compy_changes else { return false };
-    if recovered != before || recovered <= rough {
+    if recovered <= rough {
         return false;
     }
+    let delta = recovered - rough;
+    let back_to_baseline = c.baseline_newest.compy_changes == Some(recovered);
     c.inp.drift.iter().any(|n| {
         n.id == "applied-changes"
             && n.back_on
             && !n.titles.is_empty()
-            && recovered - rough <= n.titles.len()
+            && (delta == n.titles.len() || (back_to_baseline && delta < n.titles.len()))
             && n.cleared_at.as_deref().and_then(ts).is_some_and(|b| b > lo && b <= hi)
     })
 }

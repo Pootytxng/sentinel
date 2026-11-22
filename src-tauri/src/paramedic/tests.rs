@@ -2765,7 +2765,7 @@ mod recovery_f3 {
     }
 
     fn kt(title: &str, at: &str) -> crate::drift::KeptTitle {
-        crate::drift::KeptTitle { title: title.into(), at: at.into() }
+        crate::drift::KeptTitle { title: title.into(), rec: None, at: at.into() }
     }
 
     /// The build and the count of changes both recorded on every session that did not set them: the
@@ -2816,6 +2816,24 @@ mod recovery_f3 {
         assert!(old.seen.iter().all(|s| s.id != "setting-drift-moved"));
         // No record at all: the same.
         assert!(follow_with(episode(), Vec::new()).not_it.iter().any(|n| n.id == "setting-drift"));
+        // And when something DID move after the window opened it is not ruled out: said as what happened instead.
+        let moved = follow_with(with_extra(episode(), vec![on(10, 30.0, Some("2.0"))]), vec![fact("applied-changes", "2026-10-10T12:00:00Z", None)]);
+        assert!(moved.not_it.iter().all(|n| n.id != "setting-drift"), "{:?}", moved.not_it);
+        assert!(moved.seen.iter().any(|s| s.id == "setting-drift-moved"));
+    }
+
+    /// Off inside the window, but last read fine before it opened: when it changed is not recorded, so it is neither
+    /// listed as a change in the window nor ruled out.
+    #[test]
+    fn a_setting_noticed_inside_the_window_but_last_read_fine_before_it_is_timing_unknown() {
+        let before_window = DriftFact { last_ready_at: Some("2026-10-02T12:00:00Z".into()), ..fact("applied-changes", "2026-10-07T12:00:00Z", None) };
+        let d = follow_with(episode(), vec![before_window]);
+        assert!(d.findings.iter().all(|f| f.id != "setting-drift"), "not listed as a change in the window");
+        assert!(d.not_it.iter().all(|n| n.id != "setting-drift"), "and not ruled out: {:?}", d.not_it);
+        assert!(d.unknowns.contains(&"drift-timing"), "{:?}", d.unknowns);
+        // Last read fine inside the window: the change is placed there, and listed.
+        let inside = DriftFact { last_ready_at: Some("2026-10-06T12:00:00Z".into()), ..fact("applied-changes", "2026-10-07T12:00:00Z", None) };
+        assert!(follow_with(episode(), vec![inside]).findings.iter().any(|f| f.id == "setting-drift"));
     }
 
     #[test]
@@ -3069,8 +3087,11 @@ mod recovery_f3 {
         assert_eq!(r.summary, RecoverySummary::PointsTo { id: "setting-drift" });
         assert!(r.also_changed.is_empty(), "the count line belongs to the setting: {:?}", r.also_changed.iter().map(|e| e.code).collect::<Vec<_>>());
         assert_eq!(f.confidence, Certainty::Possible);
-        // The count row does not compete with it.
-        assert!(d.findings.iter().filter(|x| x.id == "compy-change").all(|x| x.now != Some(NowStatus::PointsTo)));
+        // The count row is there (the count did change at the first rough session) and does not compete with it: it
+        // says only that its change is explained by the setting, never "points to".
+        let count_row = d.findings.iter().find(|x| x.id == "compy-change").expect("the count row exists to be checked");
+        assert_eq!(count_row.now, Some(NowStatus::CantTell));
+        assert!(count_row.now_evidence.iter().all(|e| e.code == "recovered-compy-explained"), "{:?}", count_row.now_evidence.iter().map(|e| e.code).collect::<Vec<_>>());
         let line = f.now_evidence.iter().find(|e| e.code == "compy-changes-restore").unwrap();
         assert_eq!((line.args["from"].as_str(), line.args["to"].as_str()), ("12", "13"));
     }
@@ -3089,6 +3110,70 @@ mod recovery_f3 {
         // A count that came back up with no cleared record to explain it is not attributed to anything either.
         let d = follow_with(counted(13, 12, 13), Vec::new());
         assert!(d.recovery.as_ref().is_some_and(|r| r.also_changed.iter().any(|e| e.code == "compy-changes-differ")));
+    }
+
+    fn reapplied_titles(back: &str, n: usize) -> DriftFact {
+        let titles = (0..n).map(|i| kt(&format!("Change {i}"), NOTICED)).collect();
+        DriftFact { titles, ..fact("applied-changes", NOTICED, Some(back)) }
+    }
+
+    fn is_explained(d: &Diagnosis) -> bool {
+        d.recovery.as_ref().is_some_and(|r| r.summary == RecoverySummary::PointsTo { id: "setting-drift" } && r.also_changed.is_empty())
+            && finding_of(d, "setting-drift").now_evidence.iter().any(|e| e.code == "compy-changes-restore")
+    }
+
+    fn differs(d: &Diagnosis) -> bool {
+        // A record cleared outside the stretch is no suspect at all (said as dates), so the row may be absent.
+        d.recovery.as_ref().is_some_and(|r| r.also_changed.iter().any(|e| e.code == "compy-changes-differ"))
+            && d.findings.iter().filter(|f| f.id == "setting-drift").all(|f| f.now_evidence.iter().all(|e| e.code != "compy-changes-restore"))
+    }
+
+    /// The owner's count flapped 13 <-> 14 on Nov 11. If it reads 13 on the rough sessions and 14 once the setting
+    /// is back on, the rise is the one change that was turned back on: explained, not "more than one change".
+    #[test]
+    fn a_count_that_rose_by_the_number_of_changes_turned_back_on_is_explained_even_off_the_baseline() {
+        let d = follow_with(counted(13, 13, 14), vec![reapplied(BACK_ON)]);
+        assert!(is_explained(&d), "13 -> 14 with one restored title, baseline 13: {:?}", d.recovery.as_ref().map(|r| (&r.summary, r.also_changed.iter().map(|e| e.code).collect::<Vec<_>>())));
+        // Two restored titles and a rise of two: the same rule.
+        assert!(is_explained(&follow_with(counted(13, 12, 14), vec![reapplied_titles(BACK_ON, 2)])));
+        // Beyond the number restored it is a real second change: +2 with one restored title, +3 with two.
+        assert!(differs(&follow_with(counted(13, 12, 14), vec![reapplied(BACK_ON)])));
+        assert!(differs(&follow_with(counted(13, 11, 14), vec![reapplied(BACK_ON)])));
+        assert!(differs(&follow_with(counted(13, 10, 13), vec![reapplied_titles(BACK_ON, 2)])));
+    }
+
+    /// The baseline path on its own: a rise smaller than the number restored is explained only when the count is
+    /// now exactly what it was before the rough sessions, and not when it is somewhere else.
+    #[test]
+    fn a_smaller_rise_than_the_number_restored_is_explained_only_back_at_the_baseline() {
+        assert!(is_explained(&follow_with(counted(13, 12, 13), vec![reapplied_titles(BACK_ON, 2)])), "back at the baseline of 13");
+        assert!(differs(&follow_with(counted(14, 12, 13), vec![reapplied_titles(BACK_ON, 2)])), "baseline 14: 13 is not where it was");
+        // No rise at all (13 -> 13, or a fall) adds no count line and explains nothing away.
+        let d = follow_with(counted(13, 13, 13), vec![reapplied(BACK_ON)]);
+        assert!(!differs(&d) && !is_explained(&d), "an unchanged count has no count line to attribute");
+        assert!(differs(&follow_with(counted(13, 14, 13), vec![reapplied(BACK_ON)])), "a fall is not a restore");
+    }
+
+    /// The window: the record must have been cleared after the last rough session and by the first clear one.
+    #[test]
+    fn the_restore_must_fall_between_the_rough_sessions_and_the_clear_ones_to_explain_the_count() {
+        assert!(is_explained(&follow_with(counted(13, 12, 13), vec![reapplied(BACK_ON)])), "inside the stretch");
+        assert!(differs(&follow_with(counted(13, 12, 13), vec![reapplied("2026-10-07T12:00:00Z")])), "cleared before the rough session ended");
+        assert!(differs(&follow_with(counted(13, 12, 13), vec![reapplied("2026-10-20T12:00:00Z")])), "cleared after the clear sessions began");
+        // A record that did not read back On (an undo) explains nothing either.
+        let undone = DriftFact { back_on: false, ..reapplied(BACK_ON) };
+        assert!(differs(&follow_with(counted(13, 12, 13), vec![undone])));
+    }
+
+    /// The restore sentence names the notice's own date: with a standing notice from an older build the title was
+    /// stamped with the notice time, so every line the card prints says "off on" the original day.
+    #[test]
+    fn the_named_restore_line_carries_the_notice_date_and_each_titles_own_time() {
+        let fact = DriftFact { titles: vec![kt("Trim Windows visual effects", NOTICED), kt("Enable Windows Game Mode", "2026-10-08T09:00:00Z")], ..fact("applied-changes", NOTICED, Some(BACK_ON)) };
+        let d = follow_with(episode(), vec![fact]);
+        let line = finding_of(&d, "setting-drift").evidence.iter().find(|e| e.code == "drift-noticed").expect("the drift line").clone();
+        assert_eq!(line.args["noticed"].as_str(), NOTICED);
+        assert_eq!(line.args["seen"].as_str(), format!("{NOTICED}\u{1f}2026-10-08T09:00:00Z"));
     }
 
     /// B4: a build stamp one of the bounding sessions did not record: no "no other change", and it says which source.
@@ -3142,16 +3227,20 @@ mod recovery_f3 {
     #[test]
     fn only_applied_changes_tells_the_restored_story_and_no_check_gets_the_false_no_changes_line() {
         // Another check read ready again inside the window: said as moved, with no "back on" claim.
-        let d = follow_with(episode(), vec![fact("power-profile", "2026-10-07T12:00:00Z", Some("2026-10-08T12:00:00Z"))]);
+        // (Not the power plan: that one is already routed to dates by its own unchanged-plan rule.)
+        let d = follow_with(episode(), vec![fact("monitor-refresh", "2026-10-07T12:00:00Z", Some("2026-10-08T12:00:00Z"))]);
         assert!(d.not_it.iter().all(|n| n.id != "setting-drift"), "{:?}", d.not_it);
-        assert!(d.findings.iter().filter(|f| f.id == "setting-drift").all(|f| f.evidence.iter().all(|e| !e.code.starts_with("drift-restored"))));
+        assert!(d.findings.iter().all(|f| f.id != "setting-drift"), "a cleared record of another check is never a back-on suspect");
+        let other = d.seen.iter().find(|s| s.id == "setting-drift-moved").expect("said as dates, not dropped");
+        assert_eq!((other.args["check"].as_str(), other.args["restored"].as_str()), ("monitor-refresh", "2026-10-08T12:00:00Z"));
         // Applied changes that read ready without any of them On: neither a restore nor "no changes noticed".
         let undone = DriftFact { back_on: false, ..fact("applied-changes", NOTICED, Some(BACK_ON)) };
         let d = follow_with(with_extra(episode(), vec![calm(13), calm(14)]), vec![undone]);
         assert!(d.not_it.iter().all(|n| n.id != "setting-drift"));
         assert!(d.findings.iter().filter(|f| f.id == "setting-drift").all(|f| f.now != Some(NowStatus::PointsTo)));
-        let moved = d.seen.iter().find(|s| s.id == "setting-drift-moved");
-        assert!(moved.is_none_or(|m| !m.args.contains_key("restored")), "{:?}", moved);
+        let moved = d.seen.iter().find(|s| s.id == "setting-drift-moved").expect("an undo still says it ended, as dates");
+        assert!(!moved.args.contains_key("restored"), "no 'back on' for a notice that ended without any change reading On: {:?}", moved);
+        assert_eq!(moved.args["check"].as_str(), "applied-changes");
     }
 
     /// After the 30-day prune "no changes noticed" is only said for a window inside what Compy remembers.

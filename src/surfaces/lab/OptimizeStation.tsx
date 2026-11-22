@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../../i18n";
 import Fix from "../Fix";
 import Check, { NoUpgradeBlock, UpgradePathBlock } from "../Check";
 import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
+import { takeCheckFocus } from "../check-focus";
 import { useReducedMotion } from "../../design/use-motion";
 import { useExpertView } from "../../design/use-expert-view";
 import { knownIncomplete, useLedgerHealth } from "../../design/LedgerHealthNotice";
@@ -84,6 +85,14 @@ export function OptimizeStation(props: LabFastPathProps) {
   // Same drift derivation the Optimize room + verdict use — a drifted rec renders ONCE in Fix's
   // "turned off outside Compy" group, never double-counted as ready (one-mention law).
   const reverted = useMemo(() => deriveReverted(props.changes), [props.changes]);
+  // The Something's-wrong card opens this station asking for the "turn it back on" control. The real one-press path
+  // (it asks you to confirm first) is the switch at the top of the station, in the "turned off outside Compy" group,
+  // which is shown without opening anything: focus that. When there is none (the change is not appliable here), the
+  // request stays for the health check's own row, which opens its "More cleanup" disclosure for this visit.
+  useEffect(() => {
+    const first = document.querySelector<HTMLElement>('[data-focus-target="applied-changes"] button[role="switch"]:not(:disabled)');
+    if (first && takeCheckFocus("applied-changes")) first.focus();
+  }, [reverted.length]);
   // §5 Power-features bay: lazy-mount Gaming Mode only when the user opens the disclosure, so the
   // Lab tab never spins up its session-state poll while the bay sits collapsed (the perf rails).
   const [powerOpen, setPowerOpen] = useState(false);

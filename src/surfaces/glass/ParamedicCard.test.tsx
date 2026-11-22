@@ -2647,6 +2647,23 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     expect(screen.queryByTestId("paramedic-open-check")).toBeNull();
   });
 
+  it("a notice that stood before the upgrade keeps its own date on the card: 'off on' the notice day, never the day of a later scan", async () => {
+    // The owner's file: noticed Nov 19 by an older build that kept no titles; the new build named the title on a later
+    // scan, and (drift.rs) stamped it with the notice time. The sentence prints that date, and not the later one.
+    const later = "2026-11-22T10:02:00Z";
+    const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const line = ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z", restored: later, titles: "Trim Windows visual effects", seen: NOTICED });
+    const text = await open({ findings: [find("setting-drift", { evidence: [line, ev("drift-restored-none", { restored: later }, { kind: "unknown", source: "sessions" }), unknownOf], fix: steps("setting-drift") })] });
+    expect(text).toContain(`Compy found “Trim Windows visual effects” (off on ${day(NOTICED)}`);
+    expect(text).not.toContain(`(off on ${day(later)}`);
+    // Two titles: the first carries the notice day, the second the scan that first saw it.
+    cleanup();
+    const two = ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z", restored: later, titles: "Trim Windows visual effects\u001fEnable Windows Game Mode", seen: `${NOTICED}\u001f2026-11-21T09:00:00Z` });
+    const both = await open({ findings: [find("setting-drift", { evidence: [two, unknownOf], fix: steps("setting-drift") })] });
+    expect(both).toContain(`“Trim Windows visual effects” (off on ${day(NOTICED)}`);
+    expect(both).toContain(`“Enable Windows Game Mode” (off on ${day("2026-11-21T09:00:00Z")}`);
+  });
+
   it("a rough session after it was back on weakens the suspect with the dated line, and the suspect stays listed", async () => {
     const rough = ev("drift-restored-rough", { restored: BACK, at: "2026-11-22T12:00:00Z", count: "1" }, { kind: "measured", against: true, source: "sessions" });
     const text = await open({ findings: [suspect([rough], { in_play: false })] });
@@ -2744,7 +2761,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     const restore = ev("compy-changes-restore", { from: "12", to: "13" }, { source: "sessions" });
     const f = suspect([], { in_play: true, now: "points-to", now_evidence: [backLine, restore] });
     const text = await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery({ kind: "points-to", id: "setting-drift" }) });
-    expect(text).toContain("Compy's count of changes that are on went from 12 to 13 between the rough sessions and the ones that ran normally, back to where it was before. That is what turning that setting back on would do.");
+    expect(text).toContain("Compy's count of changes that are on went from 12 to 13 between the rough sessions and the ones that ran normally. That is what turning that setting back on would do.");
     expect(screen.queryByTestId("paramedic-between-cant-tell")).toBeNull();
     expect(text).not.toContain("also changed");
   });
@@ -2815,7 +2832,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
       await waitFor(() => expect(screen.getByTestId("paramedic-verdict")).toBeTruthy());
       expect(screen.getByTestId("paramedic-verdict").textContent).toBe(
-        "Compy 读到相关设置在这两次游戏之前已重新开启。在 Compy 会留意的更改（驱动程序、Windows 更新、游戏文件、已安装的程序）中，那段时间里没有发现其他更改。这与这些设置确实起了作用的说法相符，但并不能证明。",
+        "Compy 读到相关设置在这两次游戏之前已重新开启。在 Compy 会留意的更改（驱动程序、Windows 更新、游戏文件、已安装的程序）中，那段时间里没有发现其他更改。这与相关设置确实起了作用的说法相符，但并不能证明。",
       );
       cleanup();
       const gap = { kind: "measured", code: "gap-build", args: { from: "100", to: "101" }, against: false, source: "sessions" } as F["evidence"][number];
@@ -2870,7 +2887,8 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     it("the applied-changes setting: the step names the room, the button opens it and asks for that row, once", async () => {
       const onOpenCheck = vi.fn();
       const text = await open({ findings: [find("setting-drift", { evidence: [off("applied-changes"), unknownOf], fix: steps("setting-drift") })] }, { onOpenCheck });
-      expect(text).toContain("Turn it back on in Test, where Compy asks you to confirm first. Also check any Windows setting you changed yourself.");
+      expect(text).toContain("Turn it back on in Test, where Compy asks you to confirm first.");
+      expect(text, "no invitation to change a second thing during a one-change test").not.toContain("Also check any Windows setting");
       expect(text).not.toContain("health check");
       expect(onOpenCheck).not.toHaveBeenCalled();
       const { checkFocusPending, takeCheckFocus } = await import("../check-focus");
@@ -2894,7 +2912,8 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       for (const evidence of [[off("monitor-refresh")], [off("applied-changes"), off("power-profile")]]) {
         const onOpenCheck = vi.fn();
         const text = await open({ findings: [find("setting-drift", { evidence: [...evidence, unknownOf], fix: steps("setting-drift") })] }, { onOpenCheck });
-        expect(text).toContain("Open History to see what Compy changed, and check any Windows setting you changed yourself.");
+        expect(text).toContain("Check the setting in Windows, and any Windows setting you changed yourself.");
+        expect(text, "History is not a screen the owner can open").not.toContain("Open History");
         expect(text).not.toContain("Turn it back on in Test");
         expect(screen.queryByTestId("paramedic-open-check")).toBeNull();
         expect(onOpenCheck).not.toHaveBeenCalled();
@@ -2912,7 +2931,8 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
         await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
         openAll();
         const text = screen.getByTestId("paramedic").textContent ?? "";
-        expect(text).toContain("到“测试”里把它重新开启，开启前 Compy 会先请你确认。也请检查你自己改过的 Windows 设置。");
+        expect(text).toContain("到“测试”里把它重新开启，开启前 Compy 会先请你确认。");
+        expect(text).not.toContain("也请检查你自己改过的 Windows 设置");
         expect(screen.getByTestId("paramedic-open-check").textContent).toBe("打开“测试”");
       } finally {
         await i18n.changeLanguage("en");

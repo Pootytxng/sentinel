@@ -294,6 +294,8 @@ export default function Check({
   useEffect(() => {
     if (phase !== "verdict" || running) return;
     const row = document.querySelector<HTMLElement>('[data-check-row="applied-changes"]');
+    // (In the Lab's optimize station this embedded check never renders that row: Fix's "turned off outside Compy"
+    // group carries it, and the station focuses that group's switch itself, which is shown without opening anything.)
     if (takeCheckFocus("applied-changes") && row) row.focus();
   }, [reverted.length, phase, running]);
 

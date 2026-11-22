@@ -1232,11 +1232,11 @@ fn drift_inputs(
     let mut seen = std::collections::HashMap::new();
     for c in checks.iter().filter(|c| !dismissed.contains(c.id)) {
         observations.push((c.id.to_string(), c.label.to_string(), status_str(c.status).to_string(), c.detail.clone()));
-        let (titles, applied_at, on_titles) = match (c.id, hist) {
-            ("applied-changes", Ok(h)) => (h.drifted_titles.clone(), h.drifted_applied_at.clone(), h.active_titles.clone()),
-            _ => (Vec::new(), Vec::new(), Vec::new()),
+        let (titles, applied_at, on_titles, recs, on_recs) = match (c.id, hist) {
+            ("applied-changes", Ok(h)) => (h.drifted_titles.clone(), h.drifted_applied_at.clone(), h.active_titles.clone(), h.drifted_recs.clone(), h.active_recs.clone()),
+            _ => (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
         };
-        seen.insert(c.id.to_string(), crate::drift::Seen { value: c.value.clone(), titles, applied_at, on_titles });
+        seen.insert(c.id.to_string(), crate::drift::Seen { value: c.value.clone(), titles, applied_at, on_titles, recs, on_recs });
     }
     (observations, seen)
 }

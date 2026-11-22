@@ -388,8 +388,8 @@
     "driftRestoredClear": "After it was back on, {{game}}'s session on {{date}} ran in its usual range. One session so far; Compy says a game is back in its usual range after two.",
     "driftRestoredBetween": "The sessions since it was back on weren't clearly in {{game}}'s usual range, so Compy can't tell yet.",
     "recoveredDriftBack": "Compy read that setting back on at {{restored}}, before the sessions that ran normally. That is consistent with that setting, but it doesn't prove it.",
-    "compyChangesRestore": "Compy's count of changes that are on went from {{from}} to {{to}} between the rough sessions and the ones that ran normally, back to where it was before. That is what turning that setting back on would do.",
-    "recoveredCompyExplained": "Compy's count of changes that are on went from {{from}} to {{to}} when that setting was turned back on, so it isn't counted as another change.",
+    "compyChangesRestore": "Compy's count of changes that are on went from {{from}} to {{to}} between the rough sessions and the ones that ran normally. That is what turning that setting back on would do.",
+    "recoveredCompyExplained": "Compy's count of changes that are on went from {{from}} to {{to}} between the rough sessions and the normal ones, the same stretch in which that setting was read back on, so it isn't counted as another change.",
     "whichNotRecorded": "Which setting it was, and what changed it, isn't recorded.",
     "whichChangedNotRecorded": "What changed it isn't recorded.",
     "whichNotLoaded": "Compy couldn't read which setting it was just now. What changed it isn't recorded.",
@@ -529,14 +529,14 @@
       "step2": "Play {{game}} once, then press Something's wrong again."
     },
     "settingDrift": {
-      "step1": "Open History to see what Compy changed, and check any Windows setting you changed yourself.",
-      "stepTurnOn": "Turn it back on in {{room}}, where Compy asks you to confirm first. Also check any Windows setting you changed yourself.",
+      "step1": "Check the setting in Windows, and any Windows setting you changed yourself.",
+      "stepTurnOn": "Turn it back on in {{room}}, where Compy asks you to confirm first.",
       "step2": "Play {{game}} once, then press Something's wrong again.",
       "stepBackOn": "Compy read it back on by {{restored}}. Play {{game}} once, then press Something's wrong again.",
       "openCheck": "Open {{room}}"
     },
     "compyChange": {
-      "step1": "Open History and look at the changes Compy has on. Undo the newest one.",
+      "step1": "Open {{room}} and look at the changes Compy has on. Undo the newest one.",
       "step2": "Play {{game}} once, then press Something's wrong again."
     },
     "none": "Compy has no change to offer for this. Check it in Windows, then play once more.",

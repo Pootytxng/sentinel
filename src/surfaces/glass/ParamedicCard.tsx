@@ -568,7 +568,7 @@ function stepLines(fix: ParamedicFix, { t, game, dates }: Ctx, restored?: string
       if (appliedOnly) return [t("paramedic.fix.settingDrift.stepTurnOn", { room: t("common.rail.lab") }), t("paramedic.fix.settingDrift.step2", { game })];
       return [t("paramedic.fix.settingDrift.step1"), t("paramedic.fix.settingDrift.step2", { game })];
     case "compy-change":
-      return [t("paramedic.fix.compyChange.step1"), t("paramedic.fix.compyChange.step2", { game })];
+      return [t("paramedic.fix.compyChange.step1", { room: t("common.rail.lab") }), t("paramedic.fix.compyChange.step2", { game })];
     case "windows-update":
       // Uninstalling is the owner's choice in Settings, offered for a quality update only. There is no button.
       return present([
