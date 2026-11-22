@@ -914,6 +914,7 @@ mod tests {
             ("src/lib.rs", "build_dirty_predicate_flips_on_unstaged_change", 1), // test-only git, never shipped
             ("src/monitoring.rs", "start_fps_capture_locked", 1), // the FPS self-spawn of current_exe() (absolute path)
             ("build.rs", "git_stamp", 2), // build time only, on the developer's machine: git for the embedded stamp; never shipped
+            ("src/monitoring.rs", "spawn_plain_helper", 1), // D1-S1: the same self-spawn, unelevated (absolute, checked)
         ];
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let resolver = root.join("src").join("sys_exe.rs");

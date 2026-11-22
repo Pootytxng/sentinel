@@ -389,8 +389,11 @@ change will be reflected in an updated version of this policy before it ships.
 
 ## Administrator access
 
-Some actions (and the FPS capture helper) require Windows Administrator permission and will
-prompt you (UAC). Compy asks for these rights to read state and to apply or undo the specific change
+Some actions require Windows Administrator permission and will prompt you (UAC). The FPS capture
+helper also asks for Administrator permission, unless your Windows account is already a member of
+the built-in "Performance Log Users" group (Compy never adds you to it); then Compy starts the helper
+without a prompt and without Administrator rights, and asks for the permission only if that start
+fails. Compy asks for these rights to read state and to apply or undo the specific change
 you requested. It installs no kernel driver of its own and does not inject code into your games.
 
 ## Children's privacy

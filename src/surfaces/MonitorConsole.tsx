@@ -83,7 +83,9 @@ type FpsSample = {
   avg_frametime_ms: number;
   recent_frametimes_ms: number[];
 };
-type FpsLite = { active: boolean; status: string; sample: FpsSample | null } & FpsUnreadStatus;
+// `prompt_free`: this PC's sign-in already lets Compy measure without a Windows administrator prompt
+// (D1-S1). Absent from an older build, which reads as today's behaviour.
+type FpsLite = { active: boolean; status: string; sample: FpsSample | null; prompt_free?: boolean } & FpsUnreadStatus;
 
 // Same corner set as Play's overlay config (ported, not forked).
 const CORNERS: [string, string][] = [
@@ -795,6 +797,13 @@ export function MonitorConsole({
         <p className="mc-how">
           <Term id="etw">{t("monitor.monitorConsole.narrative.howItWorks")}</Term>
         </p>
+        {/* D1-S1: the one place the room says what the Windows prompt will do. Shown only when this
+            PC's sign-in already allows measuring without one; otherwise the room says what it said. */}
+        {fps?.prompt_free === true && (
+          <p className="mc-how" data-testid="mc-no-prompt">
+            {t("monitor.monitorConsole.noPromptSetUp")}
+          </p>
+        )}
 
         {/* What capture is doing right now. The Start/Stop button is NOT repeated here — it moved
             up to the one action slot — so this row is status plus the room's other real control. */}

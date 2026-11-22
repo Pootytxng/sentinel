@@ -1895,6 +1895,8 @@ mod process_refresh_guard {
     // the same change that reviews it: `OpenProcess` anywhere else, test code included, fails. The
     // substring also catches `NtOpenProcess`, `ZwOpenProcess` and `OpenProcessToken`; `DuplicateHandle` and
     // `GetProcessHandleFromHwnd` (other ways to end up holding a process handle) are held to the same list.
+    // One form is not a site (D1-S1): `OpenProcessToken(GetCurrentProcess(), ..)` reads THIS process's
+    // own token and opens no other process (see `is_own_token_site`; its plain `use` import likewise).
     //
     // SCOPE: this reads `src-tauri/src/**/*.rs` as masked text, nothing else. It cannot see dependency
     // crates (sysinfo's process refresh is banned separately above) and cannot see a name looked up by
@@ -1903,6 +1905,44 @@ mod process_refresh_guard {
     const OPEN_PROCESS_ALLOWLIST: &[(&str, &str, &str)] = &[];
     const HANDLE_CALLS: &[&str] = &["OpenProcess", "DuplicateHandle", "GetProcessHandleFromHwnd"];
 
+    /// D1-S1: the one form that opens nothing but THIS process's own token: `OpenProcessToken` called on
+    /// the `GetCurrentProcess()` pseudo-handle (whitespace ignored), or the name imported by a `use`
+    /// statement WITHOUT an `as` rename (a rename would hide the later call). Any other
+    /// `OpenProcessToken` (on a handle to another process, or taken as a value) still counts, and so does
+    /// every `OpenProcess`, `NtOpenProcess`, `DuplicateHandle` and `GetProcessHandleFromHwnd`.
+    fn is_own_token_site(s: &str, at: usize) -> bool {
+        const TOKEN: &str = "OpenProcessToken";
+        let ident = |c: char| c.is_alphanumeric() || c == '_';
+        if !s[at..].starts_with(TOKEN) || s[..at].chars().next_back().is_some_and(ident) {
+            return false;
+        }
+        let end = at + TOKEN.len();
+        if s[end..].chars().next().is_some_and(ident) {
+            return false; // a longer name that merely starts with it
+        }
+        let after: String = s[end..].chars().filter(|c| !c.is_whitespace()).take(24).collect();
+        if after.starts_with("(GetCurrentProcess()") {
+            return true;
+        }
+        let stmt_start = s[..at].rfind(';').map_or(0, |i| i + 1);
+        let stmt_end = s[end..].find(';').map_or(s.len(), |i| end + i);
+        let in_use = s[stmt_start..at].trim_start().starts_with("use ");
+        let renamed = s[end..stmt_end].trim_start().starts_with("as ");
+        in_use && !renamed
+    }
+
+    /// Every handle-call position in `s`, own-token sites excluded.
+    fn handle_call_positions(s: &str) -> Vec<usize> {
+        let mut hits: Vec<usize> = HANDLE_CALLS
+            .iter()
+            .flat_map(|n| s.match_indices(n).map(|(i, _)| i))
+            .filter(|&i| !is_own_token_site(s, i))
+            .collect();
+        hits.sort_unstable();
+        hits.dedup();
+        hits
+    }
+
     /// Where `OpenProcess` appears in `src`: the enclosing function name for each production occurrence,
     /// plus "<test code>" if any occurrence is inside a `#[cfg(test)]` item. Masked first, so comments
     /// and string literals neither trip nor hide it.
@@ -1910,8 +1950,8 @@ mod process_refresh_guard {
         let masked = mask(src);
         let prod = drop_test_items(&masked);
         let ident = |c: char| c.is_alphanumeric() || c == '_';
-        let count = |s: &str| HANDLE_CALLS.iter().map(|n| s.matches(n).count()).sum::<usize>();
-        let mut hits: Vec<usize> = HANDLE_CALLS.iter().flat_map(|n| prod.match_indices(n).map(|(i, _)| i)).collect();
+        let count = |s: &str| handle_call_positions(s).len();
+        let mut hits: Vec<usize> = handle_call_positions(&prod);
         hits.sort_unstable();
         let mut sites: Vec<String> = hits
             .into_iter()
@@ -1972,6 +2012,16 @@ mod process_refresh_guard {
         assert_eq!(open_process_sites("fn probe(pid: u32) { OpenProcess(Q, false, pid); }"), vec!["probe"]);
         assert_eq!(open_process_sites("fn a() {}\nfn b() { let h = NtOpenProcess(x); }"), vec!["b"]);
         assert_eq!(open_process_sites("fn t() { OpenProcessToken(h, 8, &mut t); }"), vec!["t"]);
+        // D1-S1: a token open on THIS process's pseudo-handle opens no other process; its plain import
+        // is not a call. Every other token open, a renamed import or the name taken as a value counts.
+        assert!(open_process_sites("fn own() { OpenProcessToken(GetCurrentProcess(), Q, &mut t).ok()?; }").is_empty());
+        assert!(open_process_sites("fn own() { OpenProcessToken( GetCurrentProcess( ), Q, &mut t); }").is_empty());
+        assert!(open_process_sites("fn own() {\n    use a::b;\n    use w::{GetCurrentProcess, OpenProcessToken};\n}").is_empty());
+        assert_eq!(open_process_sites("fn other(h: HANDLE) { OpenProcessToken(h, Q, &mut t); }"), vec!["other"]);
+        assert_eq!(open_process_sites("fn other() { OpenProcessToken(OpenProcess(Q, false, pid)?, Q, &mut t); }"), vec!["other", "other"]);
+        assert_eq!(open_process_sites("use w::OpenProcessToken as Opt;\nfn x() {}"), vec!["<top level>"]);
+        assert_eq!(open_process_sites("fn v() { let f = OpenProcessToken; }"), vec!["v"]);
+        assert_eq!(open_process_sites("fn own() { OpenProcessToken(GetCurrentProcess(), Q, &mut t); OpenProcess(Q, false, pid); }"), vec!["own"]);
         assert_eq!(open_process_sites("fn d() { DuplicateHandle(a, b, c); }"), vec!["d"]);
         assert_eq!(open_process_sites("fn h() { GetProcessHandleFromHwnd(w); }"), vec!["h"]);
         assert_eq!(open_process_sites("fn x() { OpenProcess(1); }\nfn y() { DuplicateHandle(1); }"), vec!["x", "y"]);

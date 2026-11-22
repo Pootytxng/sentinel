@@ -940,6 +940,12 @@ pub(crate) struct FpsStatus {
     /// (cumulative, half-second ticks). Omitted while 0. Additive: an older reader ignores it.
     #[serde(skip_serializing_if = "is_zero_u64")]
     unreadable_ticks: u64,
+    /// D1-S1: true when this PC's sign-in already lets Compy start the measurement without a Windows
+    /// administrator prompt (the account's token carries the enabled "Performance Log Users" group)
+    /// and no start without a prompt has failed since. Read-only; omitted while false (an older build
+    /// never sends it; both read as "nothing to say").
+    #[serde(skip_serializing_if = "is_false")]
+    prompt_free: bool,
 }
 
 fn is_zero_u64(n: &u64) -> bool {
@@ -1101,6 +1107,76 @@ fn elevated_helper_status(res: &std::io::Result<std::process::ExitStatus>) -> St
     }
 }
 
+/// The elevated launch of the capture helper (UAC "runas"). D1-S1 moved it into a function, unchanged,
+/// so the start without a prompt can fall back to it.
+fn launch_elevated_helper(exe: std::path::PathBuf, out: String, alive: String, generation: u64) {
+    use std::sync::atomic::Ordering;
+    // elevate_and_wait blocks for the helper's lifetime, so run it on a
+    // dedicated thread. A declined UAC prompt returns Err(os error 1223) quickly.
+    //
+    // The launcher runs SW_HIDE: the helper never creates a Tauri window
+    // (main.rs returns into run_fps_capture before tauri::Builder), but in a
+    // debug build compy.exe is a console-subsystem app, so the default
+    // SW_NORMAL would pop a visible console running the capture loop. The
+    // UAC-off direct spawn gets the same effect via CREATE_NO_WINDOW.
+    // Optimistically mark a helper live: the wait blocks for the helper's whole
+    // lifetime, so we can't wait for a separate "spawned" signal. A declined UAC returns
+    // quickly and clears it again — a brief, harmless true window.
+    helper_running().store(true, Ordering::Release);
+    std::thread::spawn(move || {
+        use std::ffi::OsStr;
+        let res = crate::actions::elevate_and_wait(
+            exe.as_os_str(),
+            &[
+                OsStr::new("--fps-capture"),
+                OsStr::new("--fps-out"),
+                OsStr::new(&out),
+                OsStr::new("--fps-alive"),
+                OsStr::new(&alive),
+            ],
+        );
+        helper_running().store(false, Ordering::Release);
+        // Only this capture's flag and status, as the direct-spawn wait above.
+        let current = capture_current(generation);
+        if current {
+            fps_active().store(false, Ordering::Release);
+        }
+        // Distinguish a cancelled/failed elevation from a clean stop. Since 2026-07-14
+        // the launcher is our own elevate_and_wait (the runas crate it replaced ALWAYS
+        // returned Ok on Windows, so a cancel arrived as Ok(!0) and the Err arm was dead).
+        // Now a real UAC decline is Err(os error 1223); a helper that ran and died also
+        // maps to "declined" — same coarse UI state as before, no false "stopped".
+        let msg = elevated_helper_status(&res);
+        if current {
+            *lock_status() = msg;
+        }
+        // Support evidence (spec §12): "I pressed start and nothing happened" is the most
+        // common monitoring report, and the three causes below are indistinguishable in the
+        // UI. os error 1223 is specifically the user dismissing the UAC prompt — a REFUSED
+        // outcome, not a failure, and not something to fix.
+        match &res {
+            Ok(s) if s.success() => {
+                support_stop(SupportOutcome::Ok, "exit_clean", "elevated helper exited cleanly")
+            }
+            Ok(s) => support_stop(
+                SupportOutcome::Failed,
+                "exit_nonzero",
+                &format!("elevated helper exited with status {s}"),
+            ),
+            Err(e) if e.raw_os_error() == Some(1223) => support_record(
+                SupportOutcome::Refused,
+                "uac_declined",
+                "the UAC prompt was dismissed, so the helper never started",
+            ),
+            Err(e) => support_record(
+                SupportOutcome::Failed,
+                "elevation_failed",
+                &format!("elevation did not complete: {e}"),
+            ),
+        }
+    });
+}
+
 fn start_fps_capture_locked() -> Result<(), String> {
     use std::sync::atomic::Ordering;
     if fps_active().load(Ordering::Acquire) {
@@ -1199,71 +1275,13 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 support_record(SupportOutcome::Failed, "spawn_failed", &format!("helper did not launch: {e}"));
             }
         }
+    } else if plain_start_applies(false, process_is_elevated(), perf_log_access()) {
+        // D1-S1: this sign-in's token already carries the enabled "Performance Log Users" group, so
+        // Windows lets this unelevated app start the trace: try the helper as a plain child first;
+        // any failure of that start is the elevated launch below, exactly as it was.
+        start_plain_or_elevated(exe, out, alive, generation);
     } else {
-        // elevate_and_wait blocks for the helper's lifetime, so run it on a
-        // dedicated thread. A declined UAC prompt returns Err(os error 1223) quickly.
-        //
-        // The launcher runs SW_HIDE: the helper never creates a Tauri window
-        // (main.rs returns into run_fps_capture before tauri::Builder), but in a
-        // debug build compy.exe is a console-subsystem app, so the default
-        // SW_NORMAL would pop a visible console running the capture loop. The
-        // direct-spawn path above gets the same effect via CREATE_NO_WINDOW.
-        // Optimistically mark a helper live: the wait blocks for the helper's whole
-        // lifetime, so we can't wait for a separate "spawned" signal. A declined UAC returns
-        // quickly and clears it again — a brief, harmless true window.
-        helper_running().store(true, Ordering::Release);
-        std::thread::spawn(move || {
-            use std::ffi::OsStr;
-            let res = crate::actions::elevate_and_wait(
-                exe.as_os_str(),
-                &[
-                    OsStr::new("--fps-capture"),
-                    OsStr::new("--fps-out"),
-                    OsStr::new(&out),
-                    OsStr::new("--fps-alive"),
-                    OsStr::new(&alive),
-                ],
-            );
-            helper_running().store(false, Ordering::Release);
-            // Only this capture's flag and status, as the direct-spawn wait above.
-            let current = capture_current(generation);
-            if current {
-                fps_active().store(false, Ordering::Release);
-            }
-            // Distinguish a cancelled/failed elevation from a clean stop. Since 2026-07-14
-            // the launcher is our own elevate_and_wait (the runas crate it replaced ALWAYS
-            // returned Ok on Windows, so a cancel arrived as Ok(!0) and the Err arm was dead).
-            // Now a real UAC decline is Err(os error 1223); a helper that ran and died also
-            // maps to "declined" — same coarse UI state as before, no false "stopped".
-            let msg = elevated_helper_status(&res);
-            if current {
-                *lock_status() = msg;
-            }
-            // Support evidence (spec §12): "I pressed start and nothing happened" is the most
-            // common monitoring report, and the three causes below are indistinguishable in the
-            // UI. os error 1223 is specifically the user dismissing the UAC prompt — a REFUSED
-            // outcome, not a failure, and not something to fix.
-            match &res {
-                Ok(s) if s.success() => {
-                    support_stop(SupportOutcome::Ok, "exit_clean", "elevated helper exited cleanly")
-                }
-                Ok(s) => support_stop(
-                    SupportOutcome::Failed,
-                    "exit_nonzero",
-                    &format!("elevated helper exited with status {s}"),
-                ),
-                Err(e) if e.raw_os_error() == Some(1223) => support_record(
-                    SupportOutcome::Refused,
-                    "uac_declined",
-                    "the UAC prompt was dismissed, so the helper never started",
-                ),
-                Err(e) => support_record(
-                    SupportOutcome::Failed,
-                    "elevation_failed",
-                    &format!("elevation did not complete: {e}"),
-                ),
-            }
-        });
+        launch_elevated_helper(exe, out, alive, generation);
     }
 
     // Session summary aggregator (F3, READ-ONLY): while monitoring is active,
@@ -1646,6 +1664,333 @@ pub(crate) fn uac_disabled() -> bool {
         .unwrap_or(false)
 }
 
+// ─── D1-S1: start the capture helper without elevation when the account already allows it ────────
+//
+// Windows lets administrators, members of the built-in "Performance Log Users" group (S-1-5-32-559)
+// and service accounts control event-tracing sessions, and enabling a provider into one takes the
+// same rights. Sources (Microsoft Learn): StartTraceW "Return value" (ERROR_ACCESS_DENIED),
+// EnableTraceEx2 "Return value" (ERROR_ACCESS_DENIED) and "Controlling Event Tracing Sessions". The
+// helper enables ONE provider (Microsoft-Windows-DXGI, fps.rs) into one real-time session, and
+// ferrisetw returns an error if either call fails, which makes the helper exit: so a start the group
+// does not cover never captures a subset, it fails and the elevated launch takes over.
+//
+// The helper is the same program with the same five arguments either way, and it names and watches
+// the game from the process snapshot in both cases (other_load.rs), so the measurement is the same.
+// This code reads THIS process's own token only. It never adds, removes or changes a group, a policy
+// or a service, and it opens no other process.
+
+/// What this process's own token says about "Performance Log Users".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PerfLogAccess {
+    /// The group is in the token and ENABLED: Windows will let this process start a trace.
+    InToken,
+    /// Not in the token as an enabled group. (Membership added after sign-in is not in the token until
+    /// the next sign-in, and this read cannot tell that case apart from "never a member".)
+    NotInToken,
+    /// The token could not be read, or its group list was malformed: treated as `NotInToken`.
+    Unknown,
+}
+
+/// S-1-5-32-559 as bytes: revision 1, two sub-authorities, NT authority (5), 32 (BUILTIN), 559.
+const PERF_LOG_USERS_SID: [u8; 16] = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 0x2F, 0x02, 0, 0];
+const SE_GROUP_ENABLED: u32 = 0x4;
+const SE_GROUP_USE_FOR_DENY_ONLY: u32 = 0x10;
+
+/// PURE: read a `TOKEN_GROUPS` buffer as `GetTokenInformation(TokenGroups)` returns it on x64:
+/// a u32 count, 4 bytes of padding, then `count` entries of (pointer to SID, u32 attributes, 4 bytes
+/// of padding), with the SIDs stored later in the SAME buffer (the pointers are absolute addresses).
+/// The group counts only when ENABLED and not "use for deny only". Anything malformed is `Unknown`;
+/// every offset is checked arithmetic (review S4).
+pub(crate) fn perf_log_access_from_token_groups(buf: &[u8]) -> PerfLogAccess {
+    fn rd<const N: usize>(buf: &[u8], at: usize) -> Option<[u8; N]> {
+        buf.get(at..at.checked_add(N)?)?.try_into().ok()
+    }
+    fn entry_sid_matches(buf: &[u8], base: usize, at: usize) -> Option<(bool, u32)> {
+        let ptr = rd::<8>(buf, at).map(|b| u64::from_le_bytes(b) as usize)?;
+        let attrs = rd::<4>(buf, at.checked_add(8)?).map(u32::from_le_bytes)?;
+        let start = ptr.checked_sub(base)?;
+        let sub_count = *buf.get(start.checked_add(1)?)? as usize;
+        let end = start.checked_add(8)?.checked_add(sub_count.checked_mul(4)?)?;
+        let sid = buf.get(start..end)?;
+        Some((sid == PERF_LOG_USERS_SID, attrs))
+    }
+    let base = buf.as_ptr() as usize;
+    let Some(count) = rd::<4>(buf, 0).map(|b| u32::from_le_bytes(b) as usize) else {
+        return PerfLogAccess::Unknown;
+    };
+    let entries_end = count.checked_mul(16).and_then(|n| n.checked_add(8));
+    if count > 1024 || !matches!(entries_end, Some(end) if end <= buf.len()) {
+        return PerfLogAccess::Unknown;
+    }
+    let mut found = false;
+    for i in 0..count {
+        let Some((is_plu, attrs)) = entry_sid_matches(buf, base, 8 + i * 16) else {
+            return PerfLogAccess::Unknown;
+        };
+        if is_plu && attrs & SE_GROUP_ENABLED != 0 && attrs & SE_GROUP_USE_FOR_DENY_ONLY == 0 {
+            found = true;
+        }
+    }
+    if found {
+        PerfLogAccess::InToken
+    } else {
+        PerfLogAccess::NotInToken
+    }
+}
+
+/// Run `f` with a read-only handle to THIS process's own token. (Our own token, never another
+/// process's: nothing here touches the game.)
+fn with_own_token<R>(f: impl FnOnce(windows::Win32::Foundation::HANDLE) -> Option<R>) -> Option<R> {
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::Security::TOKEN_QUERY;
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    // SAFETY: GetCurrentProcess is a pseudo-handle; the token handle is closed before returning.
+    unsafe {
+        let mut token = HANDLE::default();
+        OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).ok()?;
+        let out = f(token);
+        let _ = CloseHandle(token);
+        out
+    }
+}
+
+/// Is this process's token elevated? `None` when it cannot be read.
+pub(crate) fn process_is_elevated() -> Option<bool> {
+    use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION};
+    // SAFETY: the out-buffer is a TOKEN_ELEVATION of the size passed.
+    with_own_token(|token| unsafe {
+        let mut elevation = TOKEN_ELEVATION::default();
+        let mut returned = 0u32;
+        GetTokenInformation(
+            token,
+            TokenElevation,
+            Some((&mut elevation as *mut TOKEN_ELEVATION).cast()),
+            std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+            &mut returned,
+        )
+        .ok()?;
+        Some(elevation.TokenIsElevated != 0)
+    })
+}
+
+/// Read this process's token groups (`GetTokenInformation(TokenGroups)`) and parse them. The buffer is
+/// a `Vec<u64>` so it is 8-byte aligned, as TOKEN_GROUPS requires (review S4); `None` = unreadable.
+fn own_token_perf_log_access() -> Option<PerfLogAccess> {
+    use windows::Win32::Security::{GetTokenInformation, TokenGroups};
+    // SAFETY: the buffer outlives the call and its byte length is passed with it.
+    with_own_token(|token| unsafe {
+        let mut needed = 0u32;
+        let _ = GetTokenInformation(token, TokenGroups, None, 0, &mut needed);
+        if needed == 0 || needed > (1 << 16) {
+            return None;
+        }
+        let mut words = vec![0u64; (needed as usize).div_ceil(8)];
+        let bytes = words.len() * 8;
+        GetTokenInformation(token, TokenGroups, Some(words.as_mut_ptr().cast()), bytes as u32, &mut needed).ok()?;
+        // The SID pointers inside are absolute addresses into `words`, so parse it IN PLACE.
+        let view = std::slice::from_raw_parts(words.as_ptr().cast::<u8>(), bytes);
+        Some(perf_log_access_from_token_groups(view))
+    })
+}
+
+/// Does this logon session's token carry the enabled "Performance Log Users" group? A token never
+/// changes after sign-in, so this is read once per run.
+pub(crate) fn perf_log_access() -> PerfLogAccess {
+    static ACCESS: OnceLock<PerfLogAccess> = OnceLock::new();
+    *ACCESS.get_or_init(|| own_token_perf_log_access().unwrap_or(PerfLogAccess::Unknown))
+}
+
+/// PURE: start the helper as a plain (unelevated) child first? Only with UAC on, this app itself NOT
+/// elevated, and the group enabled in the token. Any other answer (including an unreadable token)
+/// is today's launch, untouched.
+pub(crate) fn plain_start_applies(uac_off: bool, elevated: Option<bool>, access: PerfLogAccess) -> bool {
+    !uac_off && elevated == Some(false) && access == PerfLogAccess::InToken
+}
+
+/// The helper's command line: the same five arguments the elevated launch passes. A plain start adds
+/// no argument and no environment of its own.
+fn helper_argv(out: &str, alive: &str) -> [String; 5] {
+    [
+        "--fps-capture".to_string(),
+        "--fps-out".to_string(),
+        out.to_string(),
+        "--fps-alive".to_string(),
+        alive.to_string(),
+    ]
+}
+
+/// PURE: the helper exe for a plain start must be an absolute path with no `..` in it: our own
+/// running exe. Anything else is a failed start (and so the elevated launch).
+fn checked_helper_path(exe: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    use std::path::Component;
+    if !exe.is_absolute() || exe.components().any(|c| matches!(c, Component::ParentDir)) {
+        return Err("own exe path is not an absolute path".to_string());
+    }
+    Ok(exe.to_path_buf())
+}
+
+/// How long after a plain start an exit still counts as "the trace did not start". A trace that
+/// cannot start makes the helper exit at once; the elevated launch takes over only in this window,
+/// never in the middle of a session.
+const PLAIN_START_WINDOW: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// True after a plain start failed and the elevated launch took over; cleared by the next plain
+/// start that works. Only so the Live room stops saying "no prompt" once it was not true.
+fn plain_start_failed() -> &'static std::sync::atomic::AtomicBool {
+    static F: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    &F
+}
+
+/// PURE: the Live room's "measures without a prompt" line is true only while a plain start applies
+/// and none has failed.
+fn prompt_free_from(plain_applies: bool, start_failed: bool) -> bool {
+    plain_applies && !start_failed
+}
+
+fn prompt_free_now() -> bool {
+    static ELEVATED: OnceLock<Option<bool>> = OnceLock::new();
+    let elevated = *ELEVATED.get_or_init(process_is_elevated);
+    prompt_free_from(
+        plain_start_applies(uac_disabled(), elevated, perf_log_access()),
+        plain_start_failed().load(std::sync::atomic::Ordering::Acquire),
+    )
+}
+
+/// Seam: what starting the helper did.
+#[derive(Debug, PartialEq, Eq)]
+enum Started {
+    Plain,
+    Elevated,
+}
+
+/// Try the plain spawn; when it fails, take the elevated launch. `note_failure` gets the reason a
+/// plain spawn failed. The three actions are handed in so tests can pin the order.
+fn start_helper<C>(
+    spawn_plain: impl FnOnce() -> Result<C, String>,
+    elevate: impl FnOnce(),
+    note_failure: impl FnOnce(&str),
+) -> (Started, Option<C>) {
+    match spawn_plain() {
+        Ok(child) => (Started::Plain, Some(child)),
+        Err(reason) => {
+            note_failure(&reason);
+            elevate();
+            (Started::Elevated, None)
+        }
+    }
+}
+
+/// When a plain helper exits: the reason to fall back to the elevated launch, or `None`. It falls back
+/// only if the capture is still wanted and the helper died inside [`PLAIN_START_WINDOW`].
+fn plain_exit_fallback_reason(status: &str, ran_for: std::time::Duration, capture_wanted: bool) -> Option<String> {
+    if !capture_wanted || ran_for > PLAIN_START_WINDOW {
+        return None;
+    }
+    Some(format!(
+        "the helper started without elevation exited ({status}) within {} s, so the trace did not start",
+        PLAIN_START_WINDOW.as_secs()
+    ))
+}
+
+/// The fallback, in capture order (review S1): it takes the same lock a served start or stop holds,
+/// and launches only if THIS capture is still the live one there. A Stop, or a Stop+Start, that got
+/// in first wins: no prompt nobody asked for, and never a second helper beside a newer capture's
+/// (both would share the session name "Compy-FPS"). `capture_wanted` is read under that lock.
+fn fall_back_in_order(
+    lock: &Mutex<u64>,
+    capture_wanted: impl FnOnce() -> bool,
+    reason_for: impl FnOnce(bool) -> Option<String>,
+    elevate: impl FnOnce(),
+    note_failure: impl FnOnce(&str),
+) -> bool {
+    let _order = lock.lock().unwrap_or_else(|p| p.into_inner());
+    match reason_for(capture_wanted()) {
+        Some(r) => {
+            note_failure(&r);
+            elevate();
+            true
+        }
+        None => false,
+    }
+}
+
+fn spawn_plain_helper(exe: &std::path::Path, out: &str, alive: &str) -> Result<std::process::Child, String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let exe = checked_helper_path(exe)?;
+    std::process::Command::new(exe) // spawn-allow: self-spawn of current_exe() (absolute, checked_helper_path), same as the UAC-off direct spawn
+        .args(helper_argv(out, alive))
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| e.to_string())
+}
+
+/// Launch the helper without elevation; the elevated launch ([`launch_elevated_helper`], unchanged)
+/// if that spawn fails, or if the helper exits inside [`PLAIN_START_WINDOW`] while this capture is
+/// still wanted. The reason for a fallback goes in the support log.
+fn start_plain_or_elevated(exe: std::path::PathBuf, out: String, alive: String, generation: u64) {
+    use std::sync::atomic::Ordering;
+    let note = |why: &str| {
+        plain_start_failed().store(true, Ordering::Release);
+        support_record(
+            SupportOutcome::Failed,
+            "nonelevated_start_failed",
+            &format!("{why}; asking for administrator permission instead"),
+        );
+    };
+    let (e2, o2, a2) = (exe.clone(), out.clone(), alive.clone());
+    let (_, child) = start_helper(
+        || spawn_plain_helper(&exe, &out, &alive),
+        || launch_elevated_helper(e2, o2, a2, generation),
+        |reason| note(&format!("could not start the helper without elevation ({reason})")),
+    );
+    let Some(mut child) = child else {
+        return;
+    };
+    plain_start_failed().store(false, Ordering::Release);
+    helper_running().store(true, Ordering::Release);
+    *lock_status() = "running".into();
+    support_record(
+        SupportOutcome::Ok,
+        "nonelevated_start",
+        "helper started without elevation (this account is in Performance Log Users)",
+    );
+    let started_at = std::time::Instant::now();
+    std::thread::spawn(move || {
+        let status = child.wait();
+        helper_running().store(false, Ordering::Release);
+        let text = match &status {
+            Ok(s) => s.to_string(),
+            Err(e) => format!("could not observe exit: {e}"),
+        };
+        let ran_for = started_at.elapsed();
+        let fell_back = fall_back_in_order(
+            capture_ctl(),
+            || capture_live(generation),
+            |wanted| plain_exit_fallback_reason(&text, ran_for, wanted),
+            || {
+                *lock_status() = "starting".into();
+                launch_elevated_helper(exe, out, alive, generation)
+            },
+            note,
+        );
+        if fell_back {
+            return;
+        }
+        // No fallback: what the UAC-off direct-spawn wait does when its helper ends.
+        if capture_current(generation) {
+            fps_active().store(false, Ordering::Release);
+            *lock_status() = "stopped".into();
+        }
+        match status {
+            Ok(s) if s.success() => support_stop(SupportOutcome::Ok, "exit_clean", "helper exited cleanly"),
+            Ok(s) => support_stop(SupportOutcome::Failed, "exit_nonzero", &format!("helper exited with status {s}")),
+            Err(e) => support_stop(SupportOutcome::Failed, "wait_failed", &format!("could not observe helper exit: {e}")),
+        }
+    });
+}
+// ─── end D1-S1 ────────────────────────────────────────────────────────────────────────────────────
+
 /// Stop FPS capture with a fresh ticket (test-only, as `start_fps_capture`). The served stop waits
 /// its turn behind a start in progress (see [`capture_in_order`]), so it stops what that start began.
 #[cfg(test)]
@@ -1735,6 +2080,7 @@ pub(crate) fn get_fps_status() -> FpsStatus {
         progress: if active { lock_progress().clone() } else { None },
         unreadable_now: unread.now,
         unreadable_ticks: unread.ticks,
+        prompt_free: prompt_free_now(),
     }
 }
 
@@ -2262,6 +2608,7 @@ mod unreadable_tests {
                 progress: None,
                 unreadable_now: now,
                 unreadable_ticks: ticks,
+                prompt_free: false,
             })
             .unwrap()
         };
@@ -2332,6 +2679,7 @@ mod unreadable_tests {
             progress: Some(progress),
             unreadable_now: true,
             unreadable_ticks: 9,
+            prompt_free: false,
         })
         .unwrap();
         assert_eq!(status["unreadable_now"], fixture["fps_status"]["unreadable_now"]);
@@ -2364,5 +2712,312 @@ mod elevated_helper_status_tests {
         assert_eq!(elevated_helper_status(&Err(std::io::Error::from_raw_os_error(1223))), "declined");
         assert_eq!(elevated_helper_status(&Ok(std::process::ExitStatus::from_raw(1))), "declined");
         assert_eq!(elevated_helper_status(&Ok(std::process::ExitStatus::from_raw(0))), "stopped");
+    }
+}
+
+// D1-S1: starting the capture helper without elevation when the account already allows it. Nothing
+// here starts a trace, a helper or a process: the token bytes are built by hand and the launchers are
+// fakes, so the order of the calls is what is pinned.
+#[cfg(test)]
+mod plain_start_tests {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+    use std::time::Duration;
+
+    const EVERYONE: [u8; 12] = [1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]; // S-1-1-0
+    const USERS: [u8; 16] = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 0x21, 0x02, 0, 0]; // S-1-5-32-545
+    const PERF_MONITOR_USERS: [u8; 16] = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 0x2E, 0x02, 0, 0]; // S-1-5-32-558, the neighbour
+    const ENABLED: u32 = 0x7; // mandatory | enabled by default | enabled
+    const NOT_ENABLED: u32 = 0x3; // mandatory | enabled by default, switched off
+    const DENY_ONLY: u32 = 0x10;
+
+    /// A `TOKEN_GROUPS` buffer shaped like `GetTokenInformation(TokenGroups)` returns it on x64: count,
+    /// padding, 16-byte (pointer, attributes) entries, then the SIDs in the same buffer.
+    fn token_groups(groups: &[(&[u8], u32)]) -> Vec<u8> {
+        let sid_bytes: usize = groups.iter().map(|(s, _)| s.len()).sum();
+        let mut buf = vec![0u8; 8 + groups.len() * 16 + sid_bytes];
+        buf[0..4].copy_from_slice(&(groups.len() as u32).to_le_bytes());
+        let base = buf.as_ptr() as usize;
+        let mut sid_at = 8 + groups.len() * 16;
+        for (i, (sid, attrs)) in groups.iter().enumerate() {
+            let at = 8 + i * 16;
+            buf[at..at + 8].copy_from_slice(&((base + sid_at) as u64).to_le_bytes());
+            buf[at + 8..at + 12].copy_from_slice(&attrs.to_le_bytes());
+            buf[sid_at..sid_at + sid.len()].copy_from_slice(sid);
+            sid_at += sid.len();
+        }
+        buf
+    }
+
+    fn access(groups: &[(&[u8], u32)]) -> PerfLogAccess {
+        perf_log_access_from_token_groups(&token_groups(groups))
+    }
+
+    #[test]
+    fn the_sid_constant_is_s_1_5_32_559() {
+        let s = PERF_LOG_USERS_SID;
+        let sub = |i: usize| u32::from_le_bytes(s[8 + 4 * i..12 + 4 * i].try_into().unwrap());
+        assert_eq!((s[0], s[1], s[7]), (1, 2, 5), "revision 1, two sub-authorities, NT authority");
+        assert_eq!(format!("S-{}-{}-{}-{}", s[0], s[7], sub(0), sub(1)), "S-1-5-32-559");
+    }
+
+    #[test]
+    fn the_group_counts_only_when_it_is_enabled_in_the_token() {
+        let plu = &PERF_LOG_USERS_SID[..];
+        assert_eq!(access(&[(&EVERYONE, ENABLED), (&USERS, ENABLED), (plu, ENABLED)]), PerfLogAccess::InToken);
+        assert_eq!(access(&[(plu, ENABLED), (&EVERYONE, ENABLED)]), PerfLogAccess::InToken, "first or last");
+        assert_eq!(access(&[(plu, 0x4)]), PerfLogAccess::InToken, "the enabled bit alone");
+        assert_eq!(access(&[(plu, NOT_ENABLED)]), PerfLogAccess::NotInToken, "switched off");
+        assert_eq!(access(&[(plu, 0)]), PerfLogAccess::NotInToken);
+        assert_eq!(access(&[(plu, DENY_ONLY)]), PerfLogAccess::NotInToken, "deny-only");
+        assert_eq!(access(&[(plu, DENY_ONLY | 0x4)]), PerfLogAccess::NotInToken, "deny-only wins over enabled");
+        assert_eq!(access(&[(&EVERYONE, ENABLED), (&USERS, ENABLED)]), PerfLogAccess::NotInToken);
+        assert_eq!(access(&[(&PERF_MONITOR_USERS, ENABLED)]), PerfLogAccess::NotInToken, "S-1-5-32-558 is not it");
+        assert_eq!(access(&[]), PerfLogAccess::NotInToken, "a token with no groups");
+    }
+
+    #[test]
+    fn a_malformed_group_list_is_unknown_never_a_guess() {
+        let good = token_groups(&[(&PERF_LOG_USERS_SID, ENABLED)]);
+        assert_eq!(perf_log_access_from_token_groups(&[]), PerfLogAccess::Unknown, "empty");
+        assert_eq!(perf_log_access_from_token_groups(&good[..6]), PerfLogAccess::Unknown, "cut inside the header");
+        assert_eq!(perf_log_access_from_token_groups(&good[..20]), PerfLogAccess::Unknown, "cut inside an entry");
+        let mut many = good.clone();
+        many[0..4].copy_from_slice(&5000u32.to_le_bytes());
+        assert_eq!(perf_log_access_from_token_groups(&many), PerfLogAccess::Unknown, "absurd count");
+        let mut foreign = good.clone();
+        foreign[8..16].copy_from_slice(&7u64.to_le_bytes());
+        assert_eq!(perf_log_access_from_token_groups(&foreign), PerfLogAccess::Unknown, "pointer outside the buffer");
+        let mut huge = good.clone();
+        huge[8..16].copy_from_slice(&u64::MAX.to_le_bytes());
+        assert_eq!(perf_log_access_from_token_groups(&huge), PerfLogAccess::Unknown, "a pointer that would overflow");
+        // A SID that claims more sub-authorities than the buffer holds. Built fresh and changed IN
+        // PLACE (a clone has a new address while its pointers still point into the original, which
+        // would turn this into the "pointer outside the buffer" case). The control is unchanged.
+        let mut long_sid = token_groups(&[(&PERF_LOG_USERS_SID, ENABLED)]);
+        assert_eq!(perf_log_access_from_token_groups(&long_sid), PerfLogAccess::InToken, "control");
+        long_sid[8 + 16 + 1] = 200; // claims 200 sub-authorities: runs past the end
+        assert_eq!(perf_log_access_from_token_groups(&long_sid), PerfLogAccess::Unknown, "a SID longer than the buffer");
+        // And an unknown answer never starts a plain helper.
+        assert!(!plain_start_applies(false, Some(false), PerfLogAccess::Unknown));
+    }
+
+    /// The real read of this test process's own token gives an answer (whatever this PC's groups are)
+    /// and opens nothing else.
+    #[test]
+    fn the_own_token_read_works_on_this_pc() {
+        assert!(own_token_perf_log_access().is_some(), "this process's token groups could not be read");
+        assert!(process_is_elevated().is_some(), "this process's elevation could not be read");
+    }
+
+    #[test]
+    fn a_plain_start_needs_uac_on_an_unelevated_app_and_the_group() {
+        for uac_off in [false, true] {
+            for elevated in [Some(false), Some(true), None] {
+                for acc in [PerfLogAccess::InToken, PerfLogAccess::NotInToken, PerfLogAccess::Unknown] {
+                    let want = !uac_off && elevated == Some(false) && acc == PerfLogAccess::InToken;
+                    assert_eq!(plain_start_applies(uac_off, elevated, acc), want, "{uac_off} {elevated:?} {acc:?}");
+                }
+            }
+        }
+    }
+
+    /// Run `start_helper` over fakes; the log records which of the three actions ran, in order.
+    fn run(spawn_fails: Option<&str>) -> (Started, Vec<String>) {
+        let log = RefCell::new(Vec::<String>::new());
+        let (started, child) = start_helper(
+            || {
+                log.borrow_mut().push("spawn plain".into());
+                match spawn_fails {
+                    Some(why) => Err(why.to_string()),
+                    None => Ok(7u8),
+                }
+            },
+            || log.borrow_mut().push("elevated launch".into()),
+            |reason| log.borrow_mut().push(format!("note: {reason}")),
+        );
+        assert_eq!(child.is_some(), started == Started::Plain);
+        (started, log.into_inner())
+    }
+
+    #[test]
+    fn with_the_group_the_plain_start_is_tried_and_the_elevated_launch_is_not_requested() {
+        let (started, log) = run(None);
+        assert_eq!(started, Started::Plain);
+        assert_eq!(log, ["spawn plain"], "no elevated launch, no UAC prompt");
+    }
+
+    #[test]
+    fn when_the_plain_start_fails_the_elevated_launch_takes_over_and_the_reason_is_noted() {
+        let (started, log) = run(Some("access denied"));
+        assert_eq!(started, Started::Elevated);
+        assert_eq!(log, ["spawn plain", "note: access denied", "elevated launch"], "the reason first, then today's launch, once");
+    }
+
+    #[test]
+    fn without_the_group_the_launch_is_todays_elevated_one() {
+        // The decision point in start_fps_capture_locked: only plain_start_applies picks the plain path.
+        let src = include_str!("monitoring.rs").replace("\r\n", "\n");
+        let at = src.find(concat!("} else if plain_start_applies(false, process_is_elevated(), ", "perf_log_access()) {")).unwrap();
+        let branch = &src[at..at + src[at..].find("\n    }\n").unwrap()];
+        assert!(branch.contains(concat!("start_plain_or_", "elevated(exe, out, alive, generation);")));
+        assert!(branch.contains(concat!("} else {\n        launch_elevated_", "helper(exe, out, alive, generation);")));
+    }
+
+    #[test]
+    fn a_plain_helper_that_dies_at_once_falls_back_once_and_never_mid_session() {
+        let early = Duration::from_millis(300);
+        let late = PLAIN_START_WINDOW + Duration::from_secs(1);
+        let reason = plain_exit_fallback_reason("exit code: 1", early, true);
+        assert!(reason.as_deref().is_some_and(|r| r.contains("exit code: 1") && r.contains("did not start")));
+        // Died after the window (a crash mid-game): no sudden prompt over the game.
+        assert_eq!(plain_exit_fallback_reason("exit code: 1", late, true), None);
+        // The user stopped the capture: nothing to start again.
+        assert_eq!(plain_exit_fallback_reason("exit code: 0", early, false), None);
+    }
+
+    /// Review S1: the fallback runs in capture order. Driven on a private lock with fakes.
+    #[test]
+    fn the_fallback_launches_only_if_this_capture_is_still_live_under_the_capture_lock() {
+        let lock = Mutex::new(0u64);
+        let (elevated, notes) = (Cell::new(0), RefCell::new(Vec::<String>::new()));
+        let fall_back = |wanted: bool| {
+            fall_back_in_order(
+                &lock,
+                || {
+                    // The capture lock is HELD while "still wanted" is read.
+                    assert!(lock.try_lock().is_err(), "the capture state must be read under the capture lock");
+                    wanted
+                },
+                |w| plain_exit_fallback_reason("exit code: 1", Duration::from_millis(300), w),
+                || elevated.set(elevated.get() + 1),
+                |r| notes.borrow_mut().push(r.to_string()),
+            )
+        };
+        assert!(fall_back(true));
+        assert_eq!((elevated.get(), notes.borrow().len()), (1, 1), "one elevated launch, reason noted first");
+        // A Stop (or Stop+Start) got the lock first: this capture is no longer live. No prompt.
+        assert!(!fall_back(false));
+        assert_eq!((elevated.get(), notes.borrow().len()), (1, 1), "nothing launched for a stopped capture");
+        // The real call site passes the process capture lock and this capture's generation.
+        let src = include_str!("monitoring.rs").replace("\r\n", "\n");
+        let f = src.find(concat!("fn start_plain_or_", "elevated(")).unwrap();
+        let body = &src[f..f + src[f..].find("\n}\n").unwrap()];
+        assert!(body.contains(concat!("fall_back_in_", "order(\n            capture_ctl(),\n            || capture_live(generation),")));
+    }
+
+    #[test]
+    fn the_no_prompt_line_is_true_only_while_a_plain_start_applies_and_has_not_failed() {
+        assert!(prompt_free_from(true, false));
+        assert!(!prompt_free_from(true, true), "after a failed plain start the room stops saying it");
+        assert!(!prompt_free_from(false, false));
+        assert!(!prompt_free_from(false, true));
+        // On the wire it is omitted while false (an older reader sees no change).
+        let status = |prompt_free: bool| {
+            serde_json::to_value(FpsStatus {
+                active: false,
+                status: "idle".into(),
+                sample: None,
+                game_running: None,
+                progress: None,
+                unreadable_now: false,
+                unreadable_ticks: 0,
+                prompt_free,
+            })
+            .unwrap()
+        };
+        assert!(status(false).get("prompt_free").is_none());
+        assert_eq!(status(true)["prompt_free"], true);
+    }
+
+    #[test]
+    fn the_helper_path_must_be_absolute_with_no_parent_steps() {
+        use std::path::Path;
+        assert!(checked_helper_path(Path::new(r"C:\Program Files\Compy\compy.exe")).is_ok());
+        assert!(checked_helper_path(Path::new("compy.exe")).is_err(), "relative");
+        assert!(checked_helper_path(Path::new(r"..\compy.exe")).is_err(), "relative with ..");
+        assert!(checked_helper_path(Path::new(r"C:\Program Files\Compy\..\Evil\compy.exe")).is_err(), "..");
+    }
+
+    // The command line of the plain start is the elevated one: five arguments, nothing added.
+    #[test]
+    fn the_plain_helper_gets_the_same_five_arguments_and_the_elevated_call_is_untouched() {
+        assert_eq!(
+            helper_argv(r"C:\o\fps.json", r"C:\o\fps.alive"),
+            ["--fps-capture", "--fps-out", r"C:\o\fps.json", "--fps-alive", r"C:\o\fps.alive"]
+        );
+        let src = include_str!("monitoring.rs");
+        assert_eq!(src.matches(concat!("crate::actions::", "elevate_and_wait(")).count(), 1);
+        let call = src.find(concat!("crate::actions::", "elevate_and_wait(")).unwrap();
+        let args = &src[call..call + src[call..].find(");").unwrap()];
+        let mut at = 0;
+        for want in [
+            concat!("OsStr::new(\"--fps", "-capture\")"),
+            concat!("OsStr::new(\"--fps", "-out\")"),
+            concat!("OsStr::new(&", "out)"),
+            concat!("OsStr::new(\"--fps", "-alive\")"),
+            concat!("OsStr::new(&", "alive)"),
+        ] {
+            at += args[at..].find(want).unwrap_or_else(|| panic!("elevated argument {want} missing or reordered"));
+        }
+        // The plain launch adds nothing: no extra argument, no environment, no other program.
+        let start = src.find(concat!("fn spawn_plain_", "helper(")).unwrap();
+        let body = &src[start..start + src[start..].find("\n}\n").unwrap()];
+        assert!(body.contains(".args(helper_argv(out, alive))"));
+        for forbidden in [".arg(", ".env(", ".envs(", "Command::new(\"", "cmd", "powershell", "runas"] {
+            assert!(!body.contains(forbidden), "the plain launch must not use {forbidden}");
+        }
+    }
+
+    // Anti-cheat: the D1-S1 code opens no process handle; the only handle it opens is our own token.
+    #[test]
+    fn the_plain_path_opens_no_process_handle_but_our_own_token() {
+        let mon = include_str!("monitoring.rs");
+        let from = mon.find(concat!("// ─── D1-S1: start the capture helper ", "without")).unwrap();
+        let to = from + mon[from..].find(concat!("// ─── end ", "D1-S1")).unwrap();
+        let region = &mon[from..to];
+        assert!(!region.contains(concat!("Open", "Process(")), "the launch/token code opens a process handle");
+        assert!(!region.contains(concat!("Duplicate", "Handle")));
+        assert!(region.contains(concat!("Open", "ProcessToken(GetCurrentProcess()")), "it reads our OWN token");
+        for other in ["sysinfo", "Toolhelp", "EnumProcesses", "refresh_processes"] {
+            assert!(!region.contains(other), "the launch/token code enumerates processes: {other}");
+        }
+    }
+
+    // Owner territory: Compy changes no Windows group. This walks every Rust source under src/.
+    #[test]
+    fn nothing_in_the_crate_changes_group_membership() {
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(dir).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        let mut files = Vec::new();
+        walk(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut files);
+        assert!(files.len() > 40, "the walk found only {} files", files.len());
+        let forbidden = [
+            concat!("netlocalgroup", "addmembers"),
+            concat!("netlocalgroup", "setmembers"),
+            concat!("netlocalgroup", "delmembers"),
+            concat!("netlocalgroup", "add("),
+            concat!("netgroup", "adduser"),
+            concat!("netuser", "setgroups"),
+            concat!("net local", "group"),
+            concat!("net.exe local", "group"),
+            concat!("add-local", "groupmember"),
+            concat!("remove-local", "groupmember"),
+            concat!("add-adgroup", "member"),
+        ];
+        for f in files {
+            let text = std::fs::read_to_string(&f).unwrap_or_default().to_lowercase();
+            for token in forbidden {
+                assert!(!text.contains(token), "{} changes group membership ({token})", f.display());
+            }
+        }
     }
 }
