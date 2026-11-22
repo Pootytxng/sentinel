@@ -111,6 +111,11 @@ export const STORE_GROUPS: Record<string, string> = {
   "incident-observer": "crashNotes",
   "hardware-fingerprint": "hardware",
   intelligence: "identity",
+  // The frame-rate helper's leftovers in runtime\ belong to no store, so the backend gives each its own row
+  // id as its store. fps.json names the last game measured; without these lines they read as "other".
+  "fps-report": "fpsHelper",
+  "fps-report-tmp": "fpsHelper",
+  "fps-alive": "fpsHelper",
 };
 
 /** The other stores "Clear everything" deletes (C2b), by inventory row id. Every `ledger-*` row is the change

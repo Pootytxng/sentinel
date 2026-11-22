@@ -75,11 +75,16 @@ describe("your-data: what the screen says", () => {
         { rel: "sessions.json", row_id: "sessions", store: "sessions", category: "play_history", size: 2048, modified_ms: 1 },
         { rel: "sessions.json.corrupt.1", row_id: "store-corrupt-stamped", store: "sessions", category: "play_history", size: 10, modified_ms: 1 },
         { rel: "runtime/fps.json", row_id: "fps-report", store: "fps-report", category: "transient", size: 5, modified_ms: 1 },
+        { rel: "runtime/fps.json.tmp", row_id: "fps-report-tmp", store: "fps-report-tmp", category: "transient", size: 3, modified_ms: 1 },
+        { rel: "runtime/fps.alive", row_id: "fps-alive", store: "fps-alive", category: "transient", size: 1, modified_ms: 1 },
+        { rel: "made-up.json", row_id: "made-up", store: "made-up", category: "transient", size: 7, modified_ms: 1 },
       ],
     } as ClearPlan;
+    // Break check: remove the three fps entries from STORE_GROUPS -> the helper's files land in "other" and this fails.
     expect(groupDeletes(plan)).toEqual([
       { group: "sessions", files: ["sessions.json", "sessions.json.corrupt.1"], bytes: 2058 },
-      { group: "other", files: ["runtime/fps.json"], bytes: 5 },
+      { group: "fpsHelper", files: ["runtime/fps.json", "runtime/fps.json.tmp", "runtime/fps.alive"], bytes: 9 },
+      { group: "other", files: ["made-up.json"], bytes: 7 },
     ]);
     expect(groupKept([{ rel: "a", code: "undo_data", detail: "" }, { rel: "b", code: "new_code", detail: "" }])).toEqual([
       { code: "undo_data", known: true, files: ["a"] },
@@ -128,6 +133,8 @@ describe("your-data: the confirm list names every play-history store the invento
       id: /\bid: "([^"]+)"/.exec(body)?.[1] ?? "",
       base: /\bbase: (?:Base::)?(\w+)/.exec(body)?.[1] ?? "",
       category: /\bcategory: (?:Category::)?(\w+)/.exec(body)?.[1] ?? "",
+      path: /\bpath: "([^"]*)"/.exec(body)?.[1] ?? "",
+      personal: (/\bpersonal: &\[([^\]]*)\]/.exec(body)?.[1] ?? "").split(",").map((s) => s.replace(/Personal::/, "").trim()).filter(Boolean),
     };
   });
   const ids = new Set(rows.map((r) => r.id));
@@ -145,6 +152,30 @@ describe("your-data: the confirm list names every play-history store the invento
 
   it("every STORE_GROUPS key is an inventory id", () => {
     expect(Object.keys(STORE_GROUPS).filter((id) => !ids.has(id))).toEqual([]);
+  });
+
+  // C2d: a file that holds a game or program name must never be listed only as "other working files".
+  // The deciding attribute is the inventory row's `personal` list containing `ProgramNames`. Such a data-folder
+  // row the play-history clear can reach (PlayHistory, HardwareFacts, SetAside, Transient) needs its own
+  // STORE_GROUPS entry unless its files group under an owning store: a `<store>`/`<file>` placeholder in its
+  // path, or a path that continues another (non-secondary) row's path stem, as care/incident-observer.corrupt.json
+  // continues care/incident-observer.json. The runtime\ frame-rate files have neither, so they need their line.
+  const reached = new Set(["PlayHistory", "HardwareFacts", "SetAside", "Transient"]);
+  const owners = rows.filter((r) => r.base === "DataRoot" && r.category !== "SetAside" && r.category !== "Transient" && r.path.includes("."));
+  const ownedBy = (r: { id: string; path: string }) =>
+    /<(store|file)>/.test(r.path) || owners.some((o) => o.id !== r.id && r.path.startsWith(o.path.slice(0, o.path.lastIndexOf(".")) + "."));
+  const naming = rows.filter((r) => r.base === "DataRoot" && reached.has(r.category) && r.personal.includes("ProgramNames"));
+
+  it("finds the rows that hold program names (non-vacuous)", () => {
+    expect(naming.map((r) => r.id)).toEqual(expect.arrayContaining(["sessions", "fps-report", "fps-report-tmp", "store-json-tmp"]));
+    expect(ownedBy(naming.find((r) => r.id === "store-json-tmp")!)).toBe(true);
+    expect(ownedBy(naming.find((r) => r.id === "incident-observer-corrupt")!)).toBe(true);
+    expect(ownedBy(naming.find((r) => r.id === "fps-report")!)).toBe(false);
+  });
+
+  // Break check: remove the fps entries from STORE_GROUPS -> ["fps-report", "fps-report-tmp"] and this fails.
+  it("every row that holds program names and has no owning store has its own words", () => {
+    expect(naming.filter((r) => !ownedBy(r) && !(r.id in STORE_GROUPS)).map((r) => r.id)).toEqual([]);
   });
 });
 

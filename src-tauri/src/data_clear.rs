@@ -4085,6 +4085,23 @@ mod tests {
         assert!(!t.has("license.key"));
     }
 
+    /// The screen groups a planned file by `store` (your-data.ts STORE_GROUPS). The frame-rate helper's files
+    /// belong to no store, so each must carry its own row id there, the key the screen's fpsHelper line uses.
+    /// Break check: in `classify`, make a secondary row with no owner take the first primary row as its class
+    /// (`unwrap_or(row)` -> `unwrap_or(ctx.primary.values().next().unwrap())`) -> fails.
+    #[test]
+    fn f1_the_frame_rate_helpers_files_carry_their_own_row_id_as_their_store() {
+        let t = Tmp::new("f1");
+        seed(&t);
+        t.put("runtime/fps.json.tmp", "x");
+        t.put("runtime/fps.alive", "x");
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        for (rel, id) in [("runtime/fps.json", "fps-report"), ("runtime/fps.json.tmp", "fps-report-tmp"), ("runtime/fps.alive", "fps-alive")] {
+            let d = plan.delete.iter().find(|d| d.rel == rel).unwrap_or_else(|| panic!("{rel} is planned: {:?}", rels(&plan)));
+            assert_eq!((d.row_id, d.store), (id, id), "{rel}");
+        }
+    }
+
     #[test]
     fn b1_a_refused_clear_that_deleted_nothing_leaves_no_record_and_one_that_deleted_a_file_keeps_it() {
         // Nothing for phase 1 to delete: no ledger family, no Trial store.

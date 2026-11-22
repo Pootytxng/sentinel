@@ -163,6 +163,7 @@
       "sharing": "你的分享设置（没有该文件时分享为关闭）",
       "licence": "你的 Compy Pro 许可证",
       "caches": "已下载的规则和目录文件",
+      "fpsHelper": "帧率辅助程序遗留的文件：它最后测量的游戏及其帧率和帧时间",
       "other": "Compy 创建的其他临时文件和损坏副本"
     },
     "everythingTitle": "清除 Compy 保存的全部数据",
