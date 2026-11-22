@@ -207,8 +207,23 @@ describe("data-root guard: the persistence root is resolved in one place", () =>
 const INVENTORY_RS = join(BACKEND, "data_inventory.rs");
 const SRC_TS = "src";
 const lastPart = (p) => p.split(/[\\/]/).pop();
-const linesOf = (text) =>
-  text ? text.split(/\r?\n/).map((t, i) => ({ n: i + 1, text: t, isComment: ["//", "///", "//!", "*"].some((p) => t.trimStart().startsWith(p)) })) : [];
+/**
+ * D1c (2026-11-21): a pure per-text result, worked out once per text and reused. The break checks below
+ * run checkInventory over the whole backend eight times with one planted file added; the real files'
+ * lines, literals and chunks are the same every time, and re-deriving them took about 0.6 s per check,
+ * which pushed tests past the 15 s timeout under push-check load. Same text in, same result out (nothing
+ * mutates a cached result), so no check is weaker; a planted file is a new text and is read fresh.
+ */
+function memoByText(fn) {
+  const cache = new Map();
+  return (text) => {
+    if (!cache.has(text)) cache.set(text, fn(text));
+    return cache.get(text);
+  };
+}
+
+const linesOf = memoByText((text) =>
+  text ? text.split(/\r?\n/).map((t, i) => ({ n: i + 1, text: t, isComment: ["//", "///", "//!", "*"].some((p) => t.trimStart().startsWith(p)) })) : []);
 
 function nextTok(s, i) {
   const c = s[i];
@@ -301,7 +316,7 @@ function productionFiles(root) {
     .map((p) => ({ file: p.f, name: lastPart(p.f), code: p.code.code, raw: p.raw }));
 }
 
-function stringLiterals(code) {
+const stringLiterals = memoByText((code) => {
   const res = [];
   let line = 1, i = 0;
   while (i < code.length) {
@@ -311,7 +326,7 @@ function stringLiterals(code) {
     i = t.e;
   }
   return res;
-}
+});
 
 const unescapeRs = (s) => s.replace(/\\\\/g, "\\").replace(/\\"/g, '"');
 /** `{x}` (a format argument) and `<x>` (an inventory placeholder) both become `*`. */
@@ -396,7 +411,7 @@ const NOT_DATA_MODULES = { "game_mods.rs": "READ-ONLY detector of graphics mods 
 const WRITE_CALL = /\b(fs::write|File::create|OpenOptions|remove_file|remove_dir|create_dir|fs::rename|fs::copy|write_atomic)\b/;
 const ACCESSOR_BASE = /\b(?:compy_data_dir|session_data_dir|mutation_root|effective_root)\s*\(|\broot\.path\(\)/;
 
-function chunksOf(code) {
+const chunksOf = memoByText((code) => {
   const nl = [];
   for (let k = code.indexOf("\n"); k >= 0; k = code.indexOf("\n", k + 1)) nl.push(k);
   const lineAt = (idx) => { let lo = 0, hi = nl.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (nl[mid] < idx) lo = mid + 1; else hi = mid; } return lo + 1; };
@@ -414,7 +429,7 @@ function chunksOf(code) {
   }
   push(start, code.length);
   return out;
-}
+});
 
 function derivedAccessors(files) {
   const names = new Set();

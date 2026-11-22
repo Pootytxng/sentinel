@@ -344,8 +344,17 @@ function aliasesIn(sources: string[], strip: Strip = stripRust): Map<string, str
 
 // A call, `name(` or `name::<T>(`, or the function handed on as an argument. Not a method `.name(`
 // on some other type, and not a field or local that merely starts with the name.
-const mentions = (body: string, name: string) =>
-  new RegExp(`(?:^|[^\\w.])${name}\\s*(?:::<[^>]*>)?\\s*\\(|[(,]\\s*&?${name}\\s*[,)]`).test(body);
+// D1c (2026-11-21): the pattern for a name is built once and reused (it used to be rebuilt on every call,
+// thousands of times per derivation). Same pattern text, so the same matches.
+const mentionPatterns = new Map<string, RegExp>();
+const mentions = (body: string, name: string) => {
+  let re = mentionPatterns.get(name);
+  if (!re) {
+    re = new RegExp(`(?:^|[^\\w.])${name}\\s*(?:::<[^>]*>)?\\s*\\(|[(,]\\s*&?${name}\\s*[,)]`);
+    mentionPatterns.set(name, re);
+  }
+  return re.test(body);
+};
 
 function ledgerWriters(sources: string[], strip: Strip = stripRust): Set<string> {
   const fns = functionsIn(sources, strip);
@@ -355,14 +364,27 @@ function ledgerWriters(sources: string[], strip: Strip = stripRust): Set<string>
   // `drop` is a trait method name (the trial RollbackGuard's), not a callable: every `drop(x)` in
   // the crate would otherwise count as a use of it.
   const skip = new Set(["drop"]);
+  // D1c: a function that did not mention any name in `reach` on one pass cannot start mentioning those
+  // same names on a later pass (its body does not change), so each pass checks every remaining function
+  // only against the names added since it was last checked. Same fixed point, far fewer regex tests.
+  const reachList = [...reach];
+  const checkedUpTo = new Map<Fn, number>();
   let grew = true;
   while (grew) {
     grew = false;
+    const upTo = reachList.length;
     for (const f of fns) {
       if (writers.has(f.name) || skip.has(f.name)) continue;
-      if ([...reach].some((name) => mentions(f.body, name))) {
+      const from = checkedUpTo.get(f) ?? 0;
+      checkedUpTo.set(f, upTo);
+      if (reachList.slice(from, upTo).some((name) => mentions(f.body, name))) {
         writers.add(f.name);
-        for (const name of [f.name, ...(aliases.get(f.name) ?? [])]) reach.add(name);
+        for (const name of [f.name, ...(aliases.get(f.name) ?? [])]) {
+          if (!reach.has(name)) {
+            reach.add(name);
+            reachList.push(name);
+          }
+        }
         grew = true;
       }
     }

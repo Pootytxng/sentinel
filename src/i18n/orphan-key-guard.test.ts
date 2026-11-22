@@ -147,24 +147,27 @@ function isConsumed(key: string, source: string, prefixes: string[]): boolean {
   return prefixes.some((p) => key.startsWith(p));
 }
 
-function orphans(): string[] {
-  const source = productionSource();
-  const prefixes = dynamicPrefixes(source);
-  return baseKeys().filter((k) => !isConsumed(k, source, prefixes));
+function orphans(keys: Flat, source: string, prefixes: string[]): string[] {
+  return keys.filter((k) => !isConsumed(k, source, prefixes));
 }
 
 describe("i18n orphan keys: every shipped string reaches a surface", () => {
   const source = productionSource();
   const prefixes = dynamicPrefixes(source);
   const keys = baseKeys();
+  // D1c (2026-11-21): the orphan list is worked out ONCE per run, from the same source read and the same
+  // keys, and shared by the three tests below. It used to be recomputed by each of them (each re-reading
+  // the whole frontend), about 1.8 s apiece; under push-check load that pushed tests past the 15 s
+  // timeout. Same keys, same source, same isConsumed: the same list, so no check is weaker.
+  const found = orphans(keys, source, prefixes);
 
   it("reads the whole string tree and the whole frontend (guard is not vacuous)", () => {
     expect(keys.length).toBeGreaterThanOrEqual(2000);
     expect(source.length).toBeGreaterThanOrEqual(500_000);
     expect(prefixes.length).toBeGreaterThanOrEqual(40);
     // If the namespace prefix were wrong, or the source scan empty, nearly everything would read
-    // as orphaned. This floor is the tripwire for both.
-    expect(keys.filter((k) => isConsumed(k, source, prefixes)).length).toBeGreaterThanOrEqual(2000);
+    // as orphaned. This floor is the tripwire for both. (Consumed = every key that is not an orphan.)
+    expect(keys.length - found.length).toBeGreaterThanOrEqual(2000);
   });
 
   it("counts all three shipped consumption shapes as live", () => {
@@ -195,12 +198,11 @@ describe("i18n orphan keys: every shipped string reaches a surface", () => {
   });
 
   it("no orphaned key outside the named debt", () => {
-    const unexplained = orphans().filter((k) => !Object.keys(ALLOWED).some((p) => k.startsWith(p)));
+    const unexplained = found.filter((k) => !Object.keys(ALLOWED).some((p) => k.startsWith(p)));
     expect(unexplained).toEqual([]);
   });
 
   it("the named debt only shrinks (ratchet)", () => {
-    const found = orphans();
     const over: string[] = [];
     for (const [prefix, { atMost, reason }] of Object.entries(ALLOWED)) {
       const n = found.filter((k) => k.startsWith(prefix)).length;
