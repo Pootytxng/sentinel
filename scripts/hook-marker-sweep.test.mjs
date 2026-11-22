@@ -71,6 +71,10 @@ for (const hook of Object.keys(MARKERS)) {
       const folder = join(scratch, own.replace("ab-12-cd", "folder-9"));
       mkdirSync(folder);
       const inside = plant(folder, own, now, MAX_AGE_MS + DAY);
+      // The folder itself is old too (planting inside it made it fresh), so only its type keeps it.
+      const folderTime = (now - MAX_AGE_MS - DAY) / 1000;
+      utimesSync(folder, folderTime, folderTime);
+      expect(now - lstatSync(folder).mtimeMs, "the folder is past the age limit").toBeGreaterThan(MAX_AGE_MS);
 
       const removed = sweepOwnMarkers(hook, scratch, now);
       expect(removed).toEqual([own]);
