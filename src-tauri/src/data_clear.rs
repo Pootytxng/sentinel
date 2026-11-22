@@ -2032,7 +2032,10 @@ fn live_root() -> Result<PathBuf, Refusal> {
 // C2a: each live wrapper below is ONE expression: its `_on` function called with the resolved root, its own
 // arguments and the process's effects (test `v1` pins the exact text). Everything else lives in the `_on`
 // function, which takes the root (or the reason there is none) and the effects as arguments, so the tests drive
-// all of it with a temp root and their own effects; the one line no test runs is the root resolution itself.
+// all of it with a temp root and their own effects. What no test runs: the root resolution itself (`live_root`,
+// whose exact text test `v1` pins) and the `ProcessEffects` methods (`deleted`, `with_benchmark_locked`,
+// `forget_trial_result`, `forget_incident_failures`, `forget_support_preview`, `forget_identity_throttle`,
+// `live_state`), which act on the running app's process-wide state; the tests use their own `ClearEffects`.
 
 /// What "Clear play history" would delete, keep and leave alone, right now. A pure read.
 pub(crate) fn plan_clear_play_history() -> ClearPlan {
@@ -4234,7 +4237,15 @@ mod tests {
         assert!(handler.contains("off_main::plan_clear_play_history,") && handler.contains("off_main::clear_play_history,"));
         assert!(lib.contains("crate::data_clear::plan_clear_play_history()"));
         assert!(lib.contains("crate::data_clear::clear_play_history(&fingerprint)"));
-        for not_yet in [concat!("data_clear::clear_", "everything"), concat!("data_clear::plan_clear_", "everything")] {
+        for not_yet in [
+            concat!("data_clear::clear_", "everything"),
+            concat!("data_clear::plan_clear_", "everything"),
+            concat!("data_clear::plan_", "everything_on"),
+            concat!("data_clear::finish_", "interrupted_clear"),
+            // The root-taking functions are for tests: the app calls only the live wrappers.
+            concat!("data_clear::plan_play_", "history_on"),
+            concat!("data_clear::clear_play_", "history_on"),
+        ] {
             assert!(!lib.contains(not_yet), "{not_yet} is C2's");
         }
     }
@@ -4272,8 +4283,15 @@ mod tests {
             let on_body = body_of(on);
             assert!(!on_body.contains("live_root") && !on_body.contains("ProcessEffects") && !on_body.contains("data_root::"), "{on} must take the root and the effects as arguments");
         }
-        // `live_root()` is called by the five wrappers and nowhere else; `&ProcessEffects` likewise.
+        // `live_root` itself is exactly the verified-root lookup and the typed refusal (review r1).
         let core = core_src();
+        let live_root_fn = core.split("fn live_root() -> Result<PathBuf, Refusal> {\n").nth(1).expect("live_root").split("\n}\n").next().unwrap();
+        assert_eq!(
+            live_root_fn,
+            "    data_root::mutation_root().map(|r| r.path().to_path_buf()).map_err(|why| Refusal {\n        code: \"data_root_unavailable\",\n        detail: why,\n        files: Vec::new(),\n    })",
+            "live_root must stay the one verified-root lookup"
+        );
+        // `live_root()` is called by the five wrappers and nowhere else; `&ProcessEffects` likewise.
         assert_eq!(core.matches("live_root()").count(), LIVE_WRAPPERS.len() + 1, "five wrapper calls + the definition");
         assert_eq!(core.matches("&ProcessEffects").count(), LIVE_WRAPPERS.len(), "only the wrappers pass the process's effects");
     }
@@ -4298,6 +4316,7 @@ mod tests {
         deleted.sort();
         let mut listed: Vec<String> = shown.delete.iter().map(|d| d.rel.clone()).collect();
         listed.sort();
+        assert!(!listed.is_empty(), "non-vacuous: the plan lists files");
         assert_eq!(deleted, listed);
         assert!(report.complete && t.has("history.json") && !t.has(INTENT_FILE));
         // A stale fingerprint deletes nothing.
@@ -4392,6 +4411,7 @@ mod tests {
         deleted.sort();
         let mut listed: Vec<String> = shown.delete.iter().map(|d| d.rel.clone()).collect();
         listed.sort();
+        assert!(!listed.is_empty(), "non-vacuous: the plan lists files");
         assert_eq!(deleted, listed);
         assert!(report.complete && t.has("license.key") && !t.has("history.json"));
         assert_eq!(intent_of(&t).stage, IntentStage::WebviewPending);
