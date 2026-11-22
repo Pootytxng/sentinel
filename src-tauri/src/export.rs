@@ -180,28 +180,29 @@ fn is_scoped_name(name: &str) -> bool {
 /// of "https://" is not one), a UNC start (`\\` anywhere, or `//` that does not follow a letter, digit or
 /// colon), or `file:`. It always ends at `" < > |` or a line break (a hard break). At a soft break (`,` `;`,
 /// or `.` `:` `!` `?` followed by a space) it ends UNLESS a slash of a kind the path has already used comes
-/// next, before the next soft or hard break. So "C:/Games/Hello, big World/Max/save.dat" and
-/// "D:/Mr. J Smith/Max/x" are each one path (D2 reviews r1 N1 and r2 B1: a folder name may hold a comma or a
-/// full stop, and spaces), while in "x C:\a.txt; Power/Performance" the `;` ends the path, because no `\`
+/// before the next hard break. So "C:/Games/Hello, big World/Max/save.dat", "C:/Games/Hello, World,
+/// Again/Max/x" and "D:/Mr. J. Smith/Max/x" are each one path (D2 reviews r1 N1, r2 B1 and r3: a folder name
+/// may hold commas, full stops and spaces), while in "x C:\a.txt; Power/Performance" the `;` ends the path, because no `\`
 /// comes after it. The cost of that last case: a backslash path whose folder name holds a comma and whose
 /// next separator is a `/` ("C:\Games\Hello, World/Max/x") ends at the comma, and a scoped name after it is
 /// left as it is; mixed separators after a comma cannot be told apart from a `/` in the prose after a path.
-/// The other way, a forward-slash path followed by prose that has a `/` before its next break ("C:/x/a.txt.
-/// Power/Performance") keeps going, which can replace a word of that prose. In "reach //RIG/share" the `/`
-/// is a separator (a UNC start in the middle of a sentence), and in "C:/Program Files (x86)/Max/x" it still
-/// is (a space or a bracket alone does not end a path). Decided per position, not per string. Linear: the
-/// next `/`, `\`, soft break and hard break after each position are worked out in one backward pass.
+/// The other way, a forward-slash path followed by prose that has a `/` anywhere before the next line break,
+/// quote or `< > |` ("C:/x/a.txt. More words, then Power/Performance") keeps going, which can replace a word
+/// of that prose. In "reach //RIG/share" the `/` is a separator (a UNC start in the middle of a sentence), and
+/// in "C:/Program Files (x86)/Max/x" it still is (a space or a bracket alone does not end a path). Decided per
+/// position, not per string. Linear: the next `/`, `\` and hard break after each position are worked out in
+/// one backward pass.
 fn path_mask(sc: &[char]) -> Vec<bool> {
     let n = sc.len();
     let alnum = |j: usize| sc[j].is_ascii_alphanumeric();
     let is_hard = |k: usize| matches!(sc[k], '"' | '<' | '>' | '|' | '\n' | '\r');
     let is_soft = |k: usize| matches!(sc[k], ';' | ',') || (matches!(sc[k], '.' | ':' | '!' | '?') && sc.get(k + 1).is_some_and(|c| c.is_whitespace()));
     // next_*[k]: the first position at or after k holding that thing, or n.
-    let (mut next_fwd, mut next_back, mut next_stop) = (vec![n; n + 1], vec![n; n + 1], vec![n; n + 1]);
+    let (mut next_fwd, mut next_back, mut next_hard) = (vec![n; n + 1], vec![n; n + 1], vec![n; n + 1]);
     for k in (0..n).rev() {
         next_fwd[k] = if sc[k] == '/' { k } else { next_fwd[k + 1] };
         next_back[k] = if sc[k] == '\\' { k } else { next_back[k + 1] };
-        next_stop[k] = if is_hard(k) || is_soft(k) { k } else { next_stop[k + 1] };
+        next_hard[k] = if is_hard(k) { k } else { next_hard[k + 1] };
     }
     let (mut inside, mut uses_fwd, mut uses_back) = (false, false, false);
     let mut mask = Vec::with_capacity(n);
@@ -214,9 +215,10 @@ fn path_mask(sc: &[char]) -> Vec<bool> {
         let unc_back = c == '\\' && next(1) == Some('\\');
         let unc_fwd = c == '/' && next(1) == Some('/') && (j == 0 || !(alnum(j - 1) || sc[j - 1] == ':'));
         let file = j + 5 <= n && sc[j..j + 5].iter().zip("file:".chars()).all(|(a, b)| a.to_ascii_lowercase() == b);
-        // A slash of a kind this path has used comes before the next soft or hard break.
+        // A slash of a kind this path has used comes before the next hard break (review r3: not the next soft
+        // break, or a folder name with two commas or full stops, "Hello, World, Again", ends the path early).
         let goes_on = || {
-            let stop = next_stop[j + 1];
+            let stop = next_hard[j + 1];
             (uses_fwd && next_fwd[j + 1] < stop) || (uses_back && next_back[j + 1] < stop)
         };
         if hard || (soft && inside && !goes_on()) {
@@ -3309,6 +3311,9 @@ mod export_tests {
         // next break, carries the path on, so a folder name with a comma or full stop AND spaces is still covered.
         assert_eq!(max("C:/Games/Hello, big World/Max/save.dat"), ("C:/Games/Hello, big World/<user>/save.dat".to_string(), 1, 0));
         assert_eq!(max("D:/Mr. J Smith/Max/x"), ("D:/Mr. J Smith/<user>/x".to_string(), 1, 0));
+        // Review r3: two commas or full stops in one folder name do not end the path either.
+        assert_eq!(max("C:/Games/Hello, World, Again/Max/x"), ("C:/Games/Hello, World, Again/<user>/x".to_string(), 1, 0));
+        assert_eq!(max("D:/Mr. J. Smith/Max/x"), ("D:/Mr. J. Smith/<user>/x".to_string(), 1, 0));
         // The stated limit: a backslash path whose folder name holds a comma and whose next separator is a `/`
         // ends at the comma (it reads exactly like "C:\a.txt; Power/Performance"), so the name is left.
         assert_eq!(max(r"C:\Games\Hello, World/Max/x"), (r"C:\Games\Hello, World/Max/x".to_string(), 0, 1));
