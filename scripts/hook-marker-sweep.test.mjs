@@ -1,19 +1,25 @@
+// @vitest-environment node
 // D1f: the four repo hooks that keep per-session marker files in the temp folder remove ONLY their own
 // stale markers (scripts/lib/hook-marker-sweep.mjs). One block per hook: the hook really calls the sweep
 // for itself, every marker name it writes is one its pattern covers, and the sweep run against a scratch
 // folder removes exactly its own old marker files and nothing else.
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MARKERS, MAX_AGE_MS, SWEEP_EVERY_MS, sweepOwnMarkers } from "./lib/hook-marker-sweep.mjs";
+import { MARKERS, MAX_AGE_MS, RESUME_AFTER_MS, SWEEP_EVERY_MS, sweepOwnMarkers } from "./lib/hook-marker-sweep.mjs";
 
 const HOOKS_DIR = join(import.meta.dirname, "..", ".claude", "hooks");
 const DAY = 24 * 60 * 60 * 1000;
 
 let scratch;
 afterEach(() => {
-  if (scratch) rmSync(scratch, { recursive: true, force: true });
+  try {
+    // `force` does not swallow EBUSY/EPERM on Windows: a failed cleanup must not turn the gate red.
+    if (scratch) rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  } catch {
+    /* left in the temp folder */
+  }
   scratch = undefined;
 });
 
@@ -82,6 +88,34 @@ for (const hook of Object.keys(MARKERS)) {
       const freshName = own.replace("ab-12-cd", "fresh-1");
       expect(sweepOwnMarkers(hook, scratch, now + SWEEP_EVERY_MS + DAY).sort()).toEqual([own, freshName].sort());
       expect(existsSync(oldOther) && existsSync(unrelated) && existsSync(inside)).toBe(true);
+    });
+
+    it("out of time, it stops, back-dates its stamp and carries on a minute later", () => {
+      scratch = mkdtempSync(join(tmpdir(), "compy-hook-sweep-test-"));
+      const now = Date.now();
+      const own = writtenNames(source)[0];
+      const oldOwn = plant(scratch, own, now, MAX_AGE_MS + DAY);
+      // A zero budget is spent before the first entry: nothing is removed this run.
+      expect(sweepOwnMarkers(hook, scratch, now, 0)).toEqual([]);
+      expect(existsSync(oldOwn)).toBe(true);
+      const stampAge = now - lstatSync(join(scratch, MARKERS[hook].stamp)).mtimeMs;
+      expect(Math.abs(stampAge - (SWEEP_EVERY_MS - RESUME_AFTER_MS)), "stamp back-dated").toBeLessThan(2000);
+      // Not yet due half a minute later; due once the minute has passed, and then it finishes the job.
+      expect(sweepOwnMarkers(hook, scratch, now + RESUME_AFTER_MS / 2)).toEqual([]);
+      expect(sweepOwnMarkers(hook, scratch, now + RESUME_AFTER_MS + 1000)).toEqual([own]);
+      expect(existsSync(oldOwn)).toBe(false);
+    });
+
+    it("a stamp path that is not a regular file is left alone and nothing is swept", () => {
+      scratch = mkdtempSync(join(tmpdir(), "compy-hook-sweep-test-"));
+      const now = Date.now();
+      const own = writtenNames(source)[0];
+      const oldOwn = plant(scratch, own, now, MAX_AGE_MS + DAY);
+      const stampDir = join(scratch, MARKERS[hook].stamp);
+      mkdirSync(stampDir);
+      expect(sweepOwnMarkers(hook, scratch, now)).toEqual([]);
+      expect(lstatSync(stampDir).isDirectory()).toBe(true);
+      expect(existsSync(oldOwn)).toBe(true);
     });
 
     it("never throws: a folder that does not exist is a no-op", () => {
