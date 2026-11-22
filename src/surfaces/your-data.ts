@@ -9,6 +9,9 @@
 // * The browser-storage keys cleared are exactly the `webview` targets the backend took from the
 //   inventory (data_inventory.rs `webview_keys`), and only after a complete clear.
 // The JSON names used here are pinned by the Rust test `w0b_the_plan_and_the_outcome_serialize_with_the_names_the_screen_reads`.
+// C2b adds "clear everything": its status, the start-up finish of a pending window clear, and "Undo all first".
+
+import { invoke } from "@tauri-apps/api/core";
 
 export type Refusal = { code: string; detail: string; files: string[] };
 export type PlannedDelete = { rel: string; row_id: string; store: string; category: string; size: number; modified_ms: number };
@@ -322,7 +325,6 @@ export function undoOrder<T extends { status: string; applied_at: string }>(rows
  * Anything that fails leaves things as they are: the next start tries again. Returns what it did.
  */
 export async function finishPendingClearAtBoot(
-  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>,
   local: StorageLike,
   session: StorageLike,
   reload: () => void,

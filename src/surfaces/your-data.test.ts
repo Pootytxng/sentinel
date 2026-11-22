@@ -1,7 +1,10 @@
 // C1 "Your data": the pure half. What can break here is honesty: a headline that says "deleted" when the
 // report is not complete, browser keys cleared beyond the inventory's list, or a code that silently
 // vanishes from the screen.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+const invokeMock = vi.hoisted(() => vi.fn());
+vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 import { readFileSync } from "fs";
 import { join } from "path";
 import {
@@ -304,11 +307,12 @@ describe("your-data C2b: clear everything", () => {
         { key: "compy_theme", prefix: false, session_storage: false },
       ],
     };
-    const invoke = async <T,>(cmd: string): Promise<T> => {
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(async (cmd: string) => {
       calls.push(cmd);
-      return (cmd === "get_clear_status" ? status : null) as T;
-    };
-    expect(await finishPendingClearAtBoot(invoke, local, session, () => reloads++)).toBe("finished");
+      return cmd === "get_clear_status" ? status : null;
+    });
+    expect(await finishPendingClearAtBoot(local, session, () => reloads++)).toBe("finished");
     expect(calls).toEqual(["get_clear_status", "acknowledge_clear"]);
     expect([...local.data.keys()]).toEqual(["other_app_key"]);
     expect(reloads).toBe(1);
@@ -317,19 +321,21 @@ describe("your-data C2b: clear everything", () => {
   it("at start, nothing happens without a pending record, and a failed acknowledge does not reload", async () => {
     const local = memStorage({ compy_theme: "dark" });
     let reloads = 0;
-    const none = async <T,>(cmd: string): Promise<T> =>
-      (cmd === "get_clear_status" ? { roll_forward: null, record: "none", abandoned_code: null, webview: [{ key: "compy_theme", prefix: false, session_storage: false }] } : null) as T;
-    expect(await finishPendingClearAtBoot(none, local, memStorage({}), () => reloads++)).toBe("nothing");
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(async (cmd: string) =>
+      cmd === "get_clear_status" ? { roll_forward: null, record: "none", abandoned_code: null, webview: [{ key: "compy_theme", prefix: false, session_storage: false }] } : null,
+    );
+    expect(await finishPendingClearAtBoot(local, memStorage({}), () => reloads++)).toBe("nothing");
     expect(local.data.get("compy_theme")).toBe("dark");
-    const ackFails = async <T,>(cmd: string): Promise<T> => {
+    invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "acknowledge_clear") throw new Error("clear_files_pending");
-      return { roll_forward: null, record: "webview_pending", abandoned_code: null, webview: [] } as T;
-    };
-    expect(await finishPendingClearAtBoot(ackFails, local, memStorage({}), () => reloads++)).toBe("failed");
-    const statusFails = async <T,>(): Promise<T> => {
+      return { roll_forward: null, record: "webview_pending", abandoned_code: null, webview: [] };
+    });
+    expect(await finishPendingClearAtBoot(local, memStorage({}), () => reloads++)).toBe("failed");
+    invokeMock.mockImplementation(async () => {
       throw new Error("not allowed");
-    };
-    expect(await finishPendingClearAtBoot(statusFails, local, memStorage({}), () => reloads++)).toBe("failed");
+    });
+    expect(await finishPendingClearAtBoot(local, memStorage({}), () => reloads++)).toBe("failed");
     expect(reloads).toBe(0);
   });
 });
