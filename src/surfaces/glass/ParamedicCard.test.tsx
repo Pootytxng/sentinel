@@ -25,6 +25,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import "../../i18n";
 import type { ParamedicDiagnosis, ParamedicSessionRef } from "../../types";
 import { ParamedicCard } from "./ParamedicCard";
+import { ConfirmProvider } from "../../design/ConfirmDialog";
 
 afterEach(() => {
   cleanup();
@@ -3088,5 +3089,167 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     } finally {
       await i18n.changeLanguage("en");
     }
+  });
+});
+
+// B3 (owner decision 2026-11-21): the card may turn a setting Compy applied back on itself, through the SAME confirm,
+// apply command and undo record the Test room uses (src/data/turn-back-on.ts). Nothing here reaches Windows.
+describe("ParamedicCard: Turn it back on (B3)", () => {
+  const NOTICED = "2026-11-19T12:00:00Z";
+  const TITLE = "Trim Windows visual effects";
+  const OTHER = "Hardware-accelerated GPU scheduling";
+  const offEv = { kind: "known" as const, code: "drift-noticed", args: { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z" }, against: false, source: "drift" };
+  const unknownOf = { kind: "unknown" as const, code: "which-not-recorded", args: {}, against: false, source: "drift" };
+  const diag: ParamedicDiagnosis = { ...base, why_first: null, findings: [find("setting-drift", { evidence: [offEv, unknownOf], fix: steps("setting-drift") })] };
+  const drift = (titles: string[]) => [{ id: "applied-changes", label: "Compy changes were turned back off", detail: "", noticed_at: NOTICED, titles }];
+  const rev = (rec_id: string, title: string) => ({ rec_id, title });
+  const applied = { id: "c-9", rec_id: "visual-effects", rec_title: TITLE, applied_at: "2026-11-22T18:10:00Z", snapshot: null, status: "applied", is_still_active: true };
+
+  async function open(props: Record<string, unknown>, withProvider = true) {
+    answer.byCmd = { paramedic_diagnose: diag, apply_recommendation: applied };
+    const card = <ParamedicCard drifts={drift([TITLE]) as never} {...props} />;
+    render(withProvider ? <ConfirmProvider>{card}</ConfirmProvider> : card);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
+    openAll();
+  }
+  const applyCalls = () => answer.calls.filter((c) => c[0] === "apply_recommendation");
+
+  it("offers a button only for a setting the ledger says reads off now AND the live drift names", async () => {
+    await open({ reverted: [rev("visual-effects", TITLE), rev("hags", OTHER)], onChanged: vi.fn() });
+    const buttons = screen.getAllByTestId("paramedic-turn-on");
+    expect(buttons.map((b) => b.textContent)).toEqual([`Turn “${TITLE}” back on`]);
+    expect(screen.getByTestId("paramedic")).toHaveTextContent(
+      "Turn it back on here or in Test. Compy asks you to confirm first and saves how it was, so you can undo it in Test.",
+    );
+    expect(applyCalls()).toHaveLength(0);
+  });
+
+  it("no button when the ledger is not read, the setting already reads on, or there is no confirm dialog", async () => {
+    await open({ reverted: null });
+    expect(screen.queryByTestId("paramedic-turn-on")).toBeNull();
+    cleanup();
+    await open({ reverted: [] });
+    expect(screen.queryByTestId("paramedic-turn-on")).toBeNull();
+    expect(screen.getByTestId("paramedic")).toHaveTextContent("Turn it back on in Test, where Compy asks you to confirm first.");
+    cleanup();
+    await open({ reverted: [rev("visual-effects", TITLE)] }, false);
+    expect(screen.queryByTestId("paramedic-turn-on")).toBeNull();
+  });
+
+  it("asks with the Test room's own confirm; cancel changes nothing", async () => {
+    await open({ reverted: [rev("visual-effects", TITLE)], onChanged: vi.fn() });
+    fireEvent.click(screen.getByTestId("paramedic-turn-on"));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(`Turn "${TITLE}" back on?`);
+    expect(dialog).toHaveTextContent("Compy snapshots the prior state so you can undo this from Applied.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(applyCalls()).toHaveLength(0);
+    expect(screen.getByTestId("paramedic-turn-on")).toBeTruthy();
+  });
+
+  it("on yes: one apply_recommendation, the ledger announcement, App's refresh, then the dated line in place of the button", async () => {
+    const onChanged = vi.fn();
+    const seen: string[] = [];
+    const listener = () => seen.push("ledger-changed");
+    window.addEventListener("compy:ledger-changed", listener);
+    try {
+      await open({ reverted: [rev("visual-effects", TITLE)], onChanged });
+      fireEvent.click(screen.getByTestId("paramedic-turn-on"));
+      fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Turn it on" }));
+      await waitFor(() => expect(screen.getByTestId("paramedic-turned-on")).toBeTruthy());
+    } finally {
+      window.removeEventListener("compy:ledger-changed", listener);
+    }
+    expect(applyCalls()).toEqual([["apply_recommendation", { recId: "visual-effects", recTitle: TITLE }]]);
+    expect(seen).toEqual(["ledger-changed"]);
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("paramedic-turned-on").textContent).toMatch(
+      new RegExp(`^You turned “${TITLE}” back on with Compy at .+\\. Play Game A once, for at least 10 minutes, then press Something's wrong again\\.$`),
+    );
+    expect(screen.queryByTestId("paramedic-turn-on")).toBeNull();
+  });
+
+  it("a refusal is shown in the backend's own words; the button stays and nothing claims it was turned on", async () => {
+    const refusal = "“Trim Windows visual effects” is held by a Gaming Mode session right now. Nothing was changed.";
+    await open({ reverted: [rev("visual-effects", TITLE)], onChanged: vi.fn() });
+    answer.byCmd = { paramedic_diagnose: diag };
+    answer.reject = refusal;
+    fireEvent.click(screen.getByTestId("paramedic-turn-on"));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Turn it on" }));
+    const notice = await screen.findByText("Couldn't turn that back on");
+    const dialog = notice.closest('[role="alertdialog"]') as HTMLElement;
+    expect(dialog).toHaveTextContent(refusal);
+    expect(applyCalls()).toHaveLength(1);
+    fireEvent.click(within(dialog).getByRole("button", { name: "OK" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(screen.getByTestId("paramedic-turn-on")).toBeTruthy();
+    expect(screen.queryByTestId("paramedic-turned-on")).toBeNull();
+  });
+
+  it("while it is being turned on the button says so, a second press asks nothing, and it applies once", async () => {
+    await open({ reverted: [rev("visual-effects", TITLE)], onChanged: vi.fn() });
+    // Hold the apply back so the card can be looked at while it runs.
+    let release: () => void = () => {};
+    answer.byCmd = { paramedic_diagnose: diag };
+    answer.gate = new Promise<void>((r) => (release = r));
+    answer.value = applied;
+    fireEvent.click(screen.getByTestId("paramedic-turn-on"));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Turn it on" }));
+    await waitFor(() => expect(screen.getByTestId("paramedic-turn-on")).toHaveTextContent("Turning it back on…"));
+    expect(screen.getByTestId("paramedic-turn-on").getAttribute("aria-disabled")).toBe("true");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    fireEvent.click(screen.getByTestId("paramedic-turn-on"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    release();
+    await waitFor(() => expect(screen.getByTestId("paramedic-turned-on")).toBeTruthy());
+    expect(applyCalls()).toHaveLength(1);
+  });
+
+  it("a second setting in the same open is not blocked, but its confirm says one change at a time", async () => {
+    const card = (
+      <ConfirmProvider>
+        <ParamedicCard drifts={drift([TITLE, OTHER]) as never} reverted={[rev("visual-effects", TITLE), rev("hags", OTHER)]} onChanged={vi.fn()} />
+      </ConfirmProvider>
+    );
+    answer.byCmd = { paramedic_diagnose: diag, apply_recommendation: applied };
+    render(card);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
+    openAll();
+    fireEvent.click(screen.getAllByTestId("paramedic-turn-on")[0]);
+    const first = await screen.findByRole("alertdialog");
+    expect(first).not.toHaveTextContent("a moment ago");
+    fireEvent.click(within(first).getByRole("button", { name: "Turn it on" }));
+    await waitFor(() => expect(screen.getByTestId("paramedic-turned-on")).toBeTruthy());
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    fireEvent.click(screen.getByTestId("paramedic-turn-on"));
+    const second = await screen.findByRole("alertdialog");
+    expect(second).toHaveTextContent(
+      `You turned on “${TITLE}” a moment ago. If you change two things before you play, Compy can't tell which one made the difference.`,
+    );
+  });
+});
+
+// B3: one apply path. The card and the Test room's check both turn a setting back on through turnBackOn, and the card
+// has no apply call of its own (no writeLedger, no direct invoke of an apply command).
+describe("Turn it back on has one path (B3)", () => {
+  const read = (rel: string) => readFileSync(join("src", ...rel.split("/")), "utf8");
+  it("the card and the check both call turnBackOn, and the card writes nothing else", () => {
+    const card = read("surfaces/glass/ParamedicCard.tsx");
+    const check = read("surfaces/Check.tsx");
+    expect(card).toMatch(/import \{ turnBackOn, type RevertedChange \} from "\.\.\/\.\.\/data\/turn-back-on";/);
+    expect(card).toMatch(/\bturnBackOn\(rev,/);
+    expect(card).not.toMatch(/\bwriteLedger\b/);
+    expect(card).not.toMatch(/invoke[^(]*\(\s*"(apply_recommendation|apply_recommendations_batch|rollback_change)"/);
+    const applyReverted = check.slice(check.indexOf("const applyReverted"), check.indexOf("const gameModeDrifted"));
+    expect(applyReverted).toMatch(/\bturnBackOn\(rev,/);
+    expect(applyReverted).not.toMatch(/writeLedger/);
+    const helper = read("data/turn-back-on.ts");
+    expect(helper.match(/writeLedger<AppliedChange>\("apply_recommendation"/g)).toHaveLength(1);
   });
 });

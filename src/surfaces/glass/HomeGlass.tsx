@@ -5,12 +5,15 @@
 //
 // It never assumes something is wrong (DIR-1a): a problem card appears only when the Care observer
 // found real evidence (pendingCare), and its two buttons are the same "Find out why" / "Not now"
-// handlers the console's card used. This page adds no mutation path; "Run a check" is the same
+// handlers the console's card used. This page adds no mutation path of its own; "Run a check" is the same
 // read-only FirstCheck the console opens. "Something's wrong" (ParamedicCard, PC Paramedic F1) asks only
-// on a tap, reads recorded sessions and shows steps; it runs no fix and writes nothing either.
+// on a tap, reads recorded sessions and shows steps. Its one action, "Turn it back on" for a setting Compy
+// applied that reads off now (B3, owner decision 2026-11-21), is the Test room's own apply path
+// (src/data/turn-back-on.ts): the same confirm, the same audited command, the same undo.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { GameReadiness, PendingCareIncident, Priorities, SessionSummary } from "../../types";
+import type { AppliedChange, GameReadiness, PendingCareIncident, Priorities, SessionSummary } from "../../types";
+import { deriveReverted } from "../use-scan";
 import { gameLibrary } from "../../data/game-library";
 import { knownFps } from "../../lib/session-metrics";
 import { wordFromRow, isMeasuredRow, confidenceWordKey } from "../../data/confidence-word";
@@ -49,7 +52,14 @@ export function HomeGlass({
   onSeeChecks,
   onOpenDetails,
   latestChange,
+  changes = null,
+  onChanged,
 }: {
+  /** B3: the ledger's applied changes (null = not read): the card offers "Turn it back on" only for one that reads off
+   *  now, through the Lab's own path. */
+  changes?: AppliedChange[] | null;
+  /** App's refresh, run after a turn-on like after any apply. */
+  onChanged?: () => Promise<unknown> | void;
   readiness: GameReadiness | null;
   priorities: Priorities | null;
   sessions: SessionSummary[];
@@ -80,6 +90,8 @@ export function HomeGlass({
   const roughRead = useHomeRough(sessionsKey(sessions));
   const rough = roughGames(roughRead);
   const back = backInRange(roughRead);
+  // B3: the Lab's own list of changes Compy applied that read off now (null while the ledger is not read).
+  const reverted = useMemo(() => (changes ? deriveReverted(changes) : null), [changes]);
   const [chartKey, setChartKey] = useState<string | null>(games[0]?.key ?? null);
 
   useEffect(() => {
@@ -208,7 +220,7 @@ export function HomeGlass({
       {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; the card itself reads nothing on mount
           (Home's sessions-only read above hands it the games running rougher than usual, to name). Always
           mounted: a new user or a new game gets the first look (what changed on this PC), not a hidden door. */}
-      <ParamedicCard noGames={noGames} games={recorded} drifts={readiness?.drifts} rough={rough} roughUnread={roughRead.kind === "unreadable"} onOpenCheck={onSeeChecks} />
+      <ParamedicCard noGames={noGames} games={recorded} drifts={readiness?.drifts} rough={rough} roughUnread={roughRead.kind === "unreadable"} onOpenCheck={onSeeChecks} reverted={reverted} onChanged={onChanged} />
 
       {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
           never the accent fill, which on this page means "your most recent game". */}

@@ -531,6 +531,12 @@
     "settingDrift": {
       "step1": "在 Windows 里检查这项设置，以及你自己改过的 Windows 设置。",
       "stepTurnOn": "到“{{room}}”里把它重新开启，开启前 Compy 会先请你确认。",
+      "stepTurnOnHere": "可以在这里或在“{{room}}”里把它重新开启。Compy 会先请你确认，并保存原来的状态，你可以在“{{room}}”里撤销。",
+      "turnOn": "重新开启“{{title}}”",
+      "turningOn": "正在重新开启…",
+      "turnedOn": "你在 {{when}} 用 Compy 重新开启了“{{title}}”。玩一次 {{game}}，至少 10 分钟，然后再按一次“出问题了”。",
+      "turnedOnNoTime": "你用 Compy 重新开启了“{{title}}”。玩一次 {{game}}，至少 10 分钟，然后再按一次“出问题了”。",
+      "secondChange": "你刚刚开启了“{{other}}”。如果在玩之前改了两件事，Compy 就分不清是哪一件起了作用。",
       "step2": "玩一次 {{game}}，再按一次“出问题了”。",
       "stepBackOn": "Compy 读到它在 {{restored}} 时已重新开启。玩一次 {{game}}，再按一次“出问题了”。",
       "openCheck": "打开“{{room}}”"

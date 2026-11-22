@@ -1,14 +1,18 @@
-// PC Paramedic F1: the "Something's wrong" door on Health and the card that answers it. READ-ONLY: it
-// asks the engine (`paramedic_diagnose`) on a tap, shows what the engine returned in plain words, and
-// offers steps the owner does in Windows. It runs no fix, writes nothing, and says what changed before
-// the problem, never that it caused it (Constitution 17). The engine returns codes and numbers; every
-// sentence here is a locale string. Keys are literal, one t() call per key (never composed).
+// PC Paramedic F1: the "Something's wrong" door on Health and the card that answers it. It asks the engine
+// (`paramedic_diagnose`) on a tap, shows what the engine returned in plain words, and offers steps the owner does
+// in Windows. Its one action (B3, owner decision 2026-11-21) is "Turn it back on" for a setting Compy applied that
+// reads off now, and it is the Test room's own path (src/data/turn-back-on.ts: the same confirm, the same audited
+// apply, the same undo); nothing else here changes the PC. It says what changed before the problem, never that it
+// caused it (Constitution 17). The engine returns codes and numbers; every sentence here is a locale string. Keys
+// are literal, one t() call per key (never composed).
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { driftShort, stampOf } from "../drift-named";
 import { requestCheckFocus } from "../check-focus";
 import { roughLine, type RoughGame } from "../home-facts";
+import { turnBackOn, type RevertedChange } from "../../data/turn-back-on";
+import { useConfirmOptional } from "../../design/ConfirmDialog";
 import type {
   Drift,
   ParamedicDiagnosis,
@@ -46,6 +50,18 @@ type Ctx = {
   driftState?: DriftState;
   /** Opens the health check (where the one-press "turn it back on" lives). Absent where the card has no such screen. */
   onOpenCheck?: () => void;
+  /** B3: "Turn it back on" in the card, through the Lab's own path. Absent when the card cannot offer it. */
+  reapply?: Reapply;
+};
+
+/** B3: the settings this card may turn back on (the ledger says Compy applied them and they read off now, and the live
+ *  drift names them), which one is being turned on, which were turned on from this card (with the ledger's time), and
+ *  the press handler. */
+type Reapply = {
+  offer: RevertedChange[];
+  busy: string | null;
+  done: { rec_id: string; title: string; at: string }[];
+  press: (rev: RevertedChange) => void;
 };
 
 const RAW = { interpolation: { escapeValue: false } } as const;
@@ -529,7 +545,8 @@ function badge(e: ParamedicEvidence, t: T): string {
   return t("paramedic.badge.measured");
 }
 
-function stepLines(fix: ParamedicFix, { t, game, dates }: Ctx, restored?: string, appliedOnly?: boolean): string[] {
+function stepLines(fix: ParamedicFix, ctx: Ctx, restored?: string, appliedOnly?: boolean): string[] {
+  const { t, game, dates } = ctx;
   if (fix.kind !== "steps") return [];
   const a = fix.args;
   switch (fix.code) {
@@ -566,6 +583,13 @@ function stepLines(fix: ParamedicFix, { t, game, dates }: Ctx, restored?: string
       if (restored) return [t("paramedic.fix.settingDrift.stepBackOn", { game, restored: dates.dayTime(restored) })];
       // Only the applied-changes row can be turned back on, and only in the Test room (where Compy asks first).
       // Any other setting keeps the plain advice: there is no one-press turn-on for it anywhere.
+      // B3: when the card can turn it back on itself (the Lab's own path), the step says both places and what Compy does first.
+      if (appliedOnly && (ctx.reapply?.offer.length ?? 0) > 0) {
+        return [
+          t("paramedic.fix.settingDrift.stepTurnOnHere", { room: t("common.rail.lab") }),
+          t("paramedic.fix.settingDrift.step2", { game }),
+        ];
+      }
       if (appliedOnly) return [t("paramedic.fix.settingDrift.stepTurnOn", { room: t("common.rail.lab") }), t("paramedic.fix.settingDrift.step2", { game })];
       return [t("paramedic.fix.settingDrift.step1"), t("paramedic.fix.settingDrift.step2", { game })];
     case "compy-change":
@@ -939,6 +963,8 @@ function FixBlock({ fix, ctx, possible, restored, appliedOnly }: { fix: Paramedi
     // Navigation only: the one-press "turn it back on" lives in the Test room's check, with its own confirm. The
     // button is shown only for the applied-changes setting; nothing else has a turn-on there.
     const toCheck = fix.kind === "steps" && fix.code === "setting-drift" && !restored && appliedOnly && ctx.onOpenCheck;
+    // B3: the card's own "Turn it back on", for each setting the ledger says reads off now (the Lab's apply path).
+    const re = fix.kind === "steps" && fix.code === "setting-drift" && !restored && appliedOnly ? ctx.reapply : undefined;
     return (
       <div>
         {/* Under a suspect that is only possible the steps are a way to find out, not a fix to make on a maybe. */}
@@ -948,6 +974,34 @@ function FixBlock({ fix, ctx, possible, restored, appliedOnly }: { fix: Paramedi
             <li key={i}>{s}</li>
           ))}
         </ol>
+        {re?.offer.map((rev) => {
+          const done = re.done.find((x) => x.rec_id === rev.rec_id);
+          if (done) {
+            // The ledger's own time, never the clock's: what was recorded, and the one next step.
+            return (
+              <p className="gl-para-note" data-testid="paramedic-turned-on" key={rev.rec_id}>
+                {done.at
+                  ? ctx.t("paramedic.fix.settingDrift.turnedOn", { title: rev.title, when: ctx.dates.dayTime(done.at), game: ctx.game })
+                  : ctx.t("paramedic.fix.settingDrift.turnedOnNoTime", { title: rev.title, game: ctx.game })}
+              </p>
+            );
+          }
+          const busy = re.busy === rev.rec_id;
+          return (
+            <button
+              key={rev.rec_id}
+              type="button"
+              className="gl-ghost"
+              data-testid="paramedic-turn-on"
+              aria-disabled={re.busy != null}
+              onClick={() => {
+                if (re.busy == null) re.press(rev);
+              }}
+            >
+              {busy ? ctx.t("paramedic.fix.settingDrift.turningOn") : ctx.t("paramedic.fix.settingDrift.turnOn", { title: rev.title })}
+            </button>
+          );
+        })}
         {toCheck && (
           <button type="button" className="gl-ghost" data-testid="paramedic-open-check" onClick={toCheck}>
             {ctx.t("paramedic.fix.settingDrift.openCheck", { room: ctx.t("common.rail.lab") })}
@@ -1507,6 +1561,8 @@ export function ParamedicCard({
   rough = [],
   roughUnread = false,
   onOpenCheck,
+  reverted = null,
+  onChanged,
 }: {
   noGames?: boolean;
   games?: RecordedGame[];
@@ -1514,8 +1570,17 @@ export function ParamedicCard({
   rough?: RoughGame[];
   roughUnread?: boolean;
   onOpenCheck?: () => void;
+  /** B3: the ledger's changes Compy applied that read off now (use-scan `deriveReverted`); null = not read, no button. */
+  reverted?: RevertedChange[] | null;
+  /** Run after a turn-on, like after any apply (App's refresh). */
+  onChanged?: () => Promise<unknown> | void;
 } = {}) {
   const { t, i18n } = useTranslation();
+  // B3: the Lab's confirm dialog. Without one (an isolated mount) the card offers no turn-on at all.
+  const confirm = useConfirmOptional();
+  const [turning, setTurning] = useState<string | null>(null);
+  const [turnedOn, setTurnedOn] = useState<{ rec_id: string; title: string; at: string }[]>([]);
+  const pressing = useRef(false);
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
   const [more, setMore] = useState(false);
@@ -1600,6 +1665,39 @@ export function ParamedicCard({
         : roughUnread
           ? t("home.posture.rough.unread")
           : "";
+  // B3: the settings the card may turn back on: ones the ledger says Compy applied and that read off now (the Lab's own
+  // list), that the live drift names too. A setting turned on from this card keeps its dated line after the refresh
+  // takes it out of both lists. No ledger list, no drift names or no confirm dialog: nothing is offered.
+  const liveTitles = (drifts ?? []).find((d) => d.id === "applied-changes")?.titles ?? [];
+  const offer: RevertedChange[] = [
+    ...(confirm && reverted ? reverted.filter((r) => liveTitles.includes(r.title)) : []),
+    ...turnedOn.filter((x) => !(reverted ?? []).some((r) => r.rec_id === x.rec_id && liveTitles.includes(r.title))),
+  ];
+  const press = (rev: RevertedChange) => {
+    if (!confirm || pressing.current) return;
+    pressing.current = true;
+    // One change at a time is advised, never enforced: a second turn-on in the same open says so in its confirm.
+    const other = turnedOn[turnedOn.length - 1];
+    void turnBackOn(rev, {
+      confirm: async (o) => {
+        const ok = await confirm(o);
+        if (ok && !o.acknowledge && alive.current) setTurning(rev.rec_id);
+        return ok;
+      },
+      t,
+      after: onChanged,
+      extraBody: other ? t("paramedic.fix.settingDrift.secondChange", { other: other.title }) : undefined,
+    })
+      .then((res) => {
+        if (!alive.current) return;
+        if (res.kind === "done") setTurnedOn((prev) => [...prev, { rec_id: rev.rec_id, title: rev.title, at: res.change?.applied_at ?? "" }]);
+      })
+      .finally(() => {
+        pressing.current = false;
+        if (alive.current) setTurning(null);
+      });
+  };
+  const reapply: Reapply | undefined = offer.length > 0 ? { offer, busy: turning, done: turnedOn, press } : undefined;
   const ctx: Ctx | null = answer
     ? {
           t,
@@ -1608,6 +1706,7 @@ export function ParamedicCard({
           drifts,
           lang: i18n.language,
           startRecord: answer.start_record,
+          reapply,
           // Opening the health check asks for the "turn it back on" row to take focus there.
           onOpenCheck: onOpenCheck ? () => { requestCheckFocus("applied-changes"); onOpenCheck(); } : undefined,
         }

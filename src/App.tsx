@@ -1666,6 +1666,10 @@ function App() {
                 onRunCheck={() => setShowFirstCheck(true)}
                 onSeeChecks={openFixesInLab}
                 onOpenDetails={() => setHomeView("details")}
+                /* B3: the Something's-wrong card's "Turn it back on" reads the ledger's own list (null while it is
+                   not read, or could not be read: then the card offers no button) and refreshes like any apply. */
+                changes={changesRead && !changesReadFailed ? changes : null}
+                onChanged={refresh}
                 /* The first-win journey's slot, below the answer (GL-empty; the move #225 finding 1
                    made for FirstWin). TrustMoment used to render ABOVE this page, so on a fresh rig
                    it pushed the eyebrow and the h1 from y110 to y314. It gates on an empty ledger,

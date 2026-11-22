@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isMeasuredRow } from "../data/confidence-word";
 import { writeLedger } from "../data/ledger-write";
+import { turnBackOn } from "../data/turn-back-on";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Priorities, PriorityItem, SessionSummary, StartupEntry, UpgradePath, UpgradeSuggestion } from "../types";
@@ -263,25 +264,22 @@ export default function Check({
 
   // Turn a specific drifted-off change back on, right here — names the setting + carries its fix,
   // instead of "1 setting(s) — go to Optimize/Ledger". Re-applies via the snapshotted apply path.
+  // B3: the same path the Something's-wrong card calls (src/data/turn-back-on.ts): one confirm, one audited apply.
   const applyReverted = async (rev: { rec_id: string; title: string }) => {
-    const ok = await confirm({
-      title: t("optimize.check.turnOnTitle", { title: rev.title }),
-      body: t("optimize.check.snapshotConfirmBody"),
-      confirmLabel: t("optimize.check.turnItOn"),
-    });
-    if (!ok) return;
-    setApplyingId(rev.rec_id);
     try {
-      await writeLedger("apply_recommendation", { recId: rev.rec_id, recTitle: rev.title });
-      await rerun();
-      onChanged();
-    } catch (e) {
-      setApplyingId(null);
-      await confirm({
-        title: t("optimize.check.turnOnFailedTitle"),
-        body: String(e),
-        confirmLabel: t("optimize.check.ok"),
-        acknowledge: true,
+      await turnBackOn(rev, {
+        confirm: async (o) => {
+          const ok = await confirm(o);
+          // The busy state starts once the owner said yes (not while the confirm is open), as before.
+          if (ok && !o.acknowledge) setApplyingId(rev.rec_id);
+          if (o.acknowledge) setApplyingId(null);
+          return ok;
+        },
+        t,
+        after: async () => {
+          await rerun();
+          onChanged();
+        },
       });
     } finally {
       setApplyingId(null);

@@ -531,6 +531,12 @@
     "settingDrift": {
       "step1": "Check the setting in Windows, and any Windows setting you changed yourself.",
       "stepTurnOn": "Turn it back on in {{room}}, where Compy asks you to confirm first.",
+      "stepTurnOnHere": "Turn it back on here or in {{room}}. Compy asks you to confirm first and saves how it was, so you can undo it in {{room}}.",
+      "turnOn": "Turn “{{title}}” back on",
+      "turningOn": "Turning it back on…",
+      "turnedOn": "You turned “{{title}}” back on with Compy at {{when}}. Play {{game}} once, for at least 10 minutes, then press Something's wrong again.",
+      "turnedOnNoTime": "You turned “{{title}}” back on with Compy. Play {{game}} once, for at least 10 minutes, then press Something's wrong again.",
+      "secondChange": "You turned on “{{other}}” a moment ago. If you change two things before you play, Compy can't tell which one made the difference.",
       "step2": "Play {{game}} once, then press Something's wrong again.",
       "stepBackOn": "Compy read it back on by {{restored}}. Play {{game}} once, then press Something's wrong again.",
       "openCheck": "Open {{room}}"
