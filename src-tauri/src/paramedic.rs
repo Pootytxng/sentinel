@@ -38,7 +38,7 @@ mod recovery;
 use changes::{ChangeRead, Limit};
 use extras::CrashRead;
 use mods::ModInput;
-use recovery::{EarlierEpisode, NowLine, NowStatus, Outcome, Recovery};
+use recovery::{EarlierEpisode, MeasuredOnce, NowLine, NowStatus, Outcome, Recovery};
 
 // ---- Frozen constants (design A3 / B). A change re-runs the walk-forward fixture test. ----------
 /// A session is judgeable only if it is long enough, has enough readings and Compy measured enough of it.
@@ -511,6 +511,10 @@ pub(crate) struct Diagnosis {
     pub recovery: Option<Recovery>,
     /// F3: set when the current episode follows an earlier one that recovered.
     pub earlier_episode: Option<EarlierEpisode>,
+    /// B2: set with `RecoveryUnclear { one_clear }` (exactly one clear session since the rough ones). A session
+    /// fact for the card's "Measured once" block; no finding's certainty, order or support depends on it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub measured_once: Option<MeasuredOnce>,
     /// Start times of this game's recent sessions that may hold two games and were therefore not judged.
     pub mixed_sessions: Vec<String>,
     /// How many of the rough sessions have a readable record of what was running when they started. The card
@@ -551,6 +555,7 @@ impl Diagnosis {
             why_first: None,
             recovery: None,
             earlier_episode: None,
+            measured_once: None,
             mixed_sessions: Vec::new(),
             start_record: None,
             method: METHOD,
@@ -1035,7 +1040,7 @@ fn diagnose_game(inp: &DiagnoseInputs, complaint: Complaint, game_key: &str) -> 
             }
             d.state = DiagnosisState::NothingWrong { sessions_checked: n.max(1) };
         }
-        Verdict::Fired => explain(inp, &game_key, &sess, &judged, newest, &mut d, None),
+        Verdict::Fired => explain(inp, &game_key, &sess, &judged, newest, &mut d, None, None),
         Verdict::Unjudged => {}
     }
     d
@@ -1057,7 +1062,7 @@ fn recovery_answer<'a>(
     let Some(outcome) = recovery::outcome(sess, judged, f, sess.len()) else { return false };
     match outcome {
         Outcome::Recovered { idx } => {
-            explain(inp, game_key, sess, judged, f, d, Some(&idx));
+            explain(inp, game_key, sess, judged, f, d, Some(&idx), None);
             d.state = if d.recovery.is_some() {
                 DiagnosisState::Recovered
             } else {
@@ -1065,7 +1070,10 @@ fn recovery_answer<'a>(
             };
         }
         Outcome::Unclear { partial, one_clear, cap_changed } => {
-            explain(inp, game_key, sess, judged, f, d, None);
+            // B2: exactly one clear session since (it is the newest judged one, nothing newer unjudged): the card
+            // says so as "Measured once". It is computed after the findings and changes none of them.
+            let once = (one_clear && !partial && !cap_changed).then_some(newest);
+            explain(inp, game_key, sess, judged, f, d, None, once);
             d.state = DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial, one_clear, cap_changed } };
         }
     }
@@ -1458,6 +1466,7 @@ fn category(id: &str) -> usize {
     ORDER.iter().position(|x| *x == id).unwrap_or(ORDER.len())
 }
 
+#[allow(clippy::too_many_arguments)] // the two optional follow-ups (`recovered`, `once`) are exclusive inputs, not state
 fn explain<'a>(
     inp: &'a DiagnoseInputs,
     game_key: &str,
@@ -1468,6 +1477,9 @@ fn explain<'a>(
     // F3: the sessions (indexes) that ran normally after this episode. With them, each candidate is
     // re-scored against the recovery and `d.recovery` is set.
     recovered: Option<&[usize]>,
+    // B2: the one clear session since this episode (index). With it `d.measured_once` is set, after the
+    // findings: nothing is re-scored.
+    once: Option<usize>,
 ) {
     let mut run = vec![newest];
     for i in (0..newest).rev() {
@@ -1617,6 +1629,9 @@ fn explain<'a>(
         recovery::settle(&ctx, &rec, &mut d.findings);
         let since = ((newest + 1)..sess.len()).filter(|&i| judged[i].verdict != Verdict::Unjudged).count();
         d.recovery = recovery::build_block(&ctx, &rec, d, since);
+    }
+    if let Some(i) = once {
+        d.measured_once = recovery::measured_once(&ctx, sess[i], d);
     }
     d.not_it = out.not_it;
     d.seen = out.seen;

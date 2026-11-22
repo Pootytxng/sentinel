@@ -768,6 +768,10 @@
       "worth_other": "{{count}} things are worth a look",
       "unknown": "Here's how your PC is doing"
     },
+    "backInRange": {
+      "once": "Measured once: {{game}}'s last session ran in its usual range (dips at about {{nowPct}}% of its average; usually about {{usualPct}}%).",
+      "two": "{{game}}'s last two sessions ran in its usual range (dips at about {{nowPct}}% of its average; usually about {{usualPct}}%)."
+    },
     "actions": {
       "improve": "Improve a game"
     },

@@ -19,7 +19,7 @@ import { ParamedicCard } from "./ParamedicCard";
 import { useDates } from "./GamesRoom";
 import { NavGlyph } from "../../design/NavGlyph";
 import { careHeadline, incidentKindLabel, incidentWhen, readinessWords } from "../../data/backend-words";
-import { homePriorities, roughGames } from "../home-facts";
+import { backInRange, backInRangeLine, homePriorities, roughGames } from "../home-facts";
 import { sessionsKey, useHomeRough } from "../use-home-rough";
 import "../glass-rooms.css";
 
@@ -79,6 +79,7 @@ export function HomeGlass({
   // recorded while Home stays open.
   const roughRead = useHomeRough(sessionsKey(sessions));
   const rough = roughGames(roughRead);
+  const back = backInRange(roughRead);
   const [chartKey, setChartKey] = useState<string | null>(games[0]?.key ?? null);
 
   useEffect(() => {
@@ -375,6 +376,14 @@ export function HomeGlass({
             </button>
           </div>
 
+          {/* B2 (owner decision 2026-11-21): one quiet line per game back in its usual range after a rough run, as
+              the card judges it (one clear session = "Measured once", two = the card's recovery). No colour, no
+              icon, not counted in the headline; nothing when there is nothing true to say. */}
+          {back.slice(0, 2).map((b) => (
+            <p className="gl-card-sub" data-testid="home-back-in-range" key={b.game}>
+              {backInRangeLine(b, t)}
+            </p>
+          ))}
           <section className="gl-card" aria-labelledby="gl-home-limiter">
             <h2 className="gl-card-title" id="gl-home-limiter">
               {/* "What's holding FPS back" only when the top row rests on a measurement. A fact Compy read

@@ -867,3 +867,76 @@ pub(super) fn build_block(c: &Ctx, rec: &[&SessionFacts], d: &Diagnosis, since: 
         also_changed,
     })
 }
+
+/// B2 (owner decision 2026-11-21, "speak after one clear session"): exactly one session since the rough ones ran
+/// clear (`Outcome::Unclear { one_clear }`). A session fact, labelled "Measured once" on the card: it re-scores no
+/// candidate, adds no support and no contradiction, and names no reason. It carries the numbers, the candidates
+/// still standing ("Still between"), what Windows and the sessions recorded changing in the stretch between the
+/// last rough session and the clear one, and whether more than one change was recorded there.
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct MeasuredOnce {
+    pub session: SessionRef,
+    /// The game's usual (the episode's baseline medians).
+    pub before: Metric,
+    /// The rough sessions (as the problem reading).
+    pub rough: Metric,
+    /// The one clear session.
+    pub now: Metric,
+    /// The candidates still standing, in the card's order, then recorded changes in the stretch with no row.
+    pub between: Vec<&'static str>,
+    /// Each recorded change in the stretch as its own line, plus a line for each record Compy could not read.
+    pub also_changed: Vec<Evidence>,
+    /// More than one change was recorded between the rough sessions and the clear one (a setting read back on
+    /// counts as one): Compy can't tell which one mattered.
+    pub cant_attribute: bool,
+}
+
+/// The "Measured once" block for one clear session. `d.problem` and `d.findings` are already set.
+pub(super) fn measured_once(c: &Ctx, clear: &SessionFacts, d: &Diagnosis) -> Option<MeasuredOnce> {
+    let p = d.problem.as_ref()?;
+    let rec = [clear];
+    let gap = gap_of(c, &rec);
+    let (lo, hi) = gap_bounds(c, &rec);
+    let mut also_changed: Vec<Evidence> = gap
+        .lines
+        .iter()
+        .zip(&gap.line_ids)
+        .filter(|(_, id)| !(gap.count_explained && **id == "setting-drift"))
+        .map(|(e, _)| e.clone())
+        .collect();
+    if !gap.complete {
+        also_changed.push(ev(EvidenceKind::Unknown, "gap-unread", "windows", false, &[]));
+    }
+    let about_setting = d.findings.iter().any(|f| f.id == "setting-drift");
+    for u in gap.unread.iter().filter(|_| about_setting) {
+        let code = if *u == "build" { "recovery-build-unread" } else { "recovery-compy-unread" };
+        also_changed.push(ev(EvidenceKind::Unknown, code, "sessions", false, &[]));
+    }
+    // The changes recorded in the stretch, each once: a watched setting read back on (a cleared notice whose
+    // titles read On again) is one change, whether or not the count of changes that are on shows it.
+    let mut changed: Vec<&'static str> = Vec::new();
+    for id in &gap.line_ids {
+        if !changed.contains(id) {
+            changed.push(id);
+        }
+    }
+    let setting_back = c.inp.drift.iter().any(|n| n.back_on && n.cleared_at.as_deref().and_then(ts).is_some_and(|b| b > lo && b <= hi));
+    if setting_back && !changed.contains(&"setting-drift") {
+        changed.push("setting-drift");
+    }
+    let mut between: Vec<&'static str> = d.findings.iter().filter(|f| f.in_play).map(|f| f.id).collect();
+    for id in &gap.ids {
+        if !between.contains(id) {
+            between.push(id);
+        }
+    }
+    Some(MeasuredOnce {
+        session: clear.session_ref(),
+        before: p.before.clone(),
+        rough: p.now.clone(),
+        now: mean_metric(&rec),
+        between,
+        also_changed,
+        cant_attribute: changed.len() >= 2,
+    })
+}

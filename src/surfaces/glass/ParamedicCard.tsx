@@ -1305,6 +1305,56 @@ function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   );
 }
 
+/** B2 (owner decision 2026-11-21): exactly one clear session since the rough ones. It is said, labelled "Measured
+ *  once", with its numbers; it raises no candidate (the rows stay as they were, all Possible), it ends with "Still
+ *  between: …" when two or more are still standing, and with "can't tell which one mattered" when more than one change
+ *  was recorded in that stretch. */
+function MeasuredOnceAnswer({ d, m, ctx }: { d: ParamedicDiagnosis; m: NonNullable<ParamedicDiagnosis["measured_once"]>; ctx: Ctx }) {
+  const { t, game } = ctx;
+  const byId = (id: string) => d.findings.find((f) => f.id === id);
+  const names = m.between.map((id) => nameOfId(id, byId, ctx)).filter((x) => x);
+  const also = m.also_changed.map((e) => evidenceLine(e, ctx)).filter((x): x is string => !!x);
+  const list = d.findings.slice(0, ROWS_SHOWN);
+  return (
+    <>
+      <Problem d={d} ctx={ctx} skipLater />
+      <div className="gl-card-top">
+        <h2 className="gl-card-title">{t("paramedic.measuredOnce.title", { game })}</h2>
+        <span className="gl-chip" data-testid="paramedic-measured-once-chip">
+          {t("common.confidenceWord.measuredOnce")}
+        </span>
+      </div>
+      <p>
+        {t("paramedic.measuredOnce.numbers", {
+          beforePct: pct(m.before.ratio),
+          roughPct: pct(m.rough.ratio),
+          nowPct: pct(m.now.ratio),
+          date: ctx.dates.day(m.session.started_at),
+        })}
+      </p>
+      <p data-testid="paramedic-unclear">{t("paramedic.measuredOnce.notYet", { game })}</p>
+      {m.cant_attribute && (
+        <p className="gl-para-note" data-testid="paramedic-measured-once-cant-attribute">
+          {t("paramedic.measuredOnce.cantAttribute")}
+        </p>
+      )}
+      <Candidates rows={list} rest={d.findings.slice(ROWS_SHOWN)} d={d} ctx={ctx} recovered={false} />
+      {also.map((l) => (
+        <p className="gl-para-note" key={l}>
+          {l}
+        </p>
+      ))}
+      {names.length >= 2 && (
+        <p className="gl-card-title" data-testid="paramedic-verdict">
+          {t("paramedic.recovered.between", { list: names.join(", ") })}
+        </p>
+      )}
+      <Checked d={d} ctx={ctx} />
+      <CantSee d={d} ctx={ctx} />
+    </>
+  );
+}
+
 /** One of the answers the engine can give, in the owner's words. */
 function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t } = ctx;
@@ -1358,8 +1408,9 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     );
   }
   if (s.kind === "cant-tell" && s.why.kind === "recovery-unclear") {
-    // The problem line, then what Compy can't tell yet, then the candidates as collapsed rows.
     const w = s.why;
+    if (w.one_clear && d.measured_once) return <MeasuredOnceAnswer d={d} m={d.measured_once} ctx={ctx} />;
+    // The problem line, then what Compy can't tell yet, then the candidates as collapsed rows.
     const body = w.cap_changed
       ? t("paramedic.cantTell.recoveryCap", { game })
       : w.one_clear

@@ -3767,6 +3767,67 @@ mod recovery_f3 {
         let quick = run_bounded(std::time::Duration::from_millis(500), || SteamLookup::Unreadable(crate::change_sources::UnreadableReason::SteamUnreadable));
         assert!(matches!(quick, SteamLookup::Unreadable(_)));
     }
+
+    // ==== B2: one clear session since the rough ones, said as "Measured once" ===============================
+    #[test]
+    fn one_clear_session_carries_the_measured_once_facts_and_rescores_no_finding() {
+        let rough_only = with_report(episode(), Vec::new());
+        let d = with_report(with_extra(episode(), vec![on(10, 50.0, Some("2.0"))]), Vec::new());
+        assert_eq!(d.state, unclear(false, true, false), "{:?}", d.state);
+        let m = d.measured_once.as_ref().expect("one clear session: the measured-once block");
+        assert!((m.before.ratio - 0.5).abs() < 1e-9 && (m.rough.ratio - 0.3).abs() < 1e-9 && (m.now.ratio - 0.5).abs() < 1e-9);
+        // Nothing about any candidate moves: same rows, same certainty, same in-play, no per-candidate verdict.
+        let shape = |d: &Diagnosis| d.findings.iter().map(|f| (f.id, f.confidence, f.in_play, f.now)).collect::<Vec<_>>();
+        assert!(!d.findings.is_empty());
+        assert_eq!(shape(&d), shape(&rough_only), "one clear session re-scores nothing");
+        // "Still between" starts with every candidate still in play, in the card's order.
+        let in_play: Vec<&str> = d.findings.iter().filter(|f| f.in_play).map(|f| f.id).collect();
+        assert!(!in_play.is_empty());
+        assert_eq!(&m.between[..in_play.len()], &in_play[..]);
+        assert!(!m.cant_attribute, "nothing else was recorded in the stretch");
+    }
+
+    #[test]
+    fn a_second_change_in_the_stretch_means_compy_cant_attribute_the_clear_session() {
+        let sess = with_extra(episode(), vec![on(10, 50.0, Some("3.0"))]);
+        let driver = || vec![gpu("2026-10-09T18:00:00Z", "2.0", "3.0")];
+        let one = with_report(sess.clone(), driver());
+        let m = one.measured_once.as_ref().expect("measured once");
+        assert!(m.also_changed.iter().any(|e| e.code == "gap-change"), "the driver install in the stretch is its own line");
+        assert!(!m.cant_attribute, "one change in the stretch is one change");
+        // The driver changed AND a watched setting was read back on in the same stretch: two changes.
+        let mut inp = inputs(sess);
+        inp.drift = vec![DriftFact {
+            id: "applied-changes".into(),
+            last_ready_at: Some("2026-10-05T12:00:00Z".into()),
+            noticed_at: "2026-10-06T12:00:00Z".into(),
+            cleared_at: Some("2026-10-09T20:00:00Z".into()),
+            titles: vec![],
+            back_on: true,
+        }];
+        inp.changes = ChangeRead::Report { report: Box::new(report(driver())), steam: GameSteam::Found };
+        let two = diagnose(&inp, Complaint::Slow, Some("g"));
+        assert!(two.measured_once.as_ref().expect("measured once").cant_attribute, "{:?}", two.measured_once);
+        // An unread Windows record is said, never "nothing changed".
+        let unread = run(with_extra(episode(), vec![on(10, 50.0, Some("2.0"))]));
+        assert!(unread.measured_once.as_ref().expect("measured once").also_changed.iter().any(|e| e.code == "gap-unread"));
+    }
+
+    #[test]
+    fn measured_once_is_absent_unless_exactly_one_clear_session_is_the_newest() {
+        let mut short = on(11, 50.0, Some("2.0"));
+        short.duration_secs = 60;
+        short.samples = 60;
+        let later_unjudged = run(with_extra(episode(), vec![on(10, 50.0, Some("2.0")), short]));
+        assert!(later_unjudged.measured_once.is_none(), "{:?}", later_unjudged.state);
+        let two_clear = run(with_extra(episode(), two(|d| on(d, 50.0, Some("2.0")))));
+        assert_eq!(two_clear.state, DiagnosisState::Recovered);
+        assert!(two_clear.measured_once.is_none());
+        let in_between = run(with_extra(episode(), vec![on(10, 42.0, Some("2.0"))]));
+        assert_eq!(in_between.state, unclear(false, false, false));
+        assert!(in_between.measured_once.is_none());
+        assert!(run(episode()).measured_once.is_none());
+    }
 }
 
 // ---- M3 commit 1: graphics mods in the game's folder ------------------------------------------------
@@ -6067,4 +6128,44 @@ fn home_status_leaves_out_a_game_not_played_in_the_recent_window() {
         .collect();
     s.append(&mut other);
     assert!(home_rough(&inputs(s)).is_empty(), "a game last played more than RECENT_GAME_DAYS before the newest session is not named");
+}
+
+// ---- B2: Home's quiet line, the games back in their usual range after a rough episode --------------
+#[test]
+fn home_status_back_in_range_matches_the_cards_recovery_answer() {
+    let normal = |at: &str| facts(at, 600, 600, 100.0, 50.0);
+    let card = |s: &[SessionFacts]| diagnose(&inputs(s.to_vec()), Complaint::Unknown, Some("g"));
+    let mut s = steady(5);
+    s.push(rough_session("2026-10-20T10:00:00Z"));
+    assert!(home_status::home_status(&inputs(s.clone())).back_in_range.is_empty(), "still rough: nothing");
+    // One clear session: the card's "Measured once"; Home's one-session line with the card's numbers.
+    s.push(normal("2026-10-21T10:00:00Z"));
+    let one = home_status::home_status(&inputs(s.clone()));
+    assert_eq!(one.back_in_range.len(), 1);
+    let b = &one.back_in_range[0];
+    assert_eq!((b.sessions, b.now_pct, b.usual_pct, b.newest_at.as_str()), (1, 50, 50, "2026-10-21T10:00:00Z"));
+    assert!(card(&s).measured_once.is_some());
+    // Two clear sessions: the card's Recovered; Home's two-session line.
+    s.push(normal("2026-10-22T10:00:00Z"));
+    assert_eq!(home_status::home_status(&inputs(s.clone())).back_in_range[0].sessions, 2);
+    assert_eq!(card(&s).state, DiagnosisState::Recovered);
+    // A newer session too short to judge: the card can't tell, so Home says nothing.
+    let mut thin = s.clone();
+    thin.push(facts("2026-10-23T10:00:00Z", 60, 60, 100.0, 50.0));
+    assert!(home_status::home_status(&inputs(thin)).back_in_range.is_empty());
+    // A session in between (not clear): nothing either.
+    let mut low = steady(5);
+    low.push(rough_session("2026-10-20T10:00:00Z"));
+    low.push(facts("2026-10-21T10:00:00Z", 600, 600, 100.0, 42.0));
+    assert!(home_status::home_status(&inputs(low)).back_in_range.is_empty());
+    // Past the card's recovery window: the game simply runs normally; Home says nothing.
+    for d in 23..=28 {
+        s.push(normal(&format!("2026-10-{d}T10:00:00Z")));
+    }
+    assert!(home_status::home_status(&inputs(s.clone())).back_in_range.is_empty());
+    assert!(matches!(card(&s).state, DiagnosisState::NothingWrong { .. }));
+    // No episode ever: nothing to follow up.
+    assert!(home_status::home_status(&inputs(steady(8))).back_in_range.is_empty());
+    // The owner's games are both still rough: nothing back in range.
+    assert!(home_status::home_status(&fixture()).back_in_range.is_empty());
 }

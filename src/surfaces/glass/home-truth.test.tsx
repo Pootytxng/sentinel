@@ -20,7 +20,7 @@ import type { GameReadiness, Priorities, ReadinessCheck, SessionSummary } from "
 import { HomeGlass } from "./HomeGlass";
 
 beforeEach(() => {
-  engine.status = { rough: [], games_judged: 1 };
+  engine.status = { rough: [], games_judged: 1, back_in_range: [] };
   engine.fail = false;
   engine.calls = [];
 });
@@ -111,7 +111,7 @@ const home = (withDrift: boolean, sessions: SessionSummary[] = []) => render(hom
 
 describe("Home truth (B1)", () => {
   it("the owner's PC today: the drift and the rough game are counted and both named; the tweak is nowhere", async () => {
-    engine.status = { rough: [skyline], games_judged: 3 };
+    engine.status = { rough: [skyline], games_judged: 3, back_in_range: [] };
     const c = home(true);
     expect(await screen.findByRole("heading", { level: 1, name: "2 things are worth a look" })).toBeInTheDocument();
     expect(within(screen.getByTestId("paramedic")).getByTestId("paramedic-rough")).toHaveTextContent(
@@ -133,7 +133,7 @@ describe("Home truth (B1)", () => {
   });
 
   it("two rough games are counted and both named in the card", async () => {
-    engine.status = { rough: [skyline, { ...skyline, game: "harbornine.exe", game_name: "Harbor Nine", rough_sessions: 3 }], games_judged: 2 };
+    engine.status = { rough: [skyline, { ...skyline, game: "harbornine.exe", game_name: "Harbor Nine", rough_sessions: 3 }], games_judged: 2, back_in_range: [] };
     home(false);
     expect(await screen.findByRole("heading", { level: 1, name: "2 things are worth a look" })).toBeInTheDocument();
     expect(screen.getByTestId("paramedic-rough")).toHaveTextContent(
@@ -151,7 +151,7 @@ describe("Home truth (B1)", () => {
     cleanup();
     engine.fail = false;
     // A count that is not a whole number: the whole answer is a failed read, not one rough game.
-    engine.status = { rough: [{ ...skyline, rough_sessions: "2" }], games_judged: 1 };
+    engine.status = { rough: [{ ...skyline, rough_sessions: "2" }], games_judged: 1, back_in_range: [] };
     home(true);
     await settle();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("1 thing is worth a look");
@@ -160,13 +160,13 @@ describe("Home truth (B1)", () => {
   });
 
   it("a session recorded while Home stays open reads again, and the old answer does not stay up", async () => {
-    engine.status = { rough: [skyline], games_judged: 1 };
+    engine.status = { rough: [skyline], games_judged: 1, back_in_range: [] };
     const first = [session("2026-11-20T12:00:00Z")];
     const { rerender } = render(homeEl(false, first));
     await settle();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("1 thing is worth a look");
     // The next session ran in its usual range: the engine no longer lists the game.
-    engine.status = { rough: [], games_judged: 1 };
+    engine.status = { rough: [], games_judged: 1, back_in_range: [] };
     rerender(homeEl(false, [session("2026-11-21T12:00:00Z"), ...first]));
     await settle();
     expect(statusCalls()).toBe(2);
@@ -176,5 +176,88 @@ describe("Home truth (B1)", () => {
     rerender(homeEl(false, [session("2026-11-21T12:00:00Z"), ...first]));
     await settle();
     expect(statusCalls()).toBe(2);
+  });
+});
+
+// B2 (owner decision 2026-11-21): one quiet line for a game back in its usual range after a rough run. Sessions only,
+// no celebration, not counted in the headline, nothing when there is nothing true to say.
+describe("Home's quiet follow-through line (B2)", () => {
+  const back = (sessions: 1 | 2, game = "skylinedrift.exe", name = "Skyline Drift") => ({
+    game,
+    game_name: name,
+    sessions,
+    now_pct: 63,
+    usual_pct: 64,
+    newest_at: "2026-11-21T12:00:00Z",
+  });
+
+  it("one clear session: 'Measured once', with the numbers, and the headline does not count it", async () => {
+    engine.status = { rough: [], games_judged: 1, back_in_range: [back(1)] };
+    home(false);
+    await settle();
+    expect(screen.getByTestId("home-back-in-range")).toHaveTextContent(
+      "Measured once: Skyline Drift's last session ran in its usual range (dips at about 63% of its average; usually about 64%).",
+    );
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Your PC looks set up right");
+    expect(screen.getByTestId("home-back-in-range").textContent).not.toMatch(/fixed|solved|back to normal|because|reason/i);
+  });
+
+  it("two clear sessions: the two-session line; at most two games are named", async () => {
+    engine.status = {
+      rough: [],
+      games_judged: 0,
+      back_in_range: [back(2), back(1, "harbornine.exe", "Harbor Nine"), back(1, "third.exe", "Third Game")],
+    };
+    home(false);
+    await settle();
+    const lines = screen.getAllByTestId("home-back-in-range").map((e) => e.textContent);
+    expect(lines).toEqual([
+      "Skyline Drift's last two sessions ran in its usual range (dips at about 63% of its average; usually about 64%).",
+      "Measured once: Harbor Nine's last session ran in its usual range (dips at about 63% of its average; usually about 64%).",
+    ]);
+  });
+
+  it("nothing when nothing true: no game back, a failed read, or an answer that is not one Compy can give", async () => {
+    home(false);
+    await settle();
+    expect(screen.queryByTestId("home-back-in-range")).toBeNull();
+    cleanup();
+    engine.fail = true;
+    home(false);
+    await settle();
+    expect(screen.queryByTestId("home-back-in-range")).toBeNull();
+    cleanup();
+    engine.fail = false;
+    // The same game rough and back in range at once: the whole answer is a failed read.
+    engine.status = { rough: [skyline], games_judged: 1, back_in_range: [back(1)] };
+    home(false);
+    await settle();
+    expect(screen.queryByTestId("home-back-in-range")).toBeNull();
+    expect(screen.getByTestId("paramedic-rough")).toHaveTextContent("Compy couldn't read how your games ran.");
+    cleanup();
+    // A percent that is not a whole number in range: a failed read too.
+    engine.status = { rough: [], games_judged: 1, back_in_range: [{ ...back(1), now_pct: 0 }] };
+    home(false);
+    await settle();
+    expect(screen.queryByTestId("home-back-in-range")).toBeNull();
+  });
+
+  it("zh-CN: the same line, in Chinese", async () => {
+    const i18n = (await import("../../i18n")).default;
+    await act(async () => {
+      await i18n.changeLanguage("zh-CN");
+    });
+    try {
+      engine.status = { rough: [], games_judged: 1, back_in_range: [back(1)] };
+      home(false);
+      await settle();
+      expect(screen.getByTestId("home-back-in-range")).toHaveTextContent(
+        "仅测得一次：Skyline Drift 上一次游戏在它平时的范围内（低帧约为平均帧率的 63%；平时约 64%）。",
+      );
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage("en");
+      });
+    }
   });
 });

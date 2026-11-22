@@ -96,7 +96,7 @@ async function mount(withDrift: boolean) {
 
 describe("HomeConsole renders the rough game (B1 review r1)", () => {
   it("rough game only: the measured sentence is the dek; no checks count, no Lab route, the light is not 'ok'", async () => {
-    engine.status = { rough: [skyline], games_judged: 1 };
+    engine.status = { rough: [skyline], games_judged: 1, back_in_range: [] };
     const c = await mount(false);
     expect(c.querySelector(".hc-headline")).toHaveTextContent("Skyline Drift ran rougher than usual last time");
     expect(c.querySelector(".hc-verdict-dek")).toHaveTextContent(ROUGH);
@@ -108,7 +108,7 @@ describe("HomeConsole renders the rough game (B1 review r1)", () => {
   });
 
   it("drift + rough game: the drift keeps its count and route, and the rough game is its own line, 'Separately: …'", async () => {
-    engine.status = { rough: [skyline], games_judged: 1 };
+    engine.status = { rough: [skyline], games_judged: 1, back_in_range: [] };
     const c = await mount(true);
     expect(c.querySelector(".hc-headline")).toHaveTextContent("Compy changes were turned back off");
     expect(c).toHaveTextContent("What to do about it is in Lab.");

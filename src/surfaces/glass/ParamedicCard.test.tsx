@@ -566,12 +566,12 @@ describe("ParamedicCard: while the episode is still going", () => {
     expect(screen.getAllByText("Compy can't tell yet whether Game A is back to normal. Play once more.").length).toBe(1);
   });
 
-  it("one clear session since says so and asks for one more (F1)", async () => {
+  it("one clear session since, from an engine with no measured-once block, says so and asks for one more (F1)", async () => {
     await ask(unclear({ one_clear: true }));
     await waitFor(() =>
-      expect(screen.getByText("One session since has run the way Game A usually does. Compy needs one more to be sure.")).toBeTruthy(),
+      expect(screen.getByText("One session since has run the way Game A usually does. Compy says more after another one.")).toBeTruthy(),
     );
-    expect(screen.queryByText(/running the way it usually does/)).toBeNull();
+    expect(screen.queryByText(/running the way it usually does|to be sure/)).toBeNull();
   });
 
   it("a frame cap that is different now is said as a frame-cap problem, not as a vague one (F9)", async () => {
@@ -579,7 +579,62 @@ describe("ParamedicCard: while the episode is still going", () => {
     await waitFor(() =>
       expect(screen.getByText("Game A's frame cap is different now, so Compy can't compare these sessions with the earlier ones.")).toBeTruthy(),
     );
-    expect(screen.queryByText(/Compy needs one more/)).toBeNull();
+    expect(screen.queryByText(/Compy says more after another one/)).toBeNull();
+  });
+
+  // B2 (owner decision 2026-11-21): the card speaks after one clear session, labelled "Measured once", raising no
+  // candidate; with two or more still standing it ends "Still between: …".
+  const once = (over: Partial<NonNullable<ParamedicDiagnosis["measured_once"]>> = {}): ParamedicDiagnosis => ({
+    ...unclear({ one_clear: true }),
+    findings: [
+      find("setting-drift", { fix: steps("setting-drift") }),
+      find("gpu-driver-change", { fix: steps("gpu-driver-change", { from: "1.0" }) }),
+      find("background-load", { fix: steps("background-load") }),
+    ],
+    measured_once: {
+      session: ref("2026-11-21T12:00:00Z"),
+      before: { ratio: 0.64, p99_ms: null, avg_fps: 120 },
+      rough: { ratio: 0.47, p99_ms: null, avg_fps: 110 },
+      now: { ratio: 0.63, p99_ms: null, avg_fps: 118 },
+      between: ["setting-drift", "gpu-driver-change", "background-load"],
+      also_changed: [],
+      cant_attribute: false,
+      ...over,
+    },
+  });
+
+  it("measured once: titled and chipped 'Measured once', with the numbers, every row still Possible, ending 'Still between'", async () => {
+    await ask(once());
+    await waitFor(() => expect(screen.getByText("Game A's last session ran in its usual range")).toBeTruthy());
+    expect(screen.getByTestId("paramedic-measured-once-chip")).toHaveTextContent("Measured once");
+    expect(
+      screen.getByText(/Its dips stayed at about 64% of its average before, fell to about 47% while it was rough, and were at about 63% on /),
+    ).toBeTruthy();
+    expect(screen.getByTestId("paramedic-unclear")).toHaveTextContent(
+      "One session can't show why it ran better, and it doesn't make any change below more likely. Play Game A once more and press Something's wrong again.",
+    );
+    const verdict = screen.getByTestId("paramedic-verdict");
+    expect(verdict.textContent).toMatch(/^Still between: .+, .+, .+\.$/);
+    expect(rows().length).toBe(3);
+    const card = screen.getByTestId("paramedic");
+    expect(card.textContent).not.toMatch(/Points to it|points to|Likely|to be sure|fixed|caused/);
+    expect(screen.queryByTestId("paramedic-measured-once-cant-attribute")).toBeNull();
+    // The verdict comes after the rows: the card ends on what it still can't separate.
+    expect(rows()[rows().length - 1].compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("measured once with a second change in the stretch says Compy can't tell which one mattered", async () => {
+    await ask(once({ cant_attribute: true }));
+    await waitFor(() => expect(screen.getByTestId("paramedic-measured-once-cant-attribute")).toBeTruthy());
+    expect(screen.getByTestId("paramedic-measured-once-cant-attribute")).toHaveTextContent(
+      "More than one change was recorded between the rough sessions and this one, so Compy can't tell which one mattered.",
+    );
+  });
+
+  it("measured once with only one candidate standing does not say 'Still between'", async () => {
+    await ask(once({ between: ["gpu-driver-change"] }));
+    await waitFor(() => expect(screen.getByText("Game A's last session ran in its usual range")).toBeTruthy());
+    expect(screen.queryByTestId("paramedic-verdict")).toBeNull();
   });
 
   it("names the last fully measured normal session when the newest normal one was only partly measured (F12)", async () => {

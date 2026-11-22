@@ -1483,6 +1483,19 @@ export type ParamedicRecovery = {
   also_changed: ParamedicEvidence[];
 };
 
+/** B2: one clear session since the rough ones. `between`: candidates still standing (then recorded changes with no
+ *  row); `also_changed`: each recorded change in the stretch, and a line per record Compy could not read;
+ *  `cant_attribute`: more than one change was recorded in that stretch. */
+export type ParamedicMeasuredOnce = {
+  session: ParamedicSessionRef;
+  before: ParamedicMetric;
+  rough: ParamedicMetric;
+  now: ParamedicMetric;
+  between: string[];
+  also_changed: ParamedicEvidence[];
+  cant_attribute: boolean;
+};
+
 /** Rough sessions with a record of what was running at the start (`recorded` of `rough`), the same for the normal
  *  sessions Compy compared with (`normal_recorded` of `normal`), and the programs open in every recorded rough one. */
 export type ParamedicStartRecord = { recorded: number; rough: number; normal_recorded: number; normal: number; open: string[] };
@@ -1505,6 +1518,8 @@ export type ParamedicDiagnosis = {
   recovery: ParamedicRecovery | null;
   /** The current episode follows an earlier one that recovered. */
   earlier_episode: { from: string; to: string } | null;
+  /** B2: exactly one clear session since the rough ones ("Measured once"). A session fact: no finding depends on it. */
+  measured_once?: ParamedicMeasuredOnce;
   /** Start times of this game's recent sessions that may hold two games: not judged, named in one note line. */
   mixed_sessions: string[];
   /** How many of the rough sessions have a record of what was running at the start, of all of them (absent: no rough session). */
