@@ -168,6 +168,39 @@ describe("Your data: clear play history", () => {
     expect((await screen.findByTestId("your-data-result")).textContent).not.toContain(SENTENCE);
   });
 
+  // C4 review r2 B1 (c4h): the two reports the backend can now give when an apply lands while the Trial-gate files
+  // go (data_clear c4g / c4g2: the Trial store is the last file under its gate). Neither shows the "deleted" note
+  // beside the "Trial results were kept" refusal.
+  it("never shows 'Trial results were deleted' beside 'so the Trial results were kept' (review r2 B1)", async () => {
+    const DELETED = "Trial results were deleted, and a change was applied around the same moment.";
+    const KEPT = "so the Trial results were kept";
+    const keptRun: ClearReport = {
+      ...REPORT,
+      deleted: ["experiments.json.tmp"],
+      not_attempted: ["experiments.json", "sessions.json"],
+      stopped: [{ code: "trials_tied_to_changes", detail: "dev text", files: [] }],
+      complete: false,
+      trials_went_during_apply: false,
+    };
+    const deletedRun: ClearReport = { ...REPORT, deleted: ["experiments.json.tmp", "experiments.json"], trials_went_during_apply: true };
+    const seen: string[] = [];
+    for (const detail of [keptRun, deletedRun]) {
+      answer(PLAN, { status: "done", detail });
+      const view = render(<YourData />);
+      await openPlan();
+      fireEvent.click(screen.getByLabelText("I understand"));
+      fireEvent.click(screen.getByRole("button", { name: "Delete play history" }));
+      const text = (await screen.findByTestId("your-data-result")).textContent ?? "";
+      expect(text.includes(DELETED) && text.includes(KEPT)).toBe(false);
+      seen.push(text);
+      view.unmount();
+    }
+    expect(seen[0]).toContain(KEPT);
+    expect(seen[0]).not.toContain(DELETED);
+    expect(seen[1]).toContain(DELETED);
+    expect(seen[1]).not.toContain(KEPT);
+  });
+
   it("a stopped run says it stopped, never 'Deleted N files.', names why, and offers no reload (review r2)", async () => {
     window.localStorage.setItem("compy_last_check_v1", "x");
     const stopped: ClearReport = {

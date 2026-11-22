@@ -309,6 +309,13 @@ fn delete_key(d: &PlannedDelete) -> (u8, usize, String) {
         // The support record last, its working file just before it.
         return (2, usize::from(d.row_id == "support-evidence"), d.rel.clone());
     }
+    if d.rel == EXPERIMENTS_FILE {
+        // The Trial store last under its gate (C4 review r2 B1), so no Trial-gate re-read can follow the C4
+        // note: its hidden working copies (`.experiments.json.*`) already sort before it, and the suffix puts it
+        // after every `experiments.json.*` (its `.tmp`, its set-asides) and nowhere else: among all other files
+        // it keeps the place its name gives it.
+        return (1, 0, format!("{EXPERIMENTS_FILE}\u{10FFFF}"));
+    }
     (1, 0, d.rel.clone())
 }
 
@@ -1249,11 +1256,12 @@ fn delete_rows(
                 // C4: the read above cannot hold off a plain apply (it takes only the ledger lock, and play
                 // history must not take that lock: design 3.3 and the lock-order guard). So read the change
                 // history AGAIN, still inside the Trial gate, now that the Trial store itself is gone. A row that
-                // is applied now was applied around the same moment: the report says so (it cannot be undone;
-                // the file is gone). Only an applied row counts: an unreadable history claims nothing.
+                // is applied now was applied around the same moment: the report says so (the Trial file is
+                // gone). Only an applied row counts: an unreadable history claims nothing.
                 // Only after the Trial store itself (review r1 F1): a Trial working file goes first, and an
                 // apply landing after it makes the pre-read at experiments.json stop the run and KEEP the
-                // Trial results, so "Trial results were deleted" would be false there.
+                // Trial results, so "Trial results were deleted" would be false there. The store is the last
+                // file under its gate (`delete_key`, review r2 B1), so no Trial-gate pre-read follows this note.
                 // What this CANNOT see: an apply that holds the ledger lock and has changed Windows but has not
                 // saved history.json yet when this read runs. That apply is still recorded and undoable; only
                 // the report's note is missing.
@@ -4417,6 +4425,72 @@ mod tests {
         assert!(t.has("experiments.json"), "the Trial results were kept");
         assert_eq!(report.stopped.iter().map(|r| r.code).collect::<Vec<_>>(), ["trials_tied_to_changes"]);
         assert!(!report.trials_went_during_apply, "{report:?}");
+    }
+
+    /// C4 review r2 B1 (c4g): the Trial store's own `.tmp` working copy (`experiments.json.tmp`, same gate)
+    /// sorted AFTER `experiments.json`, so the flag could be set at the store's delete and the `.tmp`'s pre-read
+    /// then stopped with `trials_tied_to_changes`: "Trial results were deleted" next to "...so the Trial results
+    /// were kept". Now the store goes last under its gate: the `.tmp` goes first, the apply lands, the store's
+    /// pre-read stops, the store is KEPT and there is no note. (Set-aside copies are kept by play history, t2,
+    /// so they never reach the gate here; one is seeded to pin that.)
+    /// Break check: restore the old order in `delete_key` (no Trial-store rule) -> fails.
+    #[test]
+    fn c4g_the_trial_store_goes_last_under_its_gate_so_no_note_sits_beside_a_trial_stop() {
+        let t = Tmp::new("c4g");
+        seed(&t);
+        t.put("experiments.json.tmp", "half-written trial records");
+        t.put("experiments.json.corrupt", "damaged trial records");
+        let shown = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let order: Vec<String> = rels(&shown).into_iter().map(str::to_string).collect();
+        let report = done(clear_play_history_at(&t.root, &shown.fingerprint, &later(), &ApplyRightAfterTheTrialDelete { root: &t.root }));
+        let trial_stop = report.stopped.iter().any(|r| r.code == "trials_tied_to_changes");
+        assert!(!(report.trials_went_during_apply && trial_stop), "never both the note and a Trial-store stop: {report:?}");
+        let tmp_at = order.iter().position(|r| r == "experiments.json.tmp").expect("the working copy is planned");
+        let store_at = order.iter().position(|r| r == EXPERIMENTS_FILE).expect("the Trial store is planned");
+        assert!(tmp_at < store_at, "the Trial store goes after its working copy: {order:?}");
+        assert!(!order.iter().any(|r| r == "experiments.json.corrupt"), "a set-aside copy is kept, never planned: {order:?}");
+        assert!(!t.has("experiments.json.tmp") && report.deleted.contains(&"experiments.json.tmp".to_string()), "{report:?}");
+        assert!(t.has("experiments.json"), "the Trial results were kept");
+        assert!(report.not_attempted.contains(&"experiments.json".to_string()), "{report:?}");
+        assert_eq!(report.stopped.iter().map(|r| r.code).collect::<Vec<_>>(), ["trials_tied_to_changes"]);
+        assert!(!report.trials_went_during_apply, "{report:?}");
+        assert_eq!(t.read("experiments.json.corrupt"), "damaged trial records");
+    }
+
+    /// Lands the apply only once the Trial store itself is gone (the last file under its gate).
+    struct ApplyAfterTheTrialStoreGoes<'a> {
+        root: &'a Path,
+    }
+
+    impl ClearGates for ApplyAfterTheTrialStoreGoes<'_> {
+        fn with_gate(&self, _gate: Gate, _store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            delete()
+        }
+        fn live_state(&self) -> LiveState {
+            LiveState::default()
+        }
+        fn after_trial_delete(&self) {
+            if !self.root.join(EXPERIMENTS_FILE).exists() {
+                fs::write(self.root.join("history.json"), APPLIED_LEDGER).unwrap();
+            }
+        }
+    }
+
+    /// C4 review r2 B1 (c4g2): the mirror. The apply lands only after experiments.json, the last Trial-gate file,
+    /// is deleted: the working copy and the store both go, the note is set, and nothing is stopped.
+    /// Break check: restore the old order in `delete_key` -> the `.tmp`'s pre-read stops the run and this fails.
+    #[test]
+    fn c4g2_an_apply_after_the_last_trial_gate_file_sets_the_note_and_stops_nothing() {
+        let t = Tmp::new("c4g2");
+        seed(&t);
+        t.put("experiments.json.tmp", "half-written trial records");
+        let shown = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let report = done(clear_play_history_at(&t.root, &shown.fingerprint, &later(), &ApplyAfterTheTrialStoreGoes { root: &t.root }));
+        assert!(!t.has("experiments.json") && !t.has("experiments.json.tmp"), "{report:?}");
+        assert!(report.deleted.contains(&"experiments.json".to_string()) && report.deleted.contains(&"experiments.json.tmp".to_string()));
+        assert!(report.trials_went_during_apply, "{report:?}");
+        assert!(report.stopped.is_empty() && report.not_attempted.is_empty(), "{report:?}");
+        assert_eq!(t.read("history.json"), APPLIED_LEDGER);
     }
 
     /// C4 (c4d): the read after the delete sits after the delete, in the Trial branch, and play history still
