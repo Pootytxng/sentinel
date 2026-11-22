@@ -1311,6 +1311,29 @@ mod off_main {
         blocking(move || crate::monitoring::stop_fps_capture_ticketed(ticket)).await
     }
 
+    /// "Clear play history", step 1: what it would delete, keep and leave alone, right now. A pure
+    /// read of the data folder (data_clear.rs `plan_clear`); deletes nothing.
+    #[tauri::command]
+    pub(crate) async fn plan_clear_play_history() -> Result<crate::data_clear::ClearPlan, String> {
+        blocking_result("reading your play history", || {
+            Ok(crate::data_clear::plan_clear_play_history())
+        })
+        .await
+    }
+
+    /// "Clear play history", step 2: deletes exactly the files of the plan the screen showed, named
+    /// by its fingerprint. A changed folder answers `plan_changed` and deletes nothing. Never touches
+    /// the change history (`history.json*`). Store locks are taken on the blocking pool.
+    #[tauri::command]
+    pub(crate) async fn clear_play_history(
+        fingerprint: String,
+    ) -> Result<crate::data_clear::ClearOutcome, String> {
+        blocking_result("clearing your play history", move || {
+            Ok(crate::data_clear::clear_play_history(&fingerprint))
+        })
+        .await
+    }
+
     /// The commands served here, by the name the window invokes. The tests hold the handler list
     /// and `build.rs` to it.
     #[cfg(test)]
@@ -1326,6 +1349,8 @@ mod off_main {
         "get_trial_candidates",
         "start_fps_capture",
         "stop_fps_capture",
+        "plan_clear_play_history",
+        "clear_play_history",
     ];
 
     #[cfg(test)]
@@ -1962,6 +1987,8 @@ pub fn run() {
             off_main::preview_support_evidence,
             off_main::export_support_evidence,
             support_evidence::clear_support_evidence,
+            off_main::plan_clear_play_history,
+            off_main::clear_play_history,
             get_latency_diagnostics,
             latency_measure_wake,
             latency_measure_mouse,

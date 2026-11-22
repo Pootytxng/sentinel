@@ -23,10 +23,9 @@
 //! * A working file (`Category::Transient`) newer than an hour may belong to a running operation, so it
 //!   is kept and reported.
 //!
-//! This slice (D4-2) ships the core and tests only. The two live wrappers at the bottom are NOT registered
-//! as commands until the UI/relaunch slice (see the note above them). `Scope::Everything` is planned and
-//! executed by the same code but has no wrapper yet (D4-3 adds the lock order, the clear-intent file and
-//! the start-up roll-forward). The core below this file's `live wrappers` marker takes the root as
+//! D4-2 shipped the core and tests. Since C1 the play-history wrappers at the bottom are served to the
+//! Settings screen (see the note above them); the "everything" wrappers and the start-up roll-forward
+//! are not registered or called yet (slice C2). The core below this file's `live wrappers` marker takes the root as
 //! an argument and never resolves a data root itself; every test passes a temp folder it made.
 
 #![allow(dead_code)] // `Scope::Everything` and the report helpers are first used by D4-3 and D4-4.
@@ -1844,9 +1843,10 @@ pub(crate) fn roll_forward_at(root: &Path, facts: &dyn Fn() -> ClearFacts, gates
 
 // ---- live wrappers (the only code below that touches the running app) ------------------------------
 //
-// STILL NOT REGISTERED as Tauri commands, on purpose: no `#[tauri::command]`, no entry in
-// `generate_handler!`, `build.rs` APP_COMMANDS or `capabilities/default.json`. What must still exist
-// before they are registered is in `C:\Users\Kuya\code\_train\d6-before-wiring-remaining.md`.
+// C1: `plan_clear_play_history` and `clear_play_history` are served to the main window by the async
+// commands of the same names in lib.rs `mod off_main` (registered in `generate_handler!`, `build.rs`
+// APP_COMMANDS and `capabilities/default.json`; test `w0c`). `plan_clear_everything`, `clear_everything`
+// and `finish_interrupted_clear` are STILL NOT registered or called: that is slice C2.
 //
 // They are plain blocking functions of `String`/`bool` arguments that return owned, `Send` values and
 // capture no Tauri handle, so the future command can run them with `spawn_blocking` and never wait on a
@@ -4012,6 +4012,119 @@ mod tests {
             let again = plan_clear(&t.root, Scope::Everything, &later());
             assert!(done(clear_everything_at(&t.root, &again.fingerprint, &later, &NoGates)).complete, "{at:?}");
             assert_eq!(intent_of(&t).stage, IntentStage::WebviewPending, "{at:?}");
+        }
+    }
+
+    // ---- C1: "Clear play history" is wired to the screen ------------------------------------------
+
+    /// The screen's path, on a temp root: `plan_clear` (what `plan_clear_play_history` returns) then
+    /// `clear_play_history_at` with the shown fingerprint (what `clear_play_history` runs). What is deleted
+    /// is exactly what was shown; every refusal deletes nothing and writes no record; a stale fingerprint
+    /// deletes nothing; the change history and Gaming Mode files are byte-for-byte the same afterwards.
+    #[test]
+    fn w0_the_screen_path_deletes_exactly_what_it_showed_and_a_refusal_deletes_nothing() {
+        let t = Tmp::new("w0");
+        seed(&t);
+        t.ledger(&[("Core parking", "applied"), ("Game mode", "rolled_back")]);
+        t.put("gaming-session.orphaned.json", "{}");
+        let family = ["history.json", "history.json.bak", "history.json.restored", "history.json.bak.corrupt", "gaming-session.orphaned.json"];
+        let ledger_before: Vec<String> = family.iter().map(|f| t.read(f)).collect();
+        let shown = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(shown.can_proceed());
+        // A stale fingerprint: nothing deleted, no record.
+        let before = t.listing();
+        assert!(matches!(clear_play_history_at(&t.root, "stale", &later(), &NoGates), ClearOutcome::PlanChanged));
+        assert_eq!(before, t.listing());
+        let report = done(clear_play_history_at(&t.root, &shown.fingerprint, &later(), &NoGates));
+        let mut deleted = report.deleted.clone();
+        deleted.sort();
+        let mut listed: Vec<String> = shown.delete.iter().map(|d| d.rel.clone()).collect();
+        listed.sort();
+        assert_eq!(deleted, listed, "deleted == shown");
+        assert!(report.complete && report.failed.is_empty() && report.not_attempted.is_empty());
+        for d in &shown.delete {
+            assert!(!t.has(&d.rel), "{} was shown as deleted but is still there", d.rel);
+        }
+        assert!(!t.has(INTENT_FILE), "play history never writes a clear record");
+        let ledger_after: Vec<String> = family.iter().map(|f| t.read(f)).collect();
+        assert_eq!(ledger_before, ledger_after, "play history never touches the change history");
+        assert_eq!(report.restart_reasons, ["screen_memory"]);
+        assert!(!report.webview.is_empty());
+
+        // Every refusal the screen names: nothing deleted, no record.
+        #[allow(clippy::type_complexity)]
+        let cases: Vec<(&str, Box<dyn Fn(&Tmp)>, ClearFacts)> = vec![
+            ("capture_running", Box::new(|_: &Tmp| {}), ClearFacts { capture_active: true, ..later() }),
+            ("recording_in_progress", Box::new(|_: &Tmp| {}), ClearFacts { recorder_busy: true, ..later() }),
+            ("benchmark_trial_running", Box::new(|_: &Tmp| {}), ClearFacts { benchmark_trial_running: true, ..later() }),
+            ("gaming_mode_active", Box::new(|t: &Tmp| t.put("gaming-session.json", "{}")), later()),
+            ("trial_state_unknown", Box::new(|t: &Tmp| t.put("experiments.json", "{ not json")), later()),
+        ];
+        for (code, setup, f) in cases {
+            let t = Tmp::new(code);
+            seed(&t);
+            setup(&t);
+            let ok = plan_clear(&t.root, Scope::PlayHistory, &later());
+            let before = t.listing();
+            let shown = plan_clear(&t.root, Scope::PlayHistory, &f);
+            assert!(shown.refusals.iter().any(|r| r.code == code), "{code}: {:?}", shown.refusals);
+            assert!(shown.delete.is_empty(), "{code}: a refused plan lists nothing");
+            // Both the refused plan's fingerprint and an earlier good one are refused, never deleted.
+            for fp in [&shown.fingerprint, &ok.fingerprint] {
+                match clear_play_history_at(&t.root, fp, &f, &NoGates) {
+                    ClearOutcome::Refused(r) => assert!(r.iter().any(|x| x.code == code), "{code}"),
+                    other => panic!("{code}: expected Refused, got {other:?}"),
+                }
+            }
+            assert_eq!(before, t.listing(), "{code}: nothing deleted");
+            assert!(!t.has(INTENT_FILE), "{code}: no record");
+        }
+    }
+
+    /// The JSON the screen reads (`src/surfaces/your-data.ts`). A renamed field would make the screen
+    /// show nothing, or show "deleted" from a missing list; this pins the names it relies on.
+    #[test]
+    fn w0b_the_plan_and_the_outcome_serialize_with_the_names_the_screen_reads() {
+        let t = Tmp::new("w0b");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let v = serde_json::to_value(&plan).unwrap();
+        assert_eq!(v["scope"], "play_history");
+        for k in ["delete", "kept", "unknown", "refusals", "webview", "fingerprint", "legacy_folder_present"] {
+            assert!(v.get(k).is_some(), "plan.{k}");
+        }
+        for k in ["rel", "row_id", "store", "size"] {
+            assert!(v["delete"][0].get(k).is_some(), "plan.delete[].{k}");
+        }
+        for k in ["rel", "code"] {
+            assert!(v["kept"][0].get(k).is_some(), "plan.kept[].{k}");
+        }
+        for k in ["key", "prefix", "session_storage"] {
+            assert!(v["webview"][0].get(k).is_some(), "plan.webview[].{k}");
+        }
+        let out = serde_json::to_value(clear_play_history_at(&t.root, &plan.fingerprint, &later(), &NoGates)).unwrap();
+        assert_eq!(out["status"], "done");
+        for k in ["deleted", "already_gone", "failed", "not_attempted", "stopped", "kept", "unknown", "complete", "nothing_to_do", "restart_required", "restart_reasons", "webview"] {
+            assert!(out["detail"].get(k).is_some(), "report.{k}");
+        }
+        assert_eq!(serde_json::to_value(ClearOutcome::PlanChanged).unwrap()["status"], "plan_changed");
+        let refused = serde_json::to_value(ClearOutcome::Refused(vec![Refusal { code: "capture_running", detail: String::new(), files: vec![] }])).unwrap();
+        assert_eq!(refused["status"], "refused");
+        assert_eq!(refused["detail"][0]["code"], "capture_running");
+    }
+
+    /// C1 registers only the play-history pair. "Clear everything", its plan and the start-up roll-forward
+    /// stay unregistered and uncalled until C2.
+    #[test]
+    fn w0c_only_play_history_is_wired_and_everything_is_not() {
+        let lib = include_str!("lib.rs");
+        let handler = &lib[lib.find(concat!("generate_handler", "![")).expect("handler")..];
+        let handler = &handler[..handler.find("])").expect("handler end")];
+        assert!(handler.contains("off_main::plan_clear_play_history,") && handler.contains("off_main::clear_play_history,"));
+        assert!(lib.contains("crate::data_clear::plan_clear_play_history()"));
+        assert!(lib.contains("crate::data_clear::clear_play_history(&fingerprint)"));
+        for not_yet in [concat!("data_clear::clear_", "everything"), concat!("data_clear::plan_clear_", "everything")] {
+            assert!(!lib.contains(not_yet), "{not_yet} is C2's");
         }
     }
 

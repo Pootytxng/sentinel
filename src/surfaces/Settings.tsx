@@ -32,6 +32,7 @@ import ReceiptsConsent from "./ReceiptsConsent";
 import { LicensePanel } from "./LicensePanel";
 import { FeedbackExport } from "./FeedbackExport";
 import { SupportEvidence } from "./SupportEvidence";
+import { YourData } from "./YourData";
 import "./Settings.css";
 
 // Settings / Appearance surface (spec 2026-06-06-settings-and-icon §A). Frontend + localStorage only;
@@ -401,6 +402,11 @@ export default function Settings({
           </BentoTile>
 
           <LicensePanel />
+
+          {/* ── Your data (C1): clear play history, plan first, then an "I understand" step. Full
+              width because the plan lists files; placed after the row of small tiles so the
+              Feedback/Support pairing above stays intact. ── */}
+          <YourData />
 
           {/* ── About ── */}
           <BentoTile title={t("settings.about.sectionTitle")} span="full">
