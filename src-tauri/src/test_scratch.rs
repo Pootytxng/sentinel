@@ -36,8 +36,16 @@ impl Scratch {
         self.path.clone()
     }
 
-    /// The same root, now pointing at `name` inside it (nothing is created at `name`).
+    /// The same root, now pointing at `name` inside it (nothing is created at `name`). `name` must stay
+    /// inside the root: a relative path of plain names (an absolute path, a drive or `..` is refused, so
+    /// a child can never point outside the folder the drop removes, or make the drop remove less).
     pub(crate) fn child(mut self, name: impl AsRef<Path>) -> Scratch {
+        let name = name.as_ref();
+        assert!(
+            name.components().all(|c| matches!(c, std::path::Component::Normal(_))),
+            "a scratch child must be a relative path of plain names: {}",
+            name.display()
+        );
         self.path = self.root.join(name);
         self
     }
@@ -66,6 +74,11 @@ impl Drop for Scratch {
 
 /// A new, empty scratch root `%TEMP%\compy-<label>-<pid>-<nanos>-<n>`, pointing at itself.
 pub(crate) fn scratch(label: &str) -> Scratch {
+    // The label is one plain name piece: no separator, no `..`, nothing that could move the root.
+    assert!(
+        !label.is_empty() && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+        "a scratch label is letters, digits, '-' or '_': {label:?}"
+    );
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let n = NEXT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!("compy-{label}-{}-{nanos}-{n}", std::process::id()));
@@ -112,5 +125,18 @@ mod tests {
         std::fs::create_dir_all(c.join("deep")).unwrap();
         drop(c);
         assert!(!root.exists());
+    }
+
+    #[test]
+    fn a_child_or_label_that_could_leave_the_root_is_refused() {
+        for bad in ["..", "../x", "a/../../x", r"C:\x", r"\x", "/x"] {
+            assert!(std::panic::catch_unwind(|| scratch_child("selftest", bad)).is_err(), "child {bad:?} must be refused");
+        }
+        for bad in ["", "a/b", r"a\b", "..", "a.b"] {
+            assert!(std::panic::catch_unwind(|| scratch(bad)).is_err(), "label {bad:?} must be refused");
+        }
+        // Plain nested names are fine.
+        let ok = scratch_child("selftest", std::path::Path::new("a").join("b.txt"));
+        assert!(ok.ends_with(std::path::Path::new("a").join("b.txt")));
     }
 }

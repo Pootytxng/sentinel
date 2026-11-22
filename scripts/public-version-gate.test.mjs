@@ -1,9 +1,9 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { windows, WINDOWS_ONLY } from "./lib/windows-only.mjs";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = join(import.meta.dirname, "..");
@@ -42,8 +42,15 @@ const invoke = (scenario, sourcePath) => {
   return { payload, status: output.status, combined };
 };
 
+// D1e: every folder `write` makes is removed when the file's tests end (they used to stay in %TEMP%).
+const made = [];
+afterAll(() => {
+  for (const dir of made) rmSync(dir, { recursive: true, force: true });
+});
+
 const write = (text, label) => {
   const path = join(mkdtempSync(join(tmpdir(), "compy-public-version-gate-")), `release-${label}.ps1`);
+  made.push(dirname(path));
   writeFileSync(path, text, "utf8");
   return path;
 };

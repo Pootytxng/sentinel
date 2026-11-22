@@ -2434,7 +2434,8 @@ mod safety_tests {
                 .map(|d| d.as_nanos())
                 .unwrap_or(0)
         );
-        let repo = std::env::temp_dir().join(format!("compy-dirty-guard-{uniq}"));
+        // D1d review: inside a fresh scratch root that is removed when the test ends.
+        let repo = crate::test_scratch::scratch_child("dirty-guard", format!("compy-dirty-guard-{uniq}"));
         let _ = std::fs::remove_dir_all(&repo);
         std::fs::create_dir_all(&repo)
             .expect("create a throwaway temp repo dir for the build-dirty guard (temp setup must \

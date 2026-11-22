@@ -493,10 +493,12 @@ describe("the ledger-writing command list matches src-tauri", () => {
   it("the derivation reaches a chain defined callers-first and an alias that becomes a writer mid-pass", () => {
     const writers = ledgerWriters([
       "use crate::m::{chain_c as later_name};\nfn late_alias_cmd() { later_name(); }",
-      "fn chain_a_cmd() { chain_b(); }\nfn chain_b() { chain_c(); }\nfn chain_c() { save_history(&h); }",
+      // `after_cmd` comes AFTER chain_c in the same source, so it is visited later in the pass that makes
+      // chain_c a writer (D1d review r1): it must still be reached.
+      "fn chain_a_cmd() { chain_b(); }\nfn chain_b() { chain_c(); }\nfn chain_c() { save_history(&h); }\nfn after_cmd() { chain_c(); }",
       "fn bystander_cmd() { chain_d(); }",
     ]);
-    for (const name of ["chain_c", "chain_b", "chain_a_cmd", "late_alias_cmd"]) expect(writers, name).toContain(name);
+    for (const name of ["chain_c", "chain_b", "chain_a_cmd", "late_alias_cmd", "after_cmd"]) expect(writers, name).toContain(name);
     expect(writers).not.toContain("bystander_cmd");
   });
 
