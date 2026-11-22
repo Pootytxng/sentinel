@@ -49,6 +49,8 @@ export type ClearReport = {
   webview: WebviewTarget[];
   /** "Clear everything" only: its record could not be marked stopped (C2b review B4). Absent on older answers. */
   record_not_updated?: boolean;
+  /** "Clear everything": every file is gone but the record could not be advanced (C2b review r2 follow-up). */
+  record_not_advanced?: boolean;
 };
 
 export type ClearOutcome =

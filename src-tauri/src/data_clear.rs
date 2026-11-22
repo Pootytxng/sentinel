@@ -864,6 +864,11 @@ pub(crate) struct ClearReport {
     /// stopped (or removed). The record may still say "files pending", so the next start may finish deleting the
     /// confirmed files. The screen says so instead of "nothing more will be deleted".
     pub(crate) record_not_updated: bool,
+    /// "Clear everything" only (C2b review r2 follow-up): every file is gone but the record could not be advanced
+    /// past "files pending". The next start reads it again, confined to the files it lists (none of which it
+    /// deletes if it was made after the clear started). The screen says so instead of the generic "couldn't
+    /// remove its note".
+    pub(crate) record_not_advanced: bool,
 }
 
 impl ClearReport {
@@ -1174,6 +1179,7 @@ fn new_report(now: &ClearPlan) -> ClearReport {
         restart_reasons: restart_reasons_in(MEMORY_COPIES, now.scope),
         webview: now.webview.clone(),
         record_not_updated: false,
+        record_not_advanced: false,
     }
 }
 
@@ -1390,6 +1396,7 @@ pub(crate) fn finish_everything(root: &Path, phase: LedgerPhase, gates: &dyn Cle
         // the files it lists, all gone now) advances it.
         if let Err(why) = mark_files_done(root) {
             eprintln!("[data_clear] the clear finished but its record could not be advanced ({why}); the next start will advance it");
+            report.record_not_advanced = true;
         }
     } else if !progress && !rolled_forward {
         if let Err(why) = remove_intent(root) {
@@ -4445,6 +4452,43 @@ mod tests {
         let report = done(clear_everything_at(&t2.root, &shown.fingerprint, &later, &FailOnly));
         assert!(!report.complete && !report.record_not_updated);
         assert_eq!(intent_of(&t2).stage, IntentStage::Abandoned);
+    }
+
+    /// Arms the next atomic write on this thread to fail as the support record (the last file of "clear
+    /// everything") goes, so every file is deleted but the record cannot be advanced afterwards.
+    struct FailTheRecordAfterTheLastFile;
+
+    impl ClearGates for FailTheRecordAfterTheLastFile {
+        fn with_gate(&self, _gate: Gate, store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            let out = delete();
+            if store == "support-evidence" {
+                crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::AfterWrite);
+            }
+            out
+        }
+        fn live_state(&self) -> LiveState {
+            LiveState::default()
+        }
+    }
+
+    /// C2b review r2 follow-up: a COMPLETE "clear everything" whose record cannot be advanced says so.
+    /// Break check: remove `report.record_not_advanced = true` in `finish_everything` -> fails.
+    #[test]
+    fn z6_a_complete_clear_whose_record_cannot_be_advanced_says_so() {
+        let t = Tmp::new("z6");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(rels(&shown).contains(&"support/evidence.jsonl"), "the support record is the last file: {:?}", rels(&shown));
+        let report = done(clear_everything_at(&t.root, &shown.fingerprint, &later, &FailTheRecordAfterTheLastFile));
+        assert!(report.complete && report.record_not_advanced && !report.record_not_updated, "{report:?}");
+        assert_eq!(intent_of(&t).stage, IntentStage::FilesPending, "the record could not be advanced");
+        // Mirror: with the record writable the flag stays off and the record moves on.
+        let t2 = Tmp::new("z6b");
+        seed(&t2);
+        let shown = plan_clear(&t2.root, Scope::Everything, &later());
+        let report = done(clear_everything_at(&t2.root, &shown.fingerprint, &later, &NoGates));
+        assert!(report.complete && !report.record_not_advanced, "{report:?}");
+        assert_eq!(intent_of(&t2).stage, IntentStage::WebviewPending);
     }
 
     /// C2b review B4, start-up side: a roll-forward that gives up but cannot mark the record says so.

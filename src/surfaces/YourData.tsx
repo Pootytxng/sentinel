@@ -475,7 +475,11 @@ function Result({
       {everything && !report.complete && (
         <p className="receipts-hint sev-warn">{t(k(report.record_not_updated ? "recordNotUpdated" : "everythingNotFinished"))}</p>
       )}
-      {ack === "failed" && <p className="receipts-hint sev-warn">{t(k("ackFailed"))}</p>}
+      {everything && report.complete && report.record_not_advanced ? (
+        <p className="receipts-hint sev-warn">{t(k("recordNotAdvanced"))}</p>
+      ) : (
+        ack === "failed" && <p className="receipts-hint sev-warn">{t(k("ackFailed"))}</p>
+      )}
       {report.deleted.some((f) => f.startsWith("care/")) && <p className="receipts-hint">{t(k("crashNotesReturn"))}</p>}
       {showReload && (
         <div data-testid="your-data-reload">

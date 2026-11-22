@@ -191,6 +191,7 @@
     "undoAfter": "Press Check again to see what is still in place.",
     "everythingNotFinished": "The clear did not finish. Nothing more will be deleted until you confirm it again.",
     "ackFailed": "Compy couldn't remove its note that this clear is finishing. It will try again the next time it starts.",
+    "recordNotAdvanced": "Every listed file is gone, but Compy couldn't update its note about this clear. At its next start it reads that note again and deletes nothing saved after this clear began.",
     "reopenNotice": "Done. Close Compy and open it again to finish: this window still shows what it had loaded, and Compy will start as if it was just installed.",
     "statusDismiss": "Dismiss",
     "status": {

@@ -420,6 +420,27 @@ describe("Your data: clear everything", () => {
     expect(result.textContent).not.toContain("Nothing more will be deleted until you confirm it again");
   });
 
+  // C2b review r2 follow-up. Break check: drop the record_not_advanced branch in YourData.tsx -> the generic
+  // ackFailed line shows instead and this fails.
+  it("a complete clear whose record could not be advanced says so instead of the generic note line", async () => {
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: () => EVERY_PLAN,
+      clear_everything: () => ({ status: "done", detail: { ...EVERY_REPORT, complete: true, record_not_advanced: true } }),
+      acknowledge_clear: () => {
+        throw new Error("no_finished_clear");
+      },
+    });
+    render(<YourData />);
+    await openEverything();
+    await screen.findByTestId("your-data-confirm");
+    fireEvent.click(screen.getByLabelText("I understand"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete everything" }));
+    const result = await screen.findByTestId("your-data-result");
+    expect(result.textContent).toContain("deletes nothing saved after this clear began");
+    expect(result.textContent).not.toContain("couldn't remove its note");
+  });
+
   it("an abandoned clear from start-up is said in words and can be dismissed", async () => {
     let record = "abandoned";
     everything({
