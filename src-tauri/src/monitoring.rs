@@ -722,14 +722,15 @@ mod gpu_validity_tests {
 // ─── FPS / frametime control (elevated helper orchestration) ─────────────
 //
 // The main app runs unelevated; the ETW capture helper must be elevated.
-// We can't kill an elevated process from here, so the lifecycle is managed
-// by a heartbeat file: while monitoring is active a background thread
-// refreshes it every second; the helper self-exits when it goes stale. The
-// helper writes its latest report to a JSON file under LOCALAPPDATA\Compy
-// which we read here (same per-user path resolves in both processes).
+// We can't kill an elevated process from here. Hardening slice 2: the helper
+// talks to the app over a named pipe the app creates for each launch
+// (fps_pipe.rs); the app writes each report line to fps.json itself, as the
+// user, and the readers below read that file as they always did. The pipe is
+// also the lifecycle: when the app closes its end (stop, exit, crash), the
+// helper's next write fails and it exits. The helper writes no file.
 
 pub(crate) fn fps_dir() -> PathBuf {
-    // Runtime IPC files (fps.json / fps.alive) live in a dedicated `runtime/`
+    // Runtime IPC files (fps.json and its marker) live in a dedicated `runtime/`
     // subdir under the app data root — NOT %LOCALAPPDATA%\Compy, which is the
     // NSIS install dir, so runtime files never land beside the installed binaries.
     // The Trust Ledger stays directly in the data root (compy_data_dir).
@@ -738,11 +739,9 @@ pub(crate) fn fps_dir() -> PathBuf {
 pub(crate) fn fps_out_path() -> PathBuf {
     fps_dir().join("fps.json")
 }
-pub(crate) fn fps_alive_path() -> PathBuf {
-    fps_dir().join("fps.alive")
-}
-/// The helper's unreadable-tick marker (`fps::UNREADABLE_SUFFIX`): written on every tick on which the
-/// helper could not read the process snapshot, holding the cumulative count of such ticks.
+/// The helper's unreadable-tick marker (`fps::UNREADABLE_SUFFIX`): written (by the app, from the helper's
+/// pipe line) on every tick on which the helper could not read the process snapshot, holding the
+/// cumulative count of such ticks.
 pub(crate) fn fps_unreadable_path() -> PathBuf {
     PathBuf::from(format!("{}{}", fps_out_path().display(), crate::fps::UNREADABLE_SUFFIX))
 }
@@ -873,19 +872,74 @@ fn lock_progress() -> std::sync::MutexGuard<'static, Option<crate::sessions::Cap
     static P: OnceLock<Mutex<Option<crate::sessions::CaptureProgress>>> = OnceLock::new();
     P.get_or_init(|| Mutex::new(None)).lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
-pub(crate) fn touch_alive() {
-    // The helper checks this file's mtime; the contents don't matter.
-    let _ = std::fs::write(fps_alive_path(), b"alive");
-}
-
-/// Clean teardown for app exit (Train #3 §1 — clean exit). Stops the FPS heartbeat and drops the
-/// `fps.alive` file so the elevated `--fps-capture` helper self-exits on its next poll (~0.5s —
-/// `heartbeat_stale` treats a missing file as stale). A non-elevated parent can't kill the elevated
-/// helper, so this heartbeat-drop is the shutdown channel. Idempotent + safe when nothing is running.
+/// Clean teardown for app exit (Train #3 §1 — clean exit). Clears the capture flag: the pipe's reader
+/// thread sees it at the helper's next line (within ~0.5 s) and closes the pipe, and the elevated
+/// `--fps-capture` helper exits at its next write. If the app exits first, Windows closes the pipe with
+/// the process, which ends the helper the same way. A non-elevated parent can't kill the elevated
+/// helper, so closing the pipe is the shutdown channel. Idempotent + safe when nothing is running.
 pub(crate) fn shutdown_for_exit() {
     use std::sync::atomic::Ordering;
     fps_active().store(false, Ordering::Release);
-    let _ = std::fs::remove_file(fps_alive_path());
+}
+
+/// One launch's pipe: its name (for the helper's argv) and a flag the launch sets once its helper process
+/// has ended, so a reader still waiting for a client stops waiting.
+struct CapturePipe {
+    name: String,
+    done: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl CapturePipe {
+    fn argv(&self) -> [String; 5] {
+        helper_argv(&self.name, std::process::id())
+    }
+
+    /// The helper process this pipe was made for has ended: stop the reader if it is still waiting for
+    /// a client (it never connected), by flagging it and connecting once to wake it.
+    fn finished(&self) {
+        self.done.store(true, std::sync::atomic::Ordering::Release);
+        crate::fps_pipe::wake(&self.name);
+    }
+}
+
+/// Create a fresh pipe for one helper launch and start its reader thread. The reader accepts only a
+/// Compy this app started (`fps_pipe::is_our_helper`), and while this capture is live and the launch
+/// has not ended, writes each report line to fps.json and each unreadable count to the marker, as the
+/// user (`relay_line`). It ends when the helper closes its end, or at the first line after the capture
+/// stops; dropping the pipe then is what ends the helper.
+fn start_capture_pipe(generation: u64) -> Result<CapturePipe, String> {
+    use std::sync::atomic::Ordering;
+    let pipe = crate::fps_pipe::ServerPipe::create().map_err(|e| format!("could not create the capture pipe: {e}"))?;
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let handle = CapturePipe { name: pipe.name.clone(), done: done.clone() };
+    std::thread::spawn(move || {
+        let (out, marker) = (fps_out_path(), fps_unreadable_path());
+        let wanted = || capture_live(generation) && !done.load(Ordering::Acquire);
+        let _ = pipe.serve(&wanted, &crate::fps_pipe::is_our_helper, &mut |line| relay_line(line, &out, &marker));
+    });
+    Ok(handle)
+}
+
+/// PURE-ish: what the app does with one helper line. A report replaces fps.json, an unreadable count
+/// replaces the marker (each written beside itself and renamed over, so a reader never sees half a
+/// file); a keepalive and anything else write nothing. This is exactly what the helper used to write
+/// itself, now written by the app with the user's own rights.
+fn relay_line(line: crate::fps_pipe::Line, out: &std::path::Path, marker: &std::path::Path) {
+    use crate::fps_pipe::Line;
+    match line {
+        Line::Report(json) => write_replacing(out, &json),
+        Line::Unreadable(n) => write_replacing(marker, &n.to_string()),
+        Line::Alive | Line::Junk => {}
+    }
+}
+
+/// Write `<path>.tmp`, then rename it over `path` (the same names the helper used to write).
+fn write_replacing(target: &std::path::Path, contents: &str) {
+    let path = target.display().to_string();
+    let tmp = format!("{path}.tmp");
+    if std::fs::write(&tmp, contents).is_ok() {
+        let _ = std::fs::rename(&tmp, target);
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -1109,8 +1163,20 @@ fn elevated_helper_status(res: &std::io::Result<std::process::ExitStatus>) -> St
 
 /// The elevated launch of the capture helper (UAC "runas"). D1-S1 moved it into a function, unchanged,
 /// so the start without a prompt can fall back to it.
-fn launch_elevated_helper(exe: std::path::PathBuf, out: String, alive: String, generation: u64) {
+fn launch_elevated_helper(exe: std::path::PathBuf, generation: u64) {
     use std::sync::atomic::Ordering;
+    // Hardening slice 2: a fresh pipe for this launch; the helper gets its name and our pid, no path.
+    let pipe = match start_capture_pipe(generation) {
+        Ok(p) => p,
+        Err(e) => {
+            if capture_current(generation) {
+                fps_active().store(false, Ordering::Release);
+                *lock_status() = format!("failed to launch helper: {e}");
+            }
+            support_record(SupportOutcome::Failed, "pipe_failed", &format!("the capture pipe could not be created: {e}"));
+            return;
+        }
+    };
     // elevate_and_wait blocks for the helper's lifetime, so run it on a
     // dedicated thread. A declined UAC prompt returns Err(os error 1223) quickly.
     //
@@ -1125,16 +1191,9 @@ fn launch_elevated_helper(exe: std::path::PathBuf, out: String, alive: String, g
     helper_running().store(true, Ordering::Release);
     std::thread::spawn(move || {
         use std::ffi::OsStr;
-        let res = crate::actions::elevate_and_wait(
-            exe.as_os_str(),
-            &[
-                OsStr::new("--fps-capture"),
-                OsStr::new("--fps-out"),
-                OsStr::new(&out),
-                OsStr::new("--fps-alive"),
-                OsStr::new(&alive),
-            ],
-        );
+        let argv = pipe.argv();
+        let res = crate::actions::elevate_and_wait(exe.as_os_str(), &argv.each_ref().map(OsStr::new));
+        pipe.finished();
         helper_running().store(false, Ordering::Release);
         // Only this capture's flag and status, as the direct-spawn wait above.
         let current = capture_current(generation);
@@ -1182,15 +1241,13 @@ fn start_fps_capture_locked() -> Result<(), String> {
     if fps_active().load(Ordering::Acquire) {
         return Ok(()); // already running
     }
-    // A quick stop→start can outrace the previous elevated helper's self-exit: `stop_fps_capture`
-    // clears the intent flag and drops the heartbeat, but the helper only notices on its next poll.
-    // If we re-touched `fps.alive` now, that stale helper would see a fresh heartbeat and keep
-    // running alongside the one we're about to spawn — two elevated helpers we can't kill, both
-    // writing fps.json. So first give the old helper a bounded window to observe the dropped
-    // heartbeat and exit. It clears `helper_running` from its wait thread; best-effort — if it's
-    // wedged we proceed after the cap rather than hang the command (no worse than the old behaviour).
+    // A quick stop→start can outrace the previous elevated helper's exit: `stop_fps_capture` clears the
+    // intent flag, but the old pipe's reader only closes it at the helper's next line (~0.5 s) and the
+    // helper exits at the write after that. Two elevated helpers at once would hold two ETW sessions of
+    // one name. So first give the old helper a bounded window to exit. It clears `helper_running` from
+    // its wait thread; best-effort — if it's wedged we proceed after the cap rather than hang the command
+    // (no worse than the old behaviour; its pipe is closed, so it cannot reach the new capture).
     if helper_running().load(Ordering::Acquire) {
-        let _ = std::fs::remove_file(fps_alive_path()); // ensure the heartbeat stays dropped while we wait
         for _ in 0..50 {
             if !helper_running().load(Ordering::Acquire) {
                 break;
@@ -1204,30 +1261,15 @@ fn start_fps_capture_locked() -> Result<(), String> {
     // the last helper, so it never reads as this one's).
     let _ = std::fs::remove_file(fps_out_path());
     let _ = std::fs::remove_file(fps_unreadable_path());
-    // A new generation BEFORE the heartbeat and the flag go up, so a thread of the last capture that
-    // wakes now sees it was superseded (and leaves the fresh heartbeat alone).
+    // The heartbeat file of Compy versions before the capture pipe: nothing reads or writes it now.
+    let _ = std::fs::remove_file(dir.join("fps.alive"));
+    // A new generation BEFORE the flag goes up, so a thread of the last capture (its pipe reader
+    // included) that wakes now sees it was superseded and writes nothing more.
     let generation = capture_gen().fetch_add(1, Ordering::AcqRel) + 1;
-    touch_alive();
     fps_active().store(true, Ordering::Release);
     *lock_status() = "starting".into();
 
     let exe = std::env::current_exe().map_err(|e| format!("cannot find own exe: {e}"))?;
-
-    // Heartbeat: refresh the alive file every second while active; remove it
-    // on stop so the helper self-exits.
-    std::thread::spawn(move || {
-        while capture_live(generation) {
-            touch_alive();
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
-        // A superseded capture leaves the heartbeat alone: it is the new capture's now.
-        if capture_current(generation) {
-            let _ = std::fs::remove_file(fps_alive_path());
-        }
-    });
-
-    let out = fps_out_path().to_string_lossy().to_string();
-    let alive = fps_alive_path().to_string_lossy().to_string();
 
     // Launch path depends on UAC. When UAC is fully disabled (EnableLUA=0),
     // the ShellExecute "runas" verb can't elevate — it silently fails, so the
@@ -1238,14 +1280,17 @@ fn start_fps_capture_locked() -> Result<(), String> {
     if uac_disabled_refreshed() {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let pipe = match start_capture_pipe(generation) {
+            Ok(p) => p,
+            Err(e) => {
+                fps_active().store(false, Ordering::Release);
+                *lock_status() = format!("failed to launch helper: {e}");
+                support_record(SupportOutcome::Failed, "pipe_failed", &format!("the capture pipe could not be created: {e}"));
+                return Ok(());
+            }
+        };
         match std::process::Command::new(&exe) // spawn-allow: self-spawn of current_exe() (absolute path); install-dir risk is a later slice
-            .args([
-                "--fps-capture",
-                "--fps-out",
-                out.as_str(),
-                "--fps-alive",
-                alive.as_str(),
-            ])
+            .args(pipe.argv())
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
         {
@@ -1253,9 +1298,10 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 helper_running().store(true, Ordering::Release);
                 *lock_status() = "running".into();
                 support_record(SupportOutcome::Ok, "direct_spawn", "helper started without a UAC prompt (EnableLUA=0)");
-                // Reflect helper exit (self-exit on heartbeat stale, or crash).
+                // Reflect helper exit (it exits when the pipe closes, or crashes).
                 std::thread::spawn(move || {
                     let status = child.wait();
+                    pipe.finished();
                     helper_running().store(false, Ordering::Release);
                     // Only this capture's flag and status: a newer capture's are not this helper's.
                     if capture_current(generation) {
@@ -1270,6 +1316,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 });
             }
             Err(e) => {
+                pipe.finished();
                 fps_active().store(false, Ordering::Release);
                 *lock_status() = format!("failed to launch helper: {e}");
                 support_record(SupportOutcome::Failed, "spawn_failed", &format!("helper did not launch: {e}"));
@@ -1279,9 +1326,9 @@ fn start_fps_capture_locked() -> Result<(), String> {
         // D1-S1: this sign-in's token already carries the enabled "Performance Log Users" group, so
         // Windows lets this unelevated app start the trace: try the helper as a plain child first;
         // any failure of that start is the elevated launch below, exactly as it was.
-        start_plain_or_elevated(exe, out, alive, generation);
+        start_plain_or_elevated(exe, generation);
     } else {
-        launch_elevated_helper(exe, out, alive, generation);
+        launch_elevated_helper(exe, generation);
     }
 
     // Session summary aggregator (F3, READ-ONLY): while monitoring is active,
@@ -1740,7 +1787,7 @@ pub(crate) fn perf_log_access_from_token_groups(buf: &[u8]) -> PerfLogAccess {
 
 /// Run `f` with a read-only handle to THIS process's own token. (Our own token, never another
 /// process's: nothing here touches the game.)
-fn with_own_token<R>(f: impl FnOnce(windows::Win32::Foundation::HANDLE) -> Option<R>) -> Option<R> {
+pub(crate) fn with_own_token<R>(f: impl FnOnce(windows::Win32::Foundation::HANDLE) -> Option<R>) -> Option<R> {
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
     use windows::Win32::Security::TOKEN_QUERY;
     use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
@@ -1807,15 +1854,16 @@ pub(crate) fn plain_start_applies(uac_off: bool, elevated: Option<bool>, access:
     !uac_off && elevated == Some(false) && access == PerfLogAccess::InToken
 }
 
-/// The helper's command line: the same five arguments the elevated launch passes. A plain start adds
-/// no argument and no environment of its own.
-fn helper_argv(out: &str, alive: &str) -> [String; 5] {
+/// The helper's command line, the same five arguments for all three launches (elevated, UAC-off direct,
+/// plain): this launch's pipe and this app's pid (hardening slice 2: no path). A plain start adds no
+/// argument and no environment of its own.
+fn helper_argv(pipe: &str, parent_pid: u32) -> [String; 5] {
     [
         "--fps-capture".to_string(),
-        "--fps-out".to_string(),
-        out.to_string(),
-        "--fps-alive".to_string(),
-        alive.to_string(),
+        "--pipe".to_string(),
+        pipe.to_string(),
+        "--parent-pid".to_string(),
+        parent_pid.to_string(),
     ]
 }
 
@@ -1953,21 +2001,33 @@ fn fall_back_in_order(
 /// console window. The child INHERITS this app's (the user's) environment, unchanged, like the
 /// UAC-off direct spawn: it runs with the user's own rights, so that environment gives it nothing
 /// the user does not already have (the elevated launch is the one that clears it).
-fn spawn_plain_helper(exe: &std::path::Path, out: &str, alive: &str) -> Result<std::process::Child, String> {
+fn spawn_plain_helper(exe: &std::path::Path, pipe: &CapturePipe) -> Result<std::process::Child, String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let exe = checked_helper_path(exe)?;
     std::process::Command::new(exe) // spawn-allow: self-spawn of current_exe() (absolute, checked_helper_path), same as the UAC-off direct spawn
-        .args(helper_argv(out, alive))
+        .args(pipe.argv())
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| e.to_string())
 }
 
+/// A pipe and the plain start over it; on a failed start the pipe's reader is stopped at once.
+fn spawn_plain_with_pipe(exe: &std::path::Path, generation: u64) -> Result<(std::process::Child, CapturePipe), String> {
+    let pipe = start_capture_pipe(generation)?;
+    match spawn_plain_helper(exe, &pipe) {
+        Ok(child) => Ok((child, pipe)),
+        Err(e) => {
+            pipe.finished();
+            Err(e)
+        }
+    }
+}
+
 /// Launch the helper without elevation; the elevated launch ([`launch_elevated_helper`], unchanged)
 /// if that spawn fails, or if the helper exits inside [`PLAIN_START_WINDOW`] while this capture is
 /// still wanted. The reason for a fallback goes in the support log.
-fn start_plain_or_elevated(exe: std::path::PathBuf, out: String, alive: String, generation: u64) {
+fn start_plain_or_elevated(exe: std::path::PathBuf, generation: u64) {
     use std::sync::atomic::Ordering;
     let note = |why: &str| {
         plain_start_failed().store(true, Ordering::Release);
@@ -1977,13 +2037,13 @@ fn start_plain_or_elevated(exe: std::path::PathBuf, out: String, alive: String, 
             &format!("{why}; asking for administrator permission instead"),
         );
     };
-    let (e2, o2, a2) = (exe.clone(), out.clone(), alive.clone());
+    let e2 = exe.clone();
     let (_, child) = start_helper(
-        || spawn_plain_helper(&exe, &out, &alive),
-        || launch_elevated_helper(e2, o2, a2, generation),
+        || spawn_plain_with_pipe(&exe, generation),
+        || launch_elevated_helper(e2, generation),
         |reason| note(&format!("could not start the helper without elevation ({reason})")),
     );
-    let Some(mut child) = child else {
+    let Some((mut child, pipe)) = child else {
         return;
     };
     plain_start_failed().store(false, Ordering::Release);
@@ -1997,6 +2057,7 @@ fn start_plain_or_elevated(exe: std::path::PathBuf, out: String, alive: String, 
     let started_at = std::time::Instant::now();
     std::thread::spawn(move || {
         let status = child.wait();
+        pipe.finished();
         helper_running().store(false, Ordering::Release);
         let text = match &status {
             Ok(s) => s.to_string(),
@@ -2009,7 +2070,7 @@ fn start_plain_or_elevated(exe: std::path::PathBuf, out: String, alive: String, 
             |wanted| plain_exit_fallback_reason(&text, ran_for, wanted),
             || {
                 *lock_status() = "starting".into();
-                launch_elevated_helper(exe, out, alive, generation)
+                launch_elevated_helper(exe, generation)
             },
             note,
         );
@@ -2048,7 +2109,6 @@ fn stop_fps_capture_locked() {
     fps_active().store(false, Ordering::Release);
     *lock_status() = "idle".into();
     *lock_progress() = None;
-    let _ = std::fs::remove_file(fps_alive_path());
     let _ = std::fs::remove_file(fps_out_path());
     let _ = std::fs::remove_file(fps_unreadable_path());
     crate::tray::set_idle();
@@ -2310,7 +2370,57 @@ mod runtime_dir_tests {
             "runtime dir must be distinct from the ledger dir"
         );
         assert!(fps_out_path().starts_with(&d));
-        assert!(fps_alive_path().starts_with(&d));
+        assert!(fps_unreadable_path().starts_with(&d));
+    }
+}
+
+#[cfg(test)]
+mod capture_pipe_tests {
+    //! Hardening slice 2: the app writes the helper's lines itself, as the user; readers see the same files.
+    use super::{relay_line, write_replacing};
+    use crate::fps_pipe::Line;
+
+    #[test]
+    fn a_report_line_becomes_fps_json_and_a_count_becomes_the_marker() {
+        let s = crate::test_scratch::scratch("relay-line");
+        let (out, marker) = (s.join("fps.json"), s.join("fps.json.snapshot-unreadable"));
+        let report = r#"{"pid":7,"process_name":"g.exe","fps":60.0}"#;
+        relay_line(Line::Report(report.into()), &out, &marker);
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), report, "the exact line, as the helper used to write it");
+        assert!(!marker.exists());
+        relay_line(Line::Unreadable(5), &out, &marker);
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "5", "the marker's old content: the bare count");
+        assert_eq!(super::parse_unreadable_ticks(&std::fs::read_to_string(&marker).unwrap()), Some(5));
+        relay_line(Line::Alive, &out, &marker);
+        relay_line(Line::Junk, &out, &marker);
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), report, "a keepalive or junk writes nothing");
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "5");
+        let names: Vec<_> = std::fs::read_dir(&*s).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(names.len(), 2, "no .tmp left behind: {names:?}");
+    }
+
+    #[test]
+    fn a_replacing_write_replaces_the_whole_file() {
+        let s = crate::test_scratch::scratch("relay-replace");
+        let p = s.join("fps.json");
+        write_replacing(&p, "a much longer first report");
+        write_replacing(&p, "short");
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "short");
+    }
+
+    /// Source pins: no heartbeat file is left in the app, every launch builds its argv from one pipe,
+    /// and the reader accepts only this app's own helper.
+    #[test]
+    fn every_launch_passes_a_pipe_and_no_path() {
+        // Every needle is split with concat! so this test's own text never matches it.
+        let src = include_str!("monitoring.rs");
+        for gone in [concat!("fps_alive", "_path"), concat!("touch_", "alive"), concat!("\"--fps", "-out\""), concat!("\"--fps", "-alive\"")] {
+            assert!(!src.contains(gone), "{gone} must be gone from the app");
+        }
+        assert_eq!(src.matches(concat!(".args(pipe", ".argv())")).count(), 2, "UAC-off and plain launches use the pipe argv");
+        assert_eq!(src.matches(concat!("elevate_and_wait(exe.as_os_str(), ", "&argv.each_ref().map(OsStr::new))")).count(), 1);
+        assert_eq!(src.matches(concat!("&crate::fps_pipe::", "is_our_helper")).count(), 1, "the reader checks its client");
+        assert_eq!(src.matches(concat!("pipe.", "finished();")).count(), 5, "every helper end stops its reader");
     }
 }
 
@@ -2899,8 +3009,8 @@ mod plain_start_tests {
         let src = include_str!("monitoring.rs").replace("\r\n", "\n");
         let at = src.find(concat!("} else if plain_start_applies(false, process_is_elevated(), ", "perf_log_access()) {")).unwrap();
         let branch = &src[at..at + src[at..].find("\n    }\n").unwrap()];
-        assert!(branch.contains(concat!("start_plain_or_", "elevated(exe, out, alive, generation);")));
-        assert!(branch.contains(concat!("} else {\n        launch_elevated_", "helper(exe, out, alive, generation);")));
+        assert!(branch.contains(concat!("start_plain_or_", "elevated(exe, generation);")));
+        assert!(branch.contains(concat!("} else {\n        launch_elevated_", "helper(exe, generation);")));
     }
 
     #[test]
@@ -2978,31 +3088,31 @@ mod plain_start_tests {
         assert!(checked_helper_path(Path::new(r"C:\Program Files\Compy\..\Evil\compy.exe")).is_err(), "..");
     }
 
-    // The command line of the plain start is the elevated one: five arguments, nothing added.
+    // The command line of the plain start is the elevated one: five arguments, nothing added. Since
+    // hardening slice 2 the five are this launch's pipe and the app's pid (no path), for all three
+    // launches, built by one function.
     #[test]
     fn the_plain_helper_gets_the_same_five_arguments_and_the_elevated_call_is_untouched() {
+        let pipe = crate::fps_pipe::pipe_name_from([0xcd; 16]);
+        assert_eq!(helper_argv(&pipe, 4242), ["--fps-capture", "--pipe", pipe.as_str(), "--parent-pid", "4242"]);
+        // The helper accepts exactly what the app passes.
+        let mut argv = vec!["compy.exe".to_string()];
+        argv.extend(helper_argv(&pipe, 4242));
         assert_eq!(
-            helper_argv(r"C:\o\fps.json", r"C:\o\fps.alive"),
-            ["--fps-capture", "--fps-out", r"C:\o\fps.json", "--fps-alive", r"C:\o\fps.alive"]
+            crate::fps::parse_capture_args(&argv),
+            Ok(crate::fps::CaptureMode::Pipe { name: pipe.clone(), parent_pid: 4242 })
         );
         let src = include_str!("monitoring.rs");
         assert_eq!(src.matches(concat!("crate::actions::", "elevate_and_wait(")).count(), 1);
         let call = src.find(concat!("crate::actions::", "elevate_and_wait(")).unwrap();
         let args = &src[call..call + src[call..].find(");").unwrap()];
-        let mut at = 0;
-        for want in [
-            concat!("OsStr::new(\"--fps", "-capture\")"),
-            concat!("OsStr::new(\"--fps", "-out\")"),
-            concat!("OsStr::new(&", "out)"),
-            concat!("OsStr::new(\"--fps", "-alive\")"),
-            concat!("OsStr::new(&", "alive)"),
-        ] {
-            at += args[at..].find(want).unwrap_or_else(|| panic!("elevated argument {want} missing or reordered"));
-        }
+        assert!(args.contains(concat!("&argv.each_ref()", ".map(OsStr::new)")), "the elevated launch passes the same argv");
+        let pre = &src[..call];
+        assert!(pre[pre.rfind("std::thread::spawn").unwrap()..].contains(concat!("let argv = pipe", ".argv();")));
         // The plain launch adds nothing: no extra argument, no environment, no other program.
         let start = src.find(concat!("fn spawn_plain_", "helper(")).unwrap();
         let body = &src[start..start + src[start..].find("\n}\n").unwrap()];
-        assert!(body.contains(".args(helper_argv(out, alive))"));
+        assert!(body.contains(concat!(".args(pipe", ".argv())")));
         for forbidden in [".arg(", ".env(", ".envs(", "Command::new(\"", "cmd", "powershell", "runas"] {
             assert!(!body.contains(forbidden), "the plain launch must not use {forbidden}");
         }

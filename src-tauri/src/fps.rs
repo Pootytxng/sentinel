@@ -11,9 +11,11 @@
 //! window runs unelevated, so it spawns this helper elevated (one UAC prompt
 //! when the user starts the FPS graph) and consumes the helper's output.
 //!
-//! Output: one JSON line per ~500 ms to stdout describing the dominant
-//! presenting process (the game), plus a human-readable line to stderr for
-//! console testing. The main app will consume the JSON in a follow-up step.
+//! Output: one JSON line per ~500 ms describing the dominant presenting
+//! process (the game), plus a human-readable line to stderr. Started by the
+//! app (`--pipe <name> --parent-pid <pid>`), the lines go to the app's named
+//! pipe (fps_pipe.rs) and the helper writes no file; started by hand with no
+//! arguments, they go to stdout (console testing).
 //!
 //! v1 scope / honest limitations:
 //! - Covers DX11 / DX12 titles (anything that presents through DXGI). Vulkan
@@ -475,9 +477,10 @@ fn is_zero(n: &u64) -> bool {
     *n == 0
 }
 
-/// Appended to the helper's output path for the unreadable-tick marker: a file holding the cumulative
+/// Appended to the report file's path for the unreadable-tick marker: a file holding the cumulative
 /// count, rewritten on every unreadable tick. The app reads its AGE (monitoring.rs `unreadable_read`):
-/// younger than the last report means the helper is, right now, unable to look.
+/// younger than the last report means the helper is, right now, unable to look. Since hardening slice 2
+/// the APP writes both files (as the user) from the helper's pipe lines; the helper writes no file.
 pub(crate) const UNREADABLE_SUFFIX: &str = ".snapshot-unreadable";
 
 /// Counts ticks whose process snapshot could not be read, and rate-limits the message about it: the
@@ -497,14 +500,55 @@ impl UnreadableTicks {
     }
 }
 
-/// One unreadable tick: count it and rewrite the marker file beside `out` (every tick, so its age
-/// stays current while the failure lasts). True when the message should be printed now (rate-limited).
-fn note_unreadable_tick(unreadable: &mut UnreadableTicks, out: Option<&str>) -> bool {
+/// One unreadable tick: count it and send the marker line (every tick, so the app's marker file stays
+/// current while the failure lasts). True when the message should be printed now (rate-limited).
+fn note_unreadable_tick(unreadable: &mut UnreadableTicks, sink: &Sink) -> bool {
     let say = unreadable.note();
-    if let Some(out) = out {
-        write_atomic(&format!("{out}{UNREADABLE_SUFFIX}"), &unreadable.total.to_string());
-    }
+    sink.marker(unreadable.total);
     say
+}
+
+/// Where the helper's lines go: the app's pipe, or (console test mode) stdout.
+enum Sink {
+    Console,
+    Pipe(crate::fps_pipe::PipeWriter),
+}
+
+impl Sink {
+    /// A report line (today's FpsReport JSON).
+    fn report(&self, line: &str) {
+        match self {
+            Sink::Console => {
+                let stdout = std::io::stdout();
+                let mut handle = stdout.lock();
+                let _ = writeln!(handle, "{line}");
+                let _ = handle.flush();
+            }
+            Sink::Pipe(w) => {
+                w.send(line.to_string());
+            }
+        }
+    }
+
+    /// The unreadable-tick count (the app writes it to the marker file).
+    fn marker(&self, total: u64) {
+        if let Sink::Pipe(w) = self {
+            w.send(crate::fps_pipe::unreadable_line(total));
+        }
+    }
+
+    /// Nothing to report this tick: keeps the pipe busy, so the app's stop (it closes the pipe) is seen
+    /// at the next write.
+    fn alive(&self) {
+        if let Sink::Pipe(w) = self {
+            w.send(crate::fps_pipe::ALIVE_LINE.to_string());
+        }
+    }
+
+    /// The app closed the pipe (stop, exit, crash): time to exit.
+    fn closed(&self) -> bool {
+        matches!(self, Sink::Pipe(w) if w.broken())
+    }
 }
 
 /// What one tick's identity step produced. `skipped` = the snapshot was unreadable: nothing was
@@ -566,27 +610,33 @@ fn report_foreground(fg_known: bool, ev: Option<&WindowEvidence>) -> Option<bool
     }
 }
 
-/// CLI options parsed from the args after `--fps-capture`.
-struct CaptureOpts {
-    /// Where to write the latest report JSON (atomic). None → stdout only.
-    out_path: Option<String>,
-    /// Heartbeat file the parent refreshes while monitoring is active. When
-    /// it goes stale (or missing) the helper self-exits. None → run until
-    /// killed (console-test mode).
-    alive_path: Option<String>,
+/// How the helper was started (the args after `--fps-capture`).
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum CaptureMode {
+    /// No `--pipe`: print reports to stdout until killed (console test mode).
+    Console,
+    /// `--pipe <name> --parent-pid <pid>`: send lines to the app's pipe; exit when it closes.
+    Pipe { name: String, parent_pid: u32 },
 }
 
-fn parse_opts() -> CaptureOpts {
-    let args: Vec<String> = std::env::args().collect();
-    let find = |flag: &str| -> Option<String> {
-        args.iter()
-            .position(|a| a == flag)
-            .and_then(|i| args.get(i + 1))
-            .cloned()
-    };
-    CaptureOpts {
-        out_path: find("--fps-out"),
-        alive_path: find("--fps-alive"),
+/// PURE: parse the capture args. Hardening slice 2: the helper takes no path. `--fps-out` and
+/// `--fps-alive` (the old file channel) are refused outright, so no command line can make it write,
+/// rename or watch a file; `--pipe` needs `--parent-pid`, and both must be well-formed.
+pub(crate) fn parse_capture_args(args: &[String]) -> Result<CaptureMode, &'static str> {
+    if args.iter().any(|a| a == "--fps-out" || a == "--fps-alive") {
+        return Err("refused: --fps-out / --fps-alive are no longer accepted");
+    }
+    let find = |flag: &str| args.iter().position(|a| a == flag).map(|i| args.get(i + 1));
+    match (find("--pipe"), find("--parent-pid")) {
+        (None, None) => Ok(CaptureMode::Console),
+        (Some(Some(name)), Some(Some(pid))) => {
+            let parent_pid = pid.parse::<u32>().map_err(|_| "refused: --parent-pid is not a process id")?;
+            if !crate::fps_pipe::is_valid_pipe_name(name) {
+                return Err("refused: not a Compy capture pipe name");
+            }
+            Ok(CaptureMode::Pipe { name: name.clone(), parent_pid })
+        }
+        _ => Err("refused: --pipe and --parent-pid go together, each with a value"),
     }
 }
 
@@ -707,25 +757,6 @@ fn probe_window_evidence(pids: &[u32]) -> (HashMap<u32, WindowEvidence>, bool) {
     (ctx.evidence, fg_known)
 }
 
-fn write_atomic(path: &str, contents: &str) {
-    let tmp = format!("{path}.tmp");
-    if std::fs::write(&tmp, contents).is_ok() {
-        let _ = std::fs::rename(&tmp, path);
-    }
-}
-
-/// True if the heartbeat file is missing or older than ~4 s — the signal that
-/// the parent stopped monitoring (or died), so the helper should exit.
-fn heartbeat_stale(path: &str) -> bool {
-    match std::fs::metadata(path).and_then(|m| m.modified()) {
-        Ok(mtime) => mtime
-            .elapsed()
-            .map(|e| e > Duration::from_secs(4))
-            .unwrap_or(true),
-        Err(_) => true,
-    }
-}
-
 fn perf_frequency() -> i64 {
     use windows::Win32::System::Performance::QueryPerformanceFrequency;
     let mut f = 0i64;
@@ -772,7 +803,24 @@ fn stale_session_stop_command() -> std::process::Command {
 }
 
 pub fn run_capture() {
-    let opts = parse_opts();
+    // Hardening slice 2: argv and the pipe are checked BEFORE anything runs as admin (the ETW session,
+    // the logman stop). A refused argv exits 2, a pipe that is not the starting Compy's exits 4; in
+    // both cases nothing was written and nothing was started.
+    let args: Vec<String> = std::env::args().collect();
+    let sink = match parse_capture_args(&args) {
+        Err(why) => {
+            eprintln!("[compy-fps] {why}");
+            std::process::exit(2);
+        }
+        Ok(CaptureMode::Console) => Sink::Console,
+        Ok(CaptureMode::Pipe { name, parent_pid }) => match crate::fps_pipe::connect_to_parent(&name, parent_pid) {
+            Ok(pipe) => Sink::Pipe(crate::fps_pipe::PipeWriter::start(pipe)),
+            Err(why) => {
+                eprintln!("[compy-fps] {why}");
+                std::process::exit(4);
+            }
+        },
+    };
     let freq = perf_frequency() as f64;
     // Keyed by (pid, swapchain) — NOT pid alone. A process presenting two chains (game + engine
     // UI / overlay) interleaves presents; pid-level deltas go bimodal and halve the average
@@ -829,7 +877,6 @@ pub fn run_capture() {
         "[compy-fps] capturing DXGI present events. Launch a DX11/DX12 game to see frames."
     );
 
-    let stdout = std::io::stdout();
     // Sticky game attachment (0.9.1): acquire on positive window evidence +
     // streak, then report ONLY the attached pid; silence emits nothing.
     let mut attachment = Attachment::new();
@@ -838,22 +885,21 @@ pub fn run_capture() {
     // The snapshot buffer lives across ticks (no 1 MiB allocation per tick), and unreadable ticks are counted.
     let mut snap_buf: Vec<u8> = Vec::new();
     let mut unreadable = UnreadableTicks::default();
-    // A marker left by an earlier helper must not read as this one's (the app also removes it at start).
-    if let Some(out) = &opts.out_path {
-        let _ = std::fs::remove_file(format!("{out}{UNREADABLE_SUFFIX}"));
-    }
+    // Whether the last tick sent a line; a silent tick sends a keepalive at the top of the next one.
+    let mut sent = true;
     loop {
         std::thread::sleep(Duration::from_millis(REPORT_INTERVAL_MS));
         let now = Instant::now();
 
-        // Self-exit when the parent stops refreshing the heartbeat (monitoring
-        // turned off, or the app closed). A non-elevated parent can't kill us,
-        // so this is how we shut the elevated helper down cleanly.
-        if let Some(alive) = &opts.alive_path {
-            if heartbeat_stale(alive) {
-                eprintln!("[compy-fps] heartbeat stale — exiting.");
-                break;
-            }
+        // Self-exit when the app closes the pipe (monitoring turned off, or the app closed or crashed).
+        // A non-elevated parent can't kill us, so this is how the elevated helper shuts down cleanly.
+        // The pipe replaced the old heartbeat file: the helper watches no file.
+        if sink.closed() {
+            eprintln!("[compy-fps] the app closed the capture pipe - exiting.");
+            break;
+        }
+        if !std::mem::replace(&mut sent, false) {
+            sink.alive();
         }
 
         let Ok(mut map) = state.lock() else {
@@ -922,7 +968,8 @@ pub fn run_capture() {
         if step.skipped {
             // The marker is written on EVERY unreadable tick (the message is rate-limited, the file is
             // not): the app reads its age to tell "Compy couldn't read this second" from "no frames".
-            if note_unreadable_tick(&mut unreadable, opts.out_path.as_deref()) {
+            sent = true;
+            if note_unreadable_tick(&mut unreadable, &sink) {
                 eprintln!(
                     "[compy-fps] process snapshot unreadable - skipping the tick ({} so far).",
                     unreadable.total
@@ -978,15 +1025,9 @@ pub fn run_capture() {
             };
 
             if let Ok(line) = serde_json::to_string(&report) {
-                // File channel for the (unelevated) main app to read across
-                // the elevation boundary.
-                if let Some(out) = &opts.out_path {
-                    write_atomic(out, &line);
-                }
-                // stdout for console testing.
-                let mut handle = stdout.lock();
-                let _ = writeln!(handle, "{line}");
-                let _ = handle.flush();
+                // The pipe to the (unelevated) app, which writes fps.json itself; stdout in console mode.
+                sink.report(&line);
+                sent = true;
             }
             eprintln!(
                 "[compy-fps] {} (pid {}) | {:.1} FPS | {:.2} ms avg | 1% low {:.1} FPS | {} frames/s",
@@ -1175,35 +1216,10 @@ mod stale_session_stop_tests {
     }
 }
 
-#[cfg(test)]
-mod heartbeat_tests {
-    use super::*;
-
-    // Train #3 §1 regression — the elevated helper's shutdown channel. A clean app exit drops the
-    // fps.alive heartbeat (monitoring::shutdown_for_exit); the helper must read a MISSING file as
-    // stale and break its loop. That is how the orphan ("ghost") is prevented when the parent dies.
-    #[test]
-    fn missing_heartbeat_is_stale() {
-        let p = std::env::temp_dir().join("compy-test-no-such-heartbeat.alive");
-        let _ = std::fs::remove_file(&p); // ensure absent
-        let path = p.to_string_lossy().to_string();
-        assert!(
-            heartbeat_stale(&path),
-            "a missing heartbeat file must read as stale so the helper self-exits on app close"
-        );
-    }
-
-    // The inverse: a just-written heartbeat is NOT stale — the helper keeps running while the parent
-    // is alive and refreshing it (no premature self-exit during a real session).
-    #[test]
-    fn fresh_heartbeat_is_not_stale() {
-        let p = std::env::temp_dir().join("compy-test-fresh-heartbeat.alive");
-        std::fs::write(&p, b"alive").expect("write temp heartbeat");
-        let path = p.to_string_lossy().to_string();
-        assert!(!heartbeat_stale(&path), "a just-written heartbeat must not be stale");
-        let _ = std::fs::remove_file(&p);
-    }
-}
+// Train #3 §1 (the orphan "ghost" helper after the app closes) used to be guarded here over the fps.alive
+// heartbeat file. Since hardening slice 2 the pipe is the heartbeat: the app closing its end makes the
+// helper's next write fail and the loop break. That shutdown is now proven over a real pipe in
+// fps_pipe.rs `a_real_pipe_relays_lines_and_a_closed_server_breaks_the_writer`.
 
 #[cfg(test)]
 mod attachment_tests {
@@ -1593,9 +1609,9 @@ mod handle_free_identity_tests {
     //! The attached game's identity comes from snapshot rows (pid + image name + creation time), with no
     //! process opened. These drive `identity_step` (the function the capture loop calls) over synthetic rows.
     use super::{
-        identity_step, note_unreadable_tick, select_game_presenter, track_created, Attachment, FpsReport,
-        IdentityStep, PresenterCandidate, UnreadableTicks, WindowEvidence, ATTACH_STREAK_TICKS,
-        UNREADABLE_SUFFIX,
+        identity_step, note_unreadable_tick, parse_capture_args, select_game_presenter, track_created, Attachment,
+        CaptureMode, FpsReport, IdentityStep, PresenterCandidate, Sink, UnreadableTicks, WindowEvidence,
+        ATTACH_STREAK_TICKS,
     };
     use crate::other_load::ProcRow;
 
@@ -1749,26 +1765,83 @@ mod handle_free_identity_tests {
         assert!(serde_json::to_string(&rep(3)).unwrap().contains("\"snapshot_unreadable_ticks\":3"));
     }
 
-    /// M6-unread: the marker file is rewritten on EVERY unreadable tick (its age is what the app
-    /// reads), while the printed message stays rate-limited to the first and every 120th.
+    /// M6-unread: the marker line is sent on EVERY unreadable tick (the app rewrites its marker file
+    /// from it, and reads that file's age), while the printed message stays rate-limited to the first
+    /// and every 120th. Since hardening slice 2 the helper sends a line instead of writing the file.
     #[test]
-    fn every_unreadable_tick_rewrites_the_marker_but_the_message_is_rate_limited() {
-        let dir = std::env::temp_dir().join(format!("compy-unread-marker-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let out = dir.join("fps.json").to_string_lossy().into_owned();
-        let marker = format!("{out}{UNREADABLE_SUFFIX}");
-        let mut ticks = UnreadableTicks::default();
-        let said: Vec<bool> = (0..3).map(|_| note_unreadable_tick(&mut ticks, Some(&out))).collect();
-        assert_eq!(said, [true, false, false]);
-        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "3", "the file carries the running count");
-        for _ in 3..120 {
-            note_unreadable_tick(&mut ticks, Some(&out));
+    fn every_unreadable_tick_sends_the_marker_but_the_message_is_rate_limited() {
+        #[derive(Clone, Default)]
+        struct Collect(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+        impl std::io::Write for Collect {
+            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(b);
+                Ok(b.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
         }
-        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "120");
-        assert!(!note_unreadable_tick(&mut ticks, None), "tick 121 is not a message tick");
-        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "120", "no out path, no file");
-        let _ = std::fs::remove_dir_all(&dir);
+        let seen = Collect::default();
+        let sink = Sink::Pipe(crate::fps_pipe::PipeWriter::start(seen.clone()));
+        let lines = || String::from_utf8(seen.0.lock().unwrap().clone()).unwrap().lines().map(str::to_owned).collect::<Vec<_>>();
+        // One tick at a time (the real cadence is 500 ms): wait for each line to be written.
+        let mut ticks = UnreadableTicks::default();
+        let mut said = Vec::new();
+        for n in 1..=121usize {
+            said.push(note_unreadable_tick(&mut ticks, &sink));
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while lines().len() < n && std::time::Instant::now() < deadline {
+                std::thread::yield_now();
+            }
+        }
+        assert_eq!(&said[..3], &[true, false, false]);
+        assert!(said[119], "tick 120 is a message tick");
+        assert!(!said[120], "tick 121 is not a message tick");
+        let got = lines();
+        assert_eq!(got.len(), 121, "one marker line per unreadable tick");
+        assert_eq!(got[2], r#"{"unreadable_ticks":3}"#, "the line carries the running count");
+        assert_eq!(crate::fps_pipe::classify_line(&got[120]), crate::fps_pipe::Line::Unreadable(121));
+        // Console mode sends no marker (and writes no file): only the count moves.
+        assert!(!note_unreadable_tick(&mut ticks, &Sink::Console));
+        assert_eq!(ticks.total, 122);
+    }
+
+    /// Hardening slice 2: the helper takes no path. The old file flags are refused, `--pipe` needs a
+    /// valid Compy pipe name and `--parent-pid` a process id.
+    #[test]
+    fn capture_args_refuse_paths_and_need_a_valid_pipe_and_parent() {
+        let a = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let pipe = crate::fps_pipe::pipe_name_from([1; 16]);
+        assert_eq!(parse_capture_args(&a(&["compy.exe", "--fps-capture"])), Ok(CaptureMode::Console));
+        assert_eq!(
+            parse_capture_args(&a(&["compy.exe", "--fps-capture", "--pipe", &pipe, "--parent-pid", "42"])),
+            Ok(CaptureMode::Pipe { name: pipe.clone(), parent_pid: 42 })
+        );
+        for bad in [
+            a(&["compy.exe", "--fps-capture", "--fps-out", r"C:\x\fps.json"]),
+            a(&["compy.exe", "--fps-capture", "--fps-alive", r"C:\x\fps.alive"]),
+            a(&["compy.exe", "--fps-capture", "--pipe", &pipe, "--parent-pid", "42", "--fps-out", r"C:\x"]),
+            a(&["compy.exe", "--fps-capture", "--pipe", &pipe]),
+            a(&["compy.exe", "--fps-capture", "--parent-pid", "42"]),
+            a(&["compy.exe", "--fps-capture", "--pipe", &pipe, "--parent-pid"]),
+            a(&["compy.exe", "--fps-capture", "--pipe", &pipe, "--parent-pid", "-1"]),
+            a(&["compy.exe", "--fps-capture", "--pipe", r"C:\x\fps.json", "--parent-pid", "42"]),
+            a(&["compy.exe", "--fps-capture", "--pipe", r"\\.\pipe\other", "--parent-pid", "42"]),
+        ] {
+            assert!(parse_capture_args(&bad).is_err(), "{bad:?}");
+        }
+    }
+
+    /// Source guard: the helper's production code opens, writes, renames, removes and stats no file.
+    /// (The report and marker files are written by the app, monitoring.rs, as the user.)
+    #[test]
+    fn the_capture_helper_touches_no_file() {
+        let src = include_str!("fps.rs");
+        let prod = &src[..src.find("#[cfg(test)]").expect("tests")];
+        assert!(prod.contains("pub fn run_capture()"), "the cut keeps the helper's production code");
+        for banned in ["fs::write", "fs::rename", "remove_file", "OpenOptions", "fs::metadata", "fs::File", "write_atomic", "heartbeat_stale"] {
+            assert!(!prod.contains(banned), "fps.rs production code must not use {banned}");
+        }
     }
 
     /// Names the snapshot now supplies that the old open often refused. Each well-known non-game presenter
