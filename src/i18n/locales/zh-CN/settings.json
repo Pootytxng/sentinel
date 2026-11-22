@@ -216,6 +216,7 @@
     "fileFailedDenied": "无法删除：{{file}}（Windows 拒绝访问）",
     "fileFailedStillThere": "无法删除：{{file}}（删除后它仍然存在）",
     "fileFailedMoved": "无法删除：{{file}}（它已不再是 Compy 列出的普通文件，因此保持原样）",
+    "fileFailedFolderMoved": "无法删除：{{file}}（它所在路径上的某个文件夹已不再是 Compy 列出的普通文件夹，因此其中的内容都没有被动过）",
     "fileFailedCode": "无法删除：{{file}}（Windows 错误 {{code}}）",
     "fileFailedOther": "无法删除：{{file}}",
     "fileNotTried": "未尝试：{{file}}",

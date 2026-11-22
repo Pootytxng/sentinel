@@ -127,7 +127,7 @@ describe("Your data: clear play history", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete play history" }));
     await screen.findByTestId("your-data-result");
     expect(screen.queryByText(/^Deleted \d+ files?\.$/)).toBeNull();
-    expect(screen.getByText(/^Not finished: 1 files deleted, 1 could not be deleted, 0 not tried/)).toBeTruthy();
+    expect(screen.getByText(/^Not finished\. Files deleted: 1\. Files that could not be deleted: 1\. Files not tried: 0\./)).toBeTruthy();
     expect(screen.getByTestId("your-data-files").textContent).toContain("Could not delete: care/incident-observer.json");
     expect(screen.getByTestId("your-data-files").textContent).not.toContain("(in use)");
     expect(window.localStorage.getItem("compy_last_check_v1")).toBe("x");
@@ -143,8 +143,32 @@ describe("Your data: clear play history", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete play history" }));
     await screen.findByTestId("your-data-result");
     expect(screen.getByText("Deleted 1 file.")).toBeTruthy();
-    expect(screen.getByText("1 were already gone.")).toBeTruthy();
+    expect(screen.getByText("Files that were already gone: 1.")).toBeTruthy();
     expect(screen.queryByText("Deleted 2 files.")).toBeNull();
+  });
+
+  it("a stopped run says it stopped, never 'Deleted N files.', names why, and offers no reload (review r2)", async () => {
+    window.localStorage.setItem("compy_last_check_v1", "x");
+    const stopped: ClearReport = {
+      ...REPORT,
+      deleted: ["sessions.json"],
+      not_attempted: ["care/incident-observer.json"],
+      stopped: [{ code: "trial_running", detail: "dev text", files: [] }],
+      complete: false,
+    };
+    answer(PLAN, { status: "done", detail: stopped });
+    render(<YourData />);
+    await openPlan();
+    fireEvent.click(screen.getByLabelText("I understand"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete play history" }));
+    const result = await screen.findByTestId("your-data-result");
+    expect(screen.getByText(/^Stopped part way, because of what is listed below\. Files deleted: 1\. Files not tried: 1\./)).toBeTruthy();
+    expect(screen.queryByText(/^Deleted \d+ files?\.$/)).toBeNull();
+    expect(result.textContent).toContain("A Trial is starting");
+    expect(result.textContent).not.toContain("dev text");
+    expect(screen.getByTestId("your-data-files").textContent).toContain("Not tried: care/incident-observer.json");
+    expect(screen.queryByTestId("your-data-reload")).toBeNull();
+    expect(window.localStorage.getItem("compy_last_check_v1")).toBe("x");
   });
 
   it("a failed delete shows the screen's own words, never the backend's text", async () => {

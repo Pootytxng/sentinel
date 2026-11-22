@@ -204,12 +204,15 @@ export type FailureKind =
   | { kind: "denied" }
   | { kind: "still_there" }
   | { kind: "moved" }
+  | { kind: "folder_moved" }
   | { kind: "os"; code: number }
   | { kind: "other" };
 
 export function failureKind(error: string): FailureKind {
   if (error.includes("is still there after the delete")) return { kind: "still_there" };
-  if (/not where it was planned|leads outside|is a link or not a folder|is not a plain file/.test(error)) return { kind: "moved" };
+  // A folder on the way (the data folder or a sub-folder) changed: a link or something else took its place.
+  if (/not where it was planned|leads outside|is a link or not a folder/.test(error)) return { kind: "folder_moved" };
+  if (error.includes("is not a plain file")) return { kind: "moved" };
   const os = /\(os error (\d+)\)/.exec(error);
   if (os) {
     const code = Number(os[1]);
@@ -228,6 +231,7 @@ export function failureLine(f: FailedDelete): { key: string; opts: Record<string
     denied: "fileFailedDenied",
     still_there: "fileFailedStillThere",
     moved: "fileFailedMoved",
+    folder_moved: "fileFailedFolderMoved",
     os: "fileFailedCode",
     other: "fileFailedOther",
   }[why.kind];

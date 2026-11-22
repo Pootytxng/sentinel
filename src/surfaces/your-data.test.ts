@@ -143,7 +143,12 @@ describe("your-data: a failed delete never shows the backend's English (review s
     expect(failureKind("The process cannot access the file because it is being used by another process. (os error 32)")).toEqual({ kind: "in_use" });
     expect(failureKind("Access is denied. (os error 5)")).toEqual({ kind: "denied" });
     expect(failureKind("is still there after the delete")).toEqual({ kind: "still_there" });
-    expect(failureKind("is not where it was planned (a folder was swapped for a link), so nothing was deleted")).toEqual({ kind: "moved" });
+    // A folder that changed is named as a folder (review r2 nit), a file that changed as a file.
+    expect(failureKind("is not where it was planned (a folder was swapped for a link), so nothing was deleted")).toEqual({ kind: "folder_moved" });
+    expect(failureKind("the data folder is a link or not a folder, so nothing was touched")).toEqual({ kind: "folder_moved" });
+    expect(failureKind("`care` is a link or not a folder, so nothing inside it was touched")).toEqual({ kind: "folder_moved" });
+    expect(failureKind("the folder leads outside Compy's data folder, so nothing was touched")).toEqual({ kind: "folder_moved" });
+    expect(failureKind("is not a plain file, so it was left alone")).toEqual({ kind: "moved" });
     expect(failureKind("Something else (os error 1920)")).toEqual({ kind: "os", code: 1920 });
     expect(failureKind("the identity log lock is poisoned")).toEqual({ kind: "other" });
     const line = failureLine({ rel: "drift.json", error: "Something else (os error 1920)" });
@@ -165,6 +170,14 @@ describe("your-data: every code has words in both languages", () => {
       for (const c of [...KEPT_CODES, "other"]) expect(lang.kept[c], `kept.${c}`).toBeTruthy();
       for (const g of [...new Set(Object.values(STORE_GROUPS)), "other"]) expect(lang.store[g], `store.${g}`).toBeTruthy();
     }
+  });
+
+  it("English never says '1 files' or '1 were': a count goes before a plural only where a separate 'One' line exists (review r2)", () => {
+    const bad = Object.entries(en as Record<string, unknown>)
+      .filter(([k, v]) => typeof v === "string" && !(`${k}One` in en))
+      .filter(([, v]) => /\{\{(n|m|left|failed)\}\} (files|were|notes|play-history)/.test(v as string))
+      .map(([k]) => k);
+    expect(bad).toEqual([]);
   });
 
   it("the crash-notes lines do not promise they are gone for good", () => {

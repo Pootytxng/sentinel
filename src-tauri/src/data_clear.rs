@@ -1286,8 +1286,10 @@ fn delete_rows(
             let mut why = live_state_refusals(&gates.live_state());
             if gate == Gate::Experiment {
                 // Inside the Trial store's own lock (C1 review B4): `start_experiment` holds the same lock for
-                // its record and its apply, so a Trial started since the plan, or a change applied since, is
-                // seen here and the Trial results are kept.
+                // its record and its apply, so a Trial started since the plan is seen here, and so is any change
+                // applied BEFORE this read. A plain apply (Optimize) takes only the ledger lock, not this one, so
+                // it can still land just after this read; the Trial results then go while that change is on.
+                // Undo of it is unaffected (it resolves from history.json, which play history never touches).
                 why.extend(trial_gate_refusals(root));
             }
             if !why.is_empty() {
