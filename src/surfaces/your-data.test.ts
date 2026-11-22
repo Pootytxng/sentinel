@@ -8,6 +8,13 @@ import {
   clearWebviewTargets,
   failureKind,
   failureLine,
+  finishPendingClearAtBoot,
+  planHasLicence,
+  statusLine,
+  storeGroup,
+  undoOrder,
+  EVERYTHING_GROUPS,
+  type ClearStatus,
   groupDeletes,
   groupKept,
   KEPT_CODES,
@@ -188,11 +195,141 @@ describe("your-data: every code has words in both languages", () => {
   it("every refusal code the Rust planner can give for play history has its own sentence", () => {
     const rust = readFileSync(join("src-tauri", "src", "data_clear.rs"), "utf8").split("#[cfg(test)]\nmod tests")[0];
     // Codes a play-history plan or run can refuse with (the ledger/everything-only codes are C2's).
-    const everythingOnly = new Set(["store_lock_unavailable", "changes_applied", "ledger_unreadable", "ledger_set_aside", "ledger_busy", "gaming_orphan", "trial_record_set_aside", "clear_intent_unreadable", "clear_intent_unwritable", "ledger_lock_required", "no_clear_in_progress", "clear_files_pending", "clear_intent_not_removed"]);
+    // C2b: every refusal of either choice has a sentence. Exempt: `ledger_lock_required` (only a programming
+    // error can give it: a play-history entry handed an "everything" plan) and the acknowledge's own codes,
+    // which the screen shows as "could not remove its note" (`ackFailed`).
+    const everythingOnly = new Set(["ledger_lock_required", "clear_files_pending", "clear_intent_not_removed"]);
     const found = new Set<string>();
     for (const m of rust.matchAll(/(?:refuse\(\s*|Verdict::Refuse\(\s*|out\.push\(\(|code:\s*)"([a-z_]+)"/g)) found.add(m[1]);
     const missing = [...found].filter((c) => !everythingOnly.has(c) && !(REFUSAL_CODES as readonly string[]).includes(c) && !(KEPT_CODES as readonly string[]).includes(c));
     expect(found.size).toBeGreaterThan(10);
     expect(missing).toEqual([]);
+  });
+});
+
+describe("your-data C2b: clear everything", () => {
+  const src = readFileSync(join("src-tauri", "src", "data_inventory.rs"), "utf8");
+  const rows = [...src.matchAll(/InventoryRow \{([\s\S]*?)\n\s{4}\},/g)].map((m) => ({
+    id: /\bid: "([^"]+)"/.exec(m[1])?.[1] ?? "",
+    base: /\bbase: (?:Base::)?(\w+)/.exec(m[1])?.[1] ?? "",
+    category: /\bcategory: (?:Category::)?(\w+)/.exec(m[1])?.[1] ?? "",
+  }));
+  const ids = new Set(rows.map((r) => r.id));
+
+  it("every store 'clear everything' can delete has its own words, so the change history is never 'other files'", () => {
+    // Stores of their own (not working files or set-asides, which group under their owner): the change history
+    // (`ledger-*` main and backup rows), support, saved reports, choices, caches and user text.
+    const named = rows.filter(
+      (r) =>
+        r.base === "DataRoot" &&
+        (["PlayHistory", "HardwareFacts", "Support", "Cache", "Choices", "UserText"].includes(r.category) ||
+          r.id === "ledger-main" ||
+          r.id === "ledger-backup" ||
+          r.id === "ledger-restored-note"),
+    );
+    expect(named.length).toBeGreaterThan(20);
+    expect(named.filter((r) => storeGroup(r.id) === "other").map((r) => r.id)).toEqual([]);
+    expect(storeGroup("ledger-main")).toBe("changeHistory");
+    expect(storeGroup("export-report-md")).toBe("reports");
+    expect(Object.keys(EVERYTHING_GROUPS).filter((id) => !ids.has(id))).toEqual([]);
+  });
+
+  it("the licence box appears only when the plan involves the licence file", () => {
+    const base = { delete: [], kept: [] } as unknown as ClearPlan;
+    expect(planHasLicence(base)).toBe(false);
+    expect(planHasLicence({ ...base, kept: [{ rel: "license.key", code: "licence_kept", detail: "" }] })).toBe(true);
+    expect(planHasLicence({ ...base, delete: [{ rel: "license.key", row_id: "license", store: "license", category: "choices", size: 1, modified_ms: 1 }] })).toBe(true);
+  });
+
+  it("'Undo all first' undoes every row not rolled back, newest first", () => {
+    const rows = [
+      { id: "a", status: "applied", applied_at: "2026-11-01T00:00:00Z" },
+      { id: "b", status: "rolled_back", applied_at: "2026-11-03T00:00:00Z" },
+      { id: "c", status: "externally_reverted", applied_at: "2026-11-02T00:00:00Z" },
+    ];
+    expect(undoOrder(rows).map((r) => r.id)).toEqual(["c", "a"]);
+  });
+
+  it("the status line comes from the start-up result first, then an abandoned record; unknown codes are shown", () => {
+    const s = (over: Partial<ClearStatus>): ClearStatus => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [], ...over });
+    expect(statusLine(s({}))).toBeNull();
+    expect(statusLine(s({ roll_forward: { status: "completed" }, record: "none" }))).toEqual({ key: "completed", dismiss: false });
+    expect(statusLine(s({ roll_forward: { status: "abandoned", detail: { code: "changes_applied" } }, record: "abandoned" }))).toEqual({
+      key: "abandoned_changes_applied",
+      code: "changes_applied",
+      dismiss: true,
+    });
+    expect(statusLine(s({ record: "abandoned", abandoned_code: "brand_new" }))).toEqual({ key: "abandoned_other", code: "brand_new", dismiss: true });
+    expect(statusLine(s({ record: "unreadable" }))).toEqual({ key: "kept", dismiss: false });
+  });
+
+  it("every status line and every new string has words in both languages", () => {
+    const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "settings.json"), "utf8")).yourData;
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "settings.json"), "utf8")).yourData;
+    for (const lang of [en, zh]) {
+      for (const key of ["completed", "incomplete", "webview_pending", "kept", "deferred", "abandoned_needs_reconfirm", "abandoned_changes_applied", "abandoned_ledger_unreadable", "abandoned_ledger_set_aside", "abandoned_other"]) {
+        expect(lang.status[key], `status.${key}`).toBeTruthy();
+      }
+      for (const g of new Set(Object.values(EVERYTHING_GROUPS).concat(["changeHistory", "reports"]))) expect(lang.store[g], `store.${g}`).toBeTruthy();
+    }
+    // The after-clear notice asks for a close and reopen; nothing says Compy restarts itself.
+    expect(en.reopenNotice).toMatch(/Close Compy and open it again/);
+    for (const v of Object.values(en)) if (typeof v === "string") expect(v).not.toMatch(/restarts? (itself|automatically)/i);
+  });
+
+  function memStorage(init: Record<string, string>) {
+    const data = new Map(Object.entries(init));
+    return {
+      data,
+      get length() {
+        return data.size;
+      },
+      key: (i: number) => [...data.keys()][i] ?? null,
+      getItem: (k: string) => data.get(k) ?? null,
+      removeItem: (k: string) => void data.delete(k),
+    };
+  }
+
+  it("at start, a finished clear's pending window notes are removed, the record acknowledged, then a reload", async () => {
+    const local = memStorage({ compy_onboarded_v1: "1", compy_theme: "dark", other_app_key: "x" });
+    const session = memStorage({});
+    const calls: string[] = [];
+    let reloads = 0;
+    const status: ClearStatus = {
+      roll_forward: { status: "webview_pending" },
+      record: "webview_pending",
+      abandoned_code: null,
+      webview: [
+        { key: "compy_onboarded_v1", prefix: false, session_storage: false },
+        { key: "compy_theme", prefix: false, session_storage: false },
+      ],
+    };
+    const invoke = async <T,>(cmd: string): Promise<T> => {
+      calls.push(cmd);
+      return (cmd === "get_clear_status" ? status : null) as T;
+    };
+    expect(await finishPendingClearAtBoot(invoke, local, session, () => reloads++)).toBe("finished");
+    expect(calls).toEqual(["get_clear_status", "acknowledge_clear"]);
+    expect([...local.data.keys()]).toEqual(["other_app_key"]);
+    expect(reloads).toBe(1);
+  });
+
+  it("at start, nothing happens without a pending record, and a failed acknowledge does not reload", async () => {
+    const local = memStorage({ compy_theme: "dark" });
+    let reloads = 0;
+    const none = async <T,>(cmd: string): Promise<T> =>
+      (cmd === "get_clear_status" ? { roll_forward: null, record: "none", abandoned_code: null, webview: [{ key: "compy_theme", prefix: false, session_storage: false }] } : null) as T;
+    expect(await finishPendingClearAtBoot(none, local, memStorage({}), () => reloads++)).toBe("nothing");
+    expect(local.data.get("compy_theme")).toBe("dark");
+    const ackFails = async <T,>(cmd: string): Promise<T> => {
+      if (cmd === "acknowledge_clear") throw new Error("clear_files_pending");
+      return { roll_forward: null, record: "webview_pending", abandoned_code: null, webview: [] } as T;
+    };
+    expect(await finishPendingClearAtBoot(ackFails, local, memStorage({}), () => reloads++)).toBe("failed");
+    const statusFails = async <T,>(): Promise<T> => {
+      throw new Error("not allowed");
+    };
+    expect(await finishPendingClearAtBoot(statusFails, local, memStorage({}), () => reloads++)).toBe("failed");
+    expect(reloads).toBe(0);
   });
 });

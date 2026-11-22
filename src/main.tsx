@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
+import { finishPendingClearAtBoot } from "./surfaces/your-data";
 import App from "./App";
 import Overlay from "./Overlay";
 import { ConfirmProvider } from "./design/ConfirmDialog";
@@ -146,3 +148,10 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     )}
   </React.StrictMode>,
 );
+
+// "Clear everything" (C2b): when its files are all gone but this window's own notes were not removed yet
+// (Compy was closed right after the clear), remove exactly the inventory's keys now, then reload so nothing read
+// from the old notes stays on screen. Main window only: the overlay has no access to these commands.
+if (!isOverlay) {
+  void finishPendingClearAtBoot(invoke, window.localStorage, window.sessionStorage, () => window.location.reload());
+}

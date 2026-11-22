@@ -65,7 +65,17 @@ export const REFUSAL_CODES = [
   "data_root_unavailable",
   // A stop reason only (in the Trial store's gate, C1 review B4): a change was applied after the list was made.
   "trials_tied_to_changes",
-  // `store_lock_unavailable` is not here: only "clear everything" can give it (data_clear.rs `clear_everything_at`).
+  // "Clear everything" only (C2b).
+  "changes_applied",
+  "ledger_unreadable",
+  "ledger_set_aside",
+  "ledger_busy",
+  "gaming_orphan",
+  "trial_record_set_aside",
+  "clear_intent_unreadable",
+  "clear_intent_unwritable",
+  "store_lock_unavailable",
+  "no_clear_in_progress",
 ] as const;
 
 /** Kept-reason codes the screen explains. Anything else: `kept.other` with the code. */
@@ -79,6 +89,8 @@ export const KEPT_CODES = [
   "link_left_alone",
   "clear_in_progress",
   "not_in_this_choice",
+  // "Clear everything" only (C2b).
+  "licence_kept",
 ] as const;
 
 /** Store ids (data_inventory.rs row ids) the confirm list names in words. Anything else: `store.other`. */
@@ -96,13 +108,34 @@ export const STORE_GROUPS: Record<string, string> = {
   intelligence: "identity",
 };
 
+/** The other stores "Clear everything" deletes (C2b), by inventory row id. Every `ledger-*` row is the change
+ *  history and every `export-*` row a saved report (`storeGroup`). */
+export const EVERYTHING_GROUPS: Record<string, string> = {
+  "support-evidence": "support",
+  "readiness-dismissals": "dismissed",
+  "receipts-consent": "sharing",
+  license: "licence",
+  "rules-manifest": "caches",
+  "rules-body": "caches",
+  "rules-version": "caches",
+  "case-catalog": "caches",
+  "case-fetch-disabled": "caches",
+};
+
+/** Which words a planned delete's store gets. Anything unnamed is "other working files and damaged copies". */
+export function storeGroup(store: string): string {
+  if (store.startsWith("ledger-")) return "changeHistory";
+  if (store.startsWith("export-")) return "reports";
+  return STORE_GROUPS[store] ?? EVERYTHING_GROUPS[store] ?? "other";
+}
+
 export type DeleteGroup = { group: string; files: string[]; bytes: number };
 
 /** The planned deletes, grouped by what they are, in a stable order (the first file's order in the plan). */
 export function groupDeletes(plan: ClearPlan): DeleteGroup[] {
   const out: DeleteGroup[] = [];
   for (const d of plan.delete) {
-    const group = STORE_GROUPS[d.store] ?? "other";
+    const group = storeGroup(d.store);
     let g = out.find((x) => x.group === group);
     if (!g) {
       g = { group, files: [], bytes: 0 };
@@ -236,6 +269,80 @@ export function failureLine(f: FailedDelete): { key: string; opts: Record<string
     other: "fileFailedOther",
   }[why.kind];
   return { key, opts: why.kind === "os" ? { file: f.rel, code: why.code } : { file: f.rel } };
+}
+
+// ---- C2b: "Clear everything" ----------------------------------------------------------------------------
+
+export type Scope = "play_history" | "everything";
+
+/** The licence file is part of this plan's choice: listed to delete, or kept because the box is not ticked. */
+export function planHasLicence(plan: ClearPlan): boolean {
+  return plan.delete.some((d) => d.store === "license") || plan.kept.some((k) => k.code === "licence_kept");
+}
+
+/** What `get_clear_status` answers (data_clear.rs `ClearStatus`). */
+export type ClearStatus = {
+  roll_forward: { status: string; detail?: unknown } | null;
+  record: "none" | "files_pending" | "webview_pending" | "abandoned" | "unreadable" | "no_root";
+  abandoned_code: string | null;
+  webview: WebviewTarget[];
+};
+
+/** Start-up result codes and abandon codes the screen has its own sentence for. */
+export const ROLL_FORWARD_STATUSES = ["completed", "incomplete", "webview_pending", "abandoned", "kept", "deferred"] as const;
+export const ABANDON_CODES = ["needs_reconfirm", "changes_applied", "ledger_unreadable", "ledger_set_aside"] as const;
+
+/** The status line (locale key under `settings.yourData.status.`) and whether to offer "Dismiss". `null`: nothing
+ *  to say. A start-up result is said first; otherwise an abandoned record still on disk. */
+export function statusLine(s: ClearStatus): { key: string; code?: string; dismiss: boolean } | null {
+  const rf = s.roll_forward?.status;
+  if (rf === "abandoned" || (!rf && s.record === "abandoned")) {
+    const fromRf = (s.roll_forward?.detail as { code?: string } | undefined)?.code;
+    const code = fromRf ?? s.abandoned_code ?? "needs_reconfirm";
+    const known = (ABANDON_CODES as readonly string[]).includes(code);
+    return { key: known ? `abandoned_${code}` : "abandoned_other", code, dismiss: s.record === "abandoned" };
+  }
+  if (rf && (ROLL_FORWARD_STATUSES as readonly string[]).includes(rf)) {
+    return { key: rf, dismiss: s.record === "abandoned" };
+  }
+  if (s.record === "unreadable") return { key: "kept", dismiss: false };
+  return null;
+}
+
+/** Rows "Undo all first" undoes: every row that is not rolled back, newest first (the ledger's order of
+ *  undoing). Each goes through the existing rollback path, one at a time. */
+export function undoOrder<T extends { status: string; applied_at: string }>(rows: T[]): T[] {
+  return rows.filter((r) => r.status !== "rolled_back").sort((a, b) => b.applied_at.localeCompare(a.applied_at));
+}
+
+/**
+ * At start (main window only): a "clear everything" whose files are all gone leaves the window's own notes for the
+ * window to remove (record `webview_pending`, e.g. Compy was closed right after the clear). Removes exactly the
+ * inventory's keys, removes the record, and reloads so nothing already read from the old notes stays on screen.
+ * Anything that fails leaves things as they are: the next start tries again. Returns what it did.
+ */
+export async function finishPendingClearAtBoot(
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>,
+  local: StorageLike,
+  session: StorageLike,
+  reload: () => void,
+): Promise<"nothing" | "finished" | "failed"> {
+  let status: ClearStatus;
+  try {
+    status = await invoke<ClearStatus>("get_clear_status");
+  } catch {
+    return "failed";
+  }
+  if (status.record !== "webview_pending") return "nothing";
+  const out = clearWebviewTargets(status.webview, local, session);
+  if (out.stillThere.length > 0) return "failed";
+  try {
+    await invoke("acknowledge_clear");
+  } catch {
+    return "failed";
+  }
+  reload();
+  return "finished";
 }
 
 /** Restart reasons the screen handles itself. Others are shown by code with "close and reopen Compy". */

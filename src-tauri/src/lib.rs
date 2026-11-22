@@ -1356,6 +1356,46 @@ mod off_main {
         .await
     }
 
+    /// "Clear everything Compy keeps", step 1: what it would delete, keep and leave alone, and why it
+    /// refuses (a change still applied, a Trial, Gaming Mode...). A pure read; deletes nothing.
+    #[tauri::command]
+    pub(crate) async fn plan_clear_everything(
+        remove_licence: bool,
+    ) -> Result<crate::data_clear::ClearPlan, String> {
+        blocking_result("reading what Compy keeps", move || {
+            Ok(crate::data_clear::plan_clear_everything(remove_licence))
+        })
+        .await
+    }
+
+    /// "Clear everything Compy keeps", step 2: the confirmed plan, named by its fingerprint. Takes the
+    /// Trial gate then the ledger lock and re-checks "no change applied" under them; refuses otherwise.
+    #[tauri::command]
+    pub(crate) async fn clear_everything(
+        fingerprint: String,
+        remove_licence: bool,
+    ) -> Result<crate::data_clear::ClearOutcome, String> {
+        blocking_result("clearing everything Compy keeps", move || {
+            Ok(crate::data_clear::clear_everything(&fingerprint, remove_licence))
+        })
+        .await
+    }
+
+    /// What the "Your data" screen shows about a clear record (and what this start's roll-forward did).
+    #[tauri::command]
+    pub(crate) async fn get_clear_status() -> Result<crate::data_clear::ClearStatus, String> {
+        blocking_result("reading the clear record", || Ok(crate::data_clear::get_clear_status())).await
+    }
+
+    /// The screen has removed its own notes (or shown why a clear stopped): removes the record.
+    #[tauri::command]
+    pub(crate) async fn acknowledge_clear() -> Result<(), String> {
+        blocking_result("finishing the clear", || {
+            crate::data_clear::acknowledge_clear().map_err(|r| r.code.to_string())
+        })
+        .await
+    }
+
     /// The commands served here, by the name the window invokes. The tests hold the handler list
     /// and `build.rs` to it.
     #[cfg(test)]
@@ -1373,6 +1413,10 @@ mod off_main {
         "stop_fps_capture",
         "plan_clear_play_history",
         "clear_play_history",
+        "plan_clear_everything",
+        "clear_everything",
+        "get_clear_status",
+        "acknowledge_clear",
     ];
 
     #[cfg(test)]
@@ -2011,6 +2055,10 @@ pub fn run() {
             support_evidence::clear_support_evidence,
             off_main::plan_clear_play_history,
             off_main::clear_play_history,
+            off_main::plan_clear_everything,
+            off_main::clear_everything,
+            off_main::get_clear_status,
+            off_main::acknowledge_clear,
             get_latency_diagnostics,
             latency_measure_wake,
             latency_measure_mouse,
@@ -2106,10 +2154,20 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // C2b: finish an interrupted "clear everything" FIRST, synchronously, before anything else in
+            // setup reads or writes the data folder (design 3.5): before the `app_start` record below (the
+            // support record is one of the files it deletes), before the experiment reconcile (it reads the
+            // ledger) and before the ledger-backup thread (it would re-create history.json.bak from a
+            // surviving history.json). One attempt only; anything unfinished needs the user to confirm again.
+            // It deletes only what the record confirmed and the inventory still lists (data_clear.rs
+            // `roll_forward_at`). The elevated helpers return from main.rs before this builder exists.
+            let roll_forward = crate::data_clear::finish_interrupted_clear();
+            crate::data_clear::remember_roll_forward(&roll_forward);
             // Support evidence (spec §12) — the anchor record. Every event after this one in the
             // file belongs to this launch of this build, which is what makes "it broke after the
-            // update" answerable: the stamp is right there above the failure. Written first, and
-            // synchronously, so ordering in the file is real ordering. It can never fail loudly —
+            // update" answerable: the stamp is right there above the failure. Written first (only the
+            // clear roll-forward above runs before it, and it writes no record), and synchronously, so
+            // ordering in the file is real ordering. It can never fail loudly —
             // record() swallows its own errors by contract.
             support_evidence::record(
                 support_evidence::EventKind::Lifecycle,
@@ -2118,6 +2176,9 @@ pub fn run() {
                 support_evidence::Outcome::Ok,
                 &format!("Compy {} started ({})", env!("CARGO_PKG_VERSION"), build_stamp()),
             );
+            // C2b: an interrupted clear that this start did not finish, named in the support record
+            // (after `app_start`, so the clear is over and its own deletion of the record is behind it).
+            crate::data_clear::record_roll_forward_evidence();
             // A3: where this copy runs from, and an old per-user copy left for this account (a
             // standard user's elevated installer cannot see it). Read-only, fixed words, no path.
             install_location::record_at_start();

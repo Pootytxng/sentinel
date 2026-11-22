@@ -19,6 +19,7 @@ use std::process::Command;
 // `generate_handler!` registration in `src/lib.rs`, and the capability grants disagree. A new
 // command cannot ship without being classified.
 const APP_COMMANDS: &[&str] = &[
+    "acknowledge_clear",
     "acknowledge_hardware_changes",
     "acknowledge_receipts_disclosure",
     "apply_outcome_choice",
@@ -32,6 +33,7 @@ const APP_COMMANDS: &[&str] = &[
     "cancel_update_restart",
     "changed_outside_offers",
     "clear_benchmark_baseline",
+    "clear_everything",
     "clear_play_history",
     "clear_scoreboard",
     "clear_support_evidence",
@@ -52,6 +54,7 @@ const APP_COMMANDS: &[&str] = &[
     "get_tuning_comparability",
     "get_benchmark_state",
     "get_build_stamp",
+    "get_clear_status",
     "get_component_evidence",
     "get_cpu_sensors",
     "get_cpu_temp",
@@ -104,6 +107,7 @@ const APP_COMMANDS: &[&str] = &[
     "paramedic_first_look",
     "paramedic_home_status",
     "paramedic_list_games",
+    "plan_clear_everything",
     "plan_clear_play_history",
     "preview_receipt_payload",
     "preview_support_evidence",

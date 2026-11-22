@@ -17,6 +17,7 @@
         { "url": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases" }
       ]
     },
+    "allow-acknowledge-clear",
     "allow-acknowledge-hardware-changes",
     "allow-acknowledge-receipts-disclosure",
     "allow-apply-outcome-choice",
@@ -30,6 +31,7 @@
     "allow-cancel-update-restart",
     "allow-changed-outside-offers",
     "allow-clear-benchmark-baseline",
+    "allow-clear-everything",
     "allow-clear-play-history",
     "allow-clear-scoreboard",
     "allow-clear-support-evidence",
@@ -50,6 +52,7 @@
     "allow-get-tuning-comparability",
     "allow-get-benchmark-state",
     "allow-get-build-stamp",
+    "allow-get-clear-status",
     "allow-get-component-evidence",
     "allow-get-cpu-sensors",
     "allow-get-cpu-temp",
@@ -102,6 +105,7 @@
     "allow-paramedic-first-look",
     "allow-paramedic-home-status",
     "allow-paramedic-list-games",
+    "allow-plan-clear-everything",
     "allow-plan-clear-play-history",
     "allow-preview-receipt-payload",
     "allow-preview-support-evidence",

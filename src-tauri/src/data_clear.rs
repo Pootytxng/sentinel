@@ -24,9 +24,10 @@
 //!   is kept and reported.
 //!
 //! D4-2 shipped the core and tests. Since C1 the play-history wrappers at the bottom are served to the
-//! Settings screen (see the note above them); the "everything" wrappers and the start-up roll-forward
-//! are not registered or called yet (slice C2). The core below this file's `live wrappers` marker takes the root as
-//! an argument and never resolves a data root itself; every test passes a temp folder it made.
+//! Settings screen; since C2b the "everything" wrappers, the clear status and the acknowledge are served too,
+//! and `setup` calls the start-up roll-forward first (see the note above the wrappers). The core below this
+//! file's `live wrappers` marker takes the root as an argument and never resolves a data root itself; every
+//! test passes a temp folder it made.
 
 #![allow(dead_code)] // `Scope::Everything` and the report helpers are first used by D4-3 and D4-4.
 
@@ -1865,8 +1866,9 @@ pub(crate) fn roll_forward_at(root: &Path, facts: &dyn Fn() -> ClearFacts, gates
 //
 // C1: `plan_clear_play_history` and `clear_play_history` are served to the main window by the async
 // commands of the same names in lib.rs `mod off_main` (registered in `generate_handler!`, `build.rs`
-// APP_COMMANDS and `capabilities/default.json`; test `w0c`). `plan_clear_everything`, `clear_everything`
-// and `finish_interrupted_clear` are STILL NOT registered or called: that is slice C2.
+// APP_COMMANDS and `capabilities/default.json`; test `w0c`). C2b adds `plan_clear_everything`,
+// `clear_everything`, `get_clear_status` and `acknowledge_clear` the same way, and `setup` calls
+// `finish_interrupted_clear` as its first statement (test `i9`).
 //
 // They are plain blocking functions of `String`/`bool` arguments that return owned, `Send` values and
 // capture no Tauri handle, so the future command can run them with `spawn_blocking` and never wait on a
@@ -2111,8 +2113,8 @@ pub(crate) fn clear_everything_on(
     }
 }
 
-/// The start-up roll-forward on the real data root. NOT YET CALLED from `lib.rs`: the call site, when the
-/// screen slice wires it, is the FIRST thing in `setup`, synchronously, before the `app_start` record is
+/// The start-up roll-forward on the real data root. Called (C2b) as the FIRST statement of `setup` in lib.rs,
+/// synchronously, before the `app_start` record is
 /// written, before the experiment reconcile and before the ledger backup thread starts (design 3.5: the
 /// support record is deleted by the clear, and `backup_missing_ledger_at` would re-create `history.json.bak`
 /// from a surviving `history.json`). A sandbox, redirected or conflicted root defers (nothing is touched).
@@ -2126,6 +2128,99 @@ pub(crate) fn finish_interrupted_clear_on(root: Result<PathBuf, Refusal>, fx: &d
     match root {
         Ok(root) => roll_forward_at(&root, &|| facts_from(fx, false), &LiveGates(fx)),
         Err(r) => RollForward::Deferred(vec![r]),
+    }
+}
+
+// ---- C2b: what the screen reads about a "clear everything" record --------------------------------------
+
+/// What THIS start's roll-forward did (`setup` sets it once, first thing), kept as JSON for the screen for the
+/// rest of the run. Not stored on disk: the record itself (`clear-intent.json`) is the stored state.
+static STARTUP_ROLL_FORWARD: std::sync::OnceLock<serde_json::Value> = std::sync::OnceLock::new();
+
+/// Keeps what the start-up roll-forward did, for the screen and for the support record. Called once.
+pub(crate) fn remember_roll_forward(rf: &RollForward) {
+    let _ = STARTUP_ROLL_FORWARD.set(serde_json::to_value(rf).unwrap_or(serde_json::Value::Null));
+}
+
+/// What the "Your data" screen needs to know about a clear record, read now.
+#[derive(Debug, Serialize)]
+pub(crate) struct ClearStatus {
+    /// What this start's roll-forward did (`RollForward` as JSON), or `None` when it was not run (no record).
+    pub(crate) roll_forward: Option<serde_json::Value>,
+    /// The record on disk now: `none`, `files_pending`, `webview_pending`, `abandoned`, `unreadable`, or
+    /// `no_root` (no canonical data folder; nothing was read).
+    pub(crate) record: &'static str,
+    /// Why an abandoned record was abandoned (`needs_reconfirm`, `changes_applied`, ...).
+    pub(crate) abandoned_code: Option<String>,
+    /// The browser keys a finished "clear everything" leaves for the window to remove (the inventory list).
+    pub(crate) webview: Vec<WebviewTarget>,
+}
+
+/// The status, live. One expression (test `v1`).
+pub(crate) fn get_clear_status() -> ClearStatus {
+    clear_status_on(live_root(), STARTUP_ROLL_FORWARD.get().cloned())
+}
+
+/// `get_clear_status` on a given root (or the reason there is none) and a given roll-forward result.
+pub(crate) fn clear_status_on(root: Result<PathBuf, Refusal>, roll_forward: Option<serde_json::Value>) -> ClearStatus {
+    let roll_forward = roll_forward.filter(|v| v.get("status").and_then(|s| s.as_str()) != Some("nothing_to_do"));
+    let (record, abandoned_code) = match root {
+        Err(_) => ("no_root", None),
+        Ok(root) => match read_intent(&root) {
+            IntentRead::Absent => ("none", None),
+            IntentRead::Unreadable(_) => ("unreadable", None),
+            IntentRead::Valid(i) => match i.stage {
+                IntentStage::FilesPending => ("files_pending", None),
+                IntentStage::WebviewPending => ("webview_pending", None),
+                IntentStage::Abandoned => ("abandoned", i.abandoned_code),
+            },
+        },
+    };
+    ClearStatus { roll_forward, record, abandoned_code, webview: webview_targets(Scope::Everything) }
+}
+
+/// The screen is done with a finished or abandoned clear: removes the record (refused while files are still
+/// pending or when it can't be read). One expression (test `v1`).
+pub(crate) fn acknowledge_clear() -> Result<(), Refusal> {
+    acknowledge_clear_on(live_root())
+}
+
+/// `acknowledge_clear` on a given root (or the reason there is none).
+pub(crate) fn acknowledge_clear_on(root: Result<PathBuf, Refusal>) -> Result<(), Refusal> {
+    root.and_then(|r| acknowledge_clear_at(&r))
+}
+
+/// The support-record entry for a start-up roll-forward that did not finish (r3 item 6): `(code, failed,
+/// detail)`, or `None` when there is nothing to record. Written by `setup` AFTER the `app_start` record, so the
+/// clear (which deletes the support record) is over by then.
+pub(crate) fn roll_forward_evidence(rf: &serde_json::Value) -> Option<(String, bool, &'static str)> {
+    let status = rf.get("status").and_then(|s| s.as_str())?;
+    let detail = rf.get("detail");
+    match status {
+        "abandoned" => Some((
+            detail.and_then(|d| d.get("code")).and_then(|c| c.as_str()).unwrap_or("abandoned").to_string(),
+            false,
+            "an interrupted clear everything was not finished at start-up; it needs the user to confirm it again",
+        )),
+        "incomplete" => Some((
+            "incomplete".to_string(),
+            true,
+            "an interrupted clear everything was finished only in part at start-up; the rest needs the user to confirm it again",
+        )),
+        "kept" => Some((
+            "clear_intent_unreadable".to_string(),
+            true,
+            "the record of an interrupted clear everything could not be read at start-up; it was left as it is and nothing was deleted",
+        )),
+        _ => None,
+    }
+}
+
+/// Writes `roll_forward_evidence` for this start's roll-forward to the support record, if there is one.
+pub(crate) fn record_roll_forward_evidence() {
+    if let Some((code, failed, detail)) = STARTUP_ROLL_FORWARD.get().and_then(roll_forward_evidence) {
+        let outcome = if failed { crate::support_evidence::Outcome::Failed } else { crate::support_evidence::Outcome::Refused };
+        crate::support_evidence::record(crate::support_evidence::EventKind::Operation, "clear_roll_forward", &code, outcome, detail);
     }
 }
 
@@ -4227,27 +4322,129 @@ mod tests {
         assert_eq!(refused["detail"][0]["code"], "capture_running");
     }
 
-    /// C1 registers only the play-history pair. "Clear everything", its plan and the start-up roll-forward
-    /// stay unregistered and uncalled until C2.
+    /// C1 + C2b: the six screen commands are registered from `off_main` and call only the live wrappers. The
+    /// root-taking `_on` functions are for tests: lib.rs never calls one.
     #[test]
-    fn w0c_only_play_history_is_wired_and_everything_is_not() {
+    fn w0c_the_screen_commands_are_wired_to_the_live_wrappers_only() {
         let lib = include_str!("lib.rs");
         let handler = &lib[lib.find(concat!("generate_handler", "![")).expect("handler")..];
         let handler = &handler[..handler.find("])").expect("handler end")];
-        assert!(handler.contains("off_main::plan_clear_play_history,") && handler.contains("off_main::clear_play_history,"));
-        assert!(lib.contains("crate::data_clear::plan_clear_play_history()"));
-        assert!(lib.contains("crate::data_clear::clear_play_history(&fingerprint)"));
-        for not_yet in [
-            concat!("data_clear::clear_", "everything"),
-            concat!("data_clear::plan_clear_", "everything"),
-            concat!("data_clear::plan_", "everything_on"),
-            concat!("data_clear::finish_", "interrupted_clear"),
-            // The root-taking functions are for tests: the app calls only the live wrappers.
+        for cmd in ["plan_clear_play_history", "clear_play_history", "plan_clear_everything", "clear_everything", "get_clear_status", "acknowledge_clear"] {
+            assert!(handler.contains(&format!("off_main::{cmd},")), "{cmd} is registered from off_main");
+        }
+        for call in [
+            "crate::data_clear::plan_clear_play_history()",
+            "crate::data_clear::clear_play_history(&fingerprint)",
+            "crate::data_clear::plan_clear_everything(remove_licence)",
+            "crate::data_clear::clear_everything(&fingerprint, remove_licence)",
+            "crate::data_clear::get_clear_status()",
+            "crate::data_clear::acknowledge_clear()",
+        ] {
+            assert_eq!(lib.matches(call).count(), 1, "{call} once, from its command");
+        }
+        for test_only in [
             concat!("data_clear::plan_play_", "history_on"),
             concat!("data_clear::clear_play_", "history_on"),
+            concat!("data_clear::plan_", "everything_on"),
+            concat!("data_clear::clear_", "everything_on"),
+            concat!("data_clear::finish_interrupted_", "clear_on"),
+            concat!("data_clear::clear_", "status_on"),
+            concat!("data_clear::acknowledge_", "clear_on"),
+            concat!("data_clear::clear_everything", "_at"),
+            concat!("data_clear::roll_forward", "_at"),
         ] {
-            assert!(!lib.contains(not_yet), "{not_yet} is C2's");
+            assert!(!lib.contains(test_only), "{test_only} is for tests; the app calls the live wrappers");
         }
+    }
+
+    /// C2b: `remember_roll_forward(&finish_interrupted_clear())` are the FIRST two statements of `setup`, before
+    /// the `app_start` record, the experiment reconcile and the ledger-backup thread; the support-record entry
+    /// comes after `app_start`; nothing else calls the roll-forward (main.rs neither: its helpers exit first).
+    #[test]
+    fn i9b_setup_runs_the_roll_forward_first_and_only_there() {
+        let lib = include_str!("lib.rs");
+        let setup = lib.split(concat!(".setup(", "|app| {")).nth(1).expect("setup");
+        let code: Vec<&str> = setup.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("//")).collect();
+        assert_eq!(code[0], "let roll_forward = crate::data_clear::finish_interrupted_clear();", "first statement");
+        assert_eq!(code[1], "crate::data_clear::remember_roll_forward(&roll_forward);");
+        let pos = |needle: &str| setup.find(needle).unwrap_or_else(|| panic!("{needle} not in setup"));
+        let rf = pos("finish_interrupted_clear()");
+        assert!(rf < pos("\"app_start\""), "before the app_start record");
+        assert!(rf < pos("reconcile_interrupted_starts"), "before the experiment reconcile");
+        assert!(rf < pos("ensure_backup_at_start"), "before the ledger-backup thread");
+        assert!(pos("\"app_start\"") < pos("record_roll_forward_evidence()"), "the support entry after app_start");
+        assert_eq!(lib.matches(concat!("finish_interrupted", "_clear()")).count(), 1, "called once, in setup");
+        assert!(!include_str!("main.rs").contains("finish_interrupted_clear"));
+    }
+
+    /// C2b: the status the screen reads, for each state of the record; the start-up result is passed through
+    /// (a "nothing to do" result is not); no root is its own answer and reads nothing.
+    #[test]
+    fn z1_clear_status_names_the_record_and_the_start_up_result() {
+        let t = Tmp::new("z1");
+        let st = clear_status_on(Ok(t.root.clone()), Some(serde_json::json!({"status": "nothing_to_do"})));
+        assert_eq!((st.record, st.roll_forward.is_none(), st.abandoned_code.is_none()), ("none", true, true));
+        assert!(!st.webview.is_empty() && st.webview == webview_targets(Scope::Everything));
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(done(clear_everything_at(&t.root, &shown.fingerprint, &later, &NoGates)).complete);
+        let rf = serde_json::json!({"status": "completed", "detail": {}});
+        let st = clear_status_on(Ok(t.root.clone()), Some(rf.clone()));
+        assert_eq!(st.record, "webview_pending");
+        assert_eq!(st.roll_forward, Some(rf));
+        let mut i = intent_of(&t);
+        i.stage = IntentStage::Abandoned;
+        i.abandoned_code = Some("needs_reconfirm".into());
+        write_intent(&t.root, &i).unwrap();
+        let st = clear_status_on(Ok(t.root.clone()), None);
+        assert_eq!((st.record, st.abandoned_code.as_deref()), ("abandoned", Some("needs_reconfirm")));
+        i.stage = IntentStage::FilesPending;
+        write_intent(&t.root, &i).unwrap();
+        assert_eq!(clear_status_on(Ok(t.root.clone()), None).record, "files_pending");
+        t.put(INTENT_FILE, "{ not a record");
+        assert_eq!(clear_status_on(Ok(t.root.clone()), None).record, "unreadable");
+        let none = Err(Refusal { code: "data_root_unavailable", detail: String::new(), files: Vec::new() });
+        assert_eq!(clear_status_on(none, None).record, "no_root");
+    }
+
+    /// C2b: acknowledging removes a finished or abandoned record only; a pending one is refused and kept.
+    #[test]
+    fn z2_acknowledge_removes_a_finished_record_only() {
+        let t = Tmp::new("z2");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(done(clear_everything_at(&t.root, &shown.fingerprint, &later, &NoGates)).complete);
+        let mut i = intent_of(&t);
+        i.stage = IntentStage::FilesPending;
+        write_intent(&t.root, &i).unwrap();
+        assert_eq!(acknowledge_clear_on(Ok(t.root.clone())).unwrap_err().code, "clear_files_pending");
+        assert!(t.has(INTENT_FILE));
+        i.stage = IntentStage::WebviewPending;
+        write_intent(&t.root, &i).unwrap();
+        assert!(acknowledge_clear_on(Ok(t.root.clone())).is_ok());
+        assert!(!t.has(INTENT_FILE));
+        let none = Err(Refusal { code: "data_root_unavailable", detail: String::new(), files: Vec::new() });
+        assert_eq!(acknowledge_clear_on(none).unwrap_err().code, "data_root_unavailable");
+    }
+
+    /// C2b: which start-up results become a support-record entry, and with which code.
+    #[test]
+    fn z3_a_start_up_roll_forward_that_did_not_finish_is_named_in_the_support_record() {
+        let ab = serde_json::to_value(RollForward::Abandoned { code: "changes_applied".into(), detail: "x".into() }).unwrap();
+        assert_eq!(roll_forward_evidence(&ab).map(|e| (e.0, e.1)), Some(("changes_applied".to_string(), false)));
+        let kept = serde_json::to_value(RollForward::Kept { code: "clear_intent_unreadable", detail: "x".into() }).unwrap();
+        assert_eq!(roll_forward_evidence(&kept).map(|e| (e.0, e.1)), Some(("clear_intent_unreadable".to_string(), true)));
+        for quiet in [RollForward::NothingToDo, RollForward::WebviewPending, RollForward::Deferred(Vec::new())] {
+            assert!(roll_forward_evidence(&serde_json::to_value(quiet).unwrap()).is_none());
+        }
+        let t = Tmp::new("z3");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        let report = done(clear_everything_at(&t.root, &shown.fingerprint, &later, &NoGates));
+        let done_rf = serde_json::to_value(RollForward::Completed(report.clone())).unwrap();
+        assert!(roll_forward_evidence(&done_rf).is_none(), "a finished roll-forward is not a failure");
+        let part = serde_json::to_value(RollForward::Incomplete(report)).unwrap();
+        assert_eq!(roll_forward_evidence(&part).map(|e| (e.0, e.1)), Some(("incomplete".to_string(), true)));
     }
 
     // ---- C2a: the live wrappers are one line; everything else runs here on temp roots ----------------------
@@ -4270,6 +4467,8 @@ mod tests {
         ("clear_play_history", "clear_play_history_on(live_root(), expected_fingerprint, &ProcessEffects)"),
         ("clear_everything", "clear_everything_on(live_root(), expected_fingerprint, remove_licence, &ProcessEffects)"),
         ("finish_interrupted_clear", "finish_interrupted_clear_on(live_root(), &ProcessEffects)"),
+        ("get_clear_status", "clear_status_on(live_root(), STARTUP_ROLL_FORWARD.get().cloned())"),
+        ("acknowledge_clear", "acknowledge_clear_on(live_root())"),
     ];
 
     /// C2a shape guard: each live wrapper is exactly "resolve the verified root, hand it and the process's effects
@@ -4292,8 +4491,10 @@ mod tests {
             "live_root must stay the one verified-root lookup"
         );
         // `live_root()` is called by the five wrappers and nowhere else; `&ProcessEffects` likewise.
-        assert_eq!(core.matches("live_root()").count(), LIVE_WRAPPERS.len() + 1, "five wrapper calls + the definition");
-        assert_eq!(core.matches("&ProcessEffects").count(), LIVE_WRAPPERS.len(), "only the wrappers pass the process's effects");
+        assert_eq!(core.matches("live_root()").count(), LIVE_WRAPPERS.len() + 1, "one call per wrapper + the definition");
+        let with_effects = LIVE_WRAPPERS.iter().filter(|(_, e)| e.contains("&ProcessEffects")).count();
+        assert_eq!(with_effects, 5);
+        assert_eq!(core.matches("&ProcessEffects").count(), with_effects, "only the wrappers pass the process's effects");
     }
 
     fn unavailable() -> Result<PathBuf, Refusal> {
@@ -4423,8 +4624,6 @@ mod tests {
         let core = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
         let pure = core.split("pub(crate) fn roll_forward_at(").nth(1).unwrap().split("// ---- live wrappers").next().unwrap();
         assert!(!pure.contains("live_root") && !pure.contains("ProcessEffects") && !pure.contains("live_facts"), "the roll-forward never resolves the real root");
-        for (name, src) in [("lib.rs", include_str!("lib.rs")), ("main.rs", include_str!("main.rs"))] {
-            assert!(!src.contains("finish_interrupted_clear"), "{name} must not call the start-up hook until the screen slice wires it");
-        }
+        // Where the live hook IS called (C2b) is pinned by `i9b`.
     }
 }

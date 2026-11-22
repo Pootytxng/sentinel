@@ -72,10 +72,11 @@ describe("Your data: clear play history", () => {
   it("reads nothing until asked, then shows the plan before deleting anything", async () => {
     answer(PLAN, { status: "done", detail: REPORT });
     render(<YourData />);
-    expect(invokeMock).not.toHaveBeenCalled();
+    // C2b: the screen reads the clear record's status on open (no data, no plan); nothing else until asked.
+    const dataCalls = () => invokeMock.mock.calls.map((c) => c[0]).filter((c) => c !== "get_clear_status");
+    expect(dataCalls()).toEqual([]);
     await openPlan();
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenCalledWith("plan_clear_play_history");
+    expect(dataCalls()).toEqual(["plan_clear_play_history"]);
     const list = screen.getByTestId("your-data-delete-list");
     expect(list.textContent).toContain("Play sessions Compy measured");
     expect(list.textContent).toContain("(1 file, 4 KB)");
@@ -230,5 +231,168 @@ describe("Your data: clear play history", () => {
     fireEvent.click(screen.getByLabelText("I understand"));
     fireEvent.click(screen.getByRole("button", { name: "Delete play history" }));
     expect((await screen.findByTestId("your-data-error")).textContent).toContain("Some files may already be deleted");
+  });
+});
+
+// C2b: "Clear everything Compy keeps".
+describe("Your data: clear everything", () => {
+  const EVERY_PLAN: ClearPlan = {
+    ...PLAN,
+    scope: "everything",
+    delete: [
+      { rel: "history.json.bak", row_id: "ledger-backup", store: "ledger-backup", category: "undo", size: 10, modified_ms: 1 },
+      { rel: "history.json", row_id: "ledger-main", store: "ledger-main", category: "undo", size: 10, modified_ms: 1 },
+      { rel: "sessions.json", row_id: "sessions", store: "sessions", category: "play_history", size: 4096, modified_ms: 1 },
+      { rel: "support/evidence.jsonl", row_id: "support-evidence", store: "support-evidence", category: "support", size: 100, modified_ms: 1 },
+    ],
+    kept: [{ rel: "license.key", code: "licence_kept", detail: "dev text" }],
+    webview: [
+      { key: "compy_onboarded_v1", prefix: false, session_storage: false },
+      { key: "compy_theme", prefix: false, session_storage: false },
+    ],
+    fingerprint: "fp-all",
+  };
+  const EVERY_REPORT: ClearReport = {
+    ...REPORT,
+    scope: "everything",
+    deleted: EVERY_PLAN.delete.map((d) => d.rel),
+    kept: EVERY_PLAN.kept,
+    webview: EVERY_PLAN.webview,
+  };
+  const REFUSED: ClearPlan = {
+    ...EVERY_PLAN,
+    delete: [],
+    refusals: [{ code: "changes_applied", detail: "dev text", files: [] }],
+    applied_changes: ["Core parking", "Game mode"],
+    offer_undo_all: true,
+  };
+
+  function everything(handlers: Record<string, (args?: Record<string, unknown>) => unknown>) {
+    invokeMock.mockImplementation((cmd: string, args?: Record<string, unknown>) => {
+      const h = handlers[cmd];
+      if (!h) return Promise.reject(new Error(`unexpected ${cmd}`));
+      try {
+        return Promise.resolve(h(args));
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    });
+  }
+
+  const openEverything = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Show what clearing everything would delete" }));
+  };
+
+  it("refuses while changes are applied, names them, and 'Undo them first' undoes newest first without clearing", async () => {
+    const undone: unknown[] = [];
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: () => REFUSED,
+      get_applied_changes: () => [
+        { id: "old", rec_title: "Game mode", status: "applied", applied_at: "2026-11-01T00:00:00Z" },
+        { id: "new", rec_title: "Core parking", status: "applied", applied_at: "2026-11-02T00:00:00Z" },
+        { id: "done", rec_title: "Power plan", status: "rolled_back", applied_at: "2026-11-03T00:00:00Z" },
+      ],
+      rollback_change: (args) => {
+        undone.push(args?.changeId);
+        if (args?.changeId === "old") throw new Error("declined at the admin prompt");
+        return null;
+      },
+    });
+    render(<YourData />);
+    await openEverything();
+    const box = await screen.findByTestId("your-data-refused");
+    expect(box.textContent).toContain("Changes Compy made are still in place");
+    expect(screen.getByTestId("your-data-applied").textContent).toContain("Core parking, Game mode");
+    expect(screen.queryByRole("button", { name: "Delete everything" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Undo them first" }));
+    await waitFor(() => expect(screen.getByTestId("your-data-undo-results").textContent).toContain("Press Check again"));
+    expect(undone).toEqual(["new", "old"]);
+    const results = screen.getByTestId("your-data-undo-results").textContent ?? "";
+    expect(results).toContain("Undone: Core parking");
+    expect(results).toContain("Couldn't undo: Game mode");
+    expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain("clear_everything");
+  });
+
+  it("the licence box re-plans; the delete sends the shown fingerprint and choice; afterwards it asks to close and reopen", async () => {
+    window.localStorage.setItem("compy_onboarded_v1", "1");
+    window.localStorage.setItem("compy_theme", "dark");
+    window.localStorage.setItem("someone_elses_key", "x");
+    const plans: unknown[] = [];
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: (args) => {
+        plans.push(args?.removeLicence);
+        return args?.removeLicence
+          ? { ...EVERY_PLAN, kept: [], delete: [...EVERY_PLAN.delete, { rel: "license.key", row_id: "license", store: "license", category: "choices", size: 5, modified_ms: 1 }], fingerprint: "fp-lic" }
+          : EVERY_PLAN;
+      },
+      clear_everything: () => ({ status: "done", detail: { ...EVERY_REPORT, deleted: [...EVERY_REPORT.deleted, "license.key"] } }),
+      acknowledge_clear: () => null,
+    });
+    render(<YourData />);
+    await openEverything();
+    await screen.findByTestId("your-data-confirm");
+    expect(screen.getByText("Delete everything Compy keeps?")).toBeTruthy();
+    expect(screen.getByTestId("your-data-delete-list").textContent).toContain("Your change history and its backup copy");
+    expect(screen.getByTestId("your-data-kept-list").textContent).not.toContain("can still be undone");
+    fireEvent.click(screen.getByLabelText("Also remove my Compy Pro licence from this PC"));
+    await waitFor(() => expect(screen.getByTestId("your-data-delete-list").textContent).toContain("Your Compy Pro licence"));
+    expect(plans).toEqual([false, true]);
+    fireEvent.click(screen.getByLabelText("I understand"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete everything" }));
+    await screen.findByTestId("your-data-result");
+    expect(invokeMock).toHaveBeenCalledWith("clear_everything", { fingerprint: "fp-lic", removeLicence: true });
+    expect(invokeMock).toHaveBeenCalledWith("acknowledge_clear");
+    expect(window.localStorage.getItem("compy_onboarded_v1")).toBeNull();
+    expect(window.localStorage.getItem("compy_theme")).toBeNull();
+    expect(window.localStorage.getItem("someone_elses_key")).toBe("x");
+    expect(screen.getByTestId("your-data-reopen").textContent).toContain("Close Compy and open it again");
+    expect(screen.queryByTestId("your-data-reload")).toBeNull();
+  });
+
+  it("an unfinished clear keeps the window's notes, does not acknowledge, and says it needs confirming again", async () => {
+    window.localStorage.setItem("compy_theme", "dark");
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: () => EVERY_PLAN,
+      clear_everything: () => ({
+        status: "done",
+        detail: { ...EVERY_REPORT, deleted: ["history.json.bak"], failed: [{ rel: "history.json", error: "Access is denied. (os error 5)" }], not_attempted: ["sessions.json"], complete: false },
+      }),
+    });
+    render(<YourData />);
+    await openEverything();
+    await screen.findByTestId("your-data-confirm");
+    fireEvent.click(screen.getByLabelText("I understand"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete everything" }));
+    const result = await screen.findByTestId("your-data-result");
+    expect(result.textContent).toContain("Nothing more will be deleted until you confirm it again");
+    expect(result.textContent).toContain("Could not delete: history.json (Windows refused access)");
+    expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain("acknowledge_clear");
+    expect(window.localStorage.getItem("compy_theme")).toBe("dark");
+    expect(screen.queryByTestId("your-data-reopen")).toBeNull();
+  });
+
+  it("an abandoned clear from start-up is said in words and can be dismissed", async () => {
+    let record = "abandoned";
+    everything({
+      get_clear_status: () => ({
+        roll_forward: { status: "abandoned", detail: { code: "changes_applied", detail: "dev text" } },
+        record,
+        abandoned_code: "changes_applied",
+        webview: [],
+      }),
+      acknowledge_clear: () => {
+        record = "none";
+        return null;
+      },
+    });
+    render(<YourData />);
+    const status = await screen.findByTestId("your-data-status");
+    expect(status.textContent).toContain("a change Compy made is in place again. Your change history was kept.");
+    expect(status.textContent).not.toContain("dev text");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("acknowledge_clear"));
   });
 });
