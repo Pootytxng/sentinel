@@ -1056,7 +1056,7 @@ fn collect_nic_drivers() -> Vec<NicDriverInfo> {
 
 /// LAZY read-only IPC — deliberately its own command so the slow PnPSignedDriver enumeration
 /// never lags the hot hardware path.
-#[tauri::command]
+/// Served off the main thread by `off_main::get_nic_driver_info` (CR-slow-async).
 pub(crate) fn get_nic_driver_info() -> Vec<NicDriverInfo> {
     on_wmi_thread(collect_nic_drivers)
 }
@@ -1972,6 +1972,15 @@ pub(crate) fn collect_hardware() -> HardwareInfo {
     hw
 }
 
+/// Fill the startup hardware snapshot now, if nothing has yet. Called once from `setup` on its own
+/// thread, so the first `get_hardware_info` / `get_recommendations` / `get_hardware_changes` finds
+/// the WMI sweep already done instead of paying for it on the first screen. A command that arrives
+/// while the warm-up is still running blocks on the same `get_or_init` and gets the same snapshot;
+/// there is never a second sweep.
+pub(crate) fn warm_hardware_snapshot() {
+    let _ = HW_SNAPSHOT.get_or_init(|| on_wmi_thread(collect_hardware_inner));
+}
+
 /// The startup hardware snapshot `collect_hardware` fills once (WMI sweep, off the main thread).
 static HW_SNAPSHOT: std::sync::OnceLock<HardwareInfo> = std::sync::OnceLock::new();
 
@@ -2798,7 +2807,7 @@ pub(crate) fn detect_monitors() -> Vec<MonitorInfo> {
     })
 }
 
-#[tauri::command]
+/// Served off the main thread by `off_main::get_hardware_info` (CR-slow-async).
 pub(crate) fn get_hardware_info() -> HardwareInfo {
     collect_hardware()
 }

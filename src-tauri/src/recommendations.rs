@@ -885,7 +885,7 @@ pub(crate) fn stated_risk_dimensions(rec_id: &str) -> Option<RiskDimensions> {
     })
 }
 
-#[tauri::command]
+/// Served off the main thread by `off_main::get_recommendations` (CR-slow-async).
 pub(crate) fn get_recommendations() -> Vec<Recommendation> {
     let hw = collect_hardware();
     build_recommendations(&hw)
