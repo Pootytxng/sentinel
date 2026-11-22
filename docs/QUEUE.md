@@ -5,26 +5,20 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 The push check can fail on a vitest 15 s timeout when several builds share the PC (one retry passed; not a code failure). A push is confirmed only by the "main -> main" line.
 
 ## NOW (in flight, each on its own branch)
-- Nothing building. Desk build on the owner's PC: fc01eff9 (installed and runtime-proved 2026-11-21)
-- Parked: claude/m1-hard-1 d04c81e9 (rebased onto main today, 2,796 Rust tests green, every tool spawn covered; confirmed real on the installed build: a program planted in Compy's per-user install folder is run, twice with administrator rights; owner brief `_train\m1-owner-brief.md`; lands only on the owner's words "land the security slice")
-- Parked: claude/d1s1-capture 10b3bcea, behind claude/m1-hard-1
+- Desk build on the owner's PC: ec5bae0e (installed and runtime-proved 2026-11-22)
 
 ## NEXT (in order)
-- [ ] Land the security slice (claude/m1-hard-1) when the owner says "land the security slice"
 - [ ] Per-machine install: the per-user install folder itself is user-writable
 - [ ] Owner capture checks (`_train\g3-owner-capture-checks.md`)
 - [ ] Capture slice 2
-- [ ] Clear my data screen
 - [ ] Consumer panel follow-up
 - [ ] Handles audit S5: the direct query-only opens of the game (fps.rs ~520/~643, monitoring.rs ~896)
 - [ ] Remove or rewrite the #[ignore] test in running_at_start.rs (~1180) that opens every process
 - [ ] Paramedic card: drift evidence lines name the setting (driftApplied/driftOther)
 - [ ] One vocabulary for how sure Compy is, slice 1 = types only (design `_train\d3-vocabulary-design.md`): Problems room says Weak/Partial/Strong signal, the card Possible/Likely, tiles Known/Likely/Unknown; a lowest-level pattern shows "Unknown" beside an observation; SessionDebrief says "Prime suspect"
-- [ ] Clear my data in Settings, slice 2 (design `_train\d4-clear-data-design.md`) — must not strand applied changes without an undo
 - [ ] Capture slice 2 (design `_train\d1-capture-design.md`): ask "Measure this session?" when a game starts. The one-time group grant itself waits for the owner (it changes a security group on the account)
 - [ ] PRIVACY.md additions (`_train\d4i-privacy-additions.md`, `_train\d1s1-privacy-line.txt`)
 - [ ] tauri.conf.json description drops "safe"
-- [ ] Export follow-ups: one stock power-plan GUID table; apostrophe and 8.3 path cases; number the ledger ids
 - [ ] Backend incident headline tail and values reach the screen as raw English (zh-CN users see English): move to i18n
 - [ ] Self-delimiting stamp marker for verify-release-state
 - [ ] Problems room follow-ups: the heading "What this points to" sits above a "can't tell" sentence; "Did this help?" answers match by rule only; a time limit on the Event Log reader; the fixed 85°C line is never compared with this card's sessions that did not crash; thermal-trend patterns reach Medium on an unmeasured "well past normal variation"
@@ -55,6 +49,7 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - [ ] Layer 3: the Tuning Bay — per-setting Trials on a repeatable workload; BIOS and overclock walkthroughs by hardware
 - [ ] Unprompted "this session ran rough" notice — stays off until the rule is validated on other PCs
 - [ ] Remaining diet steps — agent machinery removal (needs the owner's yes for the project settings file); docs archive
+- [ ] Clear play history: a plain apply (Optimize, ledger lock only) can land just after the Trial-gate read, so Trial results may be deleted while that change is on; undo is unaffected. A report-only fix is in progress (branch claude/c4-apply-gap); the stronger fix needs the lock-order guard file and design 3.3 amended by the owner.
 
 ## Waiting on the owner
 - Decide: the tier name "starter" (the app now says "N starter tweaks ready", "Starter stack", "Apply all starter fixes").
@@ -62,8 +57,6 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - Decide: should Home count an unapplied optional tweak as "worth a look"?
 - Privacy questions and the lawyer list (`_train\t2-privacy-for-owner-and-lawyer.md`).
 - Site copy differences (`_train\t2-site-privacy-diff.md`, `_train\c3-site-claims.md`).
-- Say "land the security slice" (claude/m1-hard-1).
-- Leave the PC idle for a few minutes so the install and look-only checks can run (blocked 2026-11-21: input every few seconds).
 - Website lines that make the same game and anti-cheat claims, with suggested wording in `_train\c3-site-claims.md` (the EULA line needs a lawyer).
 - ROB RUN driver-rollback test: four rough sessions in a row since the Nov 19 driver update; cause not settled.
 - Start the code-signing identity check now (memo `_train\r1-signing-memo.md`: lead time up to 30 business days; individuals in the US or Canada).
@@ -76,13 +69,28 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - One ordinary ROB RUN session with nothing else running (Compy now records background load).
 - US/Canada eligibility and identity for code signing.
 - 3-5 outside testers.
-- A VM or 15 minutes for a real UAC-prompt test.
+- A VM (or 15 minutes) for the deletion tests ("Clear play history", "Clear everything"), the installer tests and a real UAC-prompt test.
 - Yes or no on editing the project's `.claude/settings.json` in the diet.
-- Publish the privacy page wording for the history backup with the release (site/privacy.html; docs/PRIVACY.md already has it).
+- Publish the privacy page wording with the release: site/privacy.html lags docs/PRIVACY.md (the history backup, and now what "Clear play history" and "Clear everything" delete, keep and refuse).
+- Decide: the lock-order guard edit (scripts/store-lock-order-guard.test.mjs) and design 3.3, needed for the stronger "Clear play history" apply-gap fix.
+- Decide: per-user or per-machine install (brief `_train\a3-owner-brief.md`).
+- Decide: the installer description's word "reversible" (state the mechanism instead).
 - ARCHITECTURE_LOCKS line for the ledger backup (proposed text in _train\b1-review-r1.md).
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee"; a strength above the lowest needs two independent supports and no contradicting evidence (in the Paramedic's code and now the Problems room's; not yet written in the constitution); the full health check shows no score ring (removed 2026-11-20, one revert restores it).
 
 ## Done (newest first)
+- 2026-11-22 - desk build ec5bae0e installed and stamped (installed over fc01eff9)
+- 2026-11-22 - Security slice and follow-ups: system tools run by absolute path from the real system directory with a pinned child environment; logman with a cleared environment; elevation only for absolute, closed targets; the gaming tier refuses elevation when its receipts file cannot be cleared; where Compy runs from is recorded at each start b19b886c, 7ed20677, 4e8fee63, 8b492da8, 184b4fbf, eb1d26cd
+- 2026-11-22 - Capture starts without an administrator prompt when this sign-in is already in Performance Log Users; the no-prompt line states the mechanism fe1102f9, 1fb8e983
+- 2026-11-22 - Follow-through slice 1: the card keeps a setting that was read back on as a dated suspect; Home's quiet usual-range line; the card's "Measured once" f5d1c939, aab55dd3, cf501f32, 5f877746, a91b92be, 020756f8
+- 2026-11-22 - Home truth: Home counts what is off-normal, never an unapplied tweak; a rough game is named with a date on every face; nothing measured is not "clean" 0ad9617d, 43010d11, 7bf2427b
+- 2026-11-22 - "Turn it back on" in the Something's-wrong card, through the Lab's own path bdff3631
+- 2026-11-22 - A recovery row "matches the timing" (or "Doesn't match the timing"), never "points to" d2e4739b, 9234c254
+- 2026-11-22 - Driver follow-through in the card and "since the last check" lines (less read is never "unchanged"; a dropped row is "Not shown this time") 666c3545, 2a545b5f, 64bffc6a, 3dfe72d8, ec5bae0e
+- 2026-11-22 - Export follow-ups: one stock power-plan GUID table, apostrophe and path-slash cases, numbered ledger ids, renamed plan copies, adapter names, generated word list 22318628, 4d9921ea, b4c313b9, 058017b3, 8c1c8667, 280ed067
+- 2026-11-22 - Settings "Your data": "Clear play history" and "Clear everything" screens (plan first, per-file result, start-up finish of an interrupted clear, the frame-rate helper's leftover files named) 5432b01d, a217e934, 6b06891a, ff3f71dd, 4c7f377e, 7928c287, 4bc4b3bf; clear core f35b79ac, 8953f263
+- 2026-11-22 - PRIVACY.md: what "Clear play history" and "Clear everything" delete, keep and refuse 42b20448, 1a3598d9, e86f3e07, d7bad0c6
+- 2026-11-22 - Test hygiene: scratch folders no run can reuse, push-check guards stop repeating whole-tree work, bench pins state their property fbba142b, f8adaf26, c84dcc62, 85e554c3
 - 2026-11-21 - desk build fc01eff9 installed and stamped (installed over 0c4057c7)
 - 2026-11-21 - The app no longer calls changes or itself "safe": the "starter" tier is named, the mechanism is stated instead of promises; guard src/i18n/safe-promise-claims.test.ts fc01eff9, 8937664f
 - 2026-11-21 - Seconds Compy could not measure are counted from the helper's own counter, shown live, stored per session and excluded from the numbers; a mostly-unread session is not graded or compared anywhere 7c55c0c9, fd0cdc1d
@@ -138,6 +146,7 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-22 desk-install session 8: built and installed main ec5bae0e over fc01eff9, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1122a.
 - 2026-11-21 desk-install session 7: built and installed main fc01eff9 over 0c4057c7, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1121d.
 - 2026-11-21 desk-install session 6: built and installed main 0c4057c7 over a0cfaca3, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1121c.
 - 2026-11-21 desk-install session 5: built and installed main a0cfaca3 over 4115e40e, proved at runtime, stamped in RELEASE_STATE; look-only checks in _train\view-1121b.
@@ -147,4 +156,3 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - 2026-11-20 desk-install session 3: built and installed main 5f4cad34, proved at runtime, stamped in RELEASE_STATE; look-only checks of the Home card (real data and new-user sandbox) in _train\view-1120d.
 - 2026-11-20 desk-install session 2: built and installed main dd799c62, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120c.
 - 2026-11-20 desk-install session: built and installed main 3e69f454, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120b.
-- 2026-11-20 docs session: QUEUE.md and a short CLAUDE.md written; WORK_TRAIN.md points here.
