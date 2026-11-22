@@ -462,8 +462,8 @@
     "lastSessionFallback": "上次会话",
     "rough": {
       "headline": "{{game}} 上次运行比平时更不流畅",
-      "sentenceOne": "{{game}} 在 {{date}} 测得的上一次会话比它平时的范围更不流畅。",
-      "sentenceMany": "{{game}} 截至 {{date}} 连续 {{count}} 次测得的会话比它平时的范围更不流畅。",
+      "sentenceOne": "{{game}} 在{{date}}测得的上一次会话比它平时的范围更不流畅。",
+      "sentenceMany": "{{game}} 截至{{date}}连续 {{count}} 次测得的会话比它平时的范围更不流畅。",
       "others": "上次同样比平时更不流畅的还有:{{games}}。",
       "separately": "另外:{{line}}",
       "unread": "Compy 无法读取你的游戏运行情况。",

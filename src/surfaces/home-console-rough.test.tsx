@@ -70,7 +70,7 @@ const readiness = (withDrift: boolean): GameReadiness => {
   };
 };
 const priorities: Priorities = { limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null };
-const skyline = { game: "skylinedrift.exe", game_name: "Skyline Drift", rough_sessions: 2, newest_rough_at: "2026-11-20T12:00:00Z" };
+const skyline = { game: "skylinedrift.exe", game_name: "Skyline Drift", rough_sessions: 2, newest_rough_at: `${new Date().getFullYear()}-11-20T12:00:00Z` };
 const ROUGH = "Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range.";
 
 async function mount(withDrift: boolean) {

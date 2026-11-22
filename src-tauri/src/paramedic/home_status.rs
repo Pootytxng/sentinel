@@ -55,7 +55,18 @@ pub(crate) fn home_status(inp: &DiagnoseInputs) -> HomeStatus {
         let sess = game_sessions(inp, &game);
         let judged = judge_game(&sess);
         let Some(top) = (0..sess.len()).rev().find(|&i| judged[i].verdict != Verdict::Unjudged) else { continue };
-        if matches!(judged[top].verdict, Verdict::Normal | Verdict::Fired) {
+        // Counted only where the card's own answer is a measurement: a rough session (Found), or "nothing wrong"
+        // (the newest session judged normal, nothing newer left unjudged, and no rough episode whose recovery
+        // the card is still telling). A partly measured newest session or an unclear recovery is "can't tell"
+        // on the card, so it never lets Home call the rig measured clean.
+        let nothing_wrong = judged[top].verdict == Verdict::Normal
+            && top + 1 == sess.len()
+            && (0..top)
+                .rev()
+                .find(|&i| judged[i].verdict == Verdict::Fired)
+                .and_then(|f| recovery::outcome(&sess, &judged, f, sess.len()))
+                .is_none();
+        if nothing_wrong || judged[top].verdict == Verdict::Fired {
             games_judged = games_judged.saturating_add(1);
         }
         if judged[top].verdict != Verdict::Fired {

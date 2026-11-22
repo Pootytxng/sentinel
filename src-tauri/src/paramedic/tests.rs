@@ -5941,6 +5941,65 @@ fn home_status_orders_by_newest_rough_session_not_by_last_played() {
 }
 
 #[test]
+fn home_status_counts_a_game_exactly_when_the_card_answers_it_from_a_measurement() {
+    // One game per case: counted (games_judged 1) exactly when the card says "nothing wrong" or answers from a
+    // rough session; never for "partly measured", "needs more", "recovery unclear" or "recovered".
+    let normal = |at: &str| facts(at, 600, 600, 100.0, 50.0);
+    let mut cases: Vec<(&str, Vec<SessionFacts>)> = vec![("steady", steady(6)), ("thin", steady(2))];
+    let mut short_newest = steady(5);
+    short_newest.push(facts("2026-10-20T10:00:00Z", 60, 60, 100.0, 50.0));
+    cases.push(("short newest", short_newest));
+    let mut unread_newest = steady(5);
+    unread_newest.push(unread(normal("2026-10-20T10:00:00Z")));
+    cases.push(("unread newest", unread_newest));
+    let mut rough = steady(5);
+    rough.push(rough_session("2026-10-20T10:00:00Z"));
+    cases.push(("rough", rough.clone()));
+    let mut one_back = rough.clone();
+    one_back.push(normal("2026-10-21T10:00:00Z"));
+    cases.push(("one normal after rough", one_back.clone()));
+    let mut two_back = one_back;
+    two_back.push(normal("2026-10-22T10:00:00Z"));
+    cases.push(("two normal after rough", two_back.clone()));
+    let mut long_after = two_back;
+    for d in 23..=28 {
+        long_after.push(normal(&format!("2026-10-{d}T10:00:00Z")));
+    }
+    cases.push(("past the recovery window", long_after));
+    let mut saw_counted = false;
+    let mut saw_not = false;
+    for (name, s) in cases {
+        let inp = inputs(s);
+        let d = diagnose(&inp, Complaint::Unknown, Some("g"));
+        let measured = matches!(
+            d.state,
+            DiagnosisState::NothingWrong { .. } | DiagnosisState::Found | DiagnosisState::CantTell { why: CantTellWhy::NothingChanged }
+        );
+        let counted = home_status::home_status(&inp).games_judged == 1;
+        assert_eq!(counted, measured, "{name}: card says {:?}", d.state);
+        saw_counted |= counted;
+        saw_not |= !counted;
+    }
+    assert!(saw_counted && saw_not, "the cases cover both answers");
+    // The owner's games: the same parity, game by game, over the games Home considers (played within
+    // RECENT_GAME_DAYS of the newest session; the card asked about one named game has no such window).
+    let owner = fixture();
+    let newest = owner.sessions.iter().filter(|s| !s.mixed).filter_map(SessionFacts::start).max().expect("sessions");
+    let cutoff = newest - chrono::Duration::days(RECENT_GAME_DAYS);
+    let card_measured = games(&owner)
+        .iter()
+        .filter(|g| owner.sessions.iter().any(|s| !s.mixed && s.game == **g && s.start().is_some_and(|t| t >= cutoff)))
+        .filter(|g| {
+            matches!(
+                diagnose(&owner, Complaint::Unknown, Some(g)).state,
+                DiagnosisState::NothingWrong { .. } | DiagnosisState::Found | DiagnosisState::CantTell { why: CantTellWhy::NothingChanged }
+            )
+        })
+        .count();
+    assert_eq!(home_status::home_status(&owner).games_judged as usize, card_measured);
+}
+
+#[test]
 fn home_status_counts_only_games_compared_with_a_usual_range() {
     assert_eq!(home_status::home_status(&inputs(steady(6))).games_judged, 1);
     assert_eq!(home_status::home_status(&inputs(Vec::new())).games_judged, 0);

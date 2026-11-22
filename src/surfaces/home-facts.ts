@@ -61,10 +61,13 @@ export function gamesMeasured(r: RoughRead): boolean {
   return r.kind === "read" && r.judged > 0;
 }
 
-/** The day of a session start, in the app's language (the same format the Games room uses). */
-function day(iso: string, lang: string): string {
+/** The day of a session start, in the app's language (the Games room's format), with the year when it is not
+ *  this year, so an old rough run never reads as recent. `now` is for tests. */
+export function roughDay(iso: string, lang: string, now: Date = new Date()): string {
   const d = new Date(iso);
-  return Number.isFinite(d.getTime()) ? new Intl.DateTimeFormat(lang || "en", { month: "short", day: "numeric" }).format(d) : "—";
+  if (!Number.isFinite(d.getTime())) return "—";
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return new Intl.DateTimeFormat(lang || "en", sameYear ? { month: "short", day: "numeric" } : { year: "numeric", month: "short", day: "numeric" }).format(d);
 }
 
 export function roughGames(r: RoughRead): RoughGame[] {
@@ -84,7 +87,7 @@ export function roughLine(r: RoughRead, t: TFunction, lang = "en"): string {
   if (games.length === 0) return "";
   const first = games[0];
   const name = gameName(first, t);
-  const when = day(first.newest_rough_at, lang);
+  const when = roughDay(first.newest_rough_at, lang);
   const main =
     first.rough_sessions === 1
       ? t("home.posture.rough.sentenceOne", { game: name, date: when })

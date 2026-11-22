@@ -72,7 +72,7 @@ const tweakOnly: Priorities = {
 };
 
 // Noon UTC: the date reads Nov 20 in every time zone the tests run in.
-const skyline = { game: "skylinedrift.exe", game_name: "Skyline Drift", rough_sessions: 2, newest_rough_at: "2026-11-20T12:00:00Z" };
+const skyline = { game: "skylinedrift.exe", game_name: "Skyline Drift", rough_sessions: 2, newest_rough_at: `${new Date().getFullYear()}-11-20T12:00:00Z` };
 
 const session = (at: string) =>
   ({

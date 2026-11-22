@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { postureLine as postureLineRaw, liveStrip as liveStripRaw } from "./command-center-data";
 import type { GameReadiness, Priorities, ReadinessCheck, SessionSummary } from "../types";
 import type { InEffectCounts } from "../data/machine-model";
-import type { RoughRead } from "./home-facts";
+import { roughDay, type RoughRead } from "./home-facts";
 // i18n update (2026-07-23): postureLine/liveStrip's strings now come from t(...) (Simplified
 // Chinese translation pass) instead of literal English, so both take a TFunction as their last
 // param. These test-local wrappers resolve them through the real i18next instance (English is the
@@ -256,7 +256,7 @@ describe("postureLine: B1 Home truth", () => {
     game: "skylinedrift.exe",
     game_name: "Skyline Drift",
     rough_sessions: n,
-    newest_rough_at: "2026-11-20T12:00:00Z",
+    newest_rough_at: `${new Date().getFullYear()}-11-20T12:00:00Z`,
   });
   const rough = (...games: ReturnType<typeof skyline>[]): RoughRead => ({ kind: "read", games, judged: games.length + 1 });
   const drift: ReadinessCheck = {
@@ -333,8 +333,18 @@ describe("postureLine: B1 Home truth", () => {
     const zh = i18n.getFixedT("zh-CN");
     const p = postureLineRaw(readiness([check("ready", "SSD")]), null, counted(0), zh, rough(skyline(2)), "zh-CN");
     expect(p.headline).toBe("Skyline Drift 上次运行比平时更不流畅");
-    expect(p.sentence).toBe("Skyline Drift 截至 11月20日 连续 2 次测得的会话比它平时的范围更不流畅。 Compy 能读取的检查全部正常。");
+    expect(p.sentence).toBe("Skyline Drift 截至11月20日连续 2 次测得的会话比它平时的范围更不流畅。 Compy 能读取的检查全部正常。");
     const one = postureLineRaw(readiness([check("ready", "SSD"), drift]), null, counted(0), zh, rough(skyline(1)), "zh-CN");
-    expect(one.note).toBe("另外:Skyline Drift 在 11月20日 测得的上一次会话比它平时的范围更不流畅。");
+    expect(one.note).toBe("另外:Skyline Drift 在11月20日测得的上一次会话比它平时的范围更不流畅。");
+  });
+});
+
+describe("roughDay: an old rough run never reads as recent (B1 review r2)", () => {
+  const now = new Date("2026-11-21T12:00:00Z");
+  it("says the year when the session was not this year, in both languages", () => {
+    expect(roughDay("2026-11-20T12:00:00Z", "en", now)).toBe("Nov 20");
+    expect(roughDay("2025-11-20T12:00:00Z", "en", now)).toBe("Nov 20, 2025");
+    expect(roughDay("2026-11-20T12:00:00Z", "zh-CN", now)).toBe("11月20日");
+    expect(roughDay("2025-11-20T12:00:00Z", "zh-CN", now)).toBe("2025年11月20日");
   });
 });
