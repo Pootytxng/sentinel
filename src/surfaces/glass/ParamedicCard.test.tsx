@@ -3462,3 +3462,77 @@ describe("ParamedicCard: what changed since the last check (B4)", () => {
     expect(screen.queryByTestId("paramedic-since")).toBeNull();
   });
 });
+
+// B5: a program that was open when the rough sessions started, and what later sessions' START records say. Start of
+// a session only; never who closed it, never that its absence helped; the card closes nothing and has no button for it.
+describe("ParamedicCard: a program open at the start of the rough sessions, and the sessions after (B5)", () => {
+  const D = "2026-11-21T20:00:00Z";
+  const line = (code: string, args: Record<string, string>, over: Partial<F["evidence"][number]> = {}): F["evidence"][number] => ({
+    kind: "measured",
+    code,
+    args: { id: "obs", name: "OBS Studio", date: D, ...args },
+    against: false,
+    source: "sessions",
+    ...over,
+  });
+  const row = (evidence: F["evidence"], args: Record<string, string> = { names: "", programs: "OBS Studio" }) =>
+    find("background-load", { evidence, fix: steps("background-load", args) });
+  const open = async (d: ParamedicDiagnosis) => {
+    await ask(d);
+    // The answer has landed when the door reads "Check again".
+    await waitFor(() => expect(screen.getByRole("button", { name: "Check again" })).toBeTruthy());
+    openAll();
+    return screen.getByTestId("paramedic").textContent ?? "";
+  };
+
+  it("each start-of-session line, in the row, with the step changed and no button", async () => {
+    const text = await open({
+      ...base,
+      why_first: null,
+      findings: [
+        row(
+          [
+            line("program-not-open-rough", { count: "1" }, { against: true }),
+            line("program-start-unread", {}, { kind: "unknown" }),
+          ],
+          { names: "", programs: "OBS Studio", notOpen: "OBS Studio" },
+        ),
+      ],
+    });
+    expect(text).toMatch(/OBS Studio was not open when your Game A session on .+ started, and that session still ran rough\. That weakens OBS Studio as the reason\./);
+    expect(text).toMatch(/Compy didn't record what was open when your Game A session on .+ started\./);
+    expect(text).toContain("OBS Studio was not open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
+    expect(text).not.toContain("Close OBS Studio before you play");
+    expect(text).not.toMatch(/you closed|closed it|helped|fixed/i);
+    expect(screen.queryAllByRole("button").some((b) => /close/i.test(b.textContent ?? "") && !/^Close$/.test(b.textContent ?? ""))).toBe(false);
+  });
+
+  it("one clear session and the plain line", async () => {
+    let text = await open({ ...base, why_first: null, findings: [row([line("program-not-open-clear", {})])] });
+    expect(text).toMatch(/OBS Studio was not open when your Game A session on .+ started, and that session ran in its usual range\. One session so far; Compy says a game is back in its usual range after two\./);
+    cleanup();
+    text = await open({ ...base, why_first: null, findings: [row([line("program-not-open", {})])] });
+    expect(text).toMatch(/OBS Studio was not open when your Game A session on .+ started\./);
+  });
+
+  it("with no row left, the dated sentence is under what Compy checked (never silent)", async () => {
+    // The engine's own answer for this case has another row (the driver here) and the line under "What Compy checked".
+    const text = await open({
+      ...base,
+      why_first: null,
+      findings: [base.findings[0]],
+      seen: [{ id: "program-not-open-rough", args: { id: "obs", name: "OBS Studio", date: D, count: "1" } }],
+    });
+    expect(text).toMatch(/OBS Studio was not open when your Game A session on .+ started, and that session still ran rough\./);
+  });
+
+  it("zh-CN: every line is about the start of a session, with no actor", () => {
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8"));
+    const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8"));
+    const ev = (o: Record<string, string>) => [o.programNotOpenRough_one, o.programNotOpenRough_other, o.programNotOpenClear, o.programNotOpen, o.programStartUnread];
+    for (const s of ev(zh.evidence)) expect(s).toMatch(/开始时/);
+    for (const s of ev(en.evidence)) expect(s).toMatch(/started\b/);
+    for (const s of [...ev(zh.evidence), zh.fix.backgroundLoad.stepNotOpen]) expect(s).not.toMatch(/你关闭|关掉了|帮助|修复/);
+    for (const s of [...ev(en.evidence), en.fix.backgroundLoad.stepNotOpen]) expect(s).not.toMatch(/you closed|closed it|helped|fixed/i);
+  });
+});

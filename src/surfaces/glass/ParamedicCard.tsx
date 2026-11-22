@@ -380,6 +380,12 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.recoveredRamRoughLower", { peakGb: a.peakGb, totalGb: a.totalGb });
     case "recovery-ram-rough-unread":
       return t("paramedic.evidence.recoveryRamRoughUnread");
+    // B5: the start records of the sessions after the newest one the program was open in.
+    case "program-not-open-rough":
+    case "program-not-open-clear":
+    case "program-not-open":
+    case "program-start-unread":
+      return programLine(e.code, a, ctx) ?? "";
     // Presence only: the one allowed sentence for a program on its own, and counts across rough and normal sessions.
     case "already-running":
       // True of the rough sessions that were recorded: when some were not, the line says how many were.
@@ -583,6 +589,14 @@ function stepLines(fix: ParamedicFix, ctx: Ctx, restored?: string, appliedOnly?:
         t("paramedic.fix.gpuDriver.step5", { game }),
       ];
     case "background-load":
+      // B5: a program the row named was not open when a later session started: no "close it" step for it (Compy
+      // doesn't know who closed it, and closes nothing itself), only another session played the same way.
+      if (a.notOpen) {
+        return present([
+          a.names ? t("paramedic.fix.backgroundLoad.step1", { names: a.names }) : null,
+          t("paramedic.fix.backgroundLoad.stepNotOpen", { name: a.notOpen, game }),
+        ]);
+      }
       // A recorder or overlay that was open at the start of the rough sessions and of none of the normal ones is named;
       // that step already says to play once and press the button again.
       if (a.programs) {
@@ -767,9 +781,29 @@ function unknownLine(code: string, { t, game, startRecord }: Ctx): string | null
   }
 }
 
+/** B5: a program open when the rough sessions started, and what the later sessions' START records say. Start of a
+ *  session only; never who closed it, never that its absence helped. Shared by the row and "What Compy checked". */
+function programLine(code: string, a: Record<string, string>, { t, dates, game }: Ctx): string | null {
+  switch (code) {
+    case "program-not-open-rough":
+      return t("paramedic.evidence.programNotOpenRough", { name: a.name, game, date: dates.day(a.date), count: Number(a.count ?? 1) });
+    case "program-not-open-clear":
+      return t("paramedic.evidence.programNotOpenClear", { name: a.name, game, date: dates.day(a.date) });
+    case "program-not-open":
+      return t("paramedic.evidence.programNotOpen", { name: a.name, game, date: dates.day(a.date) });
+    case "program-start-unread":
+      return t("paramedic.evidence.programStartUnread", { game, date: dates.day(a.date) });
+    default:
+      return null;
+  }
+}
+
 /** One line of "also looked at": things found that Compy does not treat as findings. */
-function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null {
+function seenLine(s: ParamedicRuledOut, ctx: Ctx): string | null {
+  const { t, dates, game } = ctx;
   const a = s.args;
+  const program = programLine(s.id, a, ctx);
+  if (program) return program;
   switch (s.id) {
     case "gpu-temp":
       return t("paramedic.seen.gpuTemp", { count: Number(a.count), rough: a.rough, base: a.base });

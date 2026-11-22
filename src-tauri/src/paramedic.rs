@@ -2353,6 +2353,63 @@ fn start_evidence(c: &Ctx, game: &str) -> (Vec<Evidence>, bool, Vec<&'static str
     (evidence, timing, named)
 }
 
+/// B5 ("did it make a difference that it wasn't open?"): for each program that is not always resident and was open
+/// when at least one rough session started, what the game's sessions AFTER the newest one it was open in say. Every
+/// line is about the START of a session only (a start snapshot sees nothing opened later) and never says who closed
+/// it or that its absence helped:
+/// - `program-not-open-rough` (against): it was not open when a later session started, and that session still ran
+///   rough. This is also the dated sentence for the "was already running" line that stops holding then.
+/// - `program-not-open-clear`: one later session, it was not open at its start, and it ran in its usual range (one
+///   session: said, never support; two are the recovery's own answer).
+/// - `program-not-open`: it was not open when a later session started (the newest one with a record).
+/// - `program-start-unread`: a later session has no readable start record ("not recorded", never "not open").
+fn program_since(c: &Ctx, game: &str) -> Vec<Evidence> {
+    use crate::running_at_start as ras;
+    fn readable(s: &SessionFacts) -> Option<&crate::running_at_start::RunningAtStart> {
+        s.running_at_start.as_ref().filter(|r| r.is_readable())
+    }
+    let open_in = |s: &SessionFacts, id: &str| readable(s).is_some_and(|r| r.known.iter().any(|k| k.id == id));
+    let mut lines = Vec::new();
+    for p in ras::PROGRAMS {
+        let presence = ras::ProgramPresence { id: p.id, name: p.display_name, always_resident: p.always_resident };
+        if ras::already_running_sentence(&presence, game).is_none() || !c.affected.iter().any(|s| open_in(*s, p.id)) {
+            continue;
+        }
+        // The newest session of this game whose start record shows it open; the sessions after it are the follow-up.
+        let Some(last_open) = (0..c.sess.len()).rev().find(|&i| open_in(c.sess[i], p.id)) else { continue };
+        let after: Vec<usize> = ((last_open + 1)..c.sess.len()).collect();
+        let Some(&first_after) = after.first() else { continue };
+        let name = p.display_name.to_string();
+        let (known, unread): (Vec<usize>, Vec<usize>) = after.iter().copied().partition(|&i| readable(c.sess[i]).is_some());
+        let rough: Vec<usize> = known.iter().copied().filter(|&i| c.judged[i].verdict == Verdict::Fired).collect();
+        if let Some(&first) = rough.first() {
+            lines.push(ev(
+                EvidenceKind::Measured,
+                "program-not-open-rough",
+                "sessions",
+                true,
+                &[("id", p.id.to_string()), ("name", name.clone()), ("date", c.sess[first].started_at.clone()), ("count", rough.len().to_string())],
+            ));
+        } else if let Some(&newest) = known.last() {
+            let one_clear = c.sess[first_after].start().is_some_and(|t| {
+                matches!(recovery::since_restore(c, t, None), recovery::Since::Clear { count: 1, .. })
+            }) && known == [first_after];
+            let code = if one_clear { "program-not-open-clear" } else { "program-not-open" };
+            lines.push(ev(EvidenceKind::Measured, code, "sessions", false, &[("id", p.id.to_string()), ("name", name.clone()), ("date", c.sess[newest].started_at.clone())]));
+        }
+        if let Some(&newest) = unread.last() {
+            lines.push(ev(
+                EvidenceKind::Unknown,
+                "program-start-unread",
+                "sessions",
+                false,
+                &[("id", p.id.to_string()), ("name", name), ("date", c.sess[newest].started_at.clone())],
+            ));
+        }
+    }
+    lines
+}
+
 /// A program that gets the "was already running" line: open in every readable rough snapshot and not one that is
 /// always resident (see `running_at_start`).
 fn already_running(p: &crate::running_at_start::Program, st: &StartRead, game: &str) -> bool {
@@ -2495,7 +2552,15 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         }
     }    // What the start-of-session snapshots say (presence only; see `start_evidence`).
     let (start_ev, snap_timing, recorders) = start_evidence(c, &intelligence::pretty_game_name(&c.first_bad.game));
+    // B5: what the sessions after the newest one a program was open in say (start of the session only).
+    let follow = program_since(c, &intelligence::pretty_game_name(&c.first_bad.game));
     if seen.is_empty() && !high && !snap_timing {
+        // No row: a program that was open when the rough sessions started and not when a later one did (the "was
+        // already running" line no longer holds) is still said, dated, under what Compy checked. Never silent.
+        for e in &follow {
+            let a: Vec<(&'static str, String)> = e.args.iter().map(|(k, v)| (*k, v.clone())).collect();
+            out.see(e.code, &a);
+        }
         // Nothing to list as a finding. The figures are still worth saying, with their numbers: "about the same"
         // for every kind (with the means agreeing) sits with what Compy checked as unchanged; any other reading,
         // including a mix of the same and in between, is only listed under "also looked at".
@@ -2561,6 +2626,13 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         out.unknown("running-at-start-normal");
     }
     evidence.extend(start_ev);
+    // The step "Close {{name}}" changes once a later session started without it (`fix.args.notOpen`).
+    let not_open: Vec<String> = follow
+        .iter()
+        .filter(|e| matches!(e.code, "program-not-open" | "program-not-open-clear" | "program-not-open-rough"))
+        .filter_map(|e| e.args.get("name").cloned())
+        .collect();
+    evidence.extend(follow);
     evidence.extend(states.iter().filter(|(_, st)| shown(st)).filter_map(|(k, st)| load_evidence(*k, *st, c.affected.len(), contradiction)));
     if compared.iter().any(shown) {
         // The figure is everything except the game: say so once.
@@ -2595,7 +2667,14 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         since,
         // Programs are named in the steps only when this game's own fully measured rough sessions had them.
         // A recorder or overlay open at the start of the rough sessions and of none of the normal ones is named too.
-        fix: steps("background-load", &[("names", names_of(&busy_rough)), ("programs", recorders.join(", "))]),
+        fix: if not_open.is_empty() {
+            steps("background-load", &[("names", names_of(&busy_rough)), ("programs", recorders.join(", "))])
+        } else {
+            steps(
+                "background-load",
+                &[("names", names_of(&busy_rough)), ("programs", recorders.join(", ")), ("notOpen", not_open.join(", "))],
+            )
+        },
         evidence,
     });
 }

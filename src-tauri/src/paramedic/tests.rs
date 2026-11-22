@@ -5487,6 +5487,94 @@ fn start_codes(f: &Finding) -> Vec<&'static str> {
     f.evidence.iter().filter(|e| matches!(e.code, "already-running" | "open-counts" | "open-counts-named")).map(|e| e.code).collect()
 }
 
+// ==== B5: the sessions after the newest one a program was open in (start of the session only) =================
+fn later(at: &str, low1: f64, start: Option<RunningAtStart>) -> SessionFacts {
+    let mut s = facts(at, 600, 600, 100.0, low1);
+    s.running_at_start = start;
+    s
+}
+
+fn program_codes(evidence: &[Evidence]) -> Vec<&'static str> {
+    evidence.iter().map(|e| e.code).filter(|c| c.starts_with("program-")).collect()
+}
+
+#[test]
+fn b5_a_rough_session_without_the_program_keeps_a_dated_sentence_when_the_already_running_line_stops_holding() {
+    // OBS was open when the first rough session started and not when the second one did: "was already running" no
+    // longer holds for every rough session, the snapshot is no longer timing, and no row is left. Never silent.
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 30.0, Some(snap(&[]))));
+    let d = run_load(sess);
+    assert!(bg_finding(&d).is_none(), "no row: the snapshot is no longer timing");
+    let s = d.seen.iter().find(|s| s.id == "program-not-open-rough").unwrap_or_else(|| panic!("said under what Compy checked: {:?}", d.seen));
+    assert_eq!((s.args["name"].as_str(), s.args["date"].as_str(), s.args["count"].as_str()), ("OBS Studio", "2026-10-21T10:00:00Z", "1"));
+}
+
+#[test]
+fn b5_on_a_row_that_stands_for_another_reason_the_rough_session_without_it_is_against_and_the_step_changes() {
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
+    let first = sess.last_mut().unwrap();
+    first.busy_starts = 5;
+    first.busy_names = vec!["rustc".into()];
+    sess.push(later("2026-10-21T10:00:00Z", 30.0, Some(snap(&[]))));
+    let d = run_load(sess);
+    let f = bg_finding(&d).expect("program starts keep the row");
+    let line = f.evidence.iter().find(|e| e.code == "program-not-open-rough").unwrap_or_else(|| panic!("{:?}", program_codes(&f.evidence)));
+    assert!(line.against && line.kind == EvidenceKind::Measured);
+    assert_eq!(line.args["date"], "2026-10-21T10:00:00Z");
+    assert_eq!(f.confidence, Certainty::Possible, "it weakens that program, never above Possible");
+    match &f.fix {
+        Fix::Steps { args, .. } => assert_eq!(args.get("notOpen").map(String::as_str), Some("OBS Studio")),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn b5_one_clear_session_without_it_is_said_once_and_supports_nothing() {
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 50.0, Some(snap(&[]))));
+    let d = run_load(sess);
+    let f = bg_finding(&d).expect("the rough session's snapshot is still timing");
+    assert_eq!(program_codes(&f.evidence), ["program-not-open-clear"]);
+    let line = f.evidence.iter().find(|e| e.code == "program-not-open-clear").unwrap();
+    assert!(!line.against && line.kind == EvidenceKind::Measured);
+    assert_eq!(line.args["date"], "2026-10-21T10:00:00Z");
+    assert_eq!((f.confidence, f.now), (Certainty::Possible, None), "one session: said, never support");
+}
+
+#[test]
+fn b5_a_later_session_with_no_readable_start_record_is_not_recorded_never_not_open() {
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 50.0, Some(snapshot(std::iter::empty(), 0, 0, 0))));
+    let d = run_load(sess);
+    let f = bg_finding(&d).expect("row");
+    assert_eq!(program_codes(&f.evidence), ["program-start-unread"]);
+    let line = f.evidence.iter().find(|e| e.code == "program-start-unread").unwrap();
+    assert_eq!((line.kind, line.args["date"].as_str()), (EvidenceKind::Unknown, "2026-10-21T10:00:00Z"));
+    match &f.fix {
+        Fix::Steps { args, .. } => assert!(!args.contains_key("notOpen"), "nothing read: the close step stays"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn b5_open_again_in_the_newest_session_or_a_resident_program_gives_no_follow_up_line() {
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 50.0, Some(snap(&["obs64.exe"]))));
+    let d = run_load(sess);
+    assert!(program_codes(&bg_finding(&d).expect("row").evidence).is_empty());
+    assert!(d.seen.iter().all(|s| !s.id.starts_with("program-")));
+    // Medal is always resident: it never gets a presence sentence, so no follow-up either.
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["medal.exe"])));
+    let first = sess.last_mut().unwrap();
+    first.busy_starts = 5;
+    first.busy_names = vec!["rustc".into()];
+    sess.push(later("2026-10-21T10:00:00Z", 30.0, Some(snap(&[]))));
+    let d = run_load(sess);
+    assert!(program_codes(&bg_finding(&d).expect("row").evidence).is_empty());
+    assert!(d.seen.iter().all(|s| !s.id.starts_with("program-")));
+}
+
 #[test]
 fn a_program_open_at_the_start_of_the_rough_session_and_in_no_normal_one_is_timing_and_stays_possible() {
     let d = run_load(start_episode(quiet_base(3), Some(snap(&["obs64.exe"]))));
