@@ -434,6 +434,8 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.driverBackRough", { game, count: Number(a.count ?? 1), from: a.from, date: dates.day(a.at) });
     case "driver-back-clear":
       return t("paramedic.evidence.driverBackClear", { game, from: a.from, date: dates.day(a.at) });
+    case "driver-back-clear-unjudged":
+      return t("paramedic.evidence.driverBackClearUnjudged", { game, from: a.from, n: a.count, date: dates.day(a.at) });
     case "driver-back-between":
       return t("paramedic.evidence.driverBackBetween", { game });
     case "drift-restored-none":
@@ -1598,10 +1600,18 @@ function SinceLast({ prev, d, ctx }: { prev: ParamedicDiagnosis; d: ParamedicDia
   const a = prev.recorded;
   const b = d.recorded;
   if (a && b) {
-    if (b.sessions > a.sessions) counts.push(t("paramedic.since.newSessions", { count: b.sessions - a.sessions, game, date: dates.day(b.newest_at) }));
+    // The newest start first: at the store's session cap a new session can leave the count equal (or lower).
+    const newer = Date.parse(b.newest_at) > Date.parse(a.newest_at);
+    if (newer && b.sessions > a.sessions) counts.push(t("paramedic.since.newSessions", { count: b.sessions - a.sessions, game, date: dates.day(b.newest_at) }));
+    else if (newer) counts.push(t("paramedic.since.newSessionsCapped", { game, date: dates.day(b.newest_at) }));
     else if (b.sessions < a.sessions) counts.push(t("paramedic.since.fewer", { game }));
-    else if (b.newest_at === a.newest_at) noNew = true;
+    else if (b.newest_at === a.newest_at && b.sessions === a.sessions) noNew = true;
   }
+  // Review r1 F1: something read last time and not this time (an unknown or a limit that is new) means a row can
+  // drop out, or nothing differ, only because it wasn't read: never "nothing changed" then, and it is said first.
+  const readKeys = (x: ParamedicDiagnosis) => new Set([...x.unknowns, ...x.limits.map((l) => `${l.kind}:${l.code}`)]);
+  const readBefore = readKeys(prev);
+  const lessRead = [...readKeys(d)].some((k) => !readBefore.has(k));
   const changes: string[] = [];
   const was = stateLabel(prev, t);
   const now = stateLabel(d, t);
@@ -1615,12 +1625,14 @@ function SinceLast({ prev, d, ctx }: { prev: ParamedicDiagnosis; d: ParamedicDia
   for (const f of prev.findings) {
     if (!d.findings.some((x) => x.id === f.id)) changes.push(t("paramedic.since.rowGone", { name: findingTitle(f, ctx) ?? f.id }));
   }
-  const lines =
-    changes.length === 0
+  const sessions = noNew ? [t("paramedic.since.noNew", { game })] : counts;
+  const lines = lessRead
+    ? [t("paramedic.since.lessRead"), ...sessions, ...changes]
+    : changes.length === 0
       ? noNew
         ? [t("paramedic.since.unchangedNoNew", { game })]
         : [...counts, t("paramedic.since.unchanged")]
-      : [...(noNew ? [t("paramedic.since.noNew", { game })] : counts), ...changes];
+      : [...sessions, ...changes];
   return (
     <div data-testid="paramedic-since">
       <p className="gl-row-title">{t("paramedic.since.title")}</p>

@@ -3011,9 +3011,26 @@ mod recovery_f3 {
         // Two clear sessions are the recovery's own answer: no follow-through line repeats it.
         let d = run(with_extra(episode(), vec![on(10, 50.0, Some("1.0")), on(11, 50.0, Some("1.0"))]));
         assert_eq!(d.state, DiagnosisState::Recovered);
-        assert!(driver_codes(&d).iter().all(|c| *c != "driver-back-clear" && *c != "driver-back-between"), "{:?}", driver_codes(&d));
+        assert!(
+            driver_codes(&d).iter().all(|c| !matches!(*c, "driver-back-clear" | "driver-back-clear-unjudged" | "driver-back-between")),
+            "{:?}",
+            driver_codes(&d)
+        );
         let now = &finding_of(&d, "gpu-driver-change").now_evidence;
         assert!(now.iter().any(|e| e.code == "recovered-after-driver-change" && e.args["back"] == "true"), "{now:?}");
+        // Review r1 gap: two clear, then one Compy couldn't judge. The card is "can't tell" (trailing unjudged sessions
+        // are never "back to normal"), so this row says what the two clear ones showed, and why not yet.
+        let mut short = on(12, 50.0, Some("1.0"));
+        short.duration_secs = 30;
+        short.samples = 30;
+        let d = run(with_extra(episode(), vec![on(10, 50.0, Some("1.0")), on(11, 50.0, Some("1.0")), short]));
+        assert_ne!(d.state, DiagnosisState::Recovered);
+        let f = finding_of(&d, "gpu-driver-change");
+        let line = f.evidence.iter().find(|e| e.code == "driver-back-clear-unjudged").unwrap_or_else(|| panic!("{:?}", driver_codes(&d)));
+        assert!(!line.against && line.kind == EvidenceKind::Measured);
+        assert_eq!((line.args["count"].as_str(), line.args["later"].as_str()), ("2", "1"));
+        assert_eq!(line.args["at"], at_day(11, 10));
+        assert_eq!(f.confidence, Certainty::Possible, "said, never support");
     }
 
     /// B4 ("what changed since the last check"): the answer carries the game's own recorded-session count and newest
@@ -3086,12 +3103,16 @@ mod recovery_f3 {
         // Off: the readiness drift names it with its id; the diagnosis lists the setting with this notice.
         assert_eq!((drifts_off[0].titles.clone(), drifts_off[0].recs.clone()), (vec![B4_TITLE.to_string()], vec!["visual-effects".to_string()]));
         let f = finding_of(&off, "setting-drift");
+        assert!(f.in_play && f.confidence == Certainty::Possible, "off: one of the changes in play, never above Possible");
         assert_eq!((f.evidence[0].code, f.evidence[0].args["check"].as_str(), f.evidence[0].args["noticed"].as_str()), ("drift-noticed", "applied-changes", NOTICED));
         assert!(drifts_back.is_empty(), "read on again: no standing drift");
         // Back: two clear sessions after it was read on, the setting's own name carried from the file.
         assert_eq!(back.state, DiagnosisState::Recovered);
         assert_eq!(back.recovery.as_ref().map(|r| r.summary.clone()), Some(RecoverySummary::PointsTo { id: "setting-drift" }));
-        let restored = finding_of(&back, "setting-drift").evidence.iter().find(|e| e.code == "drift-noticed").expect("the dated line");
+        let row = finding_of(&back, "setting-drift");
+        assert_eq!((row.now, row.confidence), (Some(NowStatus::PointsTo), Certainty::Possible), "B3b end to end: the timing chip, and Possible");
+        assert!(back.findings.iter().filter(|x| x.id != "setting-drift").all(|x| x.now == Some(NowStatus::PointsAway)), "every other row pointed away");
+        let restored = row.evidence.iter().find(|e| e.code == "drift-noticed").expect("the dated line");
         assert_eq!((restored.args["titles"].as_str(), restored.args["restored"].as_str()), (B4_TITLE, BACK_ON));
 
         let wire = serde_json::json!({

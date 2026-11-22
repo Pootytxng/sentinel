@@ -1924,7 +1924,22 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
             recovery::Since::Clear { at, count: 1 } => {
                 evidence.push(ev(EvidenceKind::Measured, "driver-back-clear", "sessions", false, &[("from", from.to_string()), ("back", when), ("at", at)]))
             }
-            recovery::Since::Clear { .. } => {}
+            // Two or more: the recovery's own answer, unless sessions Compy couldn't judge came after them. Then the card
+            // is "can't tell" (recovery::outcome_within: trailing unjudged sessions are never "back to normal") and
+            // nothing else would say the clear ones ran on the earlier driver, so this row says it, with why not yet.
+            recovery::Since::Clear { at, count } => {
+                let after = ts(&at);
+                let later = c.sess.iter().filter(|s| s.start().zip(after).is_some_and(|(t, a)| t > a)).count();
+                if later > 0 {
+                    evidence.push(ev(
+                        EvidenceKind::Measured,
+                        "driver-back-clear-unjudged",
+                        "sessions",
+                        false,
+                        &[("from", from.to_string()), ("back", when), ("at", at), ("count", count.to_string()), ("later", later.to_string())],
+                    ));
+                }
+            }
             recovery::Since::Between => evidence.push(ev(EvidenceKind::Unknown, "driver-back-between", "sessions", false, &[("back", when)])),
         }
     }

@@ -3414,6 +3414,28 @@ describe("ParamedicCard: what changed since the last check (B4)", () => {
     expect(text).toMatch(/No longer listed: [^.]+\./);
   });
 
+  it("review r1 F1: something unread this time that was read last time: never 'nothing changed' or a bare 'no longer listed'", async () => {
+    await opened();
+    const [driver] = first.findings;
+    const text = await again({ ...first, findings: [driver], unknowns: [...first.unknowns, "identity-unreadable"] });
+    expect(text.startsWith("Since the last check" + "This time Compy couldn't read everything it read last time, so a change may not show here.")).toBe(true);
+    expect(text).not.toContain("Nothing in the answer changed");
+    expect(text).not.toContain("nothing in the answer changed");
+    cleanup();
+    // Same rows, one more limit: still never "unchanged".
+    await opened();
+    const limited = await again({ ...first, limits: [{ kind: "game-update", code: "not-steam", args: {} }] });
+    expect(limited).toContain("This time Compy couldn't read everything it read last time");
+    expect(limited).not.toMatch(/nothing in the answer changed/i);
+  });
+
+  it("at the session cap a newer newest start is still a new session, though the count did not grow", async () => {
+    await opened();
+    const text = await again({ ...first, recorded: rec(6, "2026-11-21T20:00:00Z") });
+    expect(text).toMatch(/At least one new Game A session was recorded, the latest on .+\./);
+    expect(text).not.toContain("No new Game A session");
+  });
+
   it("an answer about another game names both and compares nothing", async () => {
     await opened();
     const text = await again({ ...first, game: "game-b", game_name: "Game B", recorded: rec(3, "2026-11-21T20:00:00Z") });
