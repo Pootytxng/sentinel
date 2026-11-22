@@ -3003,20 +3003,46 @@ mod tests {
         assert_eq!(a.gaps, vec![Gap::MalformedRecords(2)]);
     }
 
+    // Real-log reads (D1b, 2026-11-21). This test and `the_driver_read_names_the_classes_it_covers` used
+    // to read this PC's real event logs in two tests that ran in parallel, with 5 s / 10 s budgets sized
+    // for an idle machine; under load they failed pushes with `TimedOutBeforeAnyRecord`. What the real
+    // reads prove is that the readers work without elevation, say where their coverage starts and name
+    // the driver classes they cover, NOT how fast they are: the budget behaviour itself is proven on
+    // fixtures and fakes (`SourceRead::finish(.., true, ..)`, `assess` with `timed_out`, the bounded-read
+    // tests). So:
+    //  - every real event-log read of those two tests now happens HERE, one after another, in one test:
+    //    nothing runs them in parallel with each other, and no new process-wide lock is needed;
+    //  - they get a load-tolerant budget (REAL_LOG_BUDGET), passed as the reader's own parameter, so the
+    //    production budget (DEFAULT_BUDGET) is untouched;
+    //  - a timeout is still a FAILURE, never a skip: a real read that returns no record within 120 s is a
+    //    hung or broken reader, and a skip on timeout would let that pass silently forever. Only a log
+    //    that is empty, switched off or denied is skipped (see `log_readable`).
+    const REAL_LOG_BUDGET: Duration = Duration::from_secs(120);
+
     #[test]
     fn real_log_reads_report_where_their_coverage_starts() {
         let now = Utc::now();
-        for (channel, read) in [
-            ("System", read_windows_updates(now - ChronoDuration::days(30), now, Duration::from_secs(5))),
-            ("Microsoft-Windows-Kernel-PnP/Configuration", read_driver_installs(now - ChronoDuration::days(30), now, Duration::from_secs(5))),
-        ] {
+        let readers: [(&str, &dyn Fn() -> SourceRead); 2] = [
+            ("System", &|| read_windows_updates(now - ChronoDuration::days(30), now, REAL_LOG_BUDGET)),
+            ("Microsoft-Windows-Kernel-PnP/Configuration", &|| read_driver_installs(now - ChronoDuration::days(30), now, REAL_LOG_BUDGET)),
+        ];
+        let driver_labels: Vec<String> = DRIVER_CLASSES.iter().map(|(_, _, l)| (*l).to_string()).collect();
+        for (channel, read) in readers {
             if !log_readable(channel) {
                 continue;
             }
-            match read {
+            match read() {
                 SourceRead::Read(ok) => {
                     let from = ok.covered_from.expect("an event-log read always says where its coverage starts");
                     assert!(from < now);
+                    // Moved here from the_driver_read_names_the_classes_it_covers: a real driver read
+                    // names the classes it covers, and only the driver read does.
+                    let covered = ok.notes.iter().find_map(|n| match n {
+                        Note::DriverClassesCovered(v) => Some(v.clone()),
+                        _ => None,
+                    });
+                    let is_driver_read = channel == "Microsoft-Windows-Kernel-PnP/Configuration";
+                    assert_eq!(covered, is_driver_read.then(|| driver_labels.clone()), "{channel}");
                 }
                 SourceRead::Unreadable(r) => panic!("{channel} is readable without elevation: {r:?}"),
             }
@@ -3025,11 +3051,15 @@ mod tests {
 
     /// True when this machine's log can be read at all (not empty, not disabled, not denied); else
     /// prints why and the caller skips, so a machine with a cleared log does not fail the suite.
+    /// A probe that times out is NOT a reason to skip: it panics (see REAL_LOG_BUDGET above).
     fn log_readable(channel: &str) -> bool {
-        let r = run_wevtutil(channel, None, 1, false, Duration::from_secs(10))
+        let r = run_wevtutil(channel, None, 1, false, REAL_LOG_BUDGET)
             .and_then(|t| if t.timed_out { Err(UnreadableReason::TimedOutBeforeAnyRecord) } else { parse_log_start(&t.xml) });
         match r {
             Ok(_) => true,
+            Err(UnreadableReason::TimedOutBeforeAnyRecord) => {
+                panic!("{channel}: a one-record probe returned nothing within {REAL_LOG_BUDGET:?}; a hung read is a failure, not a skip")
+            }
             Err(reason) => {
                 eprintln!("skipped {channel}: unfiltered query is unreadable here ({reason:?})");
                 false
@@ -3430,20 +3460,9 @@ mod tests {
     fn the_driver_read_names_the_classes_it_covers() {
         let labels: Vec<&str> = DRIVER_CLASSES.iter().map(|(_, _, l)| *l).collect();
         assert_eq!(labels, vec!["display", "audio", "network", "chipset/system"]);
-        if !log_readable("Microsoft-Windows-Kernel-PnP/Configuration") {
-            return;
-        }
-        let now = Utc::now();
-        match read_driver_installs(now - ChronoDuration::days(3), now, Duration::from_secs(10)) {
-            SourceRead::Read(ok) => {
-                let covered = ok.notes.iter().find_map(|n| match n {
-                    Note::DriverClassesCovered(v) => Some(v.clone()),
-                    _ => None,
-                });
-                assert_eq!(covered, Some(labels.iter().map(|s| s.to_string()).collect::<Vec<_>>()));
-            }
-            SourceRead::Unreadable(r) => panic!("{r:?}"),
-        }
+        // The real read's DriverClassesCovered note is checked in
+        // real_log_reads_report_where_their_coverage_starts (D1b: one test does every real event-log
+        // read, one after another, so they no longer run in parallel and time out under load).
     }
 
     #[test]

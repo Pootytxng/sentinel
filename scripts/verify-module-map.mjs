@@ -26,11 +26,15 @@
 //   exit 0 = map matches the tree (line-count drift WARNs unless --strict)
 //   exit 1 = MISSING / GHOST / COUNT / UNSTARRED-MUTATOR / DUPLICATE / NO-MAP / SUBMAP-MISSING /
 //            STARMAP-MISSING / INDEX-DRIFT.
-// The whole check is verifyRepo(), a pure function of a repo path, because the CLI is NOT the only
-// caller: scripts/verify-module-map-guard.test.mjs runs it against this tree on every `npm test`.
-// That residency is the point. This script existed from 2026-08-02 and `main` was already red by
-// 2026-08-04 - 7c8a03f added support_evidence.rs and updated no map - because nothing ever ran it.
-// A gate nobody runs is a gate that rots.
+// The whole check is verifyRepo(), a pure function of a repo path. Until 2026-11-20 a second caller,
+// scripts/verify-module-map-guard.test.mjs, ran it against this tree on every `npm test`. 397cfe72
+// (pre-push gate limited to user safety and correctness, PRODUCT_CONSTITUTION §38) deleted that guard,
+// so NOTHING runs this script automatically now: it is a manual check only, and the map is out of date
+// (on 2026-11-21 it failed with 12 MISSING modules and a COUNT mismatch, 60 mapped vs 74 on
+// disk). Run it before trusting the map; a red result means the map is stale, not the tree.
+// History: this script existed from 2026-08-02 and `main` was already red by 2026-08-04 - 7c8a03f
+// added support_evidence.rs and updated no map - because nothing ever ran it. A gate nobody runs is a
+// gate that rots; that is the state it is in again.
 // The absent-section cases guard the f21c170 gutted-doc class: a verifier that passes vacuously on a
 // deleted contract is worse than no verifier, so an absent section is a hard failure, never a silent
 // pass - and after the split that has to hold for BOTH halves, not just the one it started with.

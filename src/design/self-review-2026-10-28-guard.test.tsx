@@ -42,7 +42,12 @@ describe("self-review 2026-10-28 guards", () => {
     const bench = readFileSync(join("src", "surfaces", "ExperimentBench.tsx"), "utf8");
     // r2: BenchWord replaced confidenceCopy (same words, now glossed); see the r2 case below.
     expect(bench).toContain('<BenchWord c={sim.confidence} kind="estimate" />');
-    expect(bench).toContain('<BenchWord c={r.confidence ?? "unknown"} kind="measured" />');
+    // The property: a tested change's summary row says its confidence through BenchWord (the shared,
+    // glossed word), with the right kind for how it was judged, and a missing confidence reads "unknown",
+    // never a blank or a raw band. Extra props (e.g. `comparisons={r.comparisons}`) may follow; the
+    // `c`, fallback and `kind` may not change.
+    expect(bench).toMatch(/<BenchWord c=\{r\.confidence \?\? "unknown"\} kind="measured"(\s+[A-Za-z]+=\{[^{}>]*\})* \/>/);
+    expect(bench).toMatch(/<BenchWord c=\{r\.confidence \?\? "unknown"\} kind="real-play"(\s+[A-Za-z]+=\{[^{}>]*\})* \/>/);
   });
 
   it("engine sentences gloss the terms inside them and keep every other word as given", () => {
@@ -99,7 +104,14 @@ describe("self-review 2026-10-28 guards", () => {
     );
     // the bench's "· Unknown" / "· Measured" / "Expected": every confidence word goes through BenchWord
     const bench = read("surfaces", "ExperimentBench.tsx");
-    expect(bench).toMatch(/<Term tip=\{t\(confidenceHintKey\(word\)\)\}>\{t\(confidenceWordKey\(word\)\)\}<\/Term>/);
+    // The property: BenchWord shows a word from the shared vocabulary (confidenceWordKey, or its
+    // counted form "Measured N times" for the same word) inside a Term carrying the shared hint for
+    // that same word. u3-focus (2026-11-21) moved the label into a `label` const for the counted form;
+    // the word, the key family and the hint are unchanged, and nothing else may supply the label.
+    expect(bench).toMatch(/<Term tip=\{t\(confidenceHintKey\(word\)\)\}>\{label\}<\/Term>/);
+    expect(bench).toMatch(
+      /const label =\s*word === "measured" && comparisons >= 2\s*\? t\("common\.confidenceWord\.measuredTimes", \{ count: comparisons \}\)\s*: t\(confidenceWordKey\(word\)\);/,
+    );
     expect(bench).not.toContain("confidenceCopy");
     // P5-realplay: a real-play summary row says its word through BenchWord too ("Likely": sessions played
     // however the owner played support the result but don't prove its cause), so there are four.
