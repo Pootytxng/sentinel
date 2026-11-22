@@ -948,7 +948,6 @@ negotiated
 neither
 net
 netadapter
-netsh
 network
 neutral
 never
