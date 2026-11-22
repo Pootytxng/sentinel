@@ -419,7 +419,14 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.recoveredDriftBack", { restored: dates.dayTime(a.restored) });
     case "drift-noticed": {
       // It went off and Compy has since read it on again: the two dates, and nothing about who turned it on.
-      if (a.restored) return t("paramedic.evidence.driftRestored", { noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored) });
+      if (a.restored) {
+        const kept = (a.titles ?? "").split(US).map((x) => x.trim()).filter(Boolean);
+        // The setting's name was kept when it went off (Compy's own change titles); an older record has none.
+        if (kept.length > 0) {
+          return t("paramedic.evidence.driftRestoredNamed", { count: kept.length, titles: kept.join(", "), noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored), ...RAW });
+        }
+        return t("paramedic.evidence.driftRestored", { noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored) });
+      }
       // Named from the same drift list Home names it from (drift-named.ts rules), and only when that list's drift is
       // the notice the engine found (same `noticed_at`): otherwise the line stays general and the next line says why.
       const line = driftLine(a.check, a.noticed, ctx, driftState(a.check, a.noticed, ctx));
@@ -867,7 +874,8 @@ const present = (xs: (string | null)[]): string[] => xs.filter((x): x is string 
 function Evidence({ list, ctx: base, hideInstallAt }: { list: ParamedicEvidence[]; ctx: Ctx; hideInstallAt?: string }) {
   // "Which setting it was isn't recorded" is said only while a drift line here could not name its setting.
   const drift = list.filter((e) => e.code === "drift-noticed");
-  const states = drift.map((e) => driftState(e.args.check, e.args.noticed, base));
+  // A restored notice that kept its titles names its own setting (the dated line prints them), whatever the live list now holds.
+  const states = drift.map((e) => (e.args.restored && (e.args.titles ?? "").trim() !== "" ? "named" : driftState(e.args.check, e.args.noticed, base)));
   // "What changed it isn't recorded" only after every drift line named its setting; "couldn't read" when any could not be matched.
   const driftAll: DriftState | undefined = states.length === 0 ? undefined : states.every((s) => s === "named") ? "named" : states.includes("notLoaded") ? "notLoaded" : "notRecorded";
   const ctx: Ctx = driftAll ? { ...base, driftState: driftAll } : base;
@@ -1216,7 +1224,10 @@ function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const byId = (id: string) => d.findings.find((f) => f.id === id);
   const s = r.summary;
   let verdict: string;
-  if (s.kind === "points-to") verdict = t("paramedic.recovered.pointsTo", { what: nameOfId(s.id, byId, ctx) });
+  // A setting read back on is never named as the reason: two sessions in the usual range show the game is back to
+  // usual, and that nothing else recorded changed in that stretch, not that this setting did it.
+  if (s.kind === "points-to" && s.id === "setting-drift") verdict = t("paramedic.recovered.settingBack");
+  else if (s.kind === "points-to") verdict = t("paramedic.recovered.pointsTo", { what: nameOfId(s.id, byId, ctx) });
   else if (s.kind === "between") {
     verdict = t("paramedic.recovered.between", {
       list: s.ids
@@ -1238,6 +1249,7 @@ function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
       <p className="gl-card-title" data-testid="paramedic-verdict">
         {verdict}
       </p>
+      {s.kind === "between" && s.ids.includes("setting-drift") && <p className="gl-para-note" data-testid="paramedic-between-cant-tell">{t("paramedic.recovered.betweenCantTell")}</p>}
       <Candidates rows={rows} rest={rest} d={d} ctx={ctx} recovered />
       {also.map((l) => (
         <p className="gl-para-note" key={l}>

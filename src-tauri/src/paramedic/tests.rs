@@ -778,7 +778,7 @@ fn the_other_changes_dont_line_up_is_said_only_when_every_runner_up_is_contradic
     assert_eq!(ids(&d), ["gpu-driver-change"]);
     assert_eq!(d.why_first, Some("cross-game"), "nothing else changed, so nothing else lines up");
     // A setting noticed changed inside the window still lines up with every rough session.
-    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: "2026-10-07T12:00:00Z".into(), cleared_at: None });
+    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: "2026-10-07T12:00:00Z".into(), cleared_at: None, titles: vec![] });
     let d = diagnose(&inp, Complaint::Slow, Some("g"));
     assert_eq!(ids(&d), ["gpu-driver-change", "setting-drift"]);
     assert_eq!(d.why_first, Some("cross-game-lead"), "the second sentence would be false here");
@@ -2761,7 +2761,7 @@ mod recovery_f3 {
     const BACK_ON: &str = "2026-10-12T18:00:00Z";
 
     fn fact(id: &str, noticed: &str, back: Option<&str>) -> DriftFact {
-        DriftFact { id: id.into(), last_ready_at: Some(SEEN_ON.into()), noticed_at: noticed.into(), cleared_at: back.map(str::to_string) }
+        DriftFact { id: id.into(), last_ready_at: Some(SEEN_ON.into()), noticed_at: noticed.into(), cleared_at: back.map(str::to_string), titles: vec![] }
     }
 
     fn follow_with(sess: Vec<SessionFacts>, facts: Vec<DriftFact>) -> Diagnosis {
@@ -2876,6 +2876,47 @@ mod recovery_f3 {
     }
 
     #[test]
+    fn the_kept_titles_travel_with_the_restored_line_and_an_older_record_names_none() {
+        let named = DriftFact { titles: vec!["Trim Windows visual effects".into(), "Enable Windows Game Mode".into()], ..fact("applied-changes", NOTICED, Some(BACK_ON)) };
+        let d = follow_with(episode(), vec![named]);
+        let line = &finding_of(&d, "setting-drift").evidence[0];
+        assert_eq!(line.code, "drift-noticed");
+        assert_eq!(line.args["titles"], "Trim Windows visual effects\u{1f}Enable Windows Game Mode");
+        // No title kept (an older record): no `titles` argument, so the card says "a setting Compy applied".
+        let d = follow(episode());
+        assert!(!finding_of(&d, "setting-drift").evidence[0].args.contains_key("titles"));
+        // A standing notice never carries kept titles: the card names it from the live drift.
+        let d = follow_with(episode(), vec![DriftFact { titles: vec!["Trim Windows visual effects".into()], ..fact("applied-changes", "2026-10-08T10:00:00Z", None) }]);
+        assert!(!finding_of(&d, "setting-drift").evidence[0].args.contains_key("titles"));
+        // The older wire shape (no `titles`) still loads.
+        let f: DriftFact = serde_json::from_str(r#"{"id":"applied-changes","noticed_at":"2026-10-06T12:00:00Z","cleared_at":"2026-10-12T18:00:00Z"}"#).unwrap();
+        assert!(f.titles.is_empty());
+    }
+
+    #[test]
+    fn two_clear_sessions_do_not_name_the_setting_when_another_change_happened_in_the_same_stretch() {
+        // The rough run was on Windows build 100; both clear sessions ran on 101: a second recorded change
+        // between them. Two usual-range sessions say the game is back to usual, not which change did it.
+        let mut sess = episode();
+        sess[4].windows_build = Some("100".into());
+        let mut a = calm(13);
+        let mut b = calm(14);
+        a.windows_build = Some("101".into());
+        b.windows_build = Some("101".into());
+        sess.extend([a, b]);
+        let d = follow(sess);
+        assert_eq!(d.state, DiagnosisState::Recovered);
+        assert_eq!(now_of(&d, "setting-drift").0, Some(NowStatus::CantTell), "the setting is not named as the reason");
+        let r = d.recovery.as_ref().expect("the recovery block");
+        match &r.summary {
+            RecoverySummary::Between { ids } => assert!(ids.contains(&"setting-drift") && ids.contains(&"windows-build-change"), "{ids:?}"),
+            other => panic!("expected Between, got {other:?}"),
+        }
+        assert!(r.also_changed.iter().any(|e| e.code == "gap-build"), "the other change is listed");
+        assert_eq!(finding_of(&d, "setting-drift").confidence, Certainty::Possible);
+    }
+
+    #[test]
     fn a_standing_notice_still_points_away_after_the_recovery_exactly_as_before() {
         let d = follow_with(with_extra(episode(), vec![calm(13), calm(14)]), vec![fact("applied-changes", "2026-10-08T10:00:00Z", None)]);
         assert_eq!(now_of(&d, "setting-drift"), (Some(NowStatus::PointsAway), vec!["recovered-drift-still"]));
@@ -2940,6 +2981,8 @@ mod recovery_f3 {
         };
         let none = follow(episode());
         assert_eq!(keys(&none, "drift-noticed"), want("drift_noticed_restored_arg_keys"));
+        let named = follow_with(episode(), vec![DriftFact { titles: vec!["Trim Windows visual effects".into()], ..fact("applied-changes", NOTICED, Some(BACK_ON)) }]);
+        assert_eq!(keys(&named, "drift-noticed"), want("drift_noticed_restored_named_arg_keys"));
         assert_eq!(keys(&none, "drift-restored-none"), want("drift_restored_none_arg_keys"));
         let rough = follow(with_extra(episode(), vec![on(13, 30.0, Some("2.0"))]));
         assert_eq!(keys(&rough, "drift-restored-rough"), want("drift_restored_rough_arg_keys"));
@@ -3146,7 +3189,7 @@ mod recovery_f3 {
 
     #[test]
     fn a_setting_notice_that_still_stands_points_away_and_an_unplaceable_one_cannot_tell() {
-        let drift = |at: &str| DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: at.into(), cleared_at: None };
+        let drift = |at: &str| DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: at.into(), cleared_at: None, titles: vec![] };
         let mk = |fact: DriftFact, unread: bool| {
             let mut inp = inputs(with_extra(episode(), two(calm)));
             inp.drift = vec![fact];
@@ -5108,6 +5151,7 @@ fn a_drift_notice_carries_the_time_it_was_noticed_and_last_seen_fine_so_the_card
         last_ready_at: Some("2026-10-07T11:30:00Z".into()),
         noticed_at: "2026-10-07T12:00:00Z".into(),
         cleared_at: None,
+        titles: vec![],
     });
     let d = diagnose(&inp, Complaint::Slow, Some("g"));
     let f = d.findings.iter().find(|f| f.id == "setting-drift").expect("noticed inside the window");
@@ -5146,7 +5190,7 @@ fn the_p3_wire_fixture_matches_what_serde_emits() {
     let mut sess = steady_on_old("g", 10);
     sess.push(rough_on_new("g", 10));
     let mut inp = inputs(sess);
-    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: Some("2026-10-07T11:30:00Z".into()), noticed_at: "2026-10-07T12:00:00Z".into(), cleared_at: None });
+    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: Some("2026-10-07T11:30:00Z".into()), noticed_at: "2026-10-07T12:00:00Z".into(), cleared_at: None, titles: vec![] });
     let drift = diagnose(&inp, Complaint::Slow, Some("g"));
     assert_eq!(keys("drift-noticed", &drift.findings), want("drift_noticed_arg_keys"));
 }

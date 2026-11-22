@@ -252,6 +252,9 @@ pub(crate) struct DriftFact {
     /// this time). `None`: the notice still stands.
     #[serde(default)]
     cleared_at: Option<String>,
+    /// f1-follow: the applied changes' titles kept when the notice cleared (empty when none was kept).
+    #[serde(default)]
+    titles: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -1242,6 +1245,7 @@ fn inputs_from_parts(
                 last_ready_at: n.last_ready_at.clone(),
                 noticed_at: n.noticed_at.clone(),
                 cleared_at: n.cleared_at.clone(),
+                titles: n.titles.clone(),
             })
             .collect(),
         sightings_unread: false,
@@ -2683,6 +2687,10 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
         }
         if let (Some(b), Some(raw)) = (back, n.cleared_at.as_ref()) {
             args.push(("restored", raw.clone()));
+            // The setting's own name, kept when it went off: the card shows it only with these dates.
+            if !n.titles.is_empty() {
+                args.push(("titles", n.titles.join("\u{1f}")));
+            }
             restored.push(b);
         }
         evidence.push(ev(EvidenceKind::Known, "drift-noticed", "drift", false, &args));

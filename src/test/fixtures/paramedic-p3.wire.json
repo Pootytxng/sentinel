@@ -3,6 +3,7 @@
   "already_running_arg_keys": ["id", "name", "n", "of"],
   "drift_noticed_arg_keys": ["check", "noticed", "ready"],
   "drift_noticed_restored_arg_keys": ["check", "noticed", "ready", "restored"],
+  "drift_noticed_restored_named_arg_keys": ["check", "noticed", "ready", "restored", "titles"],
   "drift_restored_none_arg_keys": ["restored"],
   "drift_restored_rough_arg_keys": ["restored", "at", "count"],
   "drift_restored_clear_arg_keys": ["restored", "at"],

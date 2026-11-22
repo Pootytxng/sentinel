@@ -2681,6 +2681,103 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     });
     expect(text).toMatch(/Compy read that setting back on at [^.]*\d[^.]*, before the sessions that ran normally\. That is consistent with that setting, but it doesn't prove it\./);
     expect(text).toContain("It doesn't prove why it got better.");
+    // The game being back is the measured statement (the recovery's own title); the setting is never named as the reason.
+    expect(text).toContain("Game A's last two sessions ran the way it usually does");
+    expect(screen.getByTestId("paramedic-verdict").textContent).toBe(
+      "Compy read the setting it watched back on before those two sessions, and recorded no other change in that stretch. That fits it mattering; it doesn't show it was the reason.",
+    );
+    expect(text).not.toContain("The evidence now points to");
+    expect(text).not.toMatch(/fixed|caused|likely|probably|guarantee/i);
+    expect(screen.queryByTestId("paramedic-between-cant-tell")).toBeNull();
+  });
+
+  it("two clear sessions with a second recorded change in the stretch: Compy can't tell which change mattered", async () => {
+    const back = ev("recovered-drift-back", { restored: BACK }, { kind: "supported-inference", source: "sessions" });
+    const f = suspect([], { in_play: true, now: "cant-tell", now_evidence: [back] });
+    const text = await open({
+      state: { kind: "recovered" },
+      findings: [f],
+      recovery: {
+        before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
+        rough: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
+        now: { ratio: 0.88, p99_ms: null, avg_fps: 118 },
+        rough_sessions: [ref("2026-11-20T01:01:24Z")],
+        recovered_sessions: [ref("2026-11-22T01:01:24Z"), ref("2026-11-23T01:01:24Z")],
+        sessions_since: 2,
+        summary: { kind: "between", ids: ["setting-drift", "windows-build-change"] },
+        also_changed: [{ kind: "measured", code: "gap-build", args: { from: "100", to: "101" }, against: false, source: "sessions" }],
+      } as never,
+    });
+    expect(screen.getByTestId("paramedic-between-cant-tell").textContent).toBe("More than one change was recorded in that stretch, so Compy can't tell which one mattered.");
+    expect(text).toContain("Game A's last two sessions ran the way it usually does");
+    expect(text).not.toContain("Compy read the setting it watched back on before those two sessions");
+    expect(text).not.toContain("The evidence now points to");
+    expect(text).not.toMatch(/fixed|caused|likely/i);
+  });
+
+  it("names the setting after it came back on when its titles were kept, and falls back to 'a setting Compy applied' when none were", async () => {
+    const named = (titles: string) => ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z", restored: BACK, titles });
+    const none = ev("drift-restored-none", { restored: BACK }, { kind: "unknown", source: "sessions" });
+    const one = await open({ findings: [find("setting-drift", { evidence: [named("Trim Windows visual effects"), none, unknownOf], fix: steps("setting-drift") })] });
+    expect(one).toMatch(/Compy found “Trim Windows visual effects” off on [^.]*\d[^.]*\. It was back on by [^.]*\d[^.]*\./);
+    expect(one).toContain("What changed it isn't recorded.");
+    expect(one).not.toContain("Which setting it was");
+    expect(one).not.toMatch(/fixed|caused|you turned it on/i);
+    cleanup();
+    const many = await open({ findings: [find("setting-drift", { evidence: [named("Trim Windows visual effects\u001fEnable Windows Game Mode"), none, unknownOf], fix: steps("setting-drift") })] });
+    expect(many).toMatch(/Compy found these off on [^.]*\d[^.]*: Trim Windows visual effects, Enable Windows Game Mode\. They were back on by [^.]*\d[^.]*\./);
+    cleanup();
+    // An older record kept no title: the unnamed line, and no setting is named.
+    const old = await open({ findings: [suspect([none])] });
+    expect(old).toMatch(/Compy found it off on [^.]*\d[^.]*\. It was back on by/);
+    expect(old).not.toContain("“");
+    expect(old).toContain("A setting Compy applied went off, then came back on");
+    expect(old).toContain("Compy couldn't read which setting it was just now. What changed it isn't recorded.");
+  });
+
+  it("zh-CN: the kept setting name and the two-clear-sessions sentences", async () => {
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const named = ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z", restored: BACK, titles: "Trim Windows visual effects" });
+      const none = ev("drift-restored-none", { restored: BACK }, { kind: "unknown", source: "sessions" });
+      answer.value = { ...base, why_first: null, findings: [find("setting-drift", { evidence: [named, none, unknownOf], fix: steps("setting-drift") })] };
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
+      openAll();
+      const text = screen.getByTestId("paramedic").textContent ?? "";
+      expect(text).toContain("发现“Trim Windows visual effects”是关闭的。到");
+      expect(text).toContain("时它已重新开启。");
+      expect(text).toContain("是什么改变了它，没有记录。");
+      cleanup();
+      // The two-clear-sessions sentences: the setting is not named as the reason; a second change says Compy can't tell.
+      const recovery = (summary: unknown) =>
+        ({
+          before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
+          rough: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
+          now: { ratio: 0.88, p99_ms: null, avg_fps: 118 },
+          rough_sessions: [ref("2026-11-20T01:01:24Z")],
+          recovered_sessions: [ref("2026-11-22T01:01:24Z"), ref("2026-11-23T01:01:24Z")],
+          sessions_since: 2,
+          summary,
+          also_changed: [],
+        }) as never;
+      const back = ev("recovered-drift-back", { restored: BACK }, { kind: "supported-inference", source: "sessions" });
+      answer.value = { ...base, state: { kind: "recovered" }, findings: [suspect([], { in_play: true, now: "points-to", now_evidence: [back] })], recovery: recovery({ kind: "points-to", id: "setting-drift" }) };
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByTestId("paramedic-verdict")).toBeTruthy());
+      expect(screen.getByTestId("paramedic-verdict").textContent).toBe("Compy 读到它监视的那项设置在这两次游戏之前已重新开启，而且这段时间里没有记录到其他变化。这与它有关的说法相符，但并不能证明是它让游戏变好的。");
+      cleanup();
+      answer.value = { ...base, state: { kind: "recovered" }, findings: [suspect([], { in_play: true, now: "cant-tell", now_evidence: [back] })], recovery: recovery({ kind: "between", ids: ["setting-drift", "windows-build-change"] }) };
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByTestId("paramedic-between-cant-tell")).toBeTruthy());
+      expect(screen.getByTestId("paramedic-between-cant-tell").textContent).toBe("这段时间里记录到不止一项变化，所以 Compy 无法判断是哪一项起了作用。");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("never prints 'no changes noticed' for a setting that went off or came back; it says what happened in one line", async () => {

@@ -38,12 +38,31 @@ pub(crate) struct DriftState {
     /// older app reading a newer file ignores it.
     #[serde(default)]
     cleared: HashMap<String, ClearedDrift>,
+    /// f1-follow (additive): the titles of the applied changes noticed off while a notice stands (the
+    /// applied-changes row only), so the name survives the setting coming back on. Moved into the
+    /// `cleared` entry when it is read ready again; dropped with the notice otherwise. These are the titles
+    /// the UI passed when the change was applied, so a startup-entry change can carry a typed entry name.
+    #[serde(default)]
+    noticed_titles: HashMap<String, Vec<String>>,
 }
 
 /// How long a cleared record is kept.
 pub(crate) const CLEARED_KEEP_DAYS: i64 = 30;
+/// Most titles kept for one setting.
+const KEPT_TITLES: usize = 8;
 
-/// A setting noticed off that later read ready again (timestamps only; no names, no values).
+/// Folds the titles one scan read into the ones already kept for a standing notice: no blanks, no repeats,
+/// in the order first seen, at most `KEPT_TITLES`.
+fn merge_titles(kept: &mut Vec<String>, read: &[String]) {
+    for t in read {
+        let t = t.trim();
+        if !t.is_empty() && kept.len() < KEPT_TITLES && !kept.iter().any(|k| k == t) {
+            kept.push(t.to_string());
+        }
+    }
+}
+
+/// A setting noticed off that later read ready again: times, and the titles of the applied changes that had been off.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct ClearedDrift {
     pub noticed_at: String,
@@ -52,6 +71,10 @@ pub(crate) struct ClearedDrift {
     /// The last ready scan before it went off (the earlier bound), when one was recorded.
     #[serde(default)]
     pub last_ready_at: Option<String>,
+    /// The titles of the applied changes that had been off (Compy's own catalog titles; a startup-entry change
+    /// can carry the entry's typed name). Empty for a record made before this was kept: the card then names none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub titles: Vec<String>,
 }
 
 /// Drops cleared records older than `CLEARED_KEEP_DAYS` as of `now`. A stamp that cannot be read as a
@@ -71,6 +94,7 @@ impl DriftState {
         self.cleared.contains_key(id)
             || self.last_good.contains_key(id)
             || self.noticed_at.contains_key(id)
+            || self.noticed_titles.contains_key(id)
             || self.labels.contains_key(id)
             || self.last_ready_seen.contains_key(id)
             || self.last_ready_value.contains_key(id)
@@ -206,6 +230,7 @@ pub(crate) fn detect_seen(
             state.cleared.remove(id);
             state.last_good.remove(id);
             state.noticed_at.remove(id);
+            state.noticed_titles.remove(id);
             state.labels.remove(id);
             state.last_ready_seen.remove(id);
             state.last_ready_value.remove(id);
@@ -216,10 +241,11 @@ pub(crate) fn detect_seen(
             "ready" => {
                 state.last_good.insert(id.clone(), true);
                 // The notice ends here, but the fact that it ended is kept (one entry per check).
+                let titles = state.noticed_titles.remove(id).unwrap_or_default();
                 if let Some(noticed) = state.noticed_at.remove(id) {
                     state.cleared.insert(
                         id.clone(),
-                        ClearedDrift { noticed_at: noticed, cleared_at: now.to_string(), last_ready_at: state.last_ready_seen.get(id).cloned() },
+                        ClearedDrift { noticed_at: noticed, cleared_at: now.to_string(), last_ready_at: state.last_ready_seen.get(id).cloned(), titles },
                     );
                 }
                 state.labels.remove(id);
@@ -241,6 +267,9 @@ pub(crate) fn detect_seen(
                     .or_insert_with(|| now.to_string())
                     .clone();
                 state.labels.insert(id.clone(), label.clone());
+                if !read.titles.is_empty() {
+                    merge_titles(state.noticed_titles.entry(id.clone()).or_default(), &read.titles);
+                }
                 drifts.push(Drift {
                     id: id.clone(),
                     label: label.clone(),
@@ -351,13 +380,16 @@ pub(crate) struct DriftRecord {
     pub last_ready_at: Option<String>,
     pub noticed_at: String,
     pub cleared_at: Option<String>,
+    /// The titles of the applied changes that had been off, for a cleared record only (a standing notice
+    /// is named from the live drift). Empty when none was kept.
+    pub titles: Vec<String>,
 }
 
 /// Pure mapping: every standing notice, then every cleared one (sorted by id within each).
 fn records_from(s: &DriftState) -> Vec<DriftRecord> {
     let mut v: Vec<DriftRecord> = notices_from(s)
         .into_iter()
-        .map(|n| DriftRecord { id: n.id, last_ready_at: n.last_ready_at, noticed_at: n.noticed_at, cleared_at: None })
+        .map(|n| DriftRecord { id: n.id, last_ready_at: n.last_ready_at, noticed_at: n.noticed_at, cleared_at: None, titles: Vec::new() })
         .collect();
     let mut c: Vec<DriftRecord> = s
         .cleared
@@ -367,6 +399,7 @@ fn records_from(s: &DriftState) -> Vec<DriftRecord> {
             last_ready_at: c.last_ready_at.clone(),
             noticed_at: c.noticed_at.clone(),
             cleared_at: Some(c.cleared_at.clone()),
+            titles: c.titles.clone(),
         })
         .collect();
     c.sort_by(|a, b| a.id.cmp(&b.id));
@@ -882,18 +915,60 @@ mod drift_tests {
         assert_eq!(s.cleared["vrr"].cleared_at, "2026-11-05T00:00:00Z");
     }
 
+    fn titled(titles: &[&str]) -> HashMap<String, Seen> {
+        let mut m = HashMap::new();
+        m.insert("applied-changes".to_string(), Seen { titles: titles.iter().map(|t| t.to_string()).collect(), ..Seen::default() });
+        m
+    }
+
+    #[test]
+    fn the_titles_off_when_noticed_are_kept_through_the_clear_and_nowhere_else() {
+        let (_d, s) = detect(&[obs("applied-changes", "ready")], &DriftState::default(), "2026-11-10T10:00:00Z");
+        let (d1, s) = detect_seen(&[obs("applied-changes", "attention")], &titled(&["Trim Windows visual effects"]), &s, NOV19);
+        assert_eq!(d1[0].titles, vec!["Trim Windows visual effects".to_string()]);
+        assert_eq!(s.noticed_titles["applied-changes"], vec!["Trim Windows visual effects".to_string()]);
+        // A later scan that names another one, and one that names the first again: each kept once, in order seen.
+        let (_d, s) = detect_seen(&[obs("applied-changes", "attention")], &titled(&["Enable Windows Game Mode", "Trim Windows visual effects", "  "]), &s, "2026-11-20T10:00:00Z");
+        assert_eq!(s.noticed_titles["applied-changes"], vec!["Trim Windows visual effects".to_string(), "Enable Windows Game Mode".to_string()]);
+        // A scan that could not read the titles keeps what was there.
+        let (_d, s) = detect(&[obs("applied-changes", "attention")], &s, "2026-11-20T11:00:00Z");
+        assert_eq!(s.noticed_titles["applied-changes"].len(), 2);
+        // Read ready again: the titles move into the cleared entry and out of the standing record.
+        let (_d, s) = detect(&[obs("applied-changes", "ready")], &s, NOV21);
+        assert!(s.noticed_titles.is_empty());
+        assert_eq!(s.cleared["applied-changes"].titles, vec!["Trim Windows visual effects".to_string(), "Enable Windows Game Mode".to_string()]);
+        let r = records_from(&s);
+        assert_eq!((r[0].cleared_at.as_deref(), r[0].titles.len()), (Some(NOV21), 2));
+        // Nothing standing is left behind, and the file carries the title.
+        assert!(s.labels.is_empty() && s.noticed_at.is_empty());
+        assert!(serde_json::to_string(&s).unwrap().contains("Trim Windows visual effects"));
+        // A check whose notice never named a title keeps none, and an old record has none to load.
+        let (_d, n) = detect(&[obs("vrr", "ready")], &DriftState::default(), "2026-11-01T00:00:00Z");
+        let (_d, n) = detect(&[obs("vrr", "attention")], &n, "2026-11-02T00:00:00Z");
+        let (_d, n) = detect(&[obs("vrr", "ready")], &n, "2026-11-03T00:00:00Z");
+        assert!(n.cleared["vrr"].titles.is_empty());
+        assert!(!serde_json::to_string(&n.cleared["vrr"]).unwrap().contains("titles"), "an empty list is not written");
+        let old: ClearedDrift = serde_json::from_str(r#"{"noticed_at":"a","cleared_at":"b"}"#).unwrap();
+        assert!(old.titles.is_empty() && old.last_ready_at.is_none());
+        // Never more than KEPT_TITLES.
+        let many: Vec<String> = (0..20).map(|i| format!("Change {i}")).collect();
+        let mut kept = Vec::new();
+        merge_titles(&mut kept, &many);
+        assert_eq!(kept.len(), KEPT_TITLES);
+    }
+
     #[test]
     fn a_record_older_than_thirty_days_is_pruned_and_one_inside_is_kept() {
         let mut s = DriftState::default();
-        s.cleared.insert("old".into(), ClearedDrift { noticed_at: "2026-10-01T00:00:00Z".into(), cleared_at: "2026-10-02T00:00:00Z".into(), last_ready_at: None });
-        s.cleared.insert("inside".into(), ClearedDrift { noticed_at: "2026-10-20T00:00:00Z".into(), cleared_at: "2026-10-22T00:00:00Z".into(), last_ready_at: None });
+        s.cleared.insert("old".into(), ClearedDrift { noticed_at: "2026-10-01T00:00:00Z".into(), cleared_at: "2026-10-02T00:00:00Z".into(), last_ready_at: None, titles: Vec::new() });
+        s.cleared.insert("inside".into(), ClearedDrift { noticed_at: "2026-10-20T00:00:00Z".into(), cleared_at: "2026-10-22T00:00:00Z".into(), last_ready_at: None, titles: Vec::new() });
         // 2026-11-02 is 31 days after the first and 11 after the second.
         let (_d, after) = detect(&[obs("x", "ready")], &s, "2026-11-02T00:00:01Z");
         assert!(!after.cleared.contains_key("old"), "31 days old: pruned");
         assert!(after.cleared.contains_key("inside"));
         // A stamp that is not a time is kept, never dropped on a guess.
         let mut odd = DriftState::default();
-        odd.cleared.insert("odd".into(), ClearedDrift { noticed_at: "T1".into(), cleared_at: "T2".into(), last_ready_at: None });
+        odd.cleared.insert("odd".into(), ClearedDrift { noticed_at: "T1".into(), cleared_at: "T2".into(), last_ready_at: None, titles: Vec::new() });
         let (_d, after) = detect(&[obs("x", "ready")], &odd, "2026-11-02T00:00:01Z");
         assert!(after.cleared.contains_key("odd"));
     }
