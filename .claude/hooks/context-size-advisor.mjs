@@ -72,6 +72,15 @@ const STEP_TOKENS = 30_000;
 const TAIL_BYTES = 512 * 1024; // enough to contain several recent assistant lines
 const SERIES_TURNS = 60; // bounded on purpose — a monitor that grows is the disease, not the cure
 
+// D1f: remove this hook's own stale marker files from the temp folder (at most once a day; only names
+// this hook writes; never fatal). See scripts/lib/hook-marker-sweep.mjs.
+try {
+  const { sweepOwnMarkers } = await import(new URL("../../scripts/lib/hook-marker-sweep.mjs", import.meta.url));
+  sweepOwnMarkers("context-size-advisor", tmpdir());
+} catch {
+  /* housekeeping only */
+}
+
 let input = {};
 try {
   input = JSON.parse(readFileSync(0, "utf8") || "{}");

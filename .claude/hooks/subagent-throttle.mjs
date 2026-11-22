@@ -14,7 +14,8 @@
 // sequence of them — is never flagged. Advisory only (never blocks); any read/parse error is a
 // silent allow, same failure posture as the other hooks in this repo.
 //
-// Tests: scripts/subagent-throttle-hook.test.mjs (vitest excludes .claude/**).
+// Tests: scripts/subagent-throttle-hook.test.mjs was removed in 397cfe72 (§38 gate cut); the marker
+// sweep this hook runs is tested in scripts/hook-marker-sweep.test.mjs (vitest excludes .claude/**).
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -43,7 +44,15 @@ export function decide(state, now) {
   return { state: { spawns: recent, lastWarn: now }, warning };
 }
 
-function main() {
+async function main() {
+  // D1f: remove this hook's own stale marker files from the temp folder (at most once a day; only
+  // names this hook writes; never fatal). See scripts/lib/hook-marker-sweep.mjs.
+  try {
+    const { sweepOwnMarkers } = await import(new URL("../../scripts/lib/hook-marker-sweep.mjs", import.meta.url));
+    sweepOwnMarkers("subagent-throttle", tmpdir());
+  } catch {
+    /* housekeeping only */
+  }
   let input = {};
   try {
     input = JSON.parse(readFileSync(0, "utf8") || "{}");

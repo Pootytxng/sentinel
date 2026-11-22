@@ -10,6 +10,15 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// D1f: remove this hook's own stale marker files from the temp folder (at most once a day; only names
+// this hook writes; never fatal). See scripts/lib/hook-marker-sweep.mjs.
+try {
+  const { sweepOwnMarkers } = await import(new URL("../../scripts/lib/hook-marker-sweep.mjs", import.meta.url));
+  sweepOwnMarkers("self-review-reminder", tmpdir());
+} catch {
+  /* housekeeping only */
+}
+
 let data;
 try {
   data = JSON.parse(readFileSync(0, "utf8"));
