@@ -783,23 +783,39 @@ mod tests {
     /// One guard hit: (1-based line, enclosing fn or "<top level>", what, marked, spawn sites on the line).
     type Hit = (usize, String, Option<&'static str>, bool, usize);
 
-    /// Every hit in `src`. A `Command` at the end of one line followed by `::new` at the start of the
-    /// next (a split rustfmt would never write, but which compiles) is a hit on the second line.
+    /// Every hit in `src`. A `Command::new` split over lines (which rustfmt would never write, but which
+    /// compiles) is a hit on the line where it completes. A Win32 name inside a `use` import is not a site.
     fn scan(src: &str) -> Vec<Hit> {
         let mut current_fn = String::from("<top level>");
         let mut hits = Vec::new();
-        let mut prev_tail_is_command = false;
+        // The tail of the code seen so far (whitespace removed), so a `Command::new` split over two or
+        // three lines (`Command\n::new`, `Command::\nnew`, `Command\n::\nnew`) is still seen.
+        let mut carry = String::new();
+        let mut in_use = false;
         for (i, line) in mask_source(src).iter().enumerate() {
             if let Some(f) = declared_fn(&line.blank) {
                 current_fn = f;
             }
             let (mut hit, marked, mut count) = classify(line);
             let tight: String = line.blank.chars().filter(|c| !c.is_whitespace()).collect();
-            if hit.is_none() && prev_tail_is_command && (tight.starts_with("::new") || tight.starts_with(">::new")) {
+            let joined = format!("{carry}{tight}");
+            let spans = |pat: &str| joined.contains(pat) && !tight.contains(pat) && !carry.contains(pat);
+            if hit.is_none() && (spans("Command::new") || spans("Command>::new")) {
                 (hit, count) = (Some("Command::new split across lines"), 1);
             }
-            if !tight.is_empty() {
-                prev_tail_is_command = tight.ends_with("Command") || tight.ends_with("Command>");
+            let keep = joined.chars().count().saturating_sub(16);
+            carry = joined.chars().skip(keep).collect();
+            // An import is not a spawn site (a1b review r2): a Win32 name inside a `use` statement
+            // (one or more lines, up to its `;`) does not count, unless it is renamed with `as`.
+            let trimmed = line.blank.trim_start();
+            if trimmed.starts_with("use ") || trimmed.starts_with("pub use ") || trimmed.starts_with("pub(crate) use ") {
+                in_use = true;
+            }
+            if in_use && hit == Some("process-creating Win32 call") && !line.blank.contains(" as ") {
+                (hit, count) = (None, 0);
+            }
+            if line.blank.contains(';') {
+                in_use = false;
             }
             if hit.is_some() || marked {
                 hits.push((i + 1, current_fn.clone(), hit, marked, count));
@@ -853,6 +869,11 @@ mod tests {
             r#"let c = std::process::Command ::new("x");"#,
             "let c = std::process::Command\n    ::new(\"x\");",
             "let c = <std::process::Command>\n    ::new(\"x\");",
+            // a1b review r2: splits after `::` and over three lines; a renamed Win32 import.
+            "let c = std::process::Command::\n    new(\"x\");",
+            "let c = Command\n::\nnew(\"x\");",
+            "use windows::Win32::UI::Shell::ShellExecuteExW as Run;",
+            "use w::{\n    ShellExecuteExW,\n};\nfn f() { ShellExecuteExW(&mut sei); }",
         ] {
             assert!(hit_of(bad).is_some(), "the guard must flag: {bad}");
             assert!(!scan(bad).iter().any(|h| h.3), "{bad} carries no marker");
@@ -885,9 +906,16 @@ mod tests {
             "fn f<'a>(x: &'a str) -> &'a str { x }",
             "type Count = u32;",
             "use std::process::Command;\nlet a = 1;",
+            // a1b review r2: an import is not a spawn site, one line or several.
+            "use windows::Win32::UI::Shell::{ShellExecuteExW, SHELLEXECUTEINFOW};",
+            "use windows::Win32::UI::Shell::{\n    ShellExecuteExW, SEE_MASK_NOASYNC,\n    SHELLEXECUTEINFOW,\n};",
         ] {
             assert_eq!(hit_of(fine), None, "must not flag: {fine}");
         }
+        // A whole `Command::new` on one line is one hit; the carried tail does not make the next line
+        // a second (split) hit.
+        let once = scan("let c = Command::new(\"x\");\nlet d = new(1);\nlet e = 2;");
+        assert_eq!(once.iter().map(|h| h.0).collect::<Vec<_>>(), vec![1], "{once:?}");
         // The enclosing fn is tracked, for the per-function pin.
         let src = "fn a() {}\nfn spawner() {\n    ShellExecuteExW(&mut sei) // spawn-allow: x\n}\n";
         assert_eq!(scan(src), vec![(3, "spawner".to_string(), Some("process-creating Win32 call"), true, 1)]);
@@ -909,7 +937,7 @@ mod tests {
     fn no_bare_command_new_outside_the_resolver() {
         // (file relative to src-tauri, enclosing fn, number of spawn sites). Keep this explicit and short.
         const ALLOWED: &[(&str, &str, usize)] = &[
-            ("src/actions.rs", "shell_runas_and_wait", 2), // ShellExecuteExW import + call: the one UAC runas launch
+            ("src/actions.rs", "shell_runas_and_wait", 1), // the ShellExecuteExW call: the one UAC runas launch (its import is not a site)
             ("src/actions.rs", "a_command_that_doesnt_answer_in_time_is_unread_and_ended", 1), // QA test: an absolute path that does not exist
             ("src/lib.rs", "build_dirty_predicate_flips_on_unstaged_change", 1), // test-only git, never shipped
             ("src/monitoring.rs", "start_fps_capture_locked", 1), // the FPS self-spawn of current_exe() (absolute path)

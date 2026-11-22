@@ -2235,7 +2235,9 @@ fn elevated_item_outcome(
     rec_id: &str,
 ) -> Result<(), String> {
     match run {
-        Err(e) if elevation_error_nothing_ran(e) => Err(format!(
+        // a1b review r2: an `ok` receipt can only exist if the script ran and did that item, so it is
+        // trusted even when the error text says nothing ran (the receipt is the stronger evidence).
+        Err(e) if elevation_error_nothing_ran(e) && receipts.get(rec_id) != Some(&true) => Err(format!(
             "Elevation did not complete — nothing was changed for this item. ({e})"
         )),
         Err(e) => resolve_receipt(receipts, rec_id).map_err(|reason| {
@@ -3891,10 +3893,17 @@ mod receipt_commit_tests {
         let stopped: Result<(), String> = Err(elevation_outcome(Ok(exit_status(1))).expect_err("exit 1"));
         assert!(!elevation_error_nothing_ran(stopped.as_ref().expect_err("stopped")), "the script ran");
 
-        for id in ["done", "broke", "missing"] {
+        for id in ["broke", "missing"] {
             let skip = elevated_item_outcome(&declined, &receipts, id).expect_err("a declined UAC ran nothing");
             assert!(skip.contains("nothing was changed"), "{id}: {skip}");
         }
+        // a1b review r2: an `ok` receipt is proof the script ran that item, so it wins over an error
+        // text that says nothing ran (e.g. a wait that failed after the step was done): recorded, so it
+        // can be undone, never "nothing was changed".
+        assert!(elevated_item_outcome(&declined, &receipts, "done").is_ok(), "an ok receipt is recorded");
+        let not_started: Result<(), String> = Err(crate::actions::HELPER_POWERSHELL_NOT_STARTED_MSG.to_string());
+        assert!(elevated_item_outcome(&not_started, &receipts, "done").is_ok(), "an ok receipt is recorded");
+        assert!(elevated_item_outcome(&not_started, &receipts, "missing").is_err());
         assert!(elevated_item_outcome(&stopped, &receipts, "done").is_ok(), "a finished item is recorded");
         for id in ["broke", "missing"] {
             let skip = elevated_item_outcome(&stopped, &receipts, id).expect_err("no ok receipt");
