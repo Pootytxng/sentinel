@@ -2372,7 +2372,7 @@ fn program_since(c: &Ctx, game: &str) -> Vec<Evidence> {
     let mut lines = Vec::new();
     for p in ras::PROGRAMS {
         let presence = ras::ProgramPresence { id: p.id, name: p.display_name, always_resident: p.always_resident };
-        if ras::already_running_sentence(&presence, game).is_none() || !c.affected.iter().any(|s| open_in(*s, p.id)) {
+        if ras::already_running_sentence(&presence, game).is_none() || !c.affected.iter().any(|s| open_in(s, p.id)) {
             continue;
         }
         // The newest session of this game whose start record shows it open; the sessions after it are the follow-up.
