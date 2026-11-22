@@ -227,7 +227,7 @@ describe("ParamedicCard", () => {
     await waitFor(() => expect(verdict()).toBe("Compy can't tell which of these it is yet"));
     expect(screen.queryByText("Most likely")).toBeNull();
     expect(rows().length).toBe(2);
-    expect(screen.getByText("To find out: play one session of Game A with nothing else running, then press Something's wrong again. Compy will say whether that session was rough or in the usual range.")).toBeTruthy();
+    expect(screen.getByText("To find out: play one session of Game A with nothing else running, then press Something's wrong again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet.")).toBeTruthy();
   });
 
   it("not separable without background load: does not promise that a quiet PC will tell them apart", async () => {
@@ -2614,6 +2614,18 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
   const unknownOf = ev("which-not-recorded", {}, { kind: "unknown" });
   const suspect = (after: F["evidence"], over: Partial<F> = {}) =>
     find("setting-drift", { evidence: [noticed, ...after, unknownOf], fix: steps("setting-drift"), ...over });
+  const recovery = (summary: unknown, also: F["evidence"] = []) =>
+    ({
+      before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
+      rough: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
+      now: { ratio: 0.88, p99_ms: null, avg_fps: 118 },
+      rough_sessions: [ref("2026-11-20T01:01:24Z")],
+      recovered_sessions: [ref("2026-11-22T01:01:24Z"), ref("2026-11-23T01:01:24Z")],
+      sessions_since: 2,
+      summary,
+      also_changed: also,
+    }) as never;
+  const backLine = ev("recovered-drift-back", { restored: BACK }, { kind: "supported-inference", source: "sessions" });
   async function open(d: Partial<ParamedicDiagnosis>, props: { onOpenCheck?: () => void } = {}) {
     answer.value = { ...base, why_first: null, ...d };
     render(<ParamedicCard {...props} />);
@@ -2630,7 +2642,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     expect(text).not.toContain("is no longer on");
     expect(text).toContain("No Game A session has been recorded since it was back on.");
     expect(text).not.toMatch(/fixed|caused|probably|guarantee|you turned it on/i);
-    // Nothing left to turn on: the test is a session, and no button into the health check appears even when one could open it.
+    // Nothing left to turn on: the test is a session, and no button appears even when one could open the Test room.
     expect(text).toContain("Play Game A once, then press Something's wrong again.");
     expect(screen.queryByTestId("paramedic-open-check")).toBeNull();
   });
@@ -2647,10 +2659,11 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     expect(await open({ findings: [suspect([many], { in_play: false })] })).toMatch(/Game A still ran rough in 3 sessions, the first on [A-Z][a-z]{2} \d{1,2}\./);
   });
 
-  it("one session in the usual range is 'measured once' and needs one more; it never says the setting was the reason", async () => {
+  it("one session in the usual range is 'measured once' and says what Compy needs; it never says the setting was the reason", async () => {
     const clear = ev("drift-restored-clear", { restored: BACK, at: "2026-11-22T12:00:00Z" }, { kind: "measured", source: "sessions" });
     const text = await open({ state: { kind: "cant-tell", why: { kind: "recovery-unclear", partial: false, one_clear: true, cap_changed: false } }, findings: [suspect([clear])] });
-    expect(text).toContain("After it was back on, Game A's next session ran in its usual range. One session; Compy needs one more to be sure.");
+    expect(text).toMatch(/After it was back on, Game A's session on [A-Z][a-z]{2} \d{1,2} ran in its usual range\. One session so far; Compy says a game is back in its usual range after two\./);
+    expect(text).not.toContain("One session; Compy needs one more to be sure.");
     expect(text).not.toMatch(/the reason|fixed|caused|probably/i);
     expect(screen.queryAllByText("Weakens this").length).toBe(0);
   });
@@ -2663,69 +2676,99 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
   });
 
   it("two clear sessions: the recovery says it is consistent with the setting and does not prove it", async () => {
-    const back = ev("recovered-drift-back", { restored: BACK }, { kind: "supported-inference", source: "sessions" });
-    const f = suspect([], { in_play: true, now: "points-to", now_evidence: [back] });
-    const text = await open({
-      state: { kind: "recovered" },
-      findings: [f],
-      recovery: {
-        before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
-        rough: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
-        now: { ratio: 0.88, p99_ms: null, avg_fps: 118 },
-        rough_sessions: [ref("2026-11-20T01:01:24Z")],
-        recovered_sessions: [ref("2026-11-22T01:01:24Z"), ref("2026-11-23T01:01:24Z")],
-        sessions_since: 2,
-        summary: { kind: "points-to", id: "setting-drift" },
-        also_changed: [],
-      } as never,
-    });
+    const f = suspect([], { in_play: true, now: "points-to", now_evidence: [backLine] });
+    const text = await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery({ kind: "points-to", id: "setting-drift" }) });
     expect(text).toMatch(/Compy read that setting back on at [^.]*\d[^.]*, before the sessions that ran normally\. That is consistent with that setting, but it doesn't prove it\./);
     expect(text).toContain("It doesn't prove why it got better.");
     // The game being back is the measured statement (the recovery's own title); the setting is never named as the reason.
     expect(text).toContain("Game A's last two sessions ran the way it usually does");
     expect(screen.getByTestId("paramedic-verdict").textContent).toBe(
-      "Compy read the setting it watched back on before those two sessions, and recorded no other change in that stretch. That fits it mattering; it doesn't show it was the reason.",
+      "Compy read the setting back on before those two sessions. Among the changes Compy keeps track of (drivers, Windows updates, game files, installed programs), it found no other one in that stretch. That's consistent with the setting being what mattered, but it doesn't prove it.",
     );
+    expect(text).not.toContain("recorded no other change");
     expect(text).not.toContain("The evidence now points to");
     expect(text).not.toMatch(/fixed|caused|likely|probably|guarantee/i);
     expect(screen.queryByTestId("paramedic-between-cant-tell")).toBeNull();
   });
 
+  it("two clear sessions with several settings kept say 'those settings', not 'the setting'", async () => {
+    const two = ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z", restored: BACK, titles: "Trim Windows visual effects\u001fEnable Windows Game Mode" });
+    const f = find("setting-drift", { evidence: [two, unknownOf], fix: steps("setting-drift"), in_play: true, now: "points-to", now_evidence: [backLine] });
+    await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery({ kind: "points-to", id: "setting-drift" }) });
+    expect(screen.getByTestId("paramedic-verdict").textContent).toBe(
+      "Compy read those settings back on before those two sessions. Among the changes Compy keeps track of (drivers, Windows updates, game files, installed programs), it found no other one in that stretch. That's consistent with those settings being what mattered, but it doesn't prove it.",
+    );
+  });
+
   it("two clear sessions with a second recorded change in the stretch: Compy can't tell which change mattered", async () => {
-    const back = ev("recovered-drift-back", { restored: BACK }, { kind: "supported-inference", source: "sessions" });
-    const f = suspect([], { in_play: true, now: "cant-tell", now_evidence: [back] });
+    const f = suspect([], { in_play: true, now: "cant-tell", now_evidence: [backLine] });
+    const gap = { kind: "measured", code: "gap-build", args: { from: "100", to: "101" }, against: false, source: "sessions" } as F["evidence"][number];
     const text = await open({
       state: { kind: "recovered" },
       findings: [f],
-      recovery: {
-        before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
-        rough: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
-        now: { ratio: 0.88, p99_ms: null, avg_fps: 118 },
-        rough_sessions: [ref("2026-11-20T01:01:24Z")],
-        recovered_sessions: [ref("2026-11-22T01:01:24Z"), ref("2026-11-23T01:01:24Z")],
-        sessions_since: 2,
-        summary: { kind: "between", ids: ["setting-drift", "windows-build-change"] },
-        also_changed: [{ kind: "measured", code: "gap-build", args: { from: "100", to: "101" }, against: false, source: "sessions" }],
-      } as never,
+      recovery: recovery({ kind: "between", ids: ["setting-drift", "windows-build-change"] }, [gap]),
     });
     expect(screen.getByTestId("paramedic-between-cant-tell").textContent).toBe("More than one change was recorded in that stretch, so Compy can't tell which one mattered.");
     expect(text).toContain("Game A's last two sessions ran the way it usually does");
-    expect(text).not.toContain("Compy read the setting it watched back on before those two sessions");
+    expect(text).not.toContain("Compy read the setting back on before those two sessions");
     expect(text).not.toContain("The evidence now points to");
     expect(text).not.toMatch(/fixed|caused|likely/i);
   });
 
+  it("'more than one change was recorded' is said only when the stretch recorded one: not for rows still standing, not for an unread stamp", async () => {
+    const f = suspect([], { in_play: true, now: "cant-tell", now_evidence: [backLine] });
+    const summary = { kind: "between", ids: ["setting-drift", "background-load"] };
+    await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery(summary, []) });
+    expect(screen.queryByTestId("paramedic-between-cant-tell")).toBeNull();
+    cleanup();
+    const unreadBuild = ev("recovery-build-unread", {}, { kind: "unknown", source: "sessions" });
+    await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery(summary, [unreadBuild]) });
+    expect(screen.queryByTestId("paramedic-between-cant-tell")).toBeNull();
+  });
+
+  it("an unread build or count is said by name, and 'no other one in that stretch' is not said", async () => {
+    for (const [code, line] of [
+      ["recovery-build-unread", "Compy has no Windows build for one of those sessions."],
+      ["recovery-compy-unread", "Compy has no change count for one of those sessions."],
+    ] as const) {
+      const f = suspect([], { in_play: true, now: "cant-tell", now_evidence: [backLine] });
+      const text = await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery({ kind: "none" }, [ev(code, {}, { kind: "unknown", source: "sessions" })]) });
+      expect(text, code).toContain(line);
+      expect(text, code).not.toContain("found no other one in that stretch");
+      expect(text, code).not.toContain("recorded no other change");
+      cleanup();
+    }
+  });
+
+  it("the count that came back up with the setting is said on the setting's row, and nothing else competes", async () => {
+    const restore = ev("compy-changes-restore", { from: "12", to: "13" }, { source: "sessions" });
+    const f = suspect([], { in_play: true, now: "points-to", now_evidence: [backLine, restore] });
+    const text = await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery({ kind: "points-to", id: "setting-drift" }) });
+    expect(text).toContain("Compy's count of changes that are on went from 12 to 13 between the rough sessions and the ones that ran normally, back to where it was before. That is what turning that setting back on would do.");
+    expect(screen.queryByTestId("paramedic-between-cant-tell")).toBeNull();
+    expect(text).not.toContain("also changed");
+  });
+
   it("names the setting after it came back on when its titles were kept, and falls back to 'a setting Compy applied' when none were", async () => {
-    const named = (titles: string) => ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z", restored: BACK, titles });
+    const named = (titles: string, seen?: string) =>
+      ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z", restored: BACK, titles, ...(seen ? { seen } : {}) });
     const none = ev("drift-restored-none", { restored: BACK }, { kind: "unknown", source: "sessions" });
     const one = await open({ findings: [find("setting-drift", { evidence: [named("Trim Windows visual effects"), none, unknownOf], fix: steps("setting-drift") })] });
-    expect(one).toMatch(/Compy found “Trim Windows visual effects” off on [^.]*\d[^.]*\. It was back on by [^.]*\d[^.]*\./);
+    expect(one).toMatch(/Compy found “Trim Windows visual effects” \(off on [^)]*\d[^)]*\)\. It was back on by [^.]*\d[^.]*\./);
     expect(one).toContain("What changed it isn't recorded.");
     expect(one).not.toContain("Which setting it was");
     expect(one).not.toMatch(/fixed|caused|you turned it on/i);
     cleanup();
-    const many = await open({ findings: [find("setting-drift", { evidence: [named("Trim Windows visual effects\u001fEnable Windows Game Mode"), none, unknownOf], fix: steps("setting-drift") })] });
-    expect(many).toMatch(/Compy found these off on [^.]*\d[^.]*: Trim Windows visual effects, Enable Windows Game Mode\. They were back on by [^.]*\d[^.]*\./);
+    // Two titles first read off at different times: each keeps its own time, so one is never given the other's.
+    const many = await open({
+      findings: [
+        find("setting-drift", {
+          evidence: [named("Trim Windows visual effects\u001fEnable Windows Game Mode", `${NOTICED}\u001f2026-11-20T09:30:00Z`), none, unknownOf],
+          fix: steps("setting-drift"),
+        }),
+      ],
+    });
+    expect(many).toMatch(/Compy found these off: “Trim Windows visual effects” \(off on [^)]*Nov 19[^)]*\), “Enable Windows Game Mode” \(off on [^)]*Nov 20[^)]*\)\. They were back on by [^.]*\d[^.]*\./);
     cleanup();
     // An older record kept no title: the unnamed line, and no setting is named.
     const old = await open({ findings: [suspect([none])] });
@@ -2735,42 +2778,53 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     expect(old).toContain("Compy couldn't read which setting it was just now. What changed it isn't recorded.");
   });
 
-  it("zh-CN: the kept setting name and the two-clear-sessions sentences", async () => {
+  it("zh-CN: the kept setting name, a per-title time, and the two-clear-sessions sentences", async () => {
     const i18n = (await import("../../i18n")).default;
     await i18n.changeLanguage("zh-CN");
     try {
-      const named = ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z", restored: BACK, titles: "Trim Windows visual effects" });
+      const named = (titles: string, seen?: string) =>
+        ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z", restored: BACK, titles, ...(seen ? { seen } : {}) });
       const none = ev("drift-restored-none", { restored: BACK }, { kind: "unknown", source: "sessions" });
-      answer.value = { ...base, why_first: null, findings: [find("setting-drift", { evidence: [named, none, unknownOf], fix: steps("setting-drift") })] };
+      answer.value = { ...base, why_first: null, findings: [find("setting-drift", { evidence: [named("Trim Windows visual effects"), none, unknownOf], fix: steps("setting-drift") })] };
       render(<ParamedicCard />);
       fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
       await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
       openAll();
       const text = screen.getByTestId("paramedic").textContent ?? "";
-      expect(text).toContain("发现“Trim Windows visual effects”是关闭的。到");
-      expect(text).toContain("时它已重新开启。");
+      expect(text).toMatch(/发现以下设置是关闭的：“Trim Windows visual effects”（[^）]*发现是关闭的）。到/);
+      expect(text).toContain("时已重新开启。");
       expect(text).toContain("是什么改变了它，没有记录。");
       cleanup();
+      // Two titles: one pair of quotes each (never one pair around the whole list), each with its own time.
+      answer.value = {
+        ...base,
+        why_first: null,
+        findings: [find("setting-drift", { evidence: [named("A one\u001fB two", `${NOTICED}\u001f2026-11-20T09:30:00Z`), none, unknownOf], fix: steps("setting-drift") })],
+      };
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
+      openAll();
+      const two = screen.getByTestId("paramedic").textContent ?? "";
+      expect(two).toMatch(/发现以下设置是关闭的：“A one”（[^）]*19[^）]*发现是关闭的）、“B two”（[^）]*20[^）]*发现是关闭的）。到/);
+      expect(two).not.toContain("“A one, B two”");
+      cleanup();
       // The two-clear-sessions sentences: the setting is not named as the reason; a second change says Compy can't tell.
-      const recovery = (summary: unknown) =>
-        ({
-          before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
-          rough: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
-          now: { ratio: 0.88, p99_ms: null, avg_fps: 118 },
-          rough_sessions: [ref("2026-11-20T01:01:24Z")],
-          recovered_sessions: [ref("2026-11-22T01:01:24Z"), ref("2026-11-23T01:01:24Z")],
-          sessions_since: 2,
-          summary,
-          also_changed: [],
-        }) as never;
-      const back = ev("recovered-drift-back", { restored: BACK }, { kind: "supported-inference", source: "sessions" });
-      answer.value = { ...base, state: { kind: "recovered" }, findings: [suspect([], { in_play: true, now: "points-to", now_evidence: [back] })], recovery: recovery({ kind: "points-to", id: "setting-drift" }) };
+      answer.value = { ...base, state: { kind: "recovered" }, findings: [suspect([], { in_play: true, now: "points-to", now_evidence: [backLine] })], recovery: recovery({ kind: "points-to", id: "setting-drift" }) };
       render(<ParamedicCard />);
       fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
       await waitFor(() => expect(screen.getByTestId("paramedic-verdict")).toBeTruthy());
-      expect(screen.getByTestId("paramedic-verdict").textContent).toBe("Compy 读到它监视的那项设置在这两次游戏之前已重新开启，而且这段时间里没有记录到其他变化。这与它有关的说法相符，但并不能证明是它让游戏变好的。");
+      expect(screen.getByTestId("paramedic-verdict").textContent).toBe(
+        "Compy 读到相关设置在这两次游戏之前已重新开启。在 Compy 会留意的更改（驱动程序、Windows 更新、游戏文件、已安装的程序）中，那段时间里没有发现其他更改。这与这些设置确实起了作用的说法相符，但并不能证明。",
+      );
       cleanup();
-      answer.value = { ...base, state: { kind: "recovered" }, findings: [suspect([], { in_play: true, now: "cant-tell", now_evidence: [back] })], recovery: recovery({ kind: "between", ids: ["setting-drift", "windows-build-change"] }) };
+      const gap = { kind: "measured", code: "gap-build", args: { from: "100", to: "101" }, against: false, source: "sessions" } as F["evidence"][number];
+      answer.value = {
+        ...base,
+        state: { kind: "recovered" },
+        findings: [suspect([], { in_play: true, now: "cant-tell", now_evidence: [backLine] })],
+        recovery: recovery({ kind: "between", ids: ["setting-drift", "windows-build-change"] }, [gap]),
+      };
       render(<ParamedicCard />);
       fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
       await waitFor(() => expect(screen.getByTestId("paramedic-between-cant-tell")).toBeTruthy());
@@ -2796,23 +2850,74 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     expect(none).toContain("Settings Compy watches: no changes noticed.");
   });
 
-  it("the unrestored suspect points to the health check with a button that only opens it and asks for that row", async () => {
-    const off = ev("drift-noticed", { check: "applied-changes", noticed: NOTICED, ready: "2026-11-18T12:00:00Z" });
-    const onOpenCheck = vi.fn();
-    const text = await open({ findings: [find("setting-drift", { evidence: [off, unknownOf], fix: steps("setting-drift") })] }, { onOpenCheck });
-    expect(text).toContain("Turn the setting back on from the health check, where Compy asks you to confirm first.");
-    expect(onOpenCheck).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId("paramedic-open-check"));
-    expect(onOpenCheck).toHaveBeenCalledTimes(1);
-    const { takeCheckFocus } = await import("../check-focus");
-    expect(takeCheckFocus("applied-changes")).toBe(true);
-    expect(takeCheckFocus("applied-changes")).toBe(false);
-    // The card applies nothing itself: no apply call went out.
-    expect(answer.calls.every((c) => c[0] === "paramedic_diagnose")).toBe(true);
-    // Without a screen to open there is no button.
-    cleanup();
-    await open({ findings: [find("setting-drift", { evidence: [off, unknownOf], fix: steps("setting-drift") })] });
-    expect(screen.queryByTestId("paramedic-open-check")).toBeNull();
+  it("a check that is not the applied changes never says 'back on': it says it changed and read as before again", async () => {
+    const moved = { id: "setting-drift-moved", args: { check: "monitor-refresh", noticed: NOTICED, restored: BACK } };
+    const text = await open({ findings: [find("background-load", { fix: steps("background-load") })], not_it: [], seen: [moved] });
+    expect(text).toMatch(/Compy noticed a setting it watches had changed on [^.]*\d[^.]*\. It read as before again by [^.]*\d[^.]*\./);
+    expect(text).not.toContain("was back on by");
+    expect(text).not.toContain("Settings Compy watches: no changes noticed.");
+  });
+
+  it("a stretch that opened before the record reaches back says so, not 'no changes noticed'", async () => {
+    const text = await open({ findings: [find("background-load", { fix: steps("background-load") })], not_it: [], unknowns: ["drift-horizon"] });
+    expect(text).toContain("Compy keeps a record of setting changes for 30 days, and this stretch began before that, so it can't say whether a setting changed.");
+    expect(text).not.toContain("Settings Compy watches: no changes noticed.");
+  });
+
+  describe("the turn-it-back-on step and button (they open the Test room, for the applied-changes setting only)", () => {
+    const off = (check: string) => ev("drift-noticed", { check, noticed: NOTICED, ready: "2026-11-18T12:00:00Z" });
+
+    it("the applied-changes setting: the step names the room, the button opens it and asks for that row, once", async () => {
+      const onOpenCheck = vi.fn();
+      const text = await open({ findings: [find("setting-drift", { evidence: [off("applied-changes"), unknownOf], fix: steps("setting-drift") })] }, { onOpenCheck });
+      expect(text).toContain("Turn it back on in Test, where Compy asks you to confirm first. Also check any Windows setting you changed yourself.");
+      expect(text).not.toContain("health check");
+      expect(onOpenCheck).not.toHaveBeenCalled();
+      const { checkFocusPending, takeCheckFocus } = await import("../check-focus");
+      takeCheckFocus("applied-changes");
+      const button = screen.getByTestId("paramedic-open-check");
+      expect(button.textContent).toBe("Open Test");
+      fireEvent.click(button);
+      expect(onOpenCheck).toHaveBeenCalledTimes(1);
+      expect(checkFocusPending()).toBe(true);
+      expect(takeCheckFocus("applied-changes")).toBe(true);
+      expect(takeCheckFocus("applied-changes")).toBe(false);
+      // The card applies nothing itself: no apply call went out.
+      expect(answer.calls.every((c) => c[0] === "paramedic_diagnose")).toBe(true);
+      // Without a screen to open there is no button.
+      cleanup();
+      await open({ findings: [find("setting-drift", { evidence: [off("applied-changes"), unknownOf], fix: steps("setting-drift") })] });
+      expect(screen.queryByTestId("paramedic-open-check")).toBeNull();
+    });
+
+    it("any other setting keeps the plain advice and has no button, alone or beside the applied changes", async () => {
+      for (const evidence of [[off("monitor-refresh")], [off("applied-changes"), off("power-profile")]]) {
+        const onOpenCheck = vi.fn();
+        const text = await open({ findings: [find("setting-drift", { evidence: [...evidence, unknownOf], fix: steps("setting-drift") })] }, { onOpenCheck });
+        expect(text).toContain("Open History to see what Compy changed, and check any Windows setting you changed yourself.");
+        expect(text).not.toContain("Turn it back on in Test");
+        expect(screen.queryByTestId("paramedic-open-check")).toBeNull();
+        expect(onOpenCheck).not.toHaveBeenCalled();
+        cleanup();
+      }
+    });
+
+    it("names the room from the room-name key, in both languages", async () => {
+      const i18n = (await import("../../i18n")).default;
+      await i18n.changeLanguage("zh-CN");
+      try {
+        answer.value = { ...base, why_first: null, findings: [find("setting-drift", { evidence: [off("applied-changes"), unknownOf], fix: steps("setting-drift") })] };
+        render(<ParamedicCard onOpenCheck={vi.fn()} />);
+        fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+        await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
+        openAll();
+        const text = screen.getByTestId("paramedic").textContent ?? "";
+        expect(text).toContain("到“测试”里把它重新开启，开启前 Compy 会先请你确认。也请检查你自己改过的 Windows 设置。");
+        expect(screen.getByTestId("paramedic-open-check").textContent).toBe("打开“测试”");
+      } finally {
+        await i18n.changeLanguage("en");
+      }
+    });
   });
 
   it("says 'try one thing at a time' only when two suspects can be tested", async () => {
@@ -2823,17 +2928,38 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     expect(one).not.toContain("Try one thing at a time");
   });
 
-  it("no longer promises a comparison it does not make", async () => {
+  it("promises no comparison it does not make, and names all three answers it can give, in both languages", async () => {
     const text = await open({
       findings: [
         find("gpu-driver-change", { fix: steps("gpu-driver-change", { from: "1.0" }) }),
         find("setting-drift", { fix: steps("setting-drift") }),
       ],
     });
-    for (const s of [text, loadKeys("en"), loadKeys("zh-CN")].map((x) => (typeof x === "string" ? x : JSON.stringify(x)))) {
+    for (const s of [text, loadKeys("en")].map((x) => (typeof x === "string" ? x : JSON.stringify(x)))) {
       expect(s).not.toMatch(/will compare|compare it with how it usually runs|until a fix is checked/);
     }
-    expect(text).toContain("Compy will say whether that session was rough or in the usual range. It needs two sessions in the usual range before it says Game A is back to normal.");
+    expect(text).toContain("Compy will say whether that session was rough or in the usual range, or that it can't tell yet. It needs two sessions in the usual range before it says Game A is back to normal.");
+    // The Chinese file is held to Chinese words for the same two promises, so this half can fail on its own.
+    const promises: [string, string][] = [
+      ["fix", "gpuDriver"],
+      ["nothingChanged", "next"],
+      ["notSeparable", "next"],
+      ["next", "possible"],
+      ["recovered", "next"],
+    ];
+    const zhPromises = promises.map(([sec, k]) => JSON.stringify(sec === "fix" ? (loadKeys("zh-CN").fix.gpuDriver as Record<string, string>).step5 : loadKeys("zh-CN")[sec][k]));
+    for (const s of zhPromises) expect(s).not.toMatch(/将.{0,10}比较|会.{0,6}(拿它|把它).{0,10}比较|直到.{0,8}(检查|验证)/);
+    const step5 = (loadKeys("zh-CN").fix.gpuDriver as Record<string, string>).step5;
+    expect(step5).toContain("Compy 会告诉你这一次是不顺，还是在平时的范围内，或者还看不出来。");
+    for (const [sec, k] of [
+      ["nothingChanged", "next"],
+      ["notSeparable", "next"],
+      ["next", "possible"],
+      ["recovered", "next"],
+    ] as const) {
+      expect(String(loadKeys("zh-CN")[sec][k]), `zh ${sec}.${k}`).toContain("或者还看不出来");
+      expect(String(loadKeys("en")[sec][k]), `en ${sec}.${k}`).toContain("or that it can't tell yet");
+    }
   });
 
   it("says the same in Chinese from the zh-CN keys, with the same placeholders", async () => {
@@ -2849,14 +2975,27 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       ["evidence", "driftRestoredRough_other"],
       ["evidence", "driftRestoredClear"],
       ["evidence", "driftRestoredBetween"],
+      ["evidence", "driftRestoredItem"],
+      ["evidence", "driftRestoredNamed_one"],
+      ["evidence", "driftRestoredNamed_other"],
       ["evidence", "recoveredDriftBack"],
+      ["evidence", "compyChangesRestore"],
+      ["evidence", "recoveredCompyExplained"],
+      ["unknown", "driftHorizon"],
       ["seen", "settingMoved"],
       ["seen", "settingMovedBack"],
-      ["fix", "gpuDriver"],
+      ["seen", "settingMovedReadAgain"],
+      ["recovered", "settingBack_one"],
+      ["recovered", "settingBack_other"],
     ];
-    for (const [sec, k] of keys.slice(0, -1)) expect(ph(zh[sec][k]), `${sec}.${k}`).toBe(ph(en[sec][k]));
-    expect(ph((zh.fix.gpuDriver as Record<string, string>).step5)).toBe(ph((en.fix.gpuDriver as Record<string, string>).step5));
-    expect(ph((zh.fix.settingDrift as Record<string, string>).stepBackOn)).toBe(ph((en.fix.settingDrift as Record<string, string>).stepBackOn));
+    for (const [sec, k] of keys) expect(ph(zh[sec][k]), `${sec}.${k}`).toBe(ph(en[sec][k]));
+    const fixPh = (g: string, k: string) => [ph((zh.fix[g] as Record<string, string>)[k]), ph((en.fix[g] as Record<string, string>)[k])];
+    for (const [g, k] of [["gpuDriver", "step5"], ["settingDrift", "stepBackOn"], ["settingDrift", "stepTurnOn"], ["settingDrift", "openCheck"]]) {
+      const [z, e] = fixPh(g, k);
+      expect(z, `fix.${g}.${k}`).toBe(e);
+    }
+    // zh has only the "other" plural form: both forms are the same sentence.
+    expect(zh.recovered.settingBack_one).toBe(zh.recovered.settingBack_other);
     const i18n = (await import("../../i18n")).default;
     await i18n.changeLanguage("zh-CN");
     try {

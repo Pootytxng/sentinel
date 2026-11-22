@@ -295,7 +295,6 @@
     "settingDrift": {
       "what": "Compy 监视的某项设置变了",
       "applied": "Compy 开启的某项设置已不再开启",
-      "restored": "Compy 监视的某项设置先关闭、后又重新开启",
       "appliedRestored": "Compy 开启的某项设置先关闭、后又重新开启"
     },
     "compyChange": {
@@ -378,16 +377,19 @@
     "driftOther": "Compy 注意到它监视的某项设置变了。",
     "driftOtherNamed": "Compy 注意到它监视的某项设置变了：{{what}}。",
     "driftRestored": "Compy 在 {{noticed}} 发现它是关闭的。到 {{restored}} 时它已重新开启。",
-    "driftRestoredNamed_one": "Compy 在 {{noticed}} 发现“{{titles}}”是关闭的。到 {{restored}} 时它已重新开启。",
-    "driftRestoredNamed_other": "Compy 在 {{noticed}} 发现“{{titles}}”是关闭的。到 {{restored}} 时它已重新开启。",
+    "driftRestoredNamed_one": "Compy 发现以下设置是关闭的：{{titles}}。到 {{restored}} 时已重新开启。",
+    "driftRestoredNamed_other": "Compy 发现以下设置是关闭的：{{titles}}。到 {{restored}} 时已重新开启。",
+    "driftRestoredItem": "“{{title}}”（{{noticed}} 发现是关闭的）",
     "driftRestoredNone": "自它重新开启以来，还没有记录到 {{game}} 的游戏。",
     "driftRestoredUnjudged_one": "自它重新开启以来，记录到 {{count}} 次 {{game}} 的游戏，但时间太短或只测量了一部分，所以 Compy 没有做判断。",
     "driftRestoredUnjudged_other": "自它重新开启以来，记录到 {{count}} 次 {{game}} 的游戏，但时间太短或只测量了一部分，所以 Compy 没有做判断。",
     "driftRestoredRough_one": "它重新开启之后（{{restored}}），{{game}} 在 {{date}} 仍然不顺。",
     "driftRestoredRough_other": "它重新开启之后（{{restored}}），{{game}} 仍有 {{count}} 次不顺，最早的一次在 {{date}}。",
-    "driftRestoredClear": "它重新开启之后，{{game}} 的下一次游戏表现在平时的范围内。只有一次；Compy 还需要再多一次才能确定。",
+    "driftRestoredClear": "它重新开启之后，{{game}} 在 {{date}} 的那次游戏表现在平时的范围内。目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。",
     "driftRestoredBetween": "它重新开启之后的几次游戏，并不明确在 {{game}} 平时的范围内，所以 Compy 暂时还无法判断。",
     "recoveredDriftBack": "Compy 读到那项设置在 {{restored}} 已重新开启，早于运行正常的那几次游戏。这与那项设置有关的说法相符，但并不能证明。",
+    "compyChangesRestore": "在卡顿的游戏和运行正常的那几次之间，Compy 已开启的更改数量从 {{from}} 项变成 {{to}} 项，回到了之前的数量。把那项设置重新开启，正是会出现这样的变化。",
+    "recoveredCompyExplained": "Compy 已开启的更改数量从 {{from}} 项变成 {{to}} 项，这发生在那项设置被重新开启的时候，所以不算另一项更改。",
     "whichNotRecorded": "具体是哪项设置、是什么改变了它，没有记录。",
     "whichChangedNotRecorded": "是什么改变了它，没有记录。",
     "whichNotLoaded": "Compy 刚才没能读取具体是哪项设置。是什么改变了它，没有记录。",
@@ -514,7 +516,7 @@
       "step2": "展开“显示适配器”，双击你的显卡，再打开“驱动程序”选项卡。",
       "step3": "如果“回退驱动程序”可以点击，就点击它并重启。你之前的版本是 {{from}}。",
       "step4": "如果它是灰色的，就到显卡厂商的历史驱动页面下载 {{from}}，运行它，并选择“干净安装”。",
-      "step5": "然后玩一次 {{game}}，再按一次“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内。要连续两次在平时的范围内，它才会说 {{game}} 已恢复正常。"
+      "step5": "然后玩一次 {{game}}，再按一次“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内，或者还看不出来。要连续两次在平时的范围内，它才会说 {{game}} 已恢复正常。"
     },
     "backgroundLoad": {
       "step1": "玩游戏时请关闭 {{names}}。",
@@ -527,10 +529,11 @@
       "step2": "玩一次 {{game}}，再按一次“出问题了”。"
     },
     "settingDrift": {
-      "step1": "在健康检查里把这项设置重新开启，开启前 Compy 会先请你确认。也请检查你自己改过的 Windows 设置。",
+      "step1": "打开“历史记录”查看 Compy 改过什么，并检查你自己改过的 Windows 设置。",
+      "stepTurnOn": "到“{{room}}”里把它重新开启，开启前 Compy 会先请你确认。也请检查你自己改过的 Windows 设置。",
       "step2": "玩一次 {{game}}，再按一次“出问题了”。",
       "stepBackOn": "Compy 读到它在 {{restored}} 时已重新开启。玩一次 {{game}}，再按一次“出问题了”。",
-      "openCheck": "打开健康检查"
+      "openCheck": "打开“{{room}}”"
     },
     "compyChange": {
       "step1": "打开“历史记录”，查看 Compy 开启的更改，并撤销最新的一项。",
@@ -625,6 +628,7 @@
     "display": "你的屏幕刷新率",
     "windowsBuild": "当时用的是哪个 Windows 版本",
     "driftTiming": "有些被监视的设置是什么时候变的",
+    "driftHorizon": "Compy 只保留 30 天的设置变化记录，而这段时间的开头早于这个期限，所以无法判断是否有设置变过。",
     "driftUnreadable": "它的设置变化记录（读取失败）",
     "identityUnreadable": "它的显卡驱动和电源计划检查记录（读取失败）",
     "modsNoFolder": "{{game}} 的文件夹里有没有图形 mod(Compy 没能把游戏对应到安装文件夹)",
@@ -657,12 +661,12 @@
   },
   "nothingChanged": {
     "title": "Compy 测到了问题，但它记录的内容在此之前没有变化",
-    "next": "再玩一次，然后再按一次“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内。"
+    "next": "再玩一次，然后再按一次“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内，或者还看不出来。"
   },
   "footer": "Compy 只列出问题出现之前发生了什么变化。它不会声称知道原因。",
   "notSeparable": {
     "title": "Compy 暂时还分不清是下面哪一项",
-    "next": "要查明：请在没有运行其他程序的情况下玩一次 {{game}}，再按一次“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内。",
+    "next": "要查明：请在没有运行其他程序的情况下玩一次 {{game}}，再按一次“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内，或者还看不出来。",
     "nextOther": "请再玩一次 {{game}}。Compy 可能仍然分不清这几项。"
   },
   "cap": {
@@ -673,6 +677,7 @@
   "seen": {
     "settingMoved": "Compy 在 {{noticed}} 发现它监视的某项设置是关闭的。",
     "settingMovedBack": "Compy 在 {{noticed}} 发现它监视的某项设置是关闭的。到 {{restored}} 时它已重新开启。",
+    "settingMovedReadAgain": "Compy 在 {{noticed}} 发现它监视的某项设置变了。到 {{restored}} 时它又读到和之前一样了。",
     "updatesMinor": "{{n}}个安全定义更新和{{m}}个应用更新(仅供完整列出)。",
     "programsInstalled_one": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
     "programsInstalled_other": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
@@ -764,7 +769,7 @@
   },
   "next": {
     "likely": "先试试第一项里的步骤，再玩一次 {{game}}，然后再点“出问题了”。",
-    "possible": "先检查一下，再玩一次 {{game}}，然后再点“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内。要连续两次在平时的范围内，它才会说 {{game}} 已恢复正常。"
+    "possible": "先检查一下，再玩一次 {{game}}，然后再点“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内，或者还看不出来。要连续两次在平时的范围内，它才会说 {{game}} 已恢复正常。"
   },
   "row": {
     "nowTitle": "它恢复正常之后："
@@ -779,10 +784,11 @@
     "numbers": "之前，它掉帧时仍能保持约 {{beforePct}}% 的平均帧率；卡顿期间降到约 {{roughPct}}%；现在约为 {{nowPct}}%。",
     "pointsTo": "现在的证据指向：{{what}}。",
     "between": "目前仍在这几项之间：{{list}}。",
-    "settingBack": "Compy 读到它监视的那项设置在这两次游戏之前已重新开启，而且这段时间里没有记录到其他变化。这与它有关的说法相符，但并不能证明是它让游戏变好的。",
+    "settingBack_one": "Compy 读到相关设置在这两次游戏之前已重新开启。在 Compy 会留意的更改（驱动程序、Windows 更新、游戏文件、已安装的程序）中，那段时间里没有发现其他更改。这与这些设置确实起了作用的说法相符，但并不能证明。",
+    "settingBack_other": "Compy 读到相关设置在这两次游戏之前已重新开启。在 Compy 会留意的更改（驱动程序、Windows 更新、游戏文件、已安装的程序）中，那段时间里没有发现其他更改。这与这些设置确实起了作用的说法相符，但并不能证明。",
     "betweenCantTell": "这段时间里记录到不止一项变化，所以 Compy 无法判断是哪一项起了作用。",
     "nothing": "仅凭这次恢复，Compy 还无法缩小范围。",
-    "next": "如果又变卡，请再点“出问题了”，Compy 会告诉你这一次是不顺，还是在平时的范围内。",
+    "next": "如果又变卡，请再点“出问题了”，Compy 会告诉你这一次是不顺，还是在平时的范围内，或者还看不出来。",
     "notProven": "这是已记录的游戏数据所显示的情况，并不能证明它为什么变好。",
     "gapGameFiles": "{{game}} 的文件有变化",
     "gapProgram": "安装了一个程序"

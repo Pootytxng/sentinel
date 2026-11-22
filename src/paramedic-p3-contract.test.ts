@@ -38,7 +38,8 @@ describe("Paramedic P3 wire contract", () => {
     expect([...wire.drift_noticed_arg_keys].sort()).toEqual(["check", "noticed", "ready"]);
     // f1-follow: a setting that went off and was read back on, and what the sessions since say about it.
     expect([...wire.drift_noticed_restored_arg_keys].sort()).toEqual(["check", "noticed", "ready", "restored"]);
-    expect([...wire.drift_noticed_restored_named_arg_keys].sort()).toEqual(["check", "noticed", "ready", "restored", "titles"]);
+    expect([...wire.drift_noticed_restored_named_arg_keys].sort()).toEqual(["check", "noticed", "ready", "restored", "seen", "titles"]);
+    expect([...wire.compy_changes_restore_arg_keys].sort()).toEqual(["from", "to"]);
     expect([...wire.drift_restored_none_arg_keys].sort()).toEqual(["restored"]);
     expect([...wire.drift_restored_rough_arg_keys].sort()).toEqual(["at", "count", "restored"]);
     expect([...wire.drift_restored_clear_arg_keys].sort()).toEqual(["at", "restored"]);
@@ -46,7 +47,7 @@ describe("Paramedic P3 wire contract", () => {
     expect([...wire.recovered_drift_back_arg_keys].sort()).toEqual(["restored"]);
     expect([...wire.setting_drift_moved_arg_keys].sort()).toEqual(["check", "noticed", "restored"]);
     const card = readFileSync(join("src", "surfaces", "glass", "ParamedicCard.tsx"), "utf8");
-    for (const k of ["a.n)", "a.of)", "a.noticed", "a.ready", "a.check", "a.restored", "a.at)", "a.count", "a.titles"]) expect(card, k).toContain(k);
+    for (const k of ["a.n)", "a.of)", "a.noticed", "a.ready", "a.check", "a.restored", "a.at)", "a.count", "a.titles", "a.seen", "a.from", "a.to"]) expect(card, k).toContain(k);
     const look = readFileSync(join("src", "surfaces", "glass", "ParamedicFirstLook.tsx"), "utf8");
     for (const k of ["r.state", "r.total", "r.game", "r.unmatched", "r.need"]) expect(look, k).toContain(k);
   });

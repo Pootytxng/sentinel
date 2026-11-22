@@ -157,10 +157,10 @@ function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | nu
   if (f.id === "setting-drift") {
     const drift = f.evidence.filter((e) => e.code === "drift-noticed");
     // Every setting listed came back on: the heading says it went off and came back, not that it is no longer on.
-    if (drift.length > 0 && drift.every((e) => !!e.args.restored)) {
-      return drift.every((e) => e.args.check === "applied-changes")
-        ? t("paramedic.finding.settingDrift.appliedRestored")
-        : t("paramedic.finding.settingDrift.restored");
+    // Only the applied-changes row has a "back on" story: any other check that changed and read fine again is said
+    // as a dated "seen" line, never as a setting that came back on.
+    if (drift.length > 0 && drift.every((e) => !!e.args.restored && e.args.check === "applied-changes")) {
+      return t("paramedic.finding.settingDrift.appliedRestored");
     }
     if (drift.length > 0 && drift.every((e) => e.args.check === "applied-changes")) return t("paramedic.finding.settingDrift.applied");
   }
@@ -412,18 +412,27 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     case "drift-restored-rough":
       return t("paramedic.evidence.driftRestoredRough", { game, count: Number(a.count ?? 1), restored: dates.dayTime(a.restored), date: dates.day(a.at) });
     case "drift-restored-clear":
-      return t("paramedic.evidence.driftRestoredClear", { game });
+      return t("paramedic.evidence.driftRestoredClear", { game, date: dates.day(a.at) });
     case "drift-restored-between":
       return t("paramedic.evidence.driftRestoredBetween", { game });
     case "recovered-drift-back":
       return t("paramedic.evidence.recoveredDriftBack", { restored: dates.dayTime(a.restored) });
+    // The count of changes that are on came back up to what it was because the setting was turned back on.
+    case "compy-changes-restore":
+      return t("paramedic.evidence.compyChangesRestore", { from: a.from, to: a.to });
+    case "recovered-compy-explained":
+      return t("paramedic.evidence.recoveredCompyExplained", { from: a.from, to: a.to });
     case "drift-noticed": {
       // It went off and Compy has since read it on again: the two dates, and nothing about who turned it on.
       if (a.restored) {
         const kept = (a.titles ?? "").split(US).map((x) => x.trim()).filter(Boolean);
+        // The first time Compy read each title off, in the same order; a title with no time of its own gets the notice's.
+        const seenAt = (a.seen ?? "").split(US);
         // The setting's name was kept when it went off (Compy's own change titles); an older record has none.
         if (kept.length > 0) {
-          return t("paramedic.evidence.driftRestoredNamed", { count: kept.length, titles: kept.join(", "), noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored), ...RAW });
+          // Each title carries the time Compy first read it off: they were not all found at one time.
+          const items = kept.map((title, i) => t("paramedic.evidence.driftRestoredItem", { title, noticed: dates.dayTime(seenAt[i] || a.noticed), ...RAW }));
+          return t("paramedic.evidence.driftRestoredNamed", { count: kept.length, titles: items.join(t("paramedic.firstLook.running.separator")), restored: dates.dayTime(a.restored), ...RAW });
         }
         return t("paramedic.evidence.driftRestored", { noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored) });
       }
@@ -519,7 +528,7 @@ function badge(e: ParamedicEvidence, t: T): string {
   return t("paramedic.badge.measured");
 }
 
-function stepLines(fix: ParamedicFix, { t, game, dates }: Ctx, restored?: string): string[] {
+function stepLines(fix: ParamedicFix, { t, game, dates }: Ctx, restored?: string, appliedOnly?: boolean): string[] {
   if (fix.kind !== "steps") return [];
   const a = fix.args;
   switch (fix.code) {
@@ -554,6 +563,9 @@ function stepLines(fix: ParamedicFix, { t, game, dates }: Ctx, restored?: string
     case "setting-drift":
       // Already read back on: there is nothing left to turn on, only a session to play.
       if (restored) return [t("paramedic.fix.settingDrift.stepBackOn", { game, restored: dates.dayTime(restored) })];
+      // Only the applied-changes row can be turned back on, and only in the Test room (where Compy asks first).
+      // Any other setting keeps the plain advice: there is no one-press turn-on for it anywhere.
+      if (appliedOnly) return [t("paramedic.fix.settingDrift.stepTurnOn", { room: t("common.rail.lab") }), t("paramedic.fix.settingDrift.step2", { game })];
       return [t("paramedic.fix.settingDrift.step1"), t("paramedic.fix.settingDrift.step2", { game })];
     case "compy-change":
       return [t("paramedic.fix.compyChange.step1"), t("paramedic.fix.compyChange.step2", { game })];
@@ -692,6 +704,9 @@ function unknownLine(code: string, { t, game, startRecord }: Ctx): string | null
       return t("paramedic.unknown.display");
     case "drift-timing":
       return t("paramedic.unknown.driftTiming");
+    // The setting record keeps 30 days: a stretch that opened before that cannot be called free of setting changes.
+    case "drift-horizon":
+      return t("paramedic.unknown.driftHorizon");
     case "drift-unreadable":
       return t("paramedic.unknown.driftUnreadable");
     case "identity-unreadable":
@@ -711,9 +726,13 @@ function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null 
       return t("paramedic.seen.gpuTemp", { count: Number(a.count), rough: a.rough, base: a.base });
     case "setting-drift-moved":
       // A setting went off, or came back on, after the rough sessions began: said as dates, never "no changes".
-      return a.restored
-        ? t("paramedic.seen.settingMovedBack", { noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored) })
-        : t("paramedic.seen.settingMoved", { noticed: dates.dayTime(a.noticed) });
+      // Only the applied-changes row can say "back on"; any other check only read as before again.
+      if (a.restored) {
+        return a.check === "applied-changes"
+          ? t("paramedic.seen.settingMovedBack", { noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored) })
+          : t("paramedic.seen.settingMovedReadAgain", { noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored) });
+      }
+      return t("paramedic.seen.settingMoved", { noticed: dates.dayTime(a.noticed) });
     case "game-crashes": {
       // A partial read says "at least" in the line itself. The program name is always matched; when the
       // install folder or the report's path was not there to check, the line says it went by name only.
@@ -898,6 +917,12 @@ function Evidence({ list, ctx: base, hideInstallAt }: { list: ParamedicEvidence[
   );
 }
 
+/** True when every setting the row lists is the applied-changes check: the only one with a turn-it-back-on in the Test room. */
+function appliedOnly(f: ParamedicFinding): boolean {
+  const drift = f.evidence.filter((e) => e.code === "drift-noticed");
+  return drift.length > 0 && drift.every((e) => e.args.check === "applied-changes");
+}
+
 /** When Compy read the setting back on, when every setting the row lists came back (the latest of them); else undefined. */
 function restoredAt(f: ParamedicFinding): string | undefined {
   const drift = f.evidence.filter((e) => e.code === "drift-noticed");
@@ -907,11 +932,12 @@ function restoredAt(f: ParamedicFinding): string | undefined {
 }
 
 /** The steps for one candidate; they sit inside its row, which opens on a tap. */
-function FixBlock({ fix, ctx, possible, restored }: { fix: ParamedicFix; ctx: Ctx; possible: boolean; restored?: string }) {
-  const steps = stepLines(fix, ctx, restored);
+function FixBlock({ fix, ctx, possible, restored, appliedOnly }: { fix: ParamedicFix; ctx: Ctx; possible: boolean; restored?: string; appliedOnly?: boolean }) {
+  const steps = stepLines(fix, ctx, restored, appliedOnly);
   if (steps.length > 0) {
-    // Navigation only: the one-press "turn it back on" already lives in the health check, with its own confirm.
-    const toCheck = fix.kind === "steps" && fix.code === "setting-drift" && !restored && ctx.onOpenCheck;
+    // Navigation only: the one-press "turn it back on" lives in the Test room's check, with its own confirm. The
+    // button is shown only for the applied-changes setting; nothing else has a turn-on there.
+    const toCheck = fix.kind === "steps" && fix.code === "setting-drift" && !restored && appliedOnly && ctx.onOpenCheck;
     return (
       <div>
         {/* Under a suspect that is only possible the steps are a way to find out, not a fix to make on a maybe. */}
@@ -923,7 +949,7 @@ function FixBlock({ fix, ctx, possible, restored }: { fix: ParamedicFix; ctx: Ct
         </ol>
         {toCheck && (
           <button type="button" className="gl-ghost" data-testid="paramedic-open-check" onClick={toCheck}>
-            {ctx.t("paramedic.fix.settingDrift.openCheck")}
+            {ctx.t("paramedic.fix.settingDrift.openCheck", { room: ctx.t("common.rail.lab") })}
           </button>
         )}
       </div>
@@ -1099,7 +1125,7 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
             </div>
           )}
           {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
-          {!recovered && <FixBlock fix={f.fix} ctx={ctx} possible={f.confidence === "possible"} restored={restoredAt(f)} />}
+          {!recovered && <FixBlock fix={f.fix} ctx={ctx} possible={f.confidence === "possible"} restored={restoredAt(f)} appliedOnly={appliedOnly(f)} />}
           {!recovered && f === d.findings[0] && f.confidence !== "possible" && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
         </div>
       )}
@@ -1214,6 +1240,9 @@ function nameOfId(id: string, byId: (id: string) => ParamedicFinding | undefined
   return whatText(id, ctx.t) ?? "";
 }
 
+/** Lines of the stretch between the rough sessions and the normal ones that say a record could not be read (no change is named by them). */
+const UNREAD_GAP = new Set(["gap-unread", "recovery-build-unread", "recovery-compy-unread"]);
+
 function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t, game } = ctx;
   const r = d.recovery;
@@ -1226,8 +1255,13 @@ function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   let verdict: string;
   // A setting read back on is never named as the reason: two sessions in the usual range show the game is back to
   // usual, and that nothing else recorded changed in that stretch, not that this setting did it.
-  if (s.kind === "points-to" && s.id === "setting-drift") verdict = t("paramedic.recovered.settingBack");
-  else if (s.kind === "points-to") verdict = t("paramedic.recovered.pointsTo", { what: nameOfId(s.id, byId, ctx) });
+  if (s.kind === "points-to" && s.id === "setting-drift") {
+    // One setting or several: how many titles the notice kept. What it searched is named in the sentence itself.
+    const kept = (byId("setting-drift")?.evidence ?? [])
+      .filter((e) => e.code === "drift-noticed")
+      .flatMap((e) => (e.args.titles ?? "").split(US).map((x) => x.trim()).filter(Boolean));
+    verdict = t("paramedic.recovered.settingBack", { count: Math.max(1, kept.length) });
+  } else if (s.kind === "points-to") verdict = t("paramedic.recovered.pointsTo", { what: nameOfId(s.id, byId, ctx) });
   else if (s.kind === "between") {
     verdict = t("paramedic.recovered.between", {
       list: s.ids
@@ -1249,7 +1283,13 @@ function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
       <p className="gl-card-title" data-testid="paramedic-verdict">
         {verdict}
       </p>
-      {s.kind === "between" && s.ids.includes("setting-drift") && <p className="gl-para-note" data-testid="paramedic-between-cant-tell">{t("paramedic.recovered.betweenCantTell")}</p>}
+      {/* Said only when the stretch itself recorded another change: a "between" made only of rows still standing, or of
+          a stamp Compy could not read, is not "more than one change was recorded". */}
+      {s.kind === "between" && s.ids.includes("setting-drift") && r.also_changed.some((e) => !UNREAD_GAP.has(e.code)) && (
+        <p className="gl-para-note" data-testid="paramedic-between-cant-tell">
+          {t("paramedic.recovered.betweenCantTell")}
+        </p>
+      )}
       <Candidates rows={rows} rest={rest} d={d} ctx={ctx} recovered />
       {also.map((l) => (
         <p className="gl-para-note" key={l}>
@@ -1304,7 +1344,7 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
         </p>
         <Candidates rows={rows} rest={rest} d={d} ctx={ctx} recovered={false} />
         {/* Two things to test: change one before the next session, never both. */}
-        {inPlay.filter((f) => stepLines(f.fix, ctx, restoredAt(f)).length > 0).length >= 2 && (
+        {inPlay.filter((f) => stepLines(f.fix, ctx, restoredAt(f), appliedOnly(f)).length > 0).length >= 2 && (
           <p className="gl-para-note" data-testid="paramedic-test-one">
             {t("paramedic.verdict.testOne")}
           </p>

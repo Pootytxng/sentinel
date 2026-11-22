@@ -197,7 +197,7 @@ export function HomeGlass({
 
       {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; nothing is read on mount. Always
           mounted: a new user or a new game gets the first look (what changed on this PC), not a hidden door. */}
-      <ParamedicCard noGames={noGames} games={recorded} drifts={readiness?.drifts} onOpenCheck={onOpenDetails} />
+      <ParamedicCard noGames={noGames} games={recorded} drifts={readiness?.drifts} onOpenCheck={onSeeChecks} />
 
       {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
           never the accent fill, which on this page means "your most recent game". */}

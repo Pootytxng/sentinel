@@ -820,4 +820,69 @@ describe("Home: one entry point for 'something's wrong'", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to the answer" }));
     expect(screen.getByText("Nothing looks wrong")).toBeTruthy();
   });
+
+  // f1-follow r2: the card's "Open Test" button must land where the "Turn it back on" row lives. That row is mounted
+  // only by the Test room's optimize station, which App opens through `onSeeChecks`; Home's own details view has none.
+  const driftCard = () => {
+    const sref = (at: string) => ({ started_at: at, game: "eldenring.exe", duration_secs: 3600, samples: 3500, avg_fps: 120, low1_fps: 80 });
+    return diag(
+      { kind: "found" },
+      {
+        problem: {
+          rule: "stutter-collapse",
+          spikes: false,
+          avg_lower: false,
+          before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
+          now: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
+          last_normal_at: "2026-11-11T14:14:22Z",
+          last_full_normal_at: "2026-11-11T14:14:22Z",
+          sessions_affected: [sref("2026-11-20T01:01:24Z")],
+          partial_sessions: [],
+          other_games_affected: [],
+          later_unjudged: 0,
+        },
+        baseline: sref("2026-11-11T14:14:22Z"),
+        first_bad: sref("2026-11-20T01:01:24Z"),
+        findings: [
+          {
+            id: "setting-drift",
+            confidence: "possible",
+            in_play: true,
+            evidence: [{ kind: "known", code: "drift-noticed", args: { check: "applied-changes", noticed: "2026-11-19T12:00:00Z", ready: "2026-11-18T12:00:00Z" }, against: false, source: "drift" }],
+            since_when: { kind: "unknown" },
+            fix: { kind: "steps", code: "setting-drift", args: {} },
+            now: null,
+            now_evidence: [],
+          },
+        ],
+      },
+    );
+  };
+
+  it("the card's turn-it-back-on button calls onSeeChecks (the Test room's check) and never Home's details", async () => {
+    scan.diagnose = driftCard();
+    const p = home();
+    fireEvent.click(within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
+    for (let i = 0; i < 4; i++) {
+      screen.queryAllByRole("button").filter((b) => b.getAttribute("aria-expanded") === "false").forEach((b) => fireEvent.click(b));
+    }
+    const { checkFocusPending, takeCheckFocus } = await import("../check-focus");
+    takeCheckFocus("applied-changes");
+    const button = await screen.findByTestId("paramedic-open-check");
+    expect(button.textContent).toBe("Open Test");
+    fireEvent.click(button);
+    expect(p.onSeeChecks).toHaveBeenCalledTimes(1);
+    expect(p.onOpenDetails).not.toHaveBeenCalled();
+    expect(checkFocusPending(), "the row is asked for").toBe(true);
+    takeCheckFocus("applied-changes");
+  });
+
+  it("onSeeChecks is the Test room's optimize station, and that station is what mounts the turn-it-back-on row", () => {
+    const app = readFileSync(join("src", "App.tsx"), "utf8");
+    expect(app).toContain('const openFixesInLab = () => openLabStation("optimize");');
+    expect(app).toMatch(/onSeeChecks=\{openFixesInLab\}/);
+    expect(readFileSync(join("src", "surfaces", "lab", "OptimizeStation.tsx"), "utf8")).toMatch(/from "\.\.\/Check"/);
+    expect(readFileSync(join("src", "surfaces", "glass", "HomeGlass.tsx"), "utf8")).toMatch(/<ParamedicCard[^>]*onOpenCheck=\{onSeeChecks\}/);
+  });
 });

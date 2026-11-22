@@ -289,12 +289,13 @@ export default function Check({
   };
   const gameModeDrifted = reverted.some((r) => r.rec_id === "game-mode");
   // The "Something's wrong" card can open this screen asking for the "turn it back on" row: focus it once, when it
-  // is shown. Navigation only; nothing is applied from here by this.
+  // is shown. Navigation only; nothing is applied from here by this. The request is taken once the check has settled
+  // whether or not the row is there, so one that finds no such row is dropped here and cannot steal focus on a later visit.
   useEffect(() => {
-    if (reverted.length === 0) return;
+    if (phase !== "verdict" || running) return;
     const row = document.querySelector<HTMLElement>('[data-check-row="applied-changes"]');
-    if (row && takeCheckFocus("applied-changes")) row.focus();
-  }, [reverted.length, phase]);
+    if (takeCheckFocus("applied-changes") && row) row.focus();
+  }, [reverted.length, phase, running]);
 
   // startup-load: name the apps + let the user turn them off RIGHT HERE (not "go to the Startup tab").
   // Fetched lazily only when the limiter is present; the toggle is the same reversible non-elevated

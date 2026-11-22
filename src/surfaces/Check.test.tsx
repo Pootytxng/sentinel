@@ -1107,6 +1107,39 @@ describe("Check", () => {
       expect(applyMock.applied).toEqual(["apply"]);
       expect(events.seen).toEqual(["event", "app-refresh"]);
     });
+
+    // f1-follow r2: the Something's-wrong card asks for this row, and the request is taken once, row or no row.
+    const withDriftedChange = () => {
+      prioritiesMock.payload = {
+        ...prioritiesMock.payload,
+        limiters: [
+          { id: "applied-changes", title: "Applied changes", reason: "One drifted", linked: null, confidence: "high", status: "attention" },
+        ],
+      };
+      applyMock.changes = [{ rec_id: "game-bar", rec_title: "Xbox Game Bar off", status: "applied", is_still_active: false }];
+    };
+
+    it("a focus request from the Something's-wrong card puts focus on the turn-it-back-on row, once", async () => {
+      const { requestCheckFocus, checkFocusPending } = await import("./check-focus");
+      withDriftedChange();
+      requestCheckFocus("applied-changes");
+      renderCheck(vi.fn());
+      await screen.findByRole("button", { name: "Turn it back on" });
+      const row = document.querySelector<HTMLElement>('[data-check-row="applied-changes"]');
+      expect(row).not.toBeNull();
+      await waitFor(() => expect(document.activeElement).toBe(row));
+      expect(checkFocusPending(), "taken, not left waiting").toBe(false);
+    });
+
+    it("a focus request that finds no such row is dropped, not kept for a later visit", async () => {
+      const { requestCheckFocus, checkFocusPending } = await import("./check-focus");
+      prioritiesMock.payload = { ...prioritiesMock.payload, limiters: [] };
+      applyMock.changes = [];
+      requestCheckFocus("applied-changes");
+      renderCheck(vi.fn());
+      await waitFor(() => expect(checkFocusPending()).toBe(false));
+      expect(document.querySelector('[data-check-row="applied-changes"]')).toBeNull();
+    });
   });
 
   it("renders NO upgrade-path block when no verdict names hardware", async () => {

@@ -252,9 +252,18 @@ pub(crate) struct DriftFact {
     /// this time). `None`: the notice still stands.
     #[serde(default)]
     cleared_at: Option<String>,
-    /// f1-follow: the applied changes' titles kept when the notice cleared (empty when none was kept).
+    /// f1-follow: the applied changes' titles kept when the notice cleared, only those that read On (empty when
+    /// none was kept), each with when Compy first read it off.
     #[serde(default)]
-    titles: Vec<String>,
+    titles: Vec<crate::drift::KeptTitle>,
+    /// f1-follow: the setting read On again. False: the notice ended without any noticed change reading On
+    /// (rolled back, kept as set outside Compy, an empty ledger), so it is told as dates and never as "back on".
+    #[serde(default = "yes")]
+    back_on: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -264,6 +273,11 @@ pub(crate) struct DiagnoseInputs {
     sightings: Vec<Sighting>,
     #[serde(default)]
     drift: Vec<DriftFact>,
+    /// f1-follow: the oldest time the setting-change record can still speak for (it keeps a cleared setting for
+    /// `drift::CLEARED_KEEP_DAYS`). A window that opens before it cannot be called free of setting changes.
+    /// `None`: not known (the record is not asked).
+    #[serde(default)]
+    drift_horizon: Option<String>,
     /// The identity-check store exists but could not be read: said as an unknown, never as "no checks".
     #[serde(default)]
     sightings_unread: bool,
@@ -1137,6 +1151,7 @@ pub(crate) fn read_inputs_from(dir: &std::path::Path) -> Result<DiagnoseInputs, 
     let mut inp = inputs_from_parts(&sessions, snapshots.as_deref().unwrap_or(&[]), notices.as_deref().unwrap_or(&[]));
     inp.sightings_unread = snapshots.is_err();
     inp.drift_unread = notices.is_err();
+    inp.drift_horizon = Some((Utc::now() - chrono::Duration::days(crate::drift::CLEARED_KEEP_DAYS)).to_rfc3339());
     Ok(inp)
 }
 
@@ -1246,8 +1261,10 @@ fn inputs_from_parts(
                 noticed_at: n.noticed_at.clone(),
                 cleared_at: n.cleared_at.clone(),
                 titles: n.titles.clone(),
+                back_on: n.back_on,
             })
             .collect(),
+        drift_horizon: None,
         sightings_unread: false,
         drift_unread: false,
         compy_applies: extras::CompyApplies::NotRead,
@@ -2636,7 +2653,9 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
     // f1-follow: a setting that went off or came back on after the window opened is never "no changes noticed".
     let mut moved: Vec<&DriftFact> = Vec::new();
     // The settings noticed off in the window that Compy has since read ready again, with when.
-    let mut restored: Vec<DateTime<Utc>> = Vec::new();
+    // Each with the time the same setting was noticed off again, when it was: the sessions "after it was back on"
+    // end there.
+    let mut restored: Vec<(DateTime<Utc>, Option<DateTime<Utc>>)> = Vec::new();
     // How many of the listed settings had a rough session after Compy read them back on. The row is weakened
     // only when that is every one: a setting still off in that session is not contradicted by it.
     let mut contradicted = 0usize;
@@ -2648,6 +2667,23 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
         // A clear stamp that cannot be read as a time says nothing about when it was back on: the setting is
         // not listed as a candidate with a date it does not have, and the card still does not say "none".
         if n.cleared_at.is_some() && back.is_none() {
+            if after_open {
+                moved.push(n);
+            }
+            continue;
+        }
+        // Only the applied-changes row has an "on": a cleared record of any other check (its value changed and
+        // read as before again), or of applied changes none of which read On, is told as dates and never as a
+        // setting that was turned back on.
+        if n.cleared_at.is_some() && !(n.id == "applied-changes" && n.back_on) {
+            if after_open {
+                moved.push(n);
+            }
+            continue;
+        }
+        // Back on before the first rough session began: the setting was on for every rough session, so it is not a
+        // suspect for them. It is still said, as dates.
+        if back.is_some_and(|b| b <= c.win_end) {
             if after_open {
                 moved.push(n);
             }
@@ -2687,20 +2723,22 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
         }
         if let (Some(b), Some(raw)) = (back, n.cleared_at.as_ref()) {
             args.push(("restored", raw.clone()));
-            // The setting's own name, kept when it went off: the card shows it only with these dates.
+            // The setting's own name, kept when it went off and only if it read On again: the card shows it only
+            // with these dates, each name with when Compy first read it off.
             if !n.titles.is_empty() {
-                args.push(("titles", n.titles.join("\u{1f}")));
+                args.push(("titles", n.titles.iter().map(|k| k.title.as_str()).collect::<Vec<_>>().join("\u{1f}")));
+                args.push(("seen", n.titles.iter().map(|k| k.at.as_str()).collect::<Vec<_>>().join("\u{1f}")));
             }
-            restored.push(b);
+            restored.push((b, recovery::off_again_at(c, &n.id, b)));
         }
         evidence.push(ev(EvidenceKind::Known, "drift-noticed", "drift", false, &args));
     }
     // What the sessions after it was back on say: dated facts, never "the reason". A rough one is a contradiction
     // (kept visibly, never removed); one usual-range session is "measured once"; the rest say what is missing.
     let listed = evidence.len();
-    for r in &restored {
+    for (r, until) in &restored {
         let when = iso(*r);
-        match recovery::since_restore(c, *r) {
+        match recovery::since_restore(c, *r, *until) {
             recovery::Since::Nothing => evidence.push(ev(EvidenceKind::Unknown, "drift-restored-none", "sessions", false, &[("restored", when)])),
             recovery::Since::Unjudged { count } => evidence.push(ev(
                 EvidenceKind::Unknown,
@@ -2734,13 +2772,20 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
             out.unknown("drift-timing");
         } else if !c.inp.drift_unread {
             if moved.is_empty() {
-                // An unread store is not "no changes noticed".
-                out.ruled_out("setting-drift", &[]);
+                // The record keeps a cleared setting for `CLEARED_KEEP_DAYS`: a window that opened before that
+                // cannot be called free of setting changes. An unread store is not "no changes noticed" either.
+                if c.inp.drift_horizon.as_deref().and_then(ts).is_some_and(|h| c.win_start < h) {
+                    out.unknown("drift-horizon");
+                } else {
+                    out.ruled_out("setting-drift", &[]);
+                }
             } else {
                 // Something went off or came back on after the window opened: say what, never "no changes".
                 for n in moved {
                     let mut args = vec![("check", n.id.clone()), ("noticed", n.noticed_at.clone())];
-                    if let Some(b) = n.cleared_at.as_ref().filter(|b| ts(b).is_some()) {
+                    // Read ready again: for applied changes only when one of them read On.
+                    let on_again = n.id != "applied-changes" || n.back_on;
+                    if let Some(b) = n.cleared_at.as_ref().filter(|b| on_again && ts(b).is_some()) {
                         args.push(("restored", b.clone()));
                     }
                     out.see("setting-drift-moved", &args);

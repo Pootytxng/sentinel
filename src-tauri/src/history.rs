@@ -2943,6 +2943,8 @@ pub(crate) struct AppliedChangesSummary {
     pub(crate) cant_confirm: usize,
     /// The rec ids behind `active`, sorted: what a Trial start names as "other changes on".
     pub(crate) active_recs: Vec<String>,
+    /// The titles of those same changes, sorted, once each: which of a drift notice's changes read On now.
+    pub(crate) active_titles: Vec<String>,
     /// The count builds before 453-f1 recorded on a session (newest row per rec_id by position, not
     /// rolled back, and not read as off — can't-confirm included). Kept only so a session an older
     /// Compy recorded is compared like with like, never shown as "active".
@@ -3210,6 +3212,9 @@ fn summarize_checked(
         .map(|&i| history[i].rec_id.clone())
         .collect();
     s.active_recs.sort();
+    s.active_titles = groups.iter().filter(|&&i| checks[i] == Some(ActiveCheck::On)).map(|&i| history[i].rec_title.clone()).collect();
+    s.active_titles.sort();
+    s.active_titles.dedup();
     s.active = s.active_recs.len();
     s.cant_confirm = groups.len() - s.active;
 

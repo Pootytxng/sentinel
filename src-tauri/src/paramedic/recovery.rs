@@ -160,9 +160,26 @@ pub(super) enum Since {
     Between,
 }
 
-/// The game's sessions that started at or after `restored`, read with the recovery's own rules.
-pub(super) fn since_restore(c: &Ctx, restored: DateTime<Utc>) -> Since {
-    let after: Vec<usize> = (0..c.sess.len()).filter(|&i| c.sess[i].start().is_some_and(|t| t >= restored)).collect();
+/// When the same setting was noticed off again after it was read back on at `restored`, if it was: the last time
+/// it read fine (when that is not before the restore), else the notice time. Sessions from then on are not
+/// "after it was back on".
+pub(super) fn off_again_at(c: &Ctx, id: &str, restored: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    c.inp
+        .drift
+        .iter()
+        .filter(|m| m.id == id)
+        .filter_map(|m| {
+            let noticed = ts(&m.noticed_at).filter(|n| *n > restored)?;
+            Some(m.last_ready_at.as_deref().and_then(ts).filter(|r| *r >= restored && *r < noticed).unwrap_or(noticed))
+        })
+        .min()
+}
+
+/// The game's sessions that started at or after `restored` (and before `until`, the time the setting went off
+/// again, when it did), read with the recovery's own rules.
+pub(super) fn since_restore(c: &Ctx, restored: DateTime<Utc>, until: Option<DateTime<Utc>>) -> Since {
+    let after: Vec<usize> =
+        (0..c.sess.len()).filter(|&i| c.sess[i].start().is_some_and(|t| t >= restored && until.is_none_or(|u| t < u))).collect();
     if after.is_empty() {
         return Since::Nothing;
     }
@@ -224,6 +241,12 @@ pub(super) struct Gap {
     ids: Vec<&'static str>,
     /// Every Windows record that could name a change there was read completely.
     complete: bool,
+    /// The two stamps the stretch check compares on the bounding sessions that one of them did not record
+    /// ("build", "count"): no change can be said to be absent where Compy has nothing to compare.
+    unread: Vec<&'static str>,
+    /// The difference in the count of changes that are on is the setting being turned back on, not another change
+    /// (a cleared applied-changes record falls in the stretch and the count returned to the baseline's).
+    count_explained: bool,
 }
 
 impl Gap {
@@ -234,9 +257,11 @@ impl Gap {
     }
 
     /// The same, not counting the change that a "points to it" row already names (that change is the very
-    /// thing the row is about, not an unexplained extra).
+    /// thing the row is about, not an unexplained extra). For the setting row, whose card says "no other change
+    /// was recorded in that stretch", a build or count stamp that one bounding session did not record leaves
+    /// the check incomplete: Compy cannot say there was no other change.
     fn unclean_except(&self, id: &str) -> bool {
-        !self.complete || self.line_ids.iter().any(|i| *i != id)
+        !self.complete || (id == "setting-drift" && !self.unread.is_empty()) || self.line_ids.iter().any(|i| *i != id)
     }
 }
 
@@ -306,24 +331,56 @@ fn gap_of(c: &Ctx, rec: &[&SessionFacts]) -> Gap {
             ids.push(id);
         }
     }
+    let mut unread: Vec<&'static str> = Vec::new();
+    let mut count_explained = false;
     if let Some(rf) = rec_first {
         let (a, b) = (nonblank(&rough_last.windows_build), nonblank(&rf.windows_build));
-        if let (Some(a), Some(b)) = (a, b) {
-            if a != b {
-                lines.push(ev(EvidenceKind::Measured, "gap-build", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
-                line_ids.push("windows-build-change");
-                ids.push("windows-build-change");
+        match (a, b) {
+            (Some(a), Some(b)) => {
+                if a != b {
+                    lines.push(ev(EvidenceKind::Measured, "gap-build", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
+                    line_ids.push("windows-build-change");
+                    ids.push("windows-build-change");
+                }
             }
+            _ => unread.push("build"),
         }
-        if let (Some(a), Some(b)) = (rough_last.compy_changes, rf.compy_changes) {
-            if a != b {
-                lines.push(ev(EvidenceKind::Known, "compy-changes-differ", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
-                line_ids.push("compy-change");
-                ids.push("compy-change");
+        match (rough_last.compy_changes, rf.compy_changes) {
+            (Some(a), Some(b)) => {
+                if a != b && restore_explains_count(c, lo, hi, a, b) {
+                    // The count came back up to where it was before the rough sessions, in the same stretch in which
+                    // the setting was read back on: that is the setting, not another change.
+                    count_explained = true;
+                    lines.push(ev(EvidenceKind::Known, "compy-changes-restore", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
+                    line_ids.push("setting-drift");
+                } else if a != b {
+                    lines.push(ev(EvidenceKind::Known, "compy-changes-differ", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
+                    line_ids.push("compy-change");
+                    ids.push("compy-change");
+                }
             }
+            _ => unread.push("count"),
         }
     }
-    Gap { lines, line_ids, ids, complete }
+    Gap { lines, line_ids, ids, complete, unread, count_explained }
+}
+
+/// The count of changes that are on rose between the last rough session and the first normal one. It is the
+/// setting being turned back on, and not another change, only when a cleared applied-changes record that read On
+/// again falls in that stretch, the count rose by no more than the changes it read back On, and it is now what
+/// it was before the rough sessions began.
+fn restore_explains_count(c: &Ctx, lo: DateTime<Utc>, hi: DateTime<Utc>, rough: usize, recovered: usize) -> bool {
+    let Some(before) = c.baseline_newest.compy_changes else { return false };
+    if recovered != before || recovered <= rough {
+        return false;
+    }
+    c.inp.drift.iter().any(|n| {
+        n.id == "applied-changes"
+            && n.back_on
+            && !n.titles.is_empty()
+            && recovered - rough <= n.titles.len()
+            && n.cleared_at.as_deref().and_then(ts).is_some_and(|b| b > lo && b <= hi)
+    })
 }
 
 /// A change to the game's files in the stretch is a candidate in its own right. Windows-style Steam records
@@ -359,6 +416,8 @@ struct Rc<'x> {
     /// The last rough session's end: a change after it is "between the rough sessions and the normal ones".
     rough_end: DateTime<Utc>,
     rec_start: DateTime<Utc>,
+    /// The stretch between them, read once.
+    gap: Gap,
 }
 
 fn pct1(p: f64) -> String {
@@ -375,8 +434,7 @@ fn unread(code: &'static str) -> Vec<Evidence> {
 pub(super) fn apply<'x>(c: &'x Ctx<'x>, rec: &'x [&'x SessionFacts], cands: &mut [Cand]) -> Vec<NowLine> {
     let rough_last = c.affected.iter().copied().max_by_key(|s| s.start()).unwrap_or(c.first_bad);
     let (rough_end, rec_start) = gap_bounds(c, rec);
-    let rc = Rc { c, rec, rough_last, rough_end, rec_start };
-    let clean = !gap_of(c, rec).unclean();
+    let rc = Rc { c, rec, rough_last, rough_end, rec_start, gap: gap_of(c, rec) };
     cands
         .iter_mut()
         .map(|cand| {
@@ -393,7 +451,10 @@ pub(super) fn apply<'x>(c: &'x Ctx<'x>, rec: &'x [&'x SessionFacts], cands: &mut
                 _ => (NowStatus::CantTell, Vec::new()),
             };
             match status {
-                NowStatus::PointsTo => cand.r = clean,
+                // The setting-drift row's own count line (the setting turned back on) is not an unexplained extra.
+                NowStatus::PointsTo => {
+                    cand.r = !rc.gap.unclean() || (cand.id == "setting-drift" && !rc.gap.unclean_except("setting-drift"))
+                }
                 NowStatus::PointsAway => cand.c1 = true,
                 NowStatus::CantTell => {}
             }
@@ -589,15 +650,31 @@ fn drift(rc: &Rc, cand: &Cand) -> (NowStatus, Vec<Evidence>) {
     let back: Vec<DateTime<Utc>> = notices.iter().filter_map(|n| n.cleared_at.as_deref().and_then(ts)).collect();
     if !notices.is_empty() && back.len() == notices.len() {
         let latest = back.iter().copied().max().unwrap_or(rc.rec_start);
-        if let Some(rough) = rc.c.affected.iter().filter(|s| s.start().is_some_and(|t| t >= latest)).min_by_key(|s| s.start()) {
+        // The setting went off again after it was read back on: the sessions from then on are not "after it
+        // was back on", and nothing here can say it was on for the recovered ones.
+        let until = off_again_at(rc.c, &notices[0].id, latest);
+        if until.is_some_and(|u| u <= rc.rec_start) {
+            return (NowStatus::CantTell, unread("recovery-drift-unknown"));
+        }
+        if let Some(rough) = rc
+            .c
+            .affected
+            .iter()
+            .filter(|s| s.start().is_some_and(|t| t >= latest && until.is_none_or(|u| t < u)))
+            .min_by_key(|s| s.start())
+        {
             let args = [("restored", iso(latest)), ("at", rough.started_at.clone()), ("count", "1".to_string())];
             return (NowStatus::PointsAway, vec![ev(EvidenceKind::Measured, "drift-restored-rough", "sessions", true, &args)]);
         }
         if latest <= rc.rec_start {
-            return (
-                NowStatus::PointsTo,
-                vec![ev(EvidenceKind::SupportedInference, "recovered-drift-back", "sessions", false, &[("restored", iso(latest))])],
-            );
+            let mut lines = vec![ev(EvidenceKind::SupportedInference, "recovered-drift-back", "sessions", false, &[("restored", iso(latest))])];
+            // The rise in the count of changes that are on is this setting coming back, said on this row.
+            if rc.gap.count_explained {
+                lines.extend(
+                    rc.gap.lines.iter().zip(&rc.gap.line_ids).filter(|(_, id)| **id == "setting-drift").map(|(e, _)| e.clone()),
+                );
+            }
+            return (NowStatus::PointsTo, lines);
         }
     }
     (NowStatus::CantTell, unread("recovery-drift-unknown"))
@@ -615,6 +692,11 @@ fn compy(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
     let counts: Vec<usize> = counts.into_iter().flatten().collect();
     let now = counts[counts.len() - 1];
     let from = rough[rough.len() - 1].to_string();
+    // The count came back because the setting was turned back on (said on the setting's row): this row does not
+    // compete with it.
+    if rc.gap.count_explained {
+        return (NowStatus::CantTell, vec![ev(EvidenceKind::Known, "recovered-compy-explained", "sessions", false, &[("from", from), ("to", now.to_string())])]);
+    }
     // A recovered session that ran with the same number of changes as a rough one weakens it, whatever the
     // other one had: "back" needs EVERY recovered session to differ from the rough count and equal the baseline's.
     if let Some(same) = counts.iter().copied().find(|c| rough.contains(c)) {
@@ -701,7 +783,12 @@ fn dated(rc: &Rc, what: &'static str, kind: ChangeKind) -> (NowStatus, Vec<Evide
 /// "Still between" the candidates and the recorded changes still standing, or nothing when there are fewer
 /// than two.
 fn summary(findings: &[Finding], gap: &Gap) -> RecoverySummary {
-    let live: Vec<&Finding> = findings.iter().filter(|f| f.now != Some(NowStatus::PointsAway)).collect();
+    // A count of changes that went back because the setting was turned back on is the setting row's own story.
+    let live: Vec<&Finding> = findings
+        .iter()
+        .filter(|f| f.now != Some(NowStatus::PointsAway))
+        .filter(|f| !(gap.count_explained && f.id == "compy-change"))
+        .collect();
     let supported = live.iter().filter(|f| f.now == Some(NowStatus::PointsTo)).count();
     // The change the one standing row names is not an unexplained extra: only other changes (or unread
     // records) in the stretch stop it from being named.
@@ -747,9 +834,22 @@ pub(super) fn build_block(c: &Ctx, rec: &[&SessionFacts], d: &Diagnosis, since: 
     let p = d.problem.as_ref()?;
     rec.last()?;
     let gap = gap_of(c, rec);
-    let mut also_changed = gap.lines.clone();
+    // The count line that is the setting coming back sits on the setting's row, not among the other changes.
+    let mut also_changed: Vec<Evidence> = gap
+        .lines
+        .iter()
+        .zip(&gap.line_ids)
+        .filter(|(_, id)| !(gap.count_explained && **id == "setting-drift"))
+        .map(|(e, _)| e.clone())
+        .collect();
     if !gap.complete {
         also_changed.push(ev(EvidenceKind::Unknown, "gap-unread", "windows", false, &[]));
+    }
+    // A stamp one of the two bounding sessions did not record: Compy says which one it could not read.
+    let about_setting = d.findings.iter().any(|f| f.id == "setting-drift");
+    for u in gap.unread.iter().filter(|_| about_setting) {
+        let code = if *u == "build" { "recovery-build-unread" } else { "recovery-compy-unread" };
+        also_changed.push(ev(EvidenceKind::Unknown, code, "sessions", false, &[]));
     }
     Some(Recovery {
         before: p.before.clone(),

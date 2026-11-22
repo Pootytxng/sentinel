@@ -778,7 +778,7 @@ fn the_other_changes_dont_line_up_is_said_only_when_every_runner_up_is_contradic
     assert_eq!(ids(&d), ["gpu-driver-change"]);
     assert_eq!(d.why_first, Some("cross-game"), "nothing else changed, so nothing else lines up");
     // A setting noticed changed inside the window still lines up with every rough session.
-    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: "2026-10-07T12:00:00Z".into(), cleared_at: None, titles: vec![] });
+    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: "2026-10-07T12:00:00Z".into(), cleared_at: None, titles: vec![], back_on: true });
     let d = diagnose(&inp, Complaint::Slow, Some("g"));
     assert_eq!(ids(&d), ["gpu-driver-change", "setting-drift"]);
     assert_eq!(d.why_first, Some("cross-game-lead"), "the second sentence would be false here");
@@ -2761,11 +2761,25 @@ mod recovery_f3 {
     const BACK_ON: &str = "2026-10-12T18:00:00Z";
 
     fn fact(id: &str, noticed: &str, back: Option<&str>) -> DriftFact {
-        DriftFact { id: id.into(), last_ready_at: Some(SEEN_ON.into()), noticed_at: noticed.into(), cleared_at: back.map(str::to_string), titles: vec![] }
+        DriftFact { id: id.into(), last_ready_at: Some(SEEN_ON.into()), noticed_at: noticed.into(), cleared_at: back.map(str::to_string), titles: vec![], back_on: true }
+    }
+
+    fn kt(title: &str, at: &str) -> crate::drift::KeptTitle {
+        crate::drift::KeptTitle { title: title.into(), at: at.into() }
+    }
+
+    /// The build and the count of changes both recorded on every session that did not set them: the
+    /// "nothing else changed" claim needs them (an unread stamp leaves the check incomplete).
+    fn stamped(mut sess: Vec<SessionFacts>) -> Vec<SessionFacts> {
+        for s in &mut sess {
+            s.windows_build.get_or_insert_with(|| "100".into());
+            s.compy_changes.get_or_insert(2);
+        }
+        sess
     }
 
     fn follow_with(sess: Vec<SessionFacts>, facts: Vec<DriftFact>) -> Diagnosis {
-        let mut inp = inputs(sess);
+        let mut inp = inputs(stamped(sess));
         inp.drift = facts;
         inp.changes = ChangeRead::Report { report: Box::new(report(Vec::new())), steam: GameSteam::Found };
         diagnose(&inp, Complaint::Slow, Some("g"))
@@ -2877,16 +2891,20 @@ mod recovery_f3 {
 
     #[test]
     fn the_kept_titles_travel_with_the_restored_line_and_an_older_record_names_none() {
-        let named = DriftFact { titles: vec!["Trim Windows visual effects".into(), "Enable Windows Game Mode".into()], ..fact("applied-changes", NOTICED, Some(BACK_ON)) };
+        let named = DriftFact {
+            titles: vec![kt("Trim Windows visual effects", "2026-10-06T12:00:00Z"), kt("Enable Windows Game Mode", "2026-10-07T09:00:00Z")],
+            ..fact("applied-changes", NOTICED, Some(BACK_ON))
+        };
         let d = follow_with(episode(), vec![named]);
         let line = &finding_of(&d, "setting-drift").evidence[0];
         assert_eq!(line.code, "drift-noticed");
         assert_eq!(line.args["titles"], "Trim Windows visual effects\u{1f}Enable Windows Game Mode");
+        assert_eq!(line.args["seen"], "2026-10-06T12:00:00Z\u{1f}2026-10-07T09:00:00Z", "each title carries its own first-noticed time");
         // No title kept (an older record): no `titles` argument, so the card says "a setting Compy applied".
         let d = follow(episode());
         assert!(!finding_of(&d, "setting-drift").evidence[0].args.contains_key("titles"));
         // A standing notice never carries kept titles: the card names it from the live drift.
-        let d = follow_with(episode(), vec![DriftFact { titles: vec!["Trim Windows visual effects".into()], ..fact("applied-changes", "2026-10-08T10:00:00Z", None) }]);
+        let d = follow_with(episode(), vec![DriftFact { titles: vec![kt("Trim Windows visual effects", NOTICED)], ..fact("applied-changes", "2026-10-08T10:00:00Z", None) }]);
         assert!(!finding_of(&d, "setting-drift").evidence[0].args.contains_key("titles"));
         // The older wire shape (no `titles`) still loads.
         let f: DriftFact = serde_json::from_str(r#"{"id":"applied-changes","noticed_at":"2026-10-06T12:00:00Z","cleared_at":"2026-10-12T18:00:00Z"}"#).unwrap();
@@ -2981,7 +2999,7 @@ mod recovery_f3 {
         };
         let none = follow(episode());
         assert_eq!(keys(&none, "drift-noticed"), want("drift_noticed_restored_arg_keys"));
-        let named = follow_with(episode(), vec![DriftFact { titles: vec!["Trim Windows visual effects".into()], ..fact("applied-changes", NOTICED, Some(BACK_ON)) }]);
+        let named = follow_with(episode(), vec![DriftFact { titles: vec![kt("Trim Windows visual effects", NOTICED)], ..fact("applied-changes", NOTICED, Some(BACK_ON)) }]);
         assert_eq!(keys(&named, "drift-noticed"), want("drift_noticed_restored_named_arg_keys"));
         assert_eq!(keys(&none, "drift-restored-none"), want("drift_restored_none_arg_keys"));
         let rough = follow(with_extra(episode(), vec![on(13, 30.0, Some("2.0"))]));
@@ -2992,6 +3010,8 @@ mod recovery_f3 {
         assert_eq!(keys(&unjudged, "drift-restored-unjudged"), want("drift_restored_unjudged_arg_keys"));
         let back = follow(with_extra(episode(), vec![calm(13), calm(14)]));
         assert_eq!(keys(&back, "recovered-drift-back"), want("recovered_drift_back_arg_keys"));
+        let restore = follow_with(counted(13, 12, 13), vec![reapplied(BACK_ON)]);
+        assert_eq!(keys(&restore, "compy-changes-restore"), want("compy_changes_restore_arg_keys"));
         let moved = follow_with(with_extra(episode(), vec![on(10, 30.0, Some("2.0"))]), vec![fact("applied-changes", "2026-10-10T12:00:00Z", Some("2026-10-11T12:00:00Z"))]);
         let s = moved.seen.iter().find(|s| s.id == "setting-drift-moved").unwrap();
         let mut k: Vec<String> = s.args.keys().map(|k| k.to_string()).collect();
@@ -3006,6 +3026,146 @@ mod recovery_f3 {
         let d = follow_with(episode(), vec![DriftFact { cleared_at: None, ..fact("applied-changes", NOTICED, None) }]);
         let codes = drift_codes(&d);
         assert_eq!(codes, ["drift-noticed", "which-not-recorded"], "no clear time: no dated 'back on' lines are invented");
+    }
+
+    // ---- r2: the review's four blocking findings ---------------------------------------------------
+
+    /// `follow_with` without the stamps filled in: the sessions carry only what the test gives them.
+    fn follow_raw(sess: Vec<SessionFacts>, facts: Vec<DriftFact>) -> Diagnosis {
+        let mut inp = inputs(sess);
+        inp.drift = facts;
+        inp.changes = ChangeRead::Report { report: Box::new(report(Vec::new())), steam: GameSteam::Found };
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    /// The baseline days carry `baseline` changes on, the rough session `rough`, and the two clear sessions
+    /// (days 13 and 14) `recovered`; every build is stamped.
+    fn counted(baseline: usize, rough: usize, recovered: usize) -> Vec<SessionFacts> {
+        let mut v = episode();
+        for (i, s) in v.iter_mut().enumerate() {
+            s.compy_changes = Some(if i < 4 { baseline } else { rough });
+        }
+        for day in [13, 14] {
+            let mut s = calm(day);
+            s.compy_changes = Some(recovered);
+            v.push(s);
+        }
+        stamped(v)
+    }
+
+    fn reapplied(back: &str) -> DriftFact {
+        DriftFact { titles: vec![kt("Trim Windows visual effects", NOTICED)], ..fact("applied-changes", NOTICED, Some(back)) }
+    }
+
+    /// B3: the owner's shape. The setting going off dropped the count of changes that are on (13 -> 12); turning
+    /// it back on through Compy put it back (13). That is the same setting, not a second change.
+    #[test]
+    fn a_reapply_through_compy_is_the_setting_coming_back_and_not_a_second_change() {
+        let d = follow_with(counted(13, 12, 13), vec![reapplied(BACK_ON)]);
+        assert_eq!(d.state, DiagnosisState::Recovered);
+        let f = finding_of(&d, "setting-drift");
+        assert_eq!(now_of(&d, "setting-drift"), (Some(NowStatus::PointsTo), vec!["recovered-drift-back", "compy-changes-restore"]));
+        let r = d.recovery.as_ref().expect("the recovery block");
+        assert_eq!(r.summary, RecoverySummary::PointsTo { id: "setting-drift" });
+        assert!(r.also_changed.is_empty(), "the count line belongs to the setting: {:?}", r.also_changed.iter().map(|e| e.code).collect::<Vec<_>>());
+        assert_eq!(f.confidence, Certainty::Possible);
+        // The count row does not compete with it.
+        assert!(d.findings.iter().filter(|x| x.id == "compy-change").all(|x| x.now != Some(NowStatus::PointsTo)));
+        let line = f.now_evidence.iter().find(|e| e.code == "compy-changes-restore").unwrap();
+        assert_eq!((line.args["from"].as_str(), line.args["to"].as_str()), ("12", "13"));
+    }
+
+    /// B3: a re-apply AND a real second Compy change (the count went past where it was): still between.
+    #[test]
+    fn a_reapply_plus_a_real_second_compy_change_is_still_between() {
+        let d = follow_with(counted(13, 12, 14), vec![reapplied(BACK_ON)]);
+        let r = d.recovery.as_ref().expect("the recovery block");
+        match &r.summary {
+            RecoverySummary::Between { ids } => assert!(ids.contains(&"setting-drift") && ids.contains(&"compy-change"), "{ids:?}"),
+            other => panic!("expected Between, got {other:?}"),
+        }
+        assert!(r.also_changed.iter().any(|e| e.code == "compy-changes-differ"));
+        assert!(finding_of(&d, "setting-drift").now_evidence.iter().all(|e| e.code != "compy-changes-restore"));
+        // A count that came back up with no cleared record to explain it is not attributed to anything either.
+        let d = follow_with(counted(13, 12, 13), Vec::new());
+        assert!(d.recovery.as_ref().is_some_and(|r| r.also_changed.iter().any(|e| e.code == "compy-changes-differ")));
+    }
+
+    /// B4: a build stamp one of the bounding sessions did not record: no "no other change", and it says which source.
+    #[test]
+    fn an_unread_build_stamp_leaves_the_check_incomplete_and_says_which() {
+        let mut sess = counted(2, 2, 2);
+        for s in &mut sess {
+            s.windows_build = None;
+        }
+        let d = follow_raw(sess, vec![reapplied(BACK_ON)]);
+        let r = d.recovery.as_ref().expect("the recovery block");
+        assert!(!matches!(r.summary, RecoverySummary::PointsTo { .. }), "{:?}", r.summary);
+        assert_eq!(finding_of(&d, "setting-drift").now, Some(NowStatus::CantTell));
+        assert_eq!(r.also_changed.iter().map(|e| e.code).collect::<Vec<_>>(), ["recovery-build-unread"]);
+    }
+
+    #[test]
+    fn an_unread_count_leaves_the_check_incomplete_and_says_which() {
+        let mut sess = counted(2, 2, 2);
+        for s in &mut sess {
+            s.compy_changes = None;
+        }
+        let d = follow_raw(sess, vec![reapplied(BACK_ON)]);
+        let r = d.recovery.as_ref().expect("the recovery block");
+        assert!(!matches!(r.summary, RecoverySummary::PointsTo { .. }), "{:?}", r.summary);
+        assert_eq!(finding_of(&d, "setting-drift").now, Some(NowStatus::CantTell));
+        assert_eq!(r.also_changed.iter().map(|e| e.code).collect::<Vec<_>>(), ["recovery-compy-unread"]);
+        // Both stamps read: the same sessions name it.
+        let d = follow_with(counted(2, 2, 2), vec![reapplied(BACK_ON)]);
+        assert_eq!(d.recovery.as_ref().map(|r| r.summary.clone()), Some(RecoverySummary::PointsTo { id: "setting-drift" }));
+    }
+
+    /// The setting went off again after it was read back on: the sessions from then on are not "after it was back on".
+    #[test]
+    fn a_setting_that_went_off_again_bounds_the_sessions_after_it_was_back_on() {
+        let standing = DriftFact { last_ready_at: Some("2026-10-12T19:00:00Z".into()), ..fact("applied-changes", "2026-10-12T20:00:00Z", None) };
+        // A rough session on the 13th comes after the second notice: it says nothing about the restore.
+        let sess = with_extra(episode(), vec![on(13, 30.0, Some("2.0"))]);
+        let d = follow_with(sess.clone(), vec![standing.clone(), reapplied(BACK_ON)]);
+        assert!(finding_of(&d, "setting-drift").evidence.iter().all(|e| e.code != "drift-restored-rough"), "{:?}", drift_codes(&d));
+        // Without the second notice the same session does contradict it.
+        let d = follow_with(sess, vec![reapplied(BACK_ON)]);
+        assert!(finding_of(&d, "setting-drift").evidence.iter().any(|e| e.code == "drift-restored-rough"));
+        // Off again before the first clear session started: the recovery cannot say it was on for them.
+        let d = follow_with(counted(13, 12, 13), vec![standing, reapplied(BACK_ON)]);
+        assert_ne!(finding_of(&d, "setting-drift").now, Some(NowStatus::PointsTo));
+    }
+
+    /// Only the applied-changes row has a "back on" story; and a ready read that is not On (undo, kept outside,
+    /// empty ledger) is never "back on". Neither is ever "no changes noticed".
+    #[test]
+    fn only_applied_changes_tells_the_restored_story_and_no_check_gets_the_false_no_changes_line() {
+        // Another check read ready again inside the window: said as moved, with no "back on" claim.
+        let d = follow_with(episode(), vec![fact("power-profile", "2026-10-07T12:00:00Z", Some("2026-10-08T12:00:00Z"))]);
+        assert!(d.not_it.iter().all(|n| n.id != "setting-drift"), "{:?}", d.not_it);
+        assert!(d.findings.iter().filter(|f| f.id == "setting-drift").all(|f| f.evidence.iter().all(|e| !e.code.starts_with("drift-restored"))));
+        // Applied changes that read ready without any of them On: neither a restore nor "no changes noticed".
+        let undone = DriftFact { back_on: false, ..fact("applied-changes", NOTICED, Some(BACK_ON)) };
+        let d = follow_with(with_extra(episode(), vec![calm(13), calm(14)]), vec![undone]);
+        assert!(d.not_it.iter().all(|n| n.id != "setting-drift"));
+        assert!(d.findings.iter().filter(|f| f.id == "setting-drift").all(|f| f.now != Some(NowStatus::PointsTo)));
+        let moved = d.seen.iter().find(|s| s.id == "setting-drift-moved");
+        assert!(moved.is_none_or(|m| !m.args.contains_key("restored")), "{:?}", moved);
+    }
+
+    /// After the 30-day prune "no changes noticed" is only said for a window inside what Compy remembers.
+    #[test]
+    fn no_changes_noticed_needs_the_window_to_be_inside_what_compy_remembers() {
+        let mut inp = inputs(episode());
+        inp.changes = ChangeRead::Report { report: Box::new(report(Vec::new())), steam: GameSteam::Found };
+        inp.drift_horizon = Some("2026-09-15T00:00:00Z".into());
+        let inside = diagnose(&inp, Complaint::Slow, Some("g"));
+        assert!(inside.not_it.iter().any(|n| n.id == "setting-drift"), "the window opened after the horizon: the old answer");
+        inp.drift_horizon = Some("2026-10-05T00:00:00Z".into());
+        let outside = diagnose(&inp, Complaint::Slow, Some("g"));
+        assert!(outside.not_it.iter().all(|n| n.id != "setting-drift"));
+        assert!(outside.unknowns.contains(&"drift-horizon"), "{:?}", outside.unknowns);
     }
 
     #[test]
@@ -3189,7 +3349,7 @@ mod recovery_f3 {
 
     #[test]
     fn a_setting_notice_that_still_stands_points_away_and_an_unplaceable_one_cannot_tell() {
-        let drift = |at: &str| DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: at.into(), cleared_at: None, titles: vec![] };
+        let drift = |at: &str| DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: at.into(), cleared_at: None, titles: vec![], back_on: true };
         let mk = |fact: DriftFact, unread: bool| {
             let mut inp = inputs(with_extra(episode(), two(calm)));
             inp.drift = vec![fact];
@@ -5152,6 +5312,7 @@ fn a_drift_notice_carries_the_time_it_was_noticed_and_last_seen_fine_so_the_card
         noticed_at: "2026-10-07T12:00:00Z".into(),
         cleared_at: None,
         titles: vec![],
+        back_on: true,
     });
     let d = diagnose(&inp, Complaint::Slow, Some("g"));
     let f = d.findings.iter().find(|f| f.id == "setting-drift").expect("noticed inside the window");
@@ -5190,7 +5351,7 @@ fn the_p3_wire_fixture_matches_what_serde_emits() {
     let mut sess = steady_on_old("g", 10);
     sess.push(rough_on_new("g", 10));
     let mut inp = inputs(sess);
-    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: Some("2026-10-07T11:30:00Z".into()), noticed_at: "2026-10-07T12:00:00Z".into(), cleared_at: None, titles: vec![] });
+    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: Some("2026-10-07T11:30:00Z".into()), noticed_at: "2026-10-07T12:00:00Z".into(), cleared_at: None, titles: vec![], back_on: true });
     let drift = diagnose(&inp, Complaint::Slow, Some("g"));
     assert_eq!(keys("drift-noticed", &drift.findings), want("drift_noticed_arg_keys"));
 }

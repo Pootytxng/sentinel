@@ -8,6 +8,11 @@ export function requestCheckFocus(rowId: string): void {
   wanted = rowId;
 }
 
+/** True while a request is waiting to be taken (tests only: nothing in the app reads it). */
+export function checkFocusPending(): boolean {
+  return wanted !== null;
+}
+
 /** True once for the row that was asked for; false for every other row and after it was taken. */
 export function takeCheckFocus(rowId: string): boolean {
   if (wanted !== rowId) return false;
