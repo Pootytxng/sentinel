@@ -8,7 +8,7 @@
 //!
 //! The rule here: a system tool is named by the closed [`SysTool`] enum, never by a string; its path is
 //! built from the REAL system directory returned by the Win32 API (`GetSystemDirectoryW` /
-//! `GetWindowsDirectoryW`) and never from `PATH`, the application directory, the current directory or an
+//! `GetSystemWindowsDirectoryW`) and never from `PATH`, the application directory, the current directory or an
 //! environment variable (`SystemRoot`/`windir` are attacker-influenced; the API is not). The child is
 //! started with an absolute program path, so std's search order is never used, and it never starts in
 //! the install or data folder (its working directory is System32).
@@ -119,11 +119,13 @@ fn query_system_dir() -> Option<PathBuf> {
     wide_to_path(&buf, n)
 }
 
+/// The SYSTEM Windows directory. `GetSystemWindowsDirectoryW`, not `GetWindowsDirectoryW`: on a
+/// Terminal Server the latter can return a per-user private Windows directory (hardening 1b).
 fn query_windows_dir() -> Option<PathBuf> {
-    use windows::Win32::System::SystemInformation::GetWindowsDirectoryW;
+    use windows::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
     let mut buf = [0u16; 520];
     // SAFETY: `buf` is a valid, writable buffer for the whole call.
-    let n = unsafe { GetWindowsDirectoryW(Some(&mut buf)) };
+    let n = unsafe { GetSystemWindowsDirectoryW(Some(&mut buf)) };
     wide_to_path(&buf, n)
 }
 
@@ -138,7 +140,7 @@ pub(crate) fn system_dir() -> &'static Path {
     DIR.get_or_init(|| dir_or_unavailable(query_system_dir()))
 }
 
-/// The real Windows directory (`GetWindowsDirectoryW`).
+/// The real Windows directory (`GetSystemWindowsDirectoryW`).
 pub(crate) fn windows_dir() -> &'static Path {
     static DIR: OnceLock<PathBuf> = OnceLock::new();
     DIR.get_or_init(|| dir_or_unavailable(query_windows_dir()))
@@ -344,24 +346,19 @@ mod tests {
         assert_eq!(confined(base, "powercfg.exe"), Some(base.join("powercfg.exe")));
     }
 
+    /// The pure resolver follows only the directories it is given: nothing about the current exe or the
+    /// working directory enters. (a1b: this test used to plant fakes in a temp folder the resolver
+    /// never reads, which proved nothing about planting. The real planting tests put a decoy beside
+    /// the RUNNING executable: change_sources::tests::a_powershell_planted_beside_the_executable_is_never_run
+    /// and a_wevtutil_planted_beside_the_executable_is_never_run.)
     #[test]
-    fn a_fake_tool_in_the_app_directory_is_not_what_gets_resolved() {
-        // Plant fakes in a temp "app directory" (never the real install directory).
-        let app = std::env::temp_dir().join(format!("compy-h1-app-{}", std::process::id()));
-        std::fs::create_dir_all(&app).expect("temp app dir");
-        for &t in SysTool::ALL {
-            std::fs::write(app.join(t.file_name()), b"not a real exe").expect("plant fake");
-        }
+    fn the_pure_resolver_follows_only_its_own_directories() {
+        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
         for &t in SysTool::ALL {
             let p = sys_tool_path(t);
-            assert!(!under(&p, &app), "{t:?} resolved into the app directory: {p:?}");
-            assert_ne!(p.file_name(), None);
-            assert!(p.is_absolute(), "an absolute path is never searched for, so the fake cannot win");
-            let prog = PathBuf::from(sys_command(t).get_program());
-            assert!(!under(&prog, &app), "{t:?}: the Command would run {prog:?}");
+            assert!(p.is_absolute(), "an absolute path is never searched for");
+            assert!(!under(&p, &exe_dir), "{t:?} resolved into the executable's folder: {p:?}");
         }
-        // Even with explicit fake directories handed to the pure resolver, the answer follows ITS
-        // directories only; nothing about the current exe or cwd enters.
         let fake_sys = Path::new(r"X:\fake\System32");
         let fake_win = Path::new(r"X:\fake\Windows");
         assert_eq!(tool_path_in(fake_sys, fake_win, SysTool::Powercfg), fake_sys.join("powercfg.exe"));
@@ -370,7 +367,6 @@ mod tests {
             tool_path_in(fake_sys, fake_win, SysTool::PowerShell),
             fake_sys.join(r"WindowsPowerShell\v1.0").join("powershell.exe")
         );
-        let _ = std::fs::remove_dir_all(&app);
     }
 
     #[test]
@@ -554,43 +550,248 @@ mod tests {
         "schtasks", "wmic", "dism", "taskkill", "ping",
     ];
 
-    /// One source line as the spawn guard sees it: (what process-creating thing it contains, whether
-    /// it carries the `// spawn-allow:` marker). Whole-line comments are never code.
-    fn classify(line: &str) -> (Option<&'static str>, bool) {
-        if line.trim_start().starts_with("//") {
-            return (None, false);
+    /// One source line as the spawn guard sees it, after [`mask_source`] took the WHOLE file apart.
+    struct MaskedLine {
+        /// The code with comments removed and string/char literal CONTENTS blanked (quotes kept), so
+        /// neither a comment nor text inside a string can hide or fake a spawn.
+        blank: String,
+        /// The code with comments removed but string literals intact (for `OsStr::new("tool")`).
+        with_strings: String,
+        /// The text of every comment on the line (where the `spawn-allow:` marker must be).
+        comment: String,
+    }
+
+    fn is_ident(c: char) -> bool {
+        c.is_ascii_alphanumeric() || c == '_'
+    }
+
+    /// Split a Rust source file into masked lines. A small lexer over the whole text, so a string or a
+    /// block comment that spans lines is masked on every line it covers, and a `" // "` inside a string
+    /// does not end the code (a1b: the line-based split at ` // ` let a spawn hide after such a string).
+    /// Handles `//` and nested `/* */` comments, `"..."` with escapes, raw strings `r#"..."#` (also
+    /// `br`), char literals (`'"'`, `'\''`) vs lifetimes (`'a`).
+    fn mask_source(text: &str) -> Vec<MaskedLine> {
+        #[derive(PartialEq)]
+        enum St {
+            Code,
+            Line,
+            Block(usize),
+            Str,
+            Raw(usize),
         }
-        let has_marker = line.contains("// spawn-allow:");
-        let code = line.split("// spawn-allow:").next().unwrap_or(line);
-        // A trailing prose comment is not code either.
-        let code = code.split(" // ").next().unwrap_or(code);
-        // `Command::new` in any form (call, path, split before the paren), unless it is only the
-        // text of a string literal (a list of banned words).
-        let mut rest = code;
-        while let Some(i) = rest.find("Command::new") {
-            let after = &rest[i + "Command::new".len()..];
-            if !after.starts_with('"') {
-                return (Some("Command::new"), has_marker);
+        let chars: Vec<char> = text.chars().collect();
+        let mut out = Vec::new();
+        let (mut blank, mut with_strings, mut comment) = (String::new(), String::new(), String::new());
+        let mut st = St::Code;
+        let mut i = 0;
+        while i < chars.len() {
+            let c = chars[i];
+            let next = chars.get(i + 1).copied();
+            if c == '\n' {
+                out.push(MaskedLine {
+                    blank: std::mem::take(&mut blank),
+                    with_strings: std::mem::take(&mut with_strings),
+                    comment: std::mem::take(&mut comment),
+                });
+                if st == St::Line {
+                    st = St::Code;
+                }
+                i += 1;
+                continue;
             }
-            rest = after;
+            match st {
+                St::Code => {
+                    if c == '/' && next == Some('/') {
+                        st = St::Line;
+                        comment.push_str("//");
+                        i += 2;
+                        continue;
+                    }
+                    if c == '/' && next == Some('*') {
+                        st = St::Block(1);
+                        i += 2;
+                        continue;
+                    }
+                    if c == '"' {
+                        st = St::Str;
+                        blank.push('"');
+                        with_strings.push('"');
+                        i += 1;
+                        continue;
+                    }
+                    // Raw string: r"..", r#".."#, br#".."# (an `r` that starts a token).
+                    let prev = if i > 0 { Some(chars[i - 1]) } else { None };
+                    let token_start = match prev {
+                        None => true,
+                        Some(p) if !is_ident(p) => true,
+                        Some('b') => i < 2 || !is_ident(chars[i - 2]),
+                        _ => false,
+                    };
+                    if c == 'r' && token_start {
+                        let mut j = i + 1;
+                        while chars.get(j) == Some(&'#') {
+                            j += 1;
+                        }
+                        if chars.get(j) == Some(&'"') {
+                            let hashes = j - i - 1;
+                            st = St::Raw(hashes);
+                            blank.push('"');
+                            with_strings.extend(&chars[i..=j]);
+                            i = j + 1;
+                            continue;
+                        }
+                    }
+                    if c == '\'' {
+                        // Char literal or lifetime.
+                        if next == Some('\\') {
+                            let mut j = i + 2;
+                            while j < chars.len() && chars[j] != '\'' && chars[j] != '\n' {
+                                j += 1;
+                            }
+                            blank.push_str("' '");
+                            with_strings.extend(&chars[i..=j.min(chars.len() - 1)]);
+                            i = j + 1;
+                            continue;
+                        }
+                        if chars.get(i + 2) == Some(&'\'') {
+                            blank.push_str("' '");
+                            with_strings.extend(&chars[i..i + 3]);
+                            i += 3;
+                            continue;
+                        }
+                    }
+                    blank.push(c);
+                    with_strings.push(c);
+                    i += 1;
+                }
+                St::Line => {
+                    comment.push(c);
+                    i += 1;
+                }
+                St::Block(depth) => {
+                    if c == '*' && next == Some('/') {
+                        st = if depth == 1 { St::Code } else { St::Block(depth - 1) };
+                        i += 2;
+                    } else if c == '/' && next == Some('*') {
+                        st = St::Block(depth + 1);
+                        i += 2;
+                    } else {
+                        comment.push(c);
+                        i += 1;
+                    }
+                }
+                St::Str => {
+                    if c == '\\' {
+                        blank.push_str("  ");
+                        with_strings.push(c);
+                        if let Some(n) = next.filter(|n| *n != '\n') {
+                            with_strings.push(n);
+                            i += 2;
+                        } else {
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    if c == '"' {
+                        st = St::Code;
+                        blank.push('"');
+                    } else {
+                        blank.push(' ');
+                    }
+                    with_strings.push(c);
+                    i += 1;
+                }
+                St::Raw(hashes) => {
+                    if c == '"' && (1..=hashes).all(|k| chars.get(i + k) == Some(&'#')) {
+                        st = St::Code;
+                        blank.push('"');
+                        with_strings.extend(&chars[i..=i + hashes]);
+                        i += hashes + 1;
+                        continue;
+                    }
+                    blank.push(' ');
+                    with_strings.push(c);
+                    i += 1;
+                }
+            }
+        }
+        out.push(MaskedLine { blank, with_strings, comment });
+        out
+    }
+
+    /// The name declared by `fn NAME` on this masked line, if any.
+    fn declared_fn(blank: &str) -> Option<String> {
+        let mut from = 0;
+        while let Some(i) = blank[from..].find("fn ") {
+            let at = from + i;
+            let before_ok = at == 0 || !is_ident(blank[..at].chars().next_back().unwrap());
+            let name: String = blank[at + 3..].trim_start().chars().take_while(|c| is_ident(*c)).collect();
+            if before_ok && !name.is_empty() {
+                return Some(name);
+            }
+            from = at + 3;
+        }
+        None
+    }
+
+    /// What process-creating thing a masked line contains, if any, and whether its comment carries the
+    /// `spawn-allow:` marker.
+    fn classify(line: &MaskedLine) -> (Option<&'static str>, bool) {
+        let marked = line.comment.contains("spawn-allow:");
+        let code = line.blank.as_str();
+        if code.contains("Command::new") || code.contains("Command>::new") {
+            return (Some("Command::new"), marked);
         }
         if code.contains("Command as ") {
-            return (Some("aliased Command import"), has_marker);
+            return (Some("aliased Command import"), marked);
+        }
+        // `type C = std::process::Command;` (a1b): a type alias hides the name `Command::new`.
+        if let Some(t) = code.find("type ") {
+            let word_start = t == 0 || !is_ident(code[..t].chars().next_back().unwrap());
+            if word_start && code[t..].split_once('=').is_some_and(|(_, rhs)| rhs.contains("Command")) {
+                return (Some("type alias of Command"), marked);
+            }
         }
         if ["tokio::process", "async_process", "smol::process", "async_std::process"].iter().any(|p| code.contains(p)) {
-            return (Some("async process crate"), has_marker);
+            return (Some("async process crate"), marked);
         }
-        // Case-sensitive on purpose: the SHELLEXECUTEINFOW struct and prose do not match.
-        if ["CreateProcess", "ShellExecute", "WinExec", "NtCreateUserProcess"].iter().any(|f| code.contains(f)) {
-            return (Some("process-creating Win32 call"), has_marker);
+        // Case-sensitive on purpose: the SHELLEXECUTEINFOW struct does not match. Covers the W/A/Ex
+        // variants of CreateProcess and ShellExecute, and the native-API process creators.
+        const WIN32: &[&str] = &[
+            "CreateProcess", "ShellExecute", "WinExec", "NtCreateUserProcess", "NtCreateProcess", "ZwCreateUserProcess",
+            "ZwCreateProcess", "RtlCreateUserProcess",
+        ];
+        if WIN32.iter().any(|f| code.contains(f)) {
+            return (Some("process-creating Win32 call"), marked);
         }
+        let s = line.with_strings.as_str();
         let names_tool = SPAWN_TOOLS.iter().any(|tool| {
-            code.contains(&format!("OsStr::new(\"{tool}\"")) || code.contains(&format!("OsStr::new(\"{tool}.exe\""))
+            s.contains(&format!("OsStr::new(\"{tool}\"")) || s.contains(&format!("OsStr::new(\"{tool}.exe\""))
         });
         if names_tool {
-            return (Some("system tool named by string"), has_marker);
+            return (Some("system tool named by string"), marked);
         }
-        (None, has_marker)
+        (None, marked)
+    }
+
+    /// Every hit in `src`: (1-based line, enclosing fn or "<top level>", what, marked).
+    fn scan(src: &str) -> Vec<(usize, String, Option<&'static str>, bool)> {
+        let mut current_fn = String::from("<top level>");
+        let mut hits = Vec::new();
+        for (i, line) in mask_source(src).iter().enumerate() {
+            if let Some(f) = declared_fn(&line.blank) {
+                current_fn = f;
+            }
+            let (hit, marked) = classify(line);
+            if hit.is_some() || marked {
+                hits.push((i + 1, current_fn.clone(), hit, marked));
+            }
+        }
+        hits
+    }
+
+    fn hit_of(src: &str) -> Option<&'static str> {
+        scan(src).into_iter().find_map(|(_, _, h, _)| h)
     }
 
     #[test]
@@ -603,20 +804,36 @@ mod tests {
             "    Command::new",
             "use tokio::process::Command;",
             "CreateProcessW(None, cmd, None, None, false, flags, None, None, &si, &mut pi)?;",
+            "CreateProcessA(None, cmd)",
             "windows::Win32::System::Threading::CreateProcessAsUserW(token)",
             "ShellExecuteExW(&mut sei)",
             "ShellExecuteW(None, verb, file, None, None, SW_HIDE);",
+            "ShellExecuteA(None, verb, file, None, None, SW_HIDE);",
             "WinExec(cmdline, 0);",
+            "RtlCreateUserProcess(&path, 0, params)",
+            "NtCreateUserProcess(&mut h, &mut t)",
             r#"elevate_and_wait(std::ffi::OsStr::new("powershell"), &args)"#,
             r#"elevate_and_wait(OsStr::new("cmd.exe"), &args)"#,
+            // a1b review r1 evasions:
+            r#"let c = <std::process::Command>::new("x");"#,
+            "type C = std::process::Command;",
+            "pub(crate) type Runner = Command;",
+            r#"let s = " // "; let c = Command::new("x");"#,
+            r#"let s = "a // b"; CreateProcessW(None, cmd);"#,
+            r#"let q = '"'; let c = Command::new("x");"#,
+            r#"let q = '\''; let c = Command::new("x");"#,
+            "let a = 1; /* note */ let c = Command::new(\"x\");",
+            r##"let s = r#"text " // "#; let c = Command::new("x");"##,
         ] {
-            let (hit, marked) = classify(bad);
-            assert!(hit.is_some(), "the guard must flag: {bad}");
-            assert!(!marked);
+            assert!(hit_of(bad).is_some(), "the guard must flag: {bad}");
+            assert!(!scan(bad).iter().any(|h| h.3), "{bad} carries no marker");
         }
-        // Marked lines are still hits (they are counted against ALLOWED), but are marked.
-        let (hit, marked) = classify("ShellExecuteExW(&mut sei) // spawn-allow: reason");
-        assert!(hit.is_some() && marked);
+        // Marked lines are still hits (pinned in ALLOWED), but are marked.
+        let marked = scan("ShellExecuteExW(&mut sei) // spawn-allow: reason");
+        assert!(marked.len() == 1 && marked[0].2.is_some() && marked[0].3);
+        // A marker INSIDE a string is not a marker.
+        let fake = scan(r#"let s = "// spawn-allow: x"; ShellExecuteExW(&mut sei)"#);
+        assert!(fake.len() == 1 && !fake[0].3, "{fake:?}");
         for fine in [
             "// Command::new(\"x\") in a comment",
             "/// ShellExecuteExW in a doc comment",
@@ -624,41 +841,49 @@ mod tests {
             "cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,",
             "let c = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Powercfg);",
             r#"let name = OsStr::new("--run-elevated");"#,
+            "let s = \"first line\nCommand::new(x) inside a string\nlast\";",
+            "/* a block\n Command::new(x) \n*/ let a = 1;",
+            r##"let s = r#"CreateProcessW " still raw"#;"##,
+            "fn f<'a>(x: &'a str) -> &'a str { x }",
+            "type Count = u32;",
         ] {
-            assert_eq!(classify(fine).0, None, "must not flag: {fine}");
+            assert_eq!(hit_of(fine), None, "must not flag: {fine}");
         }
+        // The enclosing fn is tracked, for the per-function pin.
+        let src = "fn a() {}\nfn spawner() {\n    ShellExecuteExW(&mut sei) // spawn-allow: x\n}\n";
+        assert_eq!(scan(src), vec![(3, "spawner".to_string(), Some("process-creating Win32 call"), true)]);
     }
 
     /// The spawn guard. Every process spawn goes through this module. A line that must create a
-    /// process another way says why with `// spawn-allow: <reason>`; the explicit list below keeps that
-    /// short, and each count is exact.
+    /// process another way says why with `// spawn-allow: <reason>`, and each such line is pinned by
+    /// FILE AND FUNCTION with an exact count (a1b: a per-file count let a marker move to another line
+    /// or function in the same file unnoticed).
     #[test]
     fn no_bare_command_new_outside_the_resolver() {
-        // (file, number of marked lines). Keep this list explicit and short.
-        const ALLOWED: &[(&str, usize)] = &[
-            ("actions.rs", 3),        // QA missing-program test; ShellExecuteExW import + call (the UAC runas launch)
-            ("lib.rs", 1),            // test-only git, never shipped
-            ("monitoring.rs", 1),     // the FPS self-spawn of current_exe() (absolute path)
+        // (file, enclosing fn, number of marked lines). Keep this list explicit and short.
+        const ALLOWED: &[(&str, &str, usize)] = &[
+            ("actions.rs", "elevate_and_wait", 2), // ShellExecuteExW import + call: the one UAC runas launch
+            ("actions.rs", "a_command_that_doesnt_answer_in_time_is_unread_and_ended", 1), // QA test: an absolute path that does not exist
+            ("lib.rs", "build_dirty_predicate_flips_on_unstaged_change", 1), // test-only git, never shipped
+            ("monitoring.rs", "start_fps_capture_locked", 1), // the FPS self-spawn of current_exe() (absolute path)
         ];
         let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut files = Vec::new();
         rust_files(&src, &mut files);
         assert!(files.len() > 20, "the scan must find the sources ({} files)", files.len());
         let mut violations = Vec::new();
-        let mut marked: HashMap<String, usize> = HashMap::new();
+        let mut marked: HashMap<(String, String), usize> = HashMap::new();
         for f in &files {
             let name = f.file_name().unwrap().to_string_lossy().into_owned();
             if name == "sys_exe.rs" {
                 continue;
             }
             let text = std::fs::read_to_string(f).expect("read source");
-            for (i, line) in text.lines().enumerate() {
-                match classify(line) {
-                    (Some(_), true) => *marked.entry(name.clone()).or_default() += 1,
-                    (Some(why), false) => violations.push(format!("{}:{}: {why}: {}", name, i + 1, line.trim())),
-                    (None, true) => {
-                        violations.push(format!("{}:{}: spawn-allow marker on a line that creates nothing", name, i + 1))
-                    }
+            for (line, func, hit, is_marked) in scan(&text) {
+                match (hit, is_marked) {
+                    (Some(_), true) => *marked.entry((name.clone(), func)).or_default() += 1,
+                    (Some(why), false) => violations.push(format!("{name}:{line} (fn {func}): {why}")),
+                    (None, true) => violations.push(format!("{name}:{line} (fn {func}): spawn-allow marker on a line that creates nothing")),
                     (None, false) => {}
                 }
             }
@@ -668,9 +893,10 @@ mod tests {
             "spawn through crate::sys_exe::sys_command(SysTool::..) (or add `// spawn-allow: <reason>` and update ALLOWED):\n{}",
             violations.join("\n")
         );
-        let mut got: Vec<(String, usize)> = marked.into_iter().collect();
+        let mut got: Vec<(String, String, usize)> = marked.into_iter().map(|((f, func), n)| (f, func, n)).collect();
         got.sort();
-        let mut want: Vec<(String, usize)> = ALLOWED.iter().map(|(f, n)| (f.to_string(), *n)).collect();
+        let mut want: Vec<(String, String, usize)> =
+            ALLOWED.iter().map(|(f, func, n)| (f.to_string(), func.to_string(), *n)).collect();
         want.sort();
         assert_eq!(got, want, "the spawn-allow list changed; review it and update ALLOWED deliberately");
     }

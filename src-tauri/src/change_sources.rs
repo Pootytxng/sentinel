@@ -2627,7 +2627,7 @@ mod tests {
     /// g4: no skip branch passes. Every set-up problem FAILS with "could not set up"; the decoy is
     /// never spawned (a bad "MZ" image can raise a modal error box or an antivirus hold, which hung
     /// this test); the property is proven at the resolver (the exact system-directory path, never
-    /// the test executable's folder) and by the real read, which is bounded by its 10 s kill budget.
+    /// the test executable's folder) and by the real read, which is bounded by REAL_LOG_BUDGET.
     #[test]
     fn a_wevtutil_planted_beside_the_executable_is_never_run() {
         let _serial = PLANT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
@@ -2653,13 +2653,61 @@ mod tests {
         assert!(!lower(&program).starts_with(&lower(&exe_dir)), "resolved into the test executable's folder: {program:?}");
         assert_ne!(lower(&program), lower(&planted), "resolved to the decoy");
 
-        // And the real reader runs that tool: the decoy cannot print an event. Bounded: the read is
-        // killed at 10 s, and the elapsed check catches a wait that outlived its own budget.
+        // And the real reader runs that tool: the decoy cannot print an event. Bounded by the
+        // load-tolerant REAL_LOG_BUDGET (a1b: was 10 s, which a loaded PC could miss); a timeout is
+        // still a FAILURE, never a skip, and the elapsed check catches a wait that outlived the budget.
         let started = Instant::now();
-        let r = run_wevtutil("System", None, 1, false, Duration::from_secs(10));
-        assert!(started.elapsed() < Duration::from_secs(30), "the bounded read took {:?}", started.elapsed());
+        let r = run_wevtutil("System", None, 1, false, REAL_LOG_BUDGET);
+        assert!(
+            started.elapsed() < REAL_LOG_BUDGET + Duration::from_secs(30),
+            "the bounded read took {:?}",
+            started.elapsed()
+        );
         assert!(matches!(&r, Ok(t) if !t.timed_out && t.xml.contains("<Event")), "{r:?}");
         assert!(planted.is_file(), "the decoy must still be there when the real read ran, or nothing was shown");
+    }
+
+    /// Hardening 1b (m1a1 review r1, test 6): PowerShell was the actual hole (the elevated helper ran
+    /// a bare `powershell.exe`), so the planting test is repeated for it, in the REAL place a planted
+    /// file would be found first: beside the running executable. Lives here, next to the wevtutil
+    /// test, to share its PLANT_LOCK and drop guard (no new lock). Same rules: set-up problems FAIL,
+    /// the decoy is never spawned, and the resolved PowerShell really runs (bounded) and reports its
+    /// own image path, which must be the system directory's.
+    #[test]
+    fn a_powershell_planted_beside_the_executable_is_never_run() {
+        let _serial = PLANT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let real = crate::sys_exe::sys_tool_path(crate::sys_exe::SysTool::PowerShell);
+        let planted = exe_dir.join("powershell.exe");
+        if planted.exists() {
+            std::fs::remove_file(&planted)
+                .unwrap_or_else(|e| panic!("could not set up: a leftover decoy {planted:?} could not be removed: {e}"));
+        }
+        std::fs::write(&planted, b"MZ decoy, never to be executed")
+            .unwrap_or_else(|e| panic!("could not set up: cannot write the decoy {planted:?}: {e}"));
+        let _guard = Planted(planted.clone());
+        assert!(planted.is_file(), "could not set up: the decoy {planted:?} vanished (antivirus?)");
+
+        for cmd in [
+            crate::sys_exe::sys_command(crate::sys_exe::SysTool::PowerShell),
+            crate::sys_exe::elevated_command(crate::sys_exe::SysTool::PowerShell),
+        ] {
+            let program = PathBuf::from(cmd.get_program());
+            assert!(program.is_absolute(), "{program:?}");
+            assert_eq!(lower(&program), lower(&real), "resolved to something other than the system PowerShell");
+            assert!(!lower(&program).starts_with(&lower(&exe_dir)), "resolved into the test executable's folder: {program:?}");
+        }
+
+        // The resolved PowerShell really runs and names its own image: never the decoy. Bounded: the
+        // child is killed at 60 s by its own handle (output_within).
+        let mut cmd = crate::sys_exe::elevated_command(crate::sys_exe::SysTool::PowerShell);
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", "(Get-Process -Id $PID).Path"]);
+        let out = crate::actions::output_within(cmd, Duration::from_secs(60))
+            .expect("the system PowerShell did not start or did not finish within 60 s");
+        let image = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        assert!(out.status.success(), "{image}\n{}", String::from_utf8_lossy(&out.stderr));
+        assert_eq!(lower(std::path::Path::new(&image)), lower(&real), "the child that ran was not the system PowerShell");
+        assert!(planted.is_file(), "the decoy must still be there when PowerShell ran, or nothing was shown");
     }
 
     /// The text of `fn <name>` up to its closing brace at column 0.

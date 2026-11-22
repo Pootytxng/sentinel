@@ -1078,6 +1078,17 @@ pub(crate) fn parse_batch_receipts(text: &str) -> std::collections::HashMap<Stri
 pub(crate) const ELEVATION_DECLINED_MSG: &str =
     "You didn't approve the elevation prompt — nothing was changed.";
 
+/// Exit code of the elevated command helper (`compy.exe --run-elevated`, lib.rs) when it was approved
+/// but Windows PowerShell itself could not be STARTED (missing, or the system directory unreadable
+/// so the resolver failed closed): no command ran. Hardening 1b. Chosen far from the small codes
+/// PowerShell and the system tools return (an elevated command may not contain `exit`).
+pub(crate) const HELPER_POWERSHELL_NOT_STARTED: i32 = 0x4350_5334;
+
+/// What the parent says for [`HELPER_POWERSHELL_NOT_STARTED`]. It starts with the launch-error prefix
+/// on purpose, so `elevation_error_nothing_ran` treats it as "nothing ran".
+pub(crate) const HELPER_POWERSHELL_NOT_STARTED_MSG: &str =
+    "could not launch elevated process: Windows PowerShell did not start in the administrator helper, so nothing was changed.";
+
 /// Quote one argument per the MSVC CommandLineToArgvW rules: bare if it has no space/tab/quote,
 /// else wrapped in quotes with `"` escaped as `\"` and backslashes doubled ONLY where they precede
 /// a quote (mid-path backslashes stay literal). Pure; unit-tested.
@@ -1123,6 +1134,21 @@ fn shell_launch_error_to_io(e: windows::core::Error) -> std::io::Error {
     }
 }
 
+/// Hardening 1b: ShellExecuteExW looks a bare or relative name up through App Paths, the current
+/// directory and PATH. `elevate_and_wait` launches only an absolute path; anything else is refused
+/// here, BEFORE the shell is called, as a launch error (nothing ran, no prompt shown). Pure, so the
+/// refusal is tested without ever calling the elevation API.
+fn elevation_target_refused(file: &std::ffi::OsStr) -> Option<std::io::Error> {
+    if std::path::Path::new(file).is_absolute() {
+        None
+    } else {
+        Some(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "refused: the program to elevate must be an absolute path",
+        ))
+    }
+}
+
 /// Launch `file` elevated (ShellExecuteExW, verb "runas", hidden) with `args`, wait for it to
 /// exit, and return its REAL exit status — with launch-layer failures surfaced as `io::Error`s
 /// that preserve `GetLastError`. A UAC decline is os error 1223 (ERROR_CANCELLED), which is the
@@ -1140,6 +1166,9 @@ pub(crate) fn elevate_and_wait(
     file: &std::ffi::OsStr,
     args: &[&std::ffi::OsStr],
 ) -> std::io::Result<std::process::ExitStatus> {
+    if let Some(refused) = elevation_target_refused(file) {
+        return Err(refused);
+    }
     use std::os::windows::ffi::OsStrExt;
     use std::os::windows::process::ExitStatusExt;
     use windows::core::PCWSTR;
@@ -1230,6 +1259,7 @@ pub(crate) fn elevation_outcome(
     match result {
         Err(e) if e.raw_os_error() == Some(ERROR_CANCELLED) => Err(ELEVATION_DECLINED_MSG.into()),
         Err(e) => Err(format!("could not launch elevated process: {}", e)),
+        Ok(s) if s.code() == Some(HELPER_POWERSHELL_NOT_STARTED) => Err(HELPER_POWERSHELL_NOT_STARTED_MSG.into()),
         Ok(s) if !s.success() => Err(format!(
             "You approved the elevation, but the operation itself failed (exit code {}) — the prompt was fine; the command hit an error.",
             s.code().map(|c| c.to_string()).unwrap_or_else(|| "?".into())
@@ -1897,6 +1927,34 @@ mod elevation_attribution_tests {
             "launch failure must never read as approved-but-failed: {msg}"
         );
         assert!(super::elevation_error_nothing_ran(&msg), "got: {msg}");
+    }
+
+    /// Hardening 1b: a bare or relative program name never reaches ShellExecuteExW (which would look
+    /// it up through App Paths, the current directory and PATH). It is refused before the shell is
+    /// called: InvalidInput, no OS error code, no prompt, and it reads as "nothing ran". Tested on the
+    /// pure check only: calling elevate_and_wait with a bare name on code without the check would
+    /// start a real elevated process, which a test must never do.
+    #[test]
+    fn elevate_and_wait_refuses_anything_but_an_absolute_path() {
+        for name in ["powershell.exe", "powershell", r"sub\compy.exe", r".\compy.exe", r"\Windows\System32\cmd.exe", "C:cmd.exe"] {
+            let err = super::elevation_target_refused(std::ffi::OsStr::new(name)).unwrap_or_else(|| panic!("{name} must be refused"));
+            assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput, "{name}: {err}");
+            assert_eq!(err.raw_os_error(), None, "{name}: refused before any shell call, got {err}");
+            let msg = elevation_outcome(Err(err)).unwrap_err();
+            assert!(super::elevation_error_nothing_ran(&msg), "{name}: {msg}");
+        }
+        for ok in [r"C:\Windows\System32\cmd.exe", r"\\?\C:\Program Files\Compy\compy.exe"] {
+            assert!(super::elevation_target_refused(std::ffi::OsStr::new(ok)).is_none(), "{ok}");
+        }
+        // The check is the FIRST statement of elevate_and_wait, before any COM or shell call.
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        let start = src.find("pub(crate) fn elevate_and_wait(").expect("elevate_and_wait");
+        let body = &src[start..];
+        let open = body.find("{\n").expect("body") + 2;
+        assert!(
+            body[open..].trim_start().starts_with("if let Some(refused) = elevation_target_refused(file) {"),
+            "elevate_and_wait must refuse a non-absolute path before anything else"
+        );
     }
 
     #[test]

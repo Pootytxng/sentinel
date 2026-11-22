@@ -107,10 +107,17 @@ pub fn run_elevated_helper(hex: &str, ticket_path: &str) -> i32 {
     let Ok(command) = String::from_utf8(bytes) else {
         return 2;
     };
-    elevated_powershell_command(&command)
-        .status()
-        .map(|s| s.code().unwrap_or(1))
-        .unwrap_or(1)
+    helper_exit_code(elevated_powershell_command(&command).status())
+}
+
+/// The helper's exit code for PowerShell's run: its own code once it ran (1 when it has none), and
+/// `HELPER_POWERSHELL_NOT_STARTED` when it could not be STARTED at all, so the parent can say that
+/// nothing ran instead of "approved, but the operation failed" (hardening 1b).
+fn helper_exit_code(status: std::io::Result<std::process::ExitStatus>) -> i32 {
+    match status {
+        Ok(s) => s.code().unwrap_or(1),
+        Err(_) => actions::HELPER_POWERSHELL_NOT_STARTED,
+    }
 }
 
 /// The command the elevated helper runs: the real `powershell.exe` from the system directory (never
@@ -2650,7 +2657,30 @@ mod safety_tests {
 
 #[cfg(test)]
 mod elevated_helper_tests {
-    use super::elevated_powershell_command;
+    use super::{elevated_powershell_command, helper_exit_code};
+    use crate::actions::{
+        elevation_error_nothing_ran, elevation_outcome, HELPER_POWERSHELL_NOT_STARTED, HELPER_POWERSHELL_NOT_STARTED_MSG,
+    };
+
+    /// Hardening 1b: PowerShell that cannot be STARTED (NotFound: what a missing powershell.exe or the
+    /// fail-closed resolver gives, see sys_exe::tests::when_the_api_fails_every_spawn_fails_closed) is
+    /// its own exit code, and the parent reads that code as "nothing ran, nothing was changed", never
+    /// "approved, but the operation failed".
+    #[test]
+    fn powershell_that_never_started_reads_as_nothing_ran() {
+        use std::os::windows::process::ExitStatusExt;
+        let code = helper_exit_code(Err(std::io::Error::from(std::io::ErrorKind::NotFound)));
+        assert_eq!(code, HELPER_POWERSHELL_NOT_STARTED);
+        let err = elevation_outcome(Ok(std::process::ExitStatus::from_raw(code as u32))).unwrap_err();
+        assert_eq!(err, HELPER_POWERSHELL_NOT_STARTED_MSG);
+        assert!(err.contains("nothing was changed"), "{err}");
+        assert!(elevation_error_nothing_ran(&err), "a helper whose PowerShell never started ran nothing");
+        // Controls: PowerShell's own codes keep their meaning.
+        assert_eq!(helper_exit_code(Ok(std::process::ExitStatus::from_raw(0))), 0);
+        assert_eq!(helper_exit_code(Ok(std::process::ExitStatus::from_raw(1))), 1);
+        let ran_failed = elevation_outcome(Ok(std::process::ExitStatus::from_raw(1))).unwrap_err();
+        assert!(!elevation_error_nothing_ran(&ran_failed), "{ran_failed}");
+    }
     use crate::sys_exe::{sys_tool_path, system_dir, SysTool, ELEVATED_ENV_ALLOWLIST};
     use std::path::Path;
 

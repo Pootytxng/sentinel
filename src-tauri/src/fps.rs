@@ -761,6 +761,16 @@ fn parse_swapchain(record: &EventRecord, schema_locator: &SchemaLocator) -> u64 
     0
 }
 
+/// `logman stop Compy-FPS -ets`, run inside the capture helper, which is usually ELEVATED. Hardening
+/// slice 1b: like the elevated command helper, it starts the real logman.exe from the system directory
+/// with the inherited (user-shaped) environment cleared and only the short allowlist restored. Same
+/// arguments as before.
+fn stale_session_stop_command() -> std::process::Command {
+    let mut c = crate::sys_exe::elevated_command(crate::sys_exe::SysTool::Logman);
+    c.args(["stop", SESSION_NAME, "-ets"]);
+    c
+}
+
 pub fn run_capture() {
     let opts = parse_opts();
     let freq = perf_frequency() as f64;
@@ -795,9 +805,7 @@ pub fn run_capture() {
     // clean Drop). Without this, StartTrace fails with AlreadyExist and FPS
     // capture can never start again until reboot. logman is built into
     // Windows; ignore its result (no session => harmless error).
-    let _ = crate::actions::quiet_command(crate::sys_exe::SysTool::Logman)
-        .args(["stop", SESSION_NAME, "-ets"])
-        .output();
+    let _ = stale_session_stop_command().output();
 
     let trace = UserTrace::new()
         .named(SESSION_NAME.to_string())
@@ -1133,6 +1141,37 @@ mod presenter_selection_tests {
         assert!((new_fps - new_low1).abs() < 5.0, "steady cadence: fps ≈ low1");
         // And the second chain tracks its own (identical) cadence rather than poisoning the main.
         assert!(chain_b.samples.len() > 100);
+    }
+}
+
+#[cfg(test)]
+mod stale_session_stop_tests {
+    use super::{stale_session_stop_command, SESSION_NAME};
+    use crate::sys_exe::{sys_tool_path, system_dir, windows_dir, SysTool, ELEVATED_ENV_ALLOWLIST};
+    use std::path::Path;
+
+    /// Hardening slice 1b: the capture helper's `logman stop` runs the real logman.exe by absolute
+    /// path, from System32, with exactly the old arguments, and sets only allowlisted variables
+    /// (SystemRoot from the API). Shape only: that the rest is cleared is proven by
+    /// sys_exe::tests::elevated_command_really_clears_the_inherited_environment (same builder).
+    #[test]
+    fn the_capture_helpers_logman_stop_runs_with_the_cleared_environment() {
+        let c = stale_session_stop_command();
+        assert_eq!(Path::new(c.get_program()), sys_tool_path(SysTool::Logman).as_path());
+        let args: Vec<_> = c.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args, ["stop", SESSION_NAME, "-ets"]);
+        assert_eq!(SESSION_NAME, "Compy-FPS", "the session name is part of the capture contract");
+        assert_eq!(c.get_current_dir(), Some(system_dir()));
+        let allowed: Vec<String> = ELEVATED_ENV_ALLOWLIST.iter().map(|s| s.to_ascii_uppercase()).collect();
+        let mut system_root = None;
+        for (k, v) in c.get_envs() {
+            let k = k.to_string_lossy().to_ascii_uppercase();
+            assert!(allowed.contains(&k), "{k} must not reach the elevated logman");
+            if k == "SYSTEMROOT" {
+                system_root = v.map(|v| v.to_string_lossy().to_ascii_lowercase());
+            }
+        }
+        assert_eq!(system_root, Some(windows_dir().to_string_lossy().to_ascii_lowercase()), "SystemRoot from the API");
     }
 }
 
