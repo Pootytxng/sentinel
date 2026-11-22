@@ -1526,5 +1526,7 @@ export type ParamedicDiagnosis = {
   mixed_sessions: string[];
   /** How many of the rough sessions have a record of what was running at the start, of all of them (absent: no rough session). */
   start_record?: ParamedicStartRecord;
+  /** B4: the answered game's recorded sessions and the newest one's start (wire-only; absent with no game). */
+  recorded?: { sessions: number; newest_at: string };
   method: string;
 };

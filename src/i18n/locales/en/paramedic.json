@@ -472,8 +472,18 @@
     "gapProgramNamed": "{{name}} was installed",
     "gapBuild": "Between the rough sessions and the normal ones: Windows went from build {{from}} to {{to}}.",
     "gapUnread": "Compy couldn't read all of Windows' records for that stretch, so other changes in it may be missing.",
-    "roughOnOldDriver_one": "The rough session was still on the old driver.",
-    "roughOnOldDriver_other": "{{count}} of the rough sessions were still on the old driver.",
+    "roughOnOldDriver_one": "The rough session on {{date}} ran on the earlier driver ({{from}}).",
+    "roughOnOldDriver_other": "{{count}} rough sessions ran on the earlier driver ({{from}}), the first on {{date}}.",
+    "driverBack": "Compy read your graphics driver as {{from}} again by {{back}}, the version {{game}} ran on before it got rough.",
+    "driverBackNone": "No {{game}} session has been recorded since.",
+    "driverBackUnjudged_one": "{{count}} {{game}} session has been recorded since, but it was too short or only partly measured, so Compy didn't judge it.",
+    "driverBackUnjudged_other": "{{count}} {{game}} sessions have been recorded since, but they were too short or only partly measured, so Compy didn't judge them.",
+    "driverBackRough_one": "On {{from}} again, {{game}} still ran rough on {{date}}.",
+    "driverBackRough_other": "On {{from}} again, {{game}} still ran rough in {{count}} sessions, the first on {{date}}.",
+    "driverBackClear": "On {{from}} again, {{game}}'s session on {{date}} ran in its usual range. One session so far; Compy says a game is back in its usual range after two.",
+    "driverBackBetween": "The sessions since weren't clearly in {{game}}'s usual range, so Compy can't tell yet.",
+    "recoveredAfterDriverBack": "It recovered after the driver went back to {{version}}, the version from before ({{when}}).",
+    "recoveredAfterDriverBackSeen": "It recovered after the driver went back to {{version}}, the version from before (Compy first saw it on {{when}}).",
     "loadCpu_one": "At their busiest (the top tenth of the session), other programs used about {{rough}}% of your processor; in normal sessions about {{base}}%.",
     "loadCpu_other": "At their busiest (the top tenth of a session), other programs used up to about {{rough}}% of your processor in the rough sessions; in normal sessions about {{base}}%.",
     "loadCpuSame_one": "At their busiest (the top tenth of the session), other programs used about {{rough}}% of your processor, about the same as in normal sessions ({{base}}%). Short bursts wouldn't show in this figure.",
@@ -516,7 +526,8 @@
       "step2": "Open Display adapters, double-click your graphics card, then open the Driver tab.",
       "step3": "If \"Roll Back Driver\" can be clicked, click it and restart. Your previous version was {{from}}.",
       "step4": "If it's greyed out, download {{from}} from the graphics maker's previous-drivers page, run it, and choose the clean install option.",
-      "step5": "Then play {{game}} for one session and press Something's wrong again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet. It needs two sessions in the usual range before it says {{game}} is back to normal."
+      "step5": "Then play {{game}} for one session and press Something's wrong again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet. It needs two sessions in the usual range before it says {{game}} is back to normal.",
+      "stepBack": "Compy read {{from}} again by {{back}}. Play {{game}} once, then press Something's wrong again."
     },
     "backgroundLoad": {
       "step1": "Close {{names}} while you play.",
@@ -804,5 +815,27 @@
     "notProven": "This is what the recorded sessions show. It doesn't prove why it got better.",
     "gapGameFiles": "{{game}}'s files changed",
     "gapProgram": "A program was installed"
+  },
+  "since": {
+    "title": "Since the last check",
+    "newSessions_one": "{{count}} new {{game}} session was recorded (on {{date}}).",
+    "newSessions_other": "{{count}} new {{game}} sessions were recorded, the latest on {{date}}.",
+    "fewer": "Fewer {{game}} sessions are recorded than at the last check.",
+    "noNew": "No new {{game}} session was recorded.",
+    "state": "The answer went from “{{from}}” to “{{to}}”.",
+    "row": "{{name}}: was “{{from}}”, now “{{to}}”.",
+    "rowNew": "Now listed: {{name}}.",
+    "rowGone": "No longer listed: {{name}}.",
+    "unchanged": "Nothing in the answer changed.",
+    "unchangedNoNew": "No new {{game}} session was recorded and nothing in the answer changed. Play {{game}} once, then press Check again.",
+    "otherGame": "This answer is about {{game}}; the last one was about {{prev}}.",
+    "stateLabel": {
+      "rough": "rougher than usual",
+      "once": "one session in its usual range",
+      "recovered": "two sessions in its usual range",
+      "nothingWrong": "nothing found",
+      "cantTell": "can't tell yet",
+      "needsMore": "needs more sessions"
+    }
   }
 }

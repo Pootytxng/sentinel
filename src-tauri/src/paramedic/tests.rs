@@ -490,9 +490,20 @@ fn a_rough_session_on_the_old_driver_weakens_the_driver() {
     second.gpu_driver = Some("1.0".into());
     sess.push(first);
     sess.push(second);
-    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let d = diagnose(&inputs(sess.clone()), Complaint::Slow, Some("g"));
     assert_eq!(d.findings[0].confidence, Certainty::Possible, "one rough session never saw the new driver");
-    assert!(d.findings[0].evidence.iter().any(|e| e.against && e.code == "rough-on-old-driver"));
+    // B4: the newest reading is the earlier driver again, so the rough session on it is the follow-through's own
+    // dated contradiction ("on 1.0 again, still ran rough"), never "was still on the old driver".
+    assert!(d.findings[0].evidence.iter().any(|e| e.against && e.code == "driver-back-rough"));
+    assert!(d.findings[0].evidence.iter().all(|e| e.code != "rough-on-old-driver"));
+    // With the new driver read again after it, nothing is "back": the same session is the dated plain line.
+    let mut inp = inputs(sess);
+    inp.sightings.push(Sighting { observed_at: "2026-10-11T08:00:00Z".into(), gpu_driver: "2.0".into(), power_plan: String::new() });
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    let line = d.findings[0].evidence.iter().find(|e| e.code == "rough-on-old-driver").expect("the plain line");
+    assert!(line.against);
+    assert_eq!((line.args["from"].as_str(), line.args["date"].as_str(), line.args["count"].as_str()), ("1.0", "2026-10-10T10:00:00Z", "1"));
+    assert!(d.findings[0].evidence.iter().all(|e| e.code != "driver-back"));
 }
 
 #[test]
@@ -2930,6 +2941,171 @@ mod recovery_f3 {
             }
             other => panic!("ends \"Still between\": {other:?}"),
         }
+    }
+
+    // ==== B4: the graphics driver read as the earlier version again (instructions only, never who changed it) ======
+    fn sighting(at: &str, driver: &str) -> Sighting {
+        Sighting { observed_at: at.into(), gpu_driver: driver.into(), power_plan: String::new() }
+    }
+
+    fn with_sightings(sess: Vec<SessionFacts>, seen: Vec<Sighting>) -> Diagnosis {
+        let mut inp = inputs(sess);
+        inp.sightings = seen;
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    fn driver_codes(d: &Diagnosis) -> Vec<&'static str> {
+        finding_of(d, "gpu-driver-change").evidence.iter().map(|e| e.code).collect()
+    }
+
+    fn back_arg(f: &Finding) -> Option<String> {
+        match &f.fix {
+            Fix::Steps { code: "gpu-driver-change", args } => args.get("back").cloned(),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn b4_the_driver_read_as_the_earlier_version_again_with_no_session_since_is_dated_and_the_steps_stop_saying_roll_back() {
+        // Only an identity check saw it: a session is not needed to read the driver.
+        let d = with_sightings(episode(), vec![sighting("2026-10-10T08:00:00Z", "1.0")]);
+        let f = finding_of(&d, "gpu-driver-change");
+        let codes = driver_codes(&d);
+        let at = codes.iter().position(|c| *c == "driver-back").unwrap_or_else(|| panic!("said: {codes:?}"));
+        assert_eq!(codes.get(at + 1), Some(&"driver-back-none"), "{codes:?}");
+        let line = &f.evidence[at];
+        assert_eq!((line.kind, line.against), (EvidenceKind::Known, false));
+        assert_eq!((line.args["from"].as_str(), line.args["back"].as_str()), ("1.0", "2026-10-10T08:00:00Z"));
+        assert_eq!(back_arg(f).as_deref(), Some("2026-10-10T08:00:00Z"), "the card's steps change");
+        assert!(f.in_play && f.confidence == Certainty::Possible, "nothing since: neither weakened nor supported");
+        // A reading of the new version after it cancels "back": the newest reading decides.
+        let d = with_sightings(episode(), vec![sighting("2026-10-10T08:00:00Z", "1.0"), sighting("2026-10-11T08:00:00Z", "2.0")]);
+        assert!(!driver_codes(&d).contains(&"driver-back"), "{:?}", driver_codes(&d));
+        assert_eq!(back_arg(finding_of(&d, "gpu-driver-change")), None);
+        // A third version is not "back".
+        let d = with_sightings(episode(), vec![sighting("2026-10-10T08:00:00Z", "3.0")]);
+        assert!(!driver_codes(&d).contains(&"driver-back"));
+    }
+
+    #[test]
+    fn b4_one_rough_session_on_the_earlier_driver_again_is_a_dated_contradiction_and_never_the_old_driver_line() {
+        let d = run(with_extra(episode(), vec![on(10, 30.0, Some("1.0"))]));
+        let f = finding_of(&d, "gpu-driver-change");
+        let line = f.evidence.iter().find(|e| e.code == "driver-back-rough").unwrap_or_else(|| panic!("{:?}", driver_codes(&d)));
+        assert!(line.against && line.kind == EvidenceKind::Measured);
+        assert_eq!((line.args["from"].as_str(), line.args["at"].as_str(), line.args["count"].as_str()), ("1.0", "2026-10-10T10:00:00Z", "1"));
+        assert!(f.evidence.iter().all(|e| e.code != "rough-on-old-driver"), "said once, by the follow-through");
+        assert!(!f.in_play && f.confidence == Certainty::Possible, "weakened, kept, never above Possible");
+    }
+
+    #[test]
+    fn b4_one_clear_session_on_the_earlier_driver_again_is_said_once_and_supports_nothing() {
+        let d = run(with_extra(episode(), vec![on(10, 50.0, Some("1.0"))]));
+        assert_eq!(d.state, unclear(false, true, false));
+        let f = finding_of(&d, "gpu-driver-change");
+        let line = f.evidence.iter().find(|e| e.code == "driver-back-clear").unwrap_or_else(|| panic!("{:?}", driver_codes(&d)));
+        assert!(!line.against && line.kind == EvidenceKind::Measured);
+        assert_eq!(line.args["at"], "2026-10-10T10:00:00Z");
+        assert!(d.measured_once.is_some(), "B2's block still carries the numbers");
+        assert_eq!((f.confidence, f.now), (Certainty::Possible, None));
+        // Two clear sessions are the recovery's own answer: no follow-through line repeats it.
+        let d = run(with_extra(episode(), vec![on(10, 50.0, Some("1.0")), on(11, 50.0, Some("1.0"))]));
+        assert_eq!(d.state, DiagnosisState::Recovered);
+        assert!(driver_codes(&d).iter().all(|c| *c != "driver-back-clear" && *c != "driver-back-between"), "{:?}", driver_codes(&d));
+        let now = &finding_of(&d, "gpu-driver-change").now_evidence;
+        assert!(now.iter().any(|e| e.code == "recovered-after-driver-change" && e.args["back"] == "true"), "{now:?}");
+    }
+
+    /// B4 ("what changed since the last check"): the answer carries the game's own recorded-session count and newest
+    /// start, so "no new session" is said from a count, never from the rows the card happens to show.
+    #[test]
+    fn b4_the_answer_counts_only_the_answered_games_recorded_sessions_and_names_the_newest() {
+        let mut sess = with_extra(episode(), vec![on(10, 50.0, Some("2.0"))]);
+        let mut other = on(12, 50.0, None);
+        other.game = "other".into();
+        sess.push(other);
+        let d = run(sess);
+        assert_eq!(d.recorded, Some(Recorded { sessions: 6, newest_at: at_day(10, 10) }));
+        assert_eq!(serde_json::to_value(&d).unwrap()["recorded"], serde_json::json!({ "sessions": 6, "newest_at": at_day(10, 10) }));
+    }
+
+    // ==== B4: end to end, a scan -> drift.json -> the diagnosis and the readiness drifts the card is handed ========
+    // The scans go through the real `detect_seen` and the real writer, and the diagnosis reads the file back through
+    // `read_inputs_from` (the command's own reader). Sessions are the test's (sessions.json has its own read tests);
+    // Windows' records are an empty, fully read report and the 30-day horizon is fixed (it is the clock), so the
+    // answer is the same on every run. What the card is handed is pinned in
+    // `src/test/fixtures/paramedic-b4-drift-to-card.wire.json` and rendered by `paramedic-b4-e2e.test.tsx`.
+    // Regenerate deliberately: COMPY_PRINT_WIRE_FIXTURE=1 cargo test --lib b4_e2e -- --nocapture.
+    const B4_FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../src/test/fixtures/paramedic-b4-drift-to-card.wire.json");
+    const B4_TITLE: &str = "Trim Windows visual effects";
+
+    fn b4_check(status: &str) -> Vec<(String, String, String, String)> {
+        vec![("applied-changes".into(), "Applied changes".into(), status.into(), String::new())]
+    }
+
+    fn b4_read(dir: &std::path::Path, sess: Vec<SessionFacts>) -> Diagnosis {
+        let mut inp = read_inputs_from(dir).expect("the stores read");
+        inp.sessions = stamped(sess);
+        inp.changes = ChangeRead::Report { report: Box::new(report(Vec::new())), steam: GameSteam::Found };
+        inp.drift_horizon = Some("2026-09-01T00:00:00Z".into());
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    #[test]
+    fn b4_e2e_a_scan_written_to_drift_json_reaches_the_card_as_the_same_setting_off_then_back_on() {
+        use crate::drift::{detect_seen, save_state_for_test, DriftState, Seen};
+        let dir = scratch_dir("b4-e2e");
+        let file = dir.join("drift.json");
+        let one = |s: Seen| std::collections::HashMap::from([("applied-changes".to_string(), s)]);
+        // Read fine on the 5th; Compy's change read off on the 6th (its ledger id travels with its title).
+        let (_, s0) = detect_seen(&b4_check("ready"), &one(Seen { value: Some("1 active".into()), ..Seen::default() }), &DriftState::default(), SEEN_ON);
+        let off_seen = Seen {
+            value: Some("0 on / 1 drifted".into()),
+            titles: vec![B4_TITLE.into()],
+            applied_at: vec!["2026-09-30T10:00:00Z".into()],
+            recs: vec!["visual-effects".into()],
+            ..Seen::default()
+        };
+        let (drifts_off, s1) = detect_seen(&b4_check("attention"), &one(off_seen), &s0, NOTICED);
+        save_state_for_test(&file, &s1);
+        let off = b4_read(&dir, episode());
+        // Read on again on the 12th, with that change's id reading On.
+        let back_seen = Seen { value: Some("1 active".into()), on_titles: vec![B4_TITLE.into()], on_recs: vec!["visual-effects".into()], ..Seen::default() };
+        let (drifts_back, s2) = detect_seen(&b4_check("ready"), &one(back_seen), &s1, BACK_ON);
+        save_state_for_test(&file, &s2);
+        let on_disk = std::fs::read_to_string(&file).expect("written");
+        let back = b4_read(&dir, with_extra(episode(), vec![calm(13), calm(14)]));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // What the file holds, as the writer wrote it: the cleared record keeps the title, its id and "back on".
+        let disk: serde_json::Value = serde_json::from_str(&on_disk).expect("drift.json parses");
+        let cleared = &disk["cleared"]["applied-changes"];
+        assert_eq!((cleared["noticed_at"].as_str(), cleared["cleared_at"].as_str(), cleared["back_on"].as_bool()), (Some(NOTICED), Some(BACK_ON), Some(true)));
+        assert_eq!(cleared["titles"][0]["title"], B4_TITLE);
+        assert_eq!(cleared["titles"][0]["rec"], "visual-effects");
+        // Off: the readiness drift names it with its id; the diagnosis lists the setting with this notice.
+        assert_eq!((drifts_off[0].titles.clone(), drifts_off[0].recs.clone()), (vec![B4_TITLE.to_string()], vec!["visual-effects".to_string()]));
+        let f = finding_of(&off, "setting-drift");
+        assert_eq!((f.evidence[0].code, f.evidence[0].args["check"].as_str(), f.evidence[0].args["noticed"].as_str()), ("drift-noticed", "applied-changes", NOTICED));
+        assert!(drifts_back.is_empty(), "read on again: no standing drift");
+        // Back: two clear sessions after it was read on, the setting's own name carried from the file.
+        assert_eq!(back.state, DiagnosisState::Recovered);
+        assert_eq!(back.recovery.as_ref().map(|r| r.summary.clone()), Some(RecoverySummary::PointsTo { id: "setting-drift" }));
+        let restored = finding_of(&back, "setting-drift").evidence.iter().find(|e| e.code == "drift-noticed").expect("the dated line");
+        assert_eq!((restored.args["titles"].as_str(), restored.args["restored"].as_str()), (B4_TITLE, BACK_ON));
+
+        let wire = serde_json::json!({
+            "off": { "drifts": drifts_off, "diagnosis": off },
+            "back": { "drifts": drifts_back, "diagnosis": back },
+        });
+        let emitted = serde_json::to_string_pretty(&wire).expect("serializes") + "\n";
+        if std::env::var_os("COMPY_PRINT_WIRE_FIXTURE").is_some() {
+            println!("----- BEGIN paramedic-b4-drift-to-card.wire.json -----\n{emitted}----- END -----");
+        }
+        let fixture = std::fs::read_to_string(B4_FIXTURE)
+            .expect("src/test/fixtures/paramedic-b4-drift-to-card.wire.json is missing: regenerate it (see above)")
+            .replace("\r\n", "\n");
+        assert!(fixture == emitted, "what the card is handed changed: check paramedic-b4-e2e.test.tsx, then regenerate the fixture");
     }
 
     #[test]

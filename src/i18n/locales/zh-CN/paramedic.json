@@ -472,8 +472,18 @@
     "gapProgramNamed": "安装了 {{name}}",
     "gapBuild": "在不顺的运行与恢复正常的运行之间：Windows 从 {{from}} 版本变为 {{to}} 版本。",
     "gapUnread": "Compy 没能读完这段时间内 Windows 的记录，所以可能漏掉了其他变化。",
-    "roughOnOldDriver_one": "那次卡顿的游戏仍在用旧驱动。",
-    "roughOnOldDriver_other": "有 {{count}} 次卡顿的游戏仍在用旧驱动。",
+    "roughOnOldDriver_one": "{{date}} 那次卡顿的游戏用的是之前的驱动（{{from}}）。",
+    "roughOnOldDriver_other": "有 {{count}} 次卡顿的游戏用的是之前的驱动（{{from}}），最早的一次在 {{date}}。",
+    "driverBack": "到 {{back}} 时，Compy 读到你的显卡驱动又是 {{from}} 了，也就是 {{game}} 变卡之前用的版本。",
+    "driverBackNone": "此后还没有记录到 {{game}} 的游戏。",
+    "driverBackUnjudged_one": "此后记录到 {{count}} 次 {{game}} 的游戏，但时间太短或只测量了一部分，所以 Compy 没有做判断。",
+    "driverBackUnjudged_other": "此后记录到 {{count}} 次 {{game}} 的游戏，但时间太短或只测量了一部分，所以 Compy 没有做判断。",
+    "driverBackRough_one": "换回 {{from}} 之后，{{game}} 在 {{date}} 仍然不顺。",
+    "driverBackRough_other": "换回 {{from}} 之后，{{game}} 仍有 {{count}} 次不顺，最早的一次在 {{date}}。",
+    "driverBackClear": "换回 {{from}} 之后，{{game}} 在 {{date}} 的那次游戏表现在平时的范围内。目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。",
+    "driverBackBetween": "此后的几次游戏并不明确在 {{game}} 平时的范围内，所以 Compy 暂时还无法判断。",
+    "recoveredAfterDriverBack": "驱动换回之前的版本 {{version}} 之后（{{when}}），它恢复了正常。",
+    "recoveredAfterDriverBackSeen": "驱动换回之前的版本 {{version}} 之后（Compy 在 {{when}} 首次看到），它恢复了正常。",
     "loadCpu_one": "在最忙的时候（一次游戏中最高的十分之一时间），其他程序占用了约 {{rough}}% 的处理器；正常游戏中约为 {{base}}%。",
     "loadCpu_other": "在最忙的时候（一次游戏中最高的十分之一时间），其他程序在这几次不顺的游戏中最多占用了约 {{rough}}% 的处理器；正常游戏中约为 {{base}}%。",
     "loadCpuSame_one": "在最忙的时候（一次游戏中最高的十分之一时间），其他程序占用了约 {{rough}}% 的处理器，与正常游戏（{{base}}%）差不多。这个数字看不到短暂的突发占用。",
@@ -516,7 +526,8 @@
       "step2": "展开“显示适配器”，双击你的显卡，再打开“驱动程序”选项卡。",
       "step3": "如果“回退驱动程序”可以点击，就点击它并重启。你之前的版本是 {{from}}。",
       "step4": "如果它是灰色的，就到显卡厂商的历史驱动页面下载 {{from}}，运行它，并选择“干净安装”。",
-      "step5": "然后玩一次 {{game}}，再按一次“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内，或者还看不出来。要连续两次在平时的范围内，它才会说 {{game}} 已恢复正常。"
+      "step5": "然后玩一次 {{game}}，再按一次“出问题了”。Compy 会告诉你这一次是不顺，还是在平时的范围内，或者还看不出来。要连续两次在平时的范围内，它才会说 {{game}} 已恢复正常。",
+      "stepBack": "到 {{back}} 时 Compy 已读到 {{from}}。玩一次 {{game}}，再按一次“出问题了”。"
     },
     "backgroundLoad": {
       "step1": "玩游戏时请关闭 {{names}}。",
@@ -804,5 +815,27 @@
     "notProven": "这是已记录的游戏数据所显示的情况，并不能证明它为什么变好。",
     "gapGameFiles": "{{game}} 的文件有变化",
     "gapProgram": "安装了一个程序"
+  },
+  "since": {
+    "title": "自上次检查以来",
+    "newSessions_one": "记录到 {{count}} 次新的 {{game}} 游戏（{{date}}）。",
+    "newSessions_other": "记录到 {{count}} 次新的 {{game}} 游戏，最近一次在 {{date}}。",
+    "fewer": "记录到的 {{game}} 游戏比上次检查时少。",
+    "noNew": "没有记录到新的 {{game}} 游戏。",
+    "state": "结论从“{{from}}”变成了“{{to}}”。",
+    "row": "{{name}}：之前是“{{from}}”，现在是“{{to}}”。",
+    "rowNew": "新列出：{{name}}。",
+    "rowGone": "不再列出：{{name}}。",
+    "unchanged": "结论没有变化。",
+    "unchangedNoNew": "没有记录到新的 {{game}} 游戏，结论也没有变化。玩一次 {{game}}，再按“再查一次”。",
+    "otherGame": "这次的结论是关于 {{game}} 的；上一次是关于 {{prev}} 的。",
+    "stateLabel": {
+      "rough": "比平时更卡",
+      "once": "有一次在平时的范围内",
+      "recovered": "连续两次在平时的范围内",
+      "nothingWrong": "没有发现问题",
+      "cantTell": "暂时无法判断",
+      "needsMore": "需要更多游戏记录"
+    }
   }
 }

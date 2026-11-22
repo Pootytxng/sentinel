@@ -521,7 +521,19 @@ pub(crate) struct Diagnosis {
     /// scopes both "was already running" and "didn't record" to these counts, so they can be true together.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start_record: Option<StartRecord>,
+    /// B4: how many sessions of the answered game Compy has recorded, and when the newest one started, so the card
+    /// can say "no new session since the last check" from a count and never from the rows it happens to show.
+    /// Wire-only (computed per answer, never stored).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded: Option<Recorded>,
     pub method: &'static str,
+}
+
+/// B4: the answered game's recorded sessions (mixed ones included: they are recorded, only not judged).
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Recorded {
+    pub sessions: u32,
+    pub newest_at: String,
 }
 
 /// Rough sessions of the game with a readable start-of-session snapshot (`recorded`), of all of them (`rough`);
@@ -558,6 +570,7 @@ impl Diagnosis {
             measured_once: None,
             mixed_sessions: Vec::new(),
             start_record: None,
+            recorded: None,
             method: METHOD,
         }
     }
@@ -984,12 +997,20 @@ pub(crate) fn diagnose(inp: &DiagnoseInputs, complaint: Complaint, game: Option<
     answers.into_iter().nth(pick).unwrap_or_else(|| Diagnosis::empty(complaint, DiagnosisState::CantTell { why: CantTellWhy::NoSessions }))
 }
 
+/// B4: every recorded session of the game (a sitting counted as the card counts it), and the newest one's start.
+fn recorded_of(inp: &DiagnoseInputs, game_key: &str) -> Option<Recorded> {
+    let all: Vec<&SessionFacts> = inp.sessions.iter().filter(|s| same_game(&s.game, game_key)).collect();
+    let newest = all.iter().filter_map(|s| s.start().map(|t| (t, s))).max_by_key(|(t, _)| *t)?.1;
+    Some(Recorded { sessions: u32::try_from(all.len()).unwrap_or(u32::MAX), newest_at: newest.started_at.clone() })
+}
+
 fn diagnose_game(inp: &DiagnoseInputs, complaint: Complaint, game_key: &str) -> Diagnosis {
     let game_key = game_key.to_string();
     let mut d = Diagnosis::empty(complaint, DiagnosisState::CantTell { why: CantTellWhy::NoSessions });
     d.game_name = Some(intelligence::pretty_game_name(&game_key));
     d.game = Some(game_key.clone());
     d.mixed_sessions = mixed_of(inp, &game_key);
+    d.recorded = recorded_of(inp, &game_key);
     if complaint == Complaint::Crash {
         d.state = DiagnosisState::CantTell { why: CantTellWhy::CrashNotCovered };
         return d;
@@ -1781,7 +1802,12 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         .filter(|t| *t <= first_new)
         .max()
         .unwrap_or(c.win_start);
-    let rough_on_old = c.affected.iter().filter(|s| on(s, from)).count();
+    // B4: the driver read as the earlier version again after the new one. Rough sessions from then on are said by the
+    // follow-through lines below (dated, "on {from} again"), not as "on the old driver".
+    let back = driver_back_at(c, from, to);
+    let before_back = |s: &&&SessionFacts| back.is_none_or(|b| s.start().is_some_and(|t| t < b));
+    let old_rough: Vec<&&SessionFacts> = c.affected.iter().filter(|s| on(s, from)).filter(before_back).collect();
+    let rough_on_old = old_rough.len();
     let first_rough_of = |o: &OtherGame| {
         (0..o.sess.len()).find(|&j| {
             o.judged[j].verdict == Verdict::Fired && o.sess[j].start().is_some_and(|t| t >= c.win_start) && on(o.sess[j], to)
@@ -1863,7 +1889,44 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
             ));
         }
     } else {
-        evidence.push(ev(EvidenceKind::Measured, "rough-on-old-driver", "sessions", true, &[("count", rough_on_old.to_string())]));
+        // B4: dated, and never "still": a rough session on the earlier driver ran after Compy had seen the new one.
+        let first = old_rough.iter().filter_map(|s| s.start()).min().map(iso).unwrap_or_default();
+        evidence.push(ev(
+            EvidenceKind::Measured,
+            "rough-on-old-driver",
+            "sessions",
+            true,
+            &[("count", rough_on_old.to_string()), ("from", from.to_string()), ("date", first)],
+        ));
+    }
+    // B4: what the sessions since the driver read as the earlier version again say. Dated facts, never "the reason",
+    // never who changed it. A rough one is a contradiction; one usual-range session is said once (B2's "Measured
+    // once" block carries the numbers); two are the recovery's own answer.
+    let mut back_rough = false;
+    if let Some(b) = back {
+        let when = iso(b);
+        evidence.push(ev(EvidenceKind::Known, "driver-back", "sessions", false, &[("from", from.to_string()), ("back", when.clone())]));
+        match recovery::since_restore(c, b, None) {
+            recovery::Since::Nothing => evidence.push(ev(EvidenceKind::Unknown, "driver-back-none", "sessions", false, &[("back", when)])),
+            recovery::Since::Unjudged { count } => {
+                evidence.push(ev(EvidenceKind::Unknown, "driver-back-unjudged", "sessions", false, &[("back", when), ("count", count.to_string())]))
+            }
+            recovery::Since::Rough { at, count } => {
+                back_rough = true;
+                evidence.push(ev(
+                    EvidenceKind::Measured,
+                    "driver-back-rough",
+                    "sessions",
+                    true,
+                    &[("from", from.to_string()), ("back", when), ("at", at), ("count", count.to_string())],
+                ));
+            }
+            recovery::Since::Clear { at, count: 1 } => {
+                evidence.push(ev(EvidenceKind::Measured, "driver-back-clear", "sessions", false, &[("from", from.to_string()), ("back", when), ("at", at)]))
+            }
+            recovery::Since::Clear { .. } => {}
+            recovery::Since::Between => evidence.push(ev(EvidenceKind::Unknown, "driver-back-between", "sessions", false, &[("back", when)])),
+        }
     }
     if !x_games.is_empty() {
         evidence.push(ev(
@@ -1923,14 +1986,47 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         confounded: !x_games.is_empty() && (!x_clean || !mod_other.is_empty() || !mod_unchecked.is_empty()),
         r: false,
         m: false,
-        c1: rough_on_old > 0 || !normal_new.is_empty() || after_rough,
+        c1: rough_on_old > 0 || back_rough || !normal_new.is_empty() || after_rough,
         since: match exact {
             Some(at) => When::Exact { at: iso(at) },
             None => When::ObservedBetween { from: iso(last_old), to: iso(first_new) },
         },
-        fix: steps("gpu-driver-change", &[("from", from.to_string()), ("to", to.to_string())]),
+        // B4: once the driver reads as the earlier version again there is nothing left to roll back: the card says so
+        // and asks for a session instead of repeating the Device Manager steps.
+        fix: match back {
+            Some(b) => steps("gpu-driver-change", &[("from", from.to_string()), ("to", to.to_string()), ("back", iso(b))]),
+            None => steps("gpu-driver-change", &[("from", from.to_string()), ("to", to.to_string())]),
+        },
         evidence,
     });
+}
+
+/// B4: when Compy first read the graphics driver as `from` (the version before the rough sessions) again: the first
+/// reading of `from` (any game's session start, or an identity check) after the last reading of `to`, and only while
+/// the newest reading is `from`. A third version is not "back", and a reading of `to` after it cancels it. Nothing
+/// here says who changed the driver.
+fn driver_back_at(c: &Ctx, from: &str, to: &str) -> Option<DateTime<Utc>> {
+    let mut readings: Vec<(DateTime<Utc>, &str)> = c
+        .inp
+        .sessions
+        .iter()
+        .filter_map(|s| Some((s.start()?, nonblank(&s.gpu_driver)?)))
+        .chain(c.inp.sightings.iter().filter_map(|g| {
+            let d = g.gpu_driver.trim();
+            if d.is_empty() {
+                None
+            } else {
+                Some((ts(&g.observed_at)?, d))
+            }
+        }))
+        .collect();
+    readings.sort_by_key(|r| r.0);
+    let newest = readings.last()?.1;
+    if !crate::hardware::same_driver(newest, from) {
+        return None;
+    }
+    let last_to = readings.iter().rev().find(|(_, d)| crate::hardware::same_driver(d, to))?.0;
+    readings.iter().find(|(t, d)| *t > last_to && crate::hardware::same_driver(d, from)).map(|r| r.0)
 }
 
 /// Adds a session that saw busy-program starts, once.

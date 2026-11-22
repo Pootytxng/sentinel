@@ -252,6 +252,12 @@ fn save_state_to(path: &std::path::Path, s: &DriftState) {
     }
 }
 
+/// B4 (tests only): the real writer, for the end-to-end test that goes from a scan to drift.json to the card.
+#[cfg(test)]
+pub(crate) fn save_state_for_test(path: &std::path::Path, s: &DriftState) {
+    save_state_to(path, s);
+}
+
 /// Pure core: fold current check observations `(id, label, status, detail)` into the prior state,
 /// returning the active drifts + updated state. Ready → records/keeps `last_good` and clears any
 /// drift; Attention while previously good → a regression, stamping `noticed_at` once (stable).

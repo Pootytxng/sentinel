@@ -3290,3 +3290,142 @@ describe("Turn it back on has one path (B3)", () => {
     expect(helper.match(/writeLedger<AppliedChange>\("apply_recommendation"/g)).toHaveLength(1);
   });
 });
+
+// B4: the graphics driver read as the earlier version again. The card says what Compy read and what the sessions since
+// say, stops repeating the roll-back steps, and never says who changed the driver. Instructions only: no button.
+describe("ParamedicCard: the driver read as the earlier version again (B4)", () => {
+  const BACK = "2026-11-21T08:00:00Z";
+  const changed = { kind: "known" as const, code: "driver-changed", args: { from: "1.0", to: "2.0" }, against: false, source: "snapshots" };
+  const back = { kind: "known" as const, code: "driver-back", args: { from: "1.0", back: BACK }, against: false, source: "sessions" };
+  const driverRow = (evidence: F["evidence"], args: Record<string, string> = { from: "1.0", to: "2.0", back: BACK }) =>
+    find("gpu-driver-change", { evidence, fix: steps("gpu-driver-change", args) });
+  const open = async (f: F) => {
+    await ask({ ...base, why_first: null, findings: [f] });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    return screen.getByTestId("paramedic").textContent ?? "";
+  };
+
+  it("with no session since: the dated line, then 'none since', and one step in place of the Device Manager steps", async () => {
+    const none = { kind: "unknown" as const, code: "driver-back-none", args: { back: BACK }, against: false, source: "sessions" };
+    const text = await open(driverRow([changed, back, none]));
+    expect(text).toMatch(/Compy read your graphics driver as 1\.0 again by .+, the version Game A ran on before it got rough\./);
+    expect(text).toContain("No Game A session has been recorded since.");
+    expect(text).toMatch(/Compy read 1\.0 again by .+\. Play Game A once, then press Something's wrong again\./);
+    expect(text).not.toMatch(/Device Manager|Roll Back Driver/);
+    // Never who changed it, never "rolled back" as a claim, never a fix.
+    expect(text).not.toMatch(/you rolled|rolled back|fixed|caused/i);
+    expect(screen.queryByTestId("paramedic-turn-on")).toBeNull();
+  });
+
+  it("without `back` the roll-back steps stay (nothing read as changed back)", async () => {
+    const text = await open(driverRow([changed], { from: "1.0", to: "2.0" }));
+    expect(text).toMatch(/Press Windows \+ X and open Device Manager/);
+    expect(text).not.toMatch(/again by/);
+  });
+
+  it("a rough session since is a dated contradiction; one clear session is said once", async () => {
+    const rough = { kind: "measured" as const, code: "driver-back-rough", args: { from: "1.0", back: BACK, at: "2026-11-21T20:00:00Z", count: "1" }, against: true, source: "sessions" };
+    let text = await open(driverRow([changed, back, rough]));
+    expect(text).toMatch(/On 1\.0 again, Game A still ran rough on /);
+    cleanup();
+    const clear = { kind: "measured" as const, code: "driver-back-clear", args: { from: "1.0", back: BACK, at: "2026-11-21T20:00:00Z" }, against: false, source: "sessions" };
+    text = await open(driverRow([changed, back, clear]));
+    expect(text).toMatch(/On 1\.0 again, Game A's session on .+ ran in its usual range\. One session so far; Compy says a game is back in its usual range after two\./);
+  });
+
+  it("the earlier-driver line is dated and never says 'still on the old driver'", async () => {
+    const old = { kind: "measured" as const, code: "rough-on-old-driver", args: { count: "1", from: "1.0", date: "2026-11-21T20:00:00Z" }, against: true, source: "sessions" };
+    const text = await open(driverRow([changed, old], { from: "1.0", to: "2.0" }));
+    expect(text).toMatch(/The rough session on .+ ran on the earlier driver \(1\.0\)\./);
+    expect(text).not.toMatch(/still on the old driver/);
+  });
+
+  it("recovered on the earlier driver says 'went back to', from the engine's own `back`", async () => {
+    const now: F["now_evidence"] = [
+      { kind: "supported-inference", code: "recovered-after-driver-change", args: { version: "1.0", when: BACK, exact: "false", back: "true" }, against: false, source: "sessions" },
+    ];
+    await ask({
+      ...base,
+      state: { kind: "recovered" },
+      why_first: null,
+      findings: [find("gpu-driver-change", { evidence: [changed], fix: steps("gpu-driver-change", { from: "1.0", to: "2.0" }), now: "points-to", now_evidence: now })],
+      recovery: {
+        before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
+        rough: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
+        now: { ratio: 0.92, p99_ms: null, avg_fps: 118 },
+        rough_sessions: [ref("2026-11-20T01:00:00Z")],
+        recovered_sessions: [ref("2026-11-21T09:00:00Z"), ref("2026-11-21T20:00:00Z")],
+        sessions_since: 2,
+        summary: { kind: "points-to", id: "gpu-driver-change" },
+        also_changed: [],
+      },
+    });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText(/It recovered after the driver went back to 1\.0, the version from before \(Compy first saw it on /)).toBeTruthy();
+  });
+});
+
+// B4: "what changed since last time". After "Check again" in the same open the card compares the answer that was on
+// screen with the new one (memory only) and says what differs; with no new session and no change it says so and what
+// to do. The session count is the engine's own `recorded`, never the rows shown.
+describe("ParamedicCard: what changed since the last check (B4)", () => {
+  const rec = (sessions: number, newest_at: string) => ({ sessions, newest_at });
+  const first: ParamedicDiagnosis = { ...base, recorded: rec(6, "2026-11-20T01:01:24Z") };
+  const again = async (next: ParamedicDiagnosis) => {
+    answer.value = next;
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(screen.getByTestId("paramedic-since")).toBeTruthy());
+    return screen.getByTestId("paramedic-since").textContent ?? "";
+  };
+  const opened = async () => {
+    await ask(first);
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0));
+  };
+
+  it("the first answer of an open has no block; the same answer again says no new session and nothing changed", async () => {
+    await opened();
+    expect(screen.queryByTestId("paramedic-since")).toBeNull();
+    const text = await again({ ...first, findings: first.findings.map((f) => ({ ...f })) });
+    expect(text).toBe(
+      "Since the last check" + "No new Game A session was recorded and nothing in the answer changed. Play Game A once, then press Check again.",
+    );
+  });
+
+  it("a new clear session: the count from `recorded` and the answer's state, from and to", async () => {
+    await opened();
+    const text = await again({
+      ...first,
+      state: { kind: "cant-tell", why: { kind: "recovery-unclear", partial: false, one_clear: true, cap_changed: false } },
+      recorded: rec(7, "2026-11-21T20:00:00Z"),
+    });
+    expect(text).toMatch(/1 new Game A session was recorded \(on .+\)\./);
+    expect(text).toContain("The answer went from “rougher than usual” to “one session in its usual range”.");
+    expect(text).not.toContain("No new Game A session");
+  });
+
+  it("a row whose chip changed, a row no longer listed, with no new session said first", async () => {
+    await opened();
+    const [driver] = first.findings;
+    const text = await again({ ...first, findings: [{ ...driver, confidence: "possible" }] });
+    expect(text).toContain("No new Game A session was recorded.");
+    expect(text).toContain("Your graphics driver was updated: was “Most likely”, now “Possible”.");
+    expect(text).toMatch(/No longer listed: [^.]+\./);
+  });
+
+  it("an answer about another game names both and compares nothing", async () => {
+    await opened();
+    const text = await again({ ...first, game: "game-b", game_name: "Game B", recorded: rec(3, "2026-11-21T20:00:00Z") });
+    expect(text).toBe("This answer is about Game B; the last one was about Game A.");
+  });
+
+  it("after Close the next answer starts a new open: no block", async () => {
+    await opened();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    answer.value = { ...first };
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0));
+    expect(screen.queryByTestId("paramedic-since")).toBeNull();
+  });
+});

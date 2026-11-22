@@ -343,7 +343,8 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     case "install-time-not-read":
       return t("paramedic.evidence.installTimeNotRead", { when: dates.dayTime(a.seenAt) });
     case "rough-on-old-driver":
-      return t("paramedic.evidence.roughOnOldDriver", { count: Number(a.count) });
+      // B4: dated and never "still": a rough session on the earlier driver ran after Compy had seen the new one.
+      return t("paramedic.evidence.roughOnOldDriver", { count: Number(a.count), from: a.from, date: dates.day(a.date) });
     // Each count says what it counts, and the names belong to the line they came from.
     case "starts-seen":
       return a.names
@@ -422,6 +423,19 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.ramWarning");
     case "ram-lower":
       return t("paramedic.evidence.ramLower", { peakGb: a.peakGb });
+    // B4: the graphics driver read as the earlier version again, and what the sessions since say. Never who changed it.
+    case "driver-back":
+      return t("paramedic.evidence.driverBack", { from: a.from, back: dates.dayTime(a.back), game });
+    case "driver-back-none":
+      return t("paramedic.evidence.driverBackNone", { game });
+    case "driver-back-unjudged":
+      return t("paramedic.evidence.driverBackUnjudged", { game, count: Number(a.count ?? 1) });
+    case "driver-back-rough":
+      return t("paramedic.evidence.driverBackRough", { game, count: Number(a.count ?? 1), from: a.from, date: dates.day(a.at) });
+    case "driver-back-clear":
+      return t("paramedic.evidence.driverBackClear", { game, from: a.from, date: dates.day(a.at) });
+    case "driver-back-between":
+      return t("paramedic.evidence.driverBackBetween", { game });
     case "drift-restored-none":
       return t("paramedic.evidence.driftRestoredNone", { game });
     case "drift-restored-unjudged":
@@ -473,6 +487,12 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     case "recovered-same-driver":
       return t("paramedic.evidence.recoveredSameDriver", { game, version: a.version });
     case "recovered-after-driver-change":
+      // B4: back to the version it had before the rough sessions (the engine's `back`), said as that.
+      if (a.back === "true") {
+        return a.exact === "true"
+          ? t("paramedic.evidence.recoveredAfterDriverBack", { version: a.version, when: dates.dayTime(a.when) })
+          : t("paramedic.evidence.recoveredAfterDriverBackSeen", { version: a.version, when: dates.dayTime(a.when) });
+      }
       return a.exact === "true"
         ? t("paramedic.evidence.recoveredAfterDriverChange", { version: a.version, when: dates.dayTime(a.when) })
         : t("paramedic.evidence.recoveredAfterDriverChangeSeen", { version: a.version, when: dates.dayTime(a.when) });
@@ -551,6 +571,8 @@ function stepLines(fix: ParamedicFix, ctx: Ctx, restored?: string, appliedOnly?:
   const a = fix.args;
   switch (fix.code) {
     case "gpu-driver-change":
+      // B4: Compy already reads the earlier version again: nothing left to roll back, only a session to play.
+      if (a.back) return [t("paramedic.fix.gpuDriver.stepBack", { from: a.from, back: dates.dayTime(a.back), game })];
       return [
         t("paramedic.fix.gpuDriver.step1"),
         t("paramedic.fix.gpuDriver.step2"),
@@ -1541,6 +1563,76 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   );
 }
 
+/** B4: the answer's state as a short label for "The answer went from … to …". */
+function stateLabel(d: ParamedicDiagnosis, t: T): string {
+  const s = d.state;
+  if (s.kind === "found") return t("paramedic.since.stateLabel.rough");
+  if (s.kind === "recovered") return t("paramedic.since.stateLabel.recovered");
+  if (s.kind === "nothing-wrong") return t("paramedic.since.stateLabel.nothingWrong");
+  if (s.kind === "needs-more-play") return t("paramedic.since.stateLabel.needsMore");
+  if (s.why.kind === "recovery-unclear" && s.why.one_clear) return t("paramedic.since.stateLabel.once");
+  if (s.why.kind === "nothing-changed") return t("paramedic.since.stateLabel.rough");
+  return t("paramedic.since.stateLabel.cantTell");
+}
+
+/** B4: a row's chip as one string (the certainty word first when the timing chip sits beside it). */
+function chipText(f: ParamedicFinding, d: ParamedicDiagnosis, t: T): string {
+  const c = chipFor(f, d.state.kind === "recovered", t);
+  return c.certainty ? `${c.certainty.text}, ${c.text}` : c.text;
+}
+
+/** B4 ("what changed since last time"): after "Check again" in the same open, what differs between the answer that
+ *  was on screen and the new one. Both answers are held in memory only; closing the card forgets them. The session
+ *  count comes from the engine's own `recorded` (never from the rows shown), so "no new session" is a count. */
+function SinceLast({ prev, d, ctx }: { prev: ParamedicDiagnosis; d: ParamedicDiagnosis; ctx: Ctx }) {
+  const { t, game, dates } = ctx;
+  if (prev.game !== d.game) {
+    return (
+      <p className="gl-para-note" data-testid="paramedic-since">
+        {t("paramedic.since.otherGame", { game, prev: prev.game_name ?? prev.game ?? "" })}
+      </p>
+    );
+  }
+  const counts: string[] = [];
+  let noNew = false;
+  const a = prev.recorded;
+  const b = d.recorded;
+  if (a && b) {
+    if (b.sessions > a.sessions) counts.push(t("paramedic.since.newSessions", { count: b.sessions - a.sessions, game, date: dates.day(b.newest_at) }));
+    else if (b.sessions < a.sessions) counts.push(t("paramedic.since.fewer", { game }));
+    else if (b.newest_at === a.newest_at) noNew = true;
+  }
+  const changes: string[] = [];
+  const was = stateLabel(prev, t);
+  const now = stateLabel(d, t);
+  if (was !== now) changes.push(t("paramedic.since.state", { from: was, to: now }));
+  for (const f of d.findings) {
+    const name = findingTitle(f, ctx) ?? f.id;
+    const before = prev.findings.find((x) => x.id === f.id);
+    if (!before) changes.push(t("paramedic.since.rowNew", { name }));
+    else if (chipText(before, prev, t) !== chipText(f, d, t)) changes.push(t("paramedic.since.row", { name, from: chipText(before, prev, t), to: chipText(f, d, t) }));
+  }
+  for (const f of prev.findings) {
+    if (!d.findings.some((x) => x.id === f.id)) changes.push(t("paramedic.since.rowGone", { name: findingTitle(f, ctx) ?? f.id }));
+  }
+  const lines =
+    changes.length === 0
+      ? noNew
+        ? [t("paramedic.since.unchangedNoNew", { game })]
+        : [...counts, t("paramedic.since.unchanged")]
+      : [...(noNew ? [t("paramedic.since.noNew", { game })] : counts), ...changes];
+  return (
+    <div data-testid="paramedic-since">
+      <p className="gl-row-title">{t("paramedic.since.title")}</p>
+      <ul className="gl-para-lines">
+        {lines.map((l, i) => (
+          <li key={i}>{l}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** `still`: another diagnosis kept running past every retry. That is "still checking", never a failed read.
  *  `busy.prev`: the answer on screen when "Check again" was pressed. It stays mounted (dimmed, aria-busy) until the new one arrives. */
 type View =
@@ -1548,7 +1640,7 @@ type View =
   | { kind: "busy"; prev: ParamedicDiagnosis | null }
   | { kind: "still" }
   | { kind: "failed" }
-  | { kind: "done"; d: ParamedicDiagnosis };
+  | { kind: "done"; d: ParamedicDiagnosis; prev?: ParamedicDiagnosis | null };
 
 const LAYER_ROLES = new Set(["dialog", "alertdialog", "menu", "listbox", "tooltip", "combobox"]);
 
@@ -1644,7 +1736,9 @@ export function ParamedicCard({
     setView((v) => ({ kind: "busy", prev: v.kind === "done" ? v.d : v.kind === "busy" ? v.prev : null }));
     invoke<ParamedicDiagnosis | null>("paramedic_diagnose", { complaint: "unknown", game: null })
       .then((d) => {
-        if (alive.current && mine === gen.current) setView(d ? { kind: "done", d } : { kind: "failed" });
+        // B4: the answer that was on screen when "Check again" was pressed stays beside the new one (memory only), so
+        // the card can say what changed since then.
+        if (alive.current && mine === gen.current) setView((v) => (d ? { kind: "done", d, prev: v.kind === "busy" ? v.prev : null } : { kind: "failed" }));
       })
       .catch((e: unknown) => {
         if (!alive.current || mine !== gen.current) return;
@@ -1865,6 +1959,7 @@ export function ParamedicCard({
                 <ParamedicFirstLook key={`questions-${round}`} games={games} elsewhere onAsking={setLookAsking} />
               ) : answer && ctx ? (
                 <>
+                  {view.kind === "done" && view.prev && <SinceLast prev={view.prev} d={answer} ctx={ctx} />}
                   {/* No usable history: with no game recorded the first look is the whole answer; with a game that
                       has too few sessions it follows the measured "can't tell yet". */}
                   {!(answer.state.kind === "cant-tell" && answer.state.why.kind === "no-sessions") && <Answer d={answer} ctx={ctx} />}
