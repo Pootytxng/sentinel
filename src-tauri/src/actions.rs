@@ -1471,32 +1471,125 @@ pub(crate) fn from_hex(s: &str) -> Option<Vec<u8>> {
 pub(crate) fn mint_elevation_ticket(encoded: &str) -> Result<std::path::PathBuf, String> {
     static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let dir = crate::compy_data_dir().join("runtime");
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("elevated dispatch ticket could not be minted: {e}"))?;
+    mint_elevation_ticket_in(&dir, encoded, SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+}
+
+/// The mint itself, in a given folder (tests use a scratch folder). Hardening slice 2 (F5): the folder
+/// is resolved to its FINAL path first (every junction on the way followed), so the path handed to the
+/// helper is the one the helper's handle check will see, and the file is created with `create_new`: an
+/// existing file, or a link planted under the name, is refused instead of written through.
+pub(crate) fn mint_elevation_ticket_in(dir: &std::path::Path, encoded: &str, seq: u64) -> Result<std::path::PathBuf, String> {
+    use std::io::Write;
+    let minted = |e: std::io::Error| format!("elevated dispatch ticket could not be minted: {e}");
+    std::fs::create_dir_all(dir).map_err(minted)?;
+    let dir = std::fs::canonicalize(dir).map_err(minted)?;
     // pid + per-process sequence keeps concurrent dispatches (and processes) from colliding.
-    let path = dir.join(format!(
-        "elev-{}-{}.ticket",
-        std::process::id(),
-        SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    std::fs::write(&path, encoded)
-        .map_err(|e| format!("elevated dispatch ticket could not be minted: {e}"))?;
+    let path = dir.join(format!("elev-{}-{}.ticket", std::process::id(), seq));
+    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&path).map_err(minted)?;
+    if let Err(e) = f.write_all(encoded.as_bytes()) {
+        drop(f);
+        let _ = std::fs::remove_file(&path);
+        return Err(minted(e));
+    }
     Ok(path)
 }
 
+/// PURE: the ticket's file name is exactly `elev-<digits>-<digits>.ticket` inside a folder named
+/// `runtime`. The helper refuses any other path before opening anything.
+pub(crate) fn is_ticket_path(path: &std::path::Path) -> bool {
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    let name_ok = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .and_then(|n| n.strip_prefix("elev-"))
+        .and_then(|n| n.strip_suffix(".ticket"))
+        .and_then(|n| n.split_once('-'))
+        .is_some_and(|(pid, seq)| digits(pid) && digits(seq));
+    let dir_ok = path
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.eq_ignore_ascii_case("runtime"));
+    name_ok && dir_ok
+}
+
 /// Helper-side verify-and-consume. True ⇒ the ticket file byte-equals the received hex; it is
-/// deleted (consume-once) before the command runs. A deletion failure does not reject — the match
-/// already proved the mint; exact-match is the lock, one-time-ness is best-effort on top. Any read
-/// failure or mismatch ⇒ false, and the helper runs NOTHING. The ticket path arrives via argv
-/// (rather than being re-derived helper-side) so a machine where UAC elevates as a different
-/// account — where %APPDATA% resolves differently in the child — can never false-reject.
+/// deleted (consume-once) before the command runs. Any failure ⇒ false, and the helper runs NOTHING.
+/// The ticket path arrives via argv (rather than being re-derived helper-side) so a machine where UAC
+/// elevates as a different account — where %APPDATA% resolves differently in the child — can never
+/// false-reject.
+///
+/// Hardening slice 2 (F5): read and delete go through ONE handle. It used to read by path and then
+/// delete by path as admin; swapping the file between the two (an oplock makes the window wide) put the
+/// admin delete wherever the swap pointed. Now: one open with share mode 0 and
+/// FILE_FLAG_OPEN_REPARSE_POINT (a link is opened as the link, never followed); refuse a link, a folder,
+/// a file with a second hard link, or a file whose final path is not exactly the argv path (a junction
+/// on the way); read through the handle; compare; delete through the same handle. A rejected probe
+/// leaves the ticket in place (the legitimate dispatch still verifies). A failed delete after a match
+/// now refuses too: the ticket must be consumed for the command to run.
 pub(crate) fn consume_elevation_ticket(encoded: &str, ticket_path: &str) -> bool {
-    match std::fs::read(ticket_path) {
-        Ok(content) if content == encoded.as_bytes() => {
-            let _ = std::fs::remove_file(ticket_path);
-            true
-        }
-        _ => false,
+    let path = std::path::Path::new(ticket_path);
+    is_ticket_path(path) && consume_ticket_by_handle(encoded.as_bytes(), path).is_ok()
+}
+
+#[cfg(windows)]
+fn consume_ticket_by_handle(expected: &[u8], path: &std::path::Path) -> Result<(), &'static str> {
+    use std::io::Read;
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+    use std::os::windows::io::AsRawHandle;
+    const GENERIC_READ: u32 = 0x8000_0000;
+    const DELETE: u32 = 0x0001_0000;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    const ATTR_REPARSE_POINT: u32 = 0x400;
+    const ATTR_DIRECTORY: u32 = 0x10;
+    let mut file = std::fs::OpenOptions::new()
+        .access_mode(GENERIC_READ | DELETE)
+        .share_mode(0)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .map_err(|_| "open")?;
+    let attrs = file.metadata().map_err(|_| "metadata")?.file_attributes();
+    if attrs & (ATTR_REPARSE_POINT | ATTR_DIRECTORY) != 0 {
+        return Err("not a plain file");
+    }
+    if ticket_link_count(file.as_raw_handle()) != Some(1) {
+        return Err("hard link");
+    }
+    let final_path = crate::data_clear::win_handle::final_path(file.as_raw_handle()).map_err(|_| "final path")?;
+    if crate::data_clear::win_handle::normalize(&final_path) != crate::data_clear::win_handle::normalize(&path.to_string_lossy()) {
+        return Err("moved");
+    }
+    let mut content = Vec::with_capacity(expected.len() + 1);
+    file.by_ref().take(expected.len() as u64 + 1).read_to_end(&mut content).map_err(|_| "read")?;
+    if content != expected {
+        return Err("mismatch");
+    }
+    crate::data_clear::win_handle::delete_on_close(file.as_raw_handle()).map_err(|_| "delete")?;
+    Ok(())
+    // The handle closes here: the ticket is gone.
+}
+
+/// The open file's hard-link count (GetFileInformationByHandle, declared by hand so no `windows` crate
+/// feature is added). None when it cannot be read.
+#[cfg(windows)]
+fn ticket_link_count(handle: std::os::windows::io::RawHandle) -> Option<u32> {
+    // BY_HANDLE_FILE_INFORMATION: attributes, three FILETIMEs (two u32 each), volume serial,
+    // size high, size low, number of links, index high, index low = 13 u32.
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetFileInformationByHandle(handle: *mut std::ffi::c_void, info: *mut [u32; 13]) -> i32;
+    }
+    let mut info = [0u32; 13];
+    // SAFETY: a live file handle owned by the caller's `File`; `info` is a writable buffer of the
+    // documented 52-byte size and 4-byte alignment.
+    (unsafe { GetFileInformationByHandle(handle.cast(), &mut info) } != 0).then_some(info[10])
+}
+
+#[cfg(not(windows))]
+fn consume_ticket_by_handle(expected: &[u8], path: &std::path::Path) -> Result<(), &'static str> {
+    match std::fs::read(path) {
+        Ok(content) if content == expected => std::fs::remove_file(path).map_err(|_| "delete"),
+        _ => Err("mismatch"),
     }
 }
 
@@ -1731,6 +1824,122 @@ mod batch_elevation_tests {
             assert!(!consume_elevation_ticket(&encoded, &ticket_s));
             assert!(!ticket.exists());
         }
+    }
+
+    // ── hardening slice 2 (F5): the ticket is read and deleted through one handle ───────────────
+
+    /// A `runtime` folder in a fresh scratch folder, its final path, and a minted ticket in it.
+    fn scratch_ticket(label: &str, hex: &str) -> (crate::test_scratch::Scratch, std::path::PathBuf) {
+        let s = crate::test_scratch::scratch_child(label, "runtime");
+        let t = super::mint_elevation_ticket_in(&s, hex, 1).expect("mint");
+        (s, t)
+    }
+
+    #[test]
+    fn only_a_ticket_shaped_path_is_opened() {
+        use super::is_ticket_path;
+        use std::path::Path;
+        assert!(is_ticket_path(Path::new(r"\\?\C:\x\Compy\runtime\elev-12-3.ticket")));
+        assert!(is_ticket_path(Path::new(r"C:\x\Runtime\elev-1-0.ticket")));
+        for bad in [
+            r"C:\x\runtime\elev-12-3.ticket.txt",
+            r"C:\x\runtime\elev-12.ticket",
+            r"C:\x\runtime\elev--3.ticket",
+            r"C:\x\runtime\elev-a-3.ticket",
+            r"C:\x\other\elev-12-3.ticket",
+            r"C:\Windows\System32\config\SAM",
+            r"elev-12-3.ticket",
+        ] {
+            assert!(!is_ticket_path(Path::new(bad)), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_mint_refuses_an_existing_name_instead_of_writing_through_it() {
+        let s = crate::test_scratch::scratch_child("ticket-mint-exists", "runtime");
+        let first = super::mint_elevation_ticket_in(&s, "aa", 7).expect("first mint");
+        let again = super::mint_elevation_ticket_in(&s, "bb", 7);
+        assert!(again.is_err(), "the same name must be refused, not overwritten");
+        assert_eq!(std::fs::read_to_string(&first).unwrap(), "aa", "the existing file is untouched");
+        assert!(first.to_string_lossy().starts_with(r"\\?\"), "the minted path is the folder's final path");
+    }
+
+    #[test]
+    fn a_ticket_is_consumed_through_its_handle_and_a_mismatch_leaves_it() {
+        let (_s, t) = scratch_ticket("ticket-consume", "abcd");
+        let ts = t.to_string_lossy().to_string();
+        assert!(!super::consume_elevation_ticket("abce", &ts));
+        assert!(!super::consume_elevation_ticket("abcd00", &ts), "a longer hex is a mismatch");
+        assert!(!super::consume_elevation_ticket("ab", &ts), "a shorter hex is a mismatch");
+        assert!(t.exists(), "rejected probes leave the ticket");
+        assert!(super::consume_elevation_ticket("abcd", &ts));
+        assert!(!t.exists(), "consumed through the handle");
+    }
+
+    #[test]
+    fn a_ticket_with_a_second_hard_link_is_refused_and_both_names_stay() {
+        let (s, t) = scratch_ticket("ticket-hardlink", "abcd");
+        let other = s.join("elsewhere.dat");
+        std::fs::hard_link(&t, &other).expect("hard link");
+        assert!(!super::consume_elevation_ticket("abcd", &t.to_string_lossy()));
+        assert!(t.exists() && other.exists(), "nothing deleted");
+    }
+
+    #[test]
+    fn a_ticket_reached_through_a_junction_is_refused_and_the_target_stays() {
+        // The argv path goes through a junction (`<scratch>\via\runtime` -> `<scratch>\real\runtime`): the
+        // handle's final path is not the argv path, so nothing is read or deleted.
+        let s = crate::test_scratch::scratch("ticket-junction");
+        let real = s.join("real").join("runtime");
+        std::fs::create_dir_all(&real).unwrap();
+        let t = super::mint_elevation_ticket_in(&real, "abcd", 2).expect("mint");
+        std::fs::create_dir_all(s.join("via")).unwrap();
+        let link = s.join("via").join("runtime");
+        let out = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
+            .args(["/c", "mklink", "/J"])
+            .arg(&link)
+            .arg(&real)
+            .output()
+            .expect("mklink");
+        assert!(out.status.success(), "mklink failed: {}", String::from_utf8_lossy(&out.stdout));
+        let via = link.join(t.file_name().unwrap());
+        assert!(!super::consume_elevation_ticket("abcd", &via.to_string_lossy()));
+        assert!(t.exists(), "the junction's target is untouched");
+        assert!(super::consume_elevation_ticket("abcd", &t.to_string_lossy()), "the real path still verifies");
+    }
+
+    #[test]
+    fn a_ticket_name_that_is_a_folder_or_link_is_refused() {
+        let s = crate::test_scratch::scratch_child("ticket-folder", "runtime");
+        let dir = s.canonicalize().unwrap().join("elev-1-5.ticket");
+        std::fs::create_dir(&dir).unwrap();
+        assert!(!super::consume_elevation_ticket("", &dir.to_string_lossy()));
+        assert!(dir.is_dir(), "a folder under the name is left alone");
+        // A junction under the ticket name, pointing at a folder holding a file: refused, target kept.
+        let target = s.join("target");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::write(target.join("keep.txt"), "x").unwrap();
+        let link = s.canonicalize().unwrap().join("elev-1-6.ticket");
+        let out = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
+            .args(["/c", "mklink", "/J"])
+            .arg(&link)
+            .arg(&target)
+            .output()
+            .expect("mklink");
+        assert!(out.status.success());
+        assert!(!super::consume_elevation_ticket("", &link.to_string_lossy()));
+        assert!(target.join("keep.txt").exists());
+    }
+
+    /// Source pin: the helper side never deletes the ticket by path again.
+    #[test]
+    fn the_ticket_consume_deletes_only_through_its_handle() {
+        let src = include_str!("actions.rs");
+        let start = src.find("fn consume_ticket_by_handle(").expect("fn");
+        let body = &src[start..start + src[start..].find("\n}\n").expect("end")];
+        assert!(!body.contains("remove_file"), "no delete by path");
+        assert!(body.contains("share_mode(0)") && body.contains("FILE_FLAG_OPEN_REPARSE_POINT"));
+        assert!(body.contains("delete_on_close(file.as_raw_handle())"));
     }
 
     #[test]

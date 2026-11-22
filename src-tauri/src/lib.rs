@@ -2345,22 +2345,28 @@ mod safety_tests {
     fn elevated_helper_runs_nothing_without_a_matching_ticket() {
         // Foreign hex with no ticket: exit 3 and ZERO PowerShell executed — proven by a command
         // whose side effect (a marker file) must not appear.
-        let marker =
-            std::env::temp_dir().join(format!("compy-boundary-{}.txt", std::process::id()));
-        let _ = std::fs::remove_file(&marker);
+        let scratch = crate::test_scratch::scratch("boundary-marker");
+        let marker = scratch.join("compy-boundary.txt");
         let cmd = format!("Set-Content -Path '{}' -Value x", marker.display());
         let hex = actions::to_hex(cmd.as_bytes());
         assert_eq!(run_elevated_helper(&hex, r"C:\__compy_qa_missing__\no.ticket"), 3);
+        // A real ticket for OTHER hex in a ticket-shaped place: still exit 3, still nothing run.
+        let runtime = crate::test_scratch::scratch_child("boundary-other-ticket", "runtime");
+        let other = actions::mint_elevation_ticket_in(&runtime, &actions::to_hex(b"exit 0"), 1).expect("mint");
+        assert_eq!(run_elevated_helper(&hex, &other.to_string_lossy()), 3);
+        assert!(other.exists(), "a mismatch leaves the ticket");
         assert!(!marker.exists(), "rejected hex must execute ZERO PowerShell");
     }
 
     #[test]
     fn elevated_helper_runs_a_minted_dispatch_exactly_once() {
-        // The legitimate path: the same mint run_elevated_powershell performs → the helper runs
-        // the command (real, unelevated PowerShell here — a harmless no-op) and consumes the
-        // ticket. A replay of the SAME argv finds no ticket and runs nothing.
+        // The legitimate path: the same mint run_elevated_powershell performs (in a scratch `runtime`
+        // folder) → the helper runs the command (real, unelevated PowerShell here — a harmless no-op)
+        // and consumes the ticket through its handle. A replay of the SAME argv finds no ticket and
+        // runs nothing.
         let hex = actions::to_hex(b"exit 0");
-        let ticket = actions::mint_elevation_ticket(&hex).expect("mint");
+        let runtime = crate::test_scratch::scratch_child("boundary-dispatch", "runtime");
+        let ticket = actions::mint_elevation_ticket_in(&runtime, &hex, 1).expect("mint");
         let ticket_s = ticket.to_string_lossy().to_string();
         assert_eq!(run_elevated_helper(&hex, &ticket_s), 0);
         assert!(!ticket.exists(), "the verified dispatch consumes its ticket");

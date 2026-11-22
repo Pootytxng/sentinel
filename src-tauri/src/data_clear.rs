@@ -1102,7 +1102,7 @@ fn remove_by_handle(file: &Path, expected: &Path) -> Result<Removed, String> {
 }
 
 #[cfg(windows)]
-mod win_handle {
+pub(crate) mod win_handle {
     use std::ffi::c_void;
 
     #[repr(C)]
@@ -1122,7 +1122,7 @@ mod win_handle {
     }
 
     /// The handle's final, resolved path (`\\?\C:\...`), with every junction on the way followed.
-    pub(super) fn final_path(handle: *mut c_void) -> Result<String, String> {
+    pub(crate) fn final_path(handle: *mut c_void) -> Result<String, String> {
         let mut buf = vec![0u16; 512];
         loop {
             // SAFETY: `handle` is a live file handle owned by the caller's `File`; `buf` is a writable
@@ -1139,13 +1139,13 @@ mod win_handle {
     }
 
     /// Case-insensitive, without the `\\?\` prefix, so two spellings of one path compare equal.
-    pub(super) fn normalize(path: &str) -> String {
+    pub(crate) fn normalize(path: &str) -> String {
         path.trim_start_matches(r"\\?\").to_lowercase()
     }
 
     /// Marks the open file for deletion; it goes when the handle closes. Tries POSIX semantics that also
     /// ignore the read-only attribute (what `std::fs::remove_file` does), then the classic form.
-    pub(super) fn delete_on_close(handle: *mut c_void) -> Result<(), String> {
+    pub(crate) fn delete_on_close(handle: *mut c_void) -> Result<(), String> {
         const FILE_DISPOSITION_INFO_CLASS: i32 = 4;
         const FILE_DISPOSITION_INFO_EX_CLASS: i32 = 21;
         const DELETE: u32 = 0x1;
