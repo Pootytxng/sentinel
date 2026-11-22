@@ -222,6 +222,8 @@ export type Drift = {
   titles?: string[];
   /** Ledger's own "turned on" stamp per title, aligned with `titles` ("" = none recorded). */
   applied_at?: string[];
+  /** B3b: the ledger's rec id per title, aligned with `titles` (wire-only; absent/empty from an older build). */
+  recs?: string[];
 };
 export type GameReadiness = { checks: ReadinessCheck[]; ready_count: number; attention_count: number; unknown_count: number; advisory_count: number; advisory: string; dismissed_ids: string[]; drifts: Drift[] };
 

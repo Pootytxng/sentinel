@@ -536,7 +536,7 @@
       "turningOn": "正在重新开启…",
       "turnedOn": "你在 {{when}} 用 Compy 重新开启了“{{title}}”。玩一次 {{game}}，至少 10 分钟，然后再按一次“出问题了”。",
       "turnedOnNoTime": "你用 Compy 重新开启了“{{title}}”。玩一次 {{game}}，至少 10 分钟，然后再按一次“出问题了”。",
-      "secondChange": "你刚刚开启了“{{other}}”。如果在玩之前改了两件事，Compy 就分不清是哪一件起了作用。",
+      "secondChange": "你刚才在这里开启了“{{other}}”。如果在玩之前改了两件事，Compy 就分不清是哪一件起了作用。",
       "step2": "玩一次 {{game}}，再按一次“出问题了”。",
       "stepBackOn": "Compy 读到它在 {{restored}} 时已重新开启。玩一次 {{game}}，再按一次“出问题了”。",
       "openCheck": "打开“{{room}}”"
@@ -787,14 +787,14 @@
     "nowTitle": "它恢复正常之后："
   },
   "now": {
-    "pointsTo": "指向它",
-    "pointsAway": "不指向它",
+    "pointsTo": "时间上吻合",
+    "pointsAway": "与此不符",
     "cantTell": "仍无法判断"
   },
   "recovered": {
     "title": "{{game}} 最近两次运行的表现和平时一样",
     "numbers": "之前，它掉帧时仍能保持约 {{beforePct}}% 的平均帧率；卡顿期间降到约 {{roughPct}}%；现在约为 {{nowPct}}%。",
-    "pointsTo": "现在的证据指向：{{what}}。",
+    "pointsTo": "列出的变化中，经过这几次后只剩一项还没有被排除：{{what}}。这与时间相符，但两次运行无法说明它为什么变好。",
     "between": "目前仍在这几项之间：{{list}}。",
     "settingBack_one": "Compy 读到相关设置在这两次游戏之前已重新开启。在 Compy 会留意的更改（驱动程序、Windows 更新、游戏文件、已安装的程序）中，那段时间里没有发现其他更改。这与相关设置确实起了作用的说法相符，但并不能证明。",
     "settingBack_other": "Compy 读到相关设置在这两次游戏之前已重新开启。在 Compy 会留意的更改（驱动程序、Windows 更新、游戏文件、已安装的程序）中，那段时间里没有发现其他更改。这与相关设置确实起了作用的说法相符，但并不能证明。",

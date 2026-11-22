@@ -2899,6 +2899,39 @@ mod recovery_f3 {
         assert_eq!(d.recovery.as_ref().map(|r| r.summary.clone()), Some(RecoverySummary::PointsTo { id: "setting-drift" }));
     }
 
+    /// B3b: the owner's likely result. The setting read back on, two clear sessions, and background programs and
+    /// memory still undecided (no load numbers on the rough session, memory not read since). One recovery
+    /// observation is one support, so no row "matches the timing" beside "Still between: …".
+    #[test]
+    fn the_owners_likely_recovery_with_programs_and_memory_still_open_gives_no_row_the_timing_chip_and_ends_still_between() {
+        let ram = |mut s: SessionFacts, peak: f64| {
+            s.peak_ram_bytes = gb_of(peak);
+            s.ram_total_bytes = gb_of(33.7);
+            s
+        };
+        let mut v: Vec<SessionFacts> = (1..=4).map(|d| ram(on(d, 50.0, None), 20.0)).collect();
+        let mut rough = ram(on(9, 30.0, None), 31.0);
+        rough.busy_starts = 9;
+        rough.busy_names = vec!["rustc".into()];
+        v.push(rough);
+        v.extend([on(13, 50.0, None), on(14, 50.0, None)]);
+        let d = follow(v);
+        assert_eq!(d.state, DiagnosisState::Recovered);
+        for id in ["setting-drift", "background-load", "memory-pressure"] {
+            assert_eq!(finding_of(&d, id).now, Some(NowStatus::CantTell), "{id}: {:?}", finding_of(&d, id).now_evidence);
+        }
+        assert!(d.findings.iter().all(|f| f.now != Some(NowStatus::PointsTo)), "no timing chip anywhere");
+        assert_eq!(finding_of(&d, "setting-drift").confidence, Certainty::Possible);
+        match d.recovery.as_ref().map(|r| r.summary.clone()) {
+            Some(RecoverySummary::Between { ids }) => {
+                for id in ["setting-drift", "background-load", "memory-pressure"] {
+                    assert!(ids.contains(&id), "{id} in {ids:?}");
+                }
+            }
+            other => panic!("ends \"Still between\": {other:?}"),
+        }
+    }
+
     #[test]
     fn a_setting_read_back_on_only_between_the_two_clear_sessions_cannot_be_placed() {
         let sess = with_extra(episode(), vec![calm(13), calm(14)]);
@@ -3382,6 +3415,9 @@ mod recovery_f3 {
             }
             other => panic!("{other:?}"),
         }
+        // B3b: each row fits on its own, but with the other still standing neither keeps the timing chip.
+        assert_eq!(now_of(&d, "gpu-driver-change").0, Some(NowStatus::CantTell));
+        assert_eq!(now_of(&d, "background-load").0, Some(NowStatus::CantTell));
     }
 
     fn gb_of(g: f64) -> Option<u64> {

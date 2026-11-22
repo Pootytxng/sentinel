@@ -730,9 +730,18 @@ describe("ParamedicCard: recovered", () => {
     expect(screen.queryByText(/newest session ran at or above/)).toBeNull();
     // The numbers line is whole, never clamped to two lines (F7).
     expect(document.querySelector(".gl-para-clamp")).toBeNull();
-    expect(verdict()).toBe("The evidence now points to: Other programs started while you played.");
+    // B3b: the one row left standing is said as a timing match, never as what the evidence "points to".
+    expect(verdict()).toBe(
+      "Of the changes listed, only one is still standing after these sessions: Other programs started while you played. That matches the timing, but two sessions can't show why it ran better.",
+    );
     expect(rows().length).toBe(2);
-    expect(rows()[0].textContent).toMatch(/Other programs started while you played.*Points to it/);
+    expect(rows()[0].textContent).toMatch(/Other programs started while you played.*Matches the timing/);
+    // The row's own certainty word stays beside the timing chip, which carries no accent of its own.
+    // (This fixture's row is Likely from its own earlier evidence; a recovery never raises it.)
+    expect(within(rows()[0]).getByTestId("paramedic-row-certainty").textContent).toBe("Most likely");
+    const timing = within(rows()[0]).getByText("Matches the timing");
+    expect(timing.getAttribute("data-tone")).toBeNull();
+    expect(within(rows()[1]).queryByTestId("paramedic-row-certainty")).toBeNull();
     expect(rows()[1].textContent).toMatch(/Your graphics driver was updated.*Points away from it/);
     expect(screen.getByText(/If it runs rough again, press Something's wrong again/)).toBeTruthy();
     openAll();
@@ -770,12 +779,15 @@ describe("ParamedicCard: recovered", () => {
   it("with more than one candidate still standing it says 'Still between'", async () => {
     await ask(
       recovered({
-        findings: [driver("cant-tell", []), background("points-to", quiet)],
+        // B3b: what the engine sends now (settle() never leaves a timing match beside another standing row).
+        findings: [driver("cant-tell", []), background("cant-tell", quiet)],
         recovery: rec({ summary: { kind: "between", ids: ["gpu-driver-change", "background-load"] }, recovered_sessions: [ref("2026-11-21T01:00:00Z"), ref("2026-11-22T01:00:00Z")] }),
       }),
     );
     await waitFor(() => expect(verdict()).toBe("Still between: Your graphics driver was updated, Other programs started while you played."));
+    expect(rows()[0].textContent).toMatch(/Still can't tell/);
     expect(rows()[1].textContent).toMatch(/Still can't tell/);
+    expect(document.body.textContent).not.toMatch(/Matches the timing/);
   });
 
   const ev = (code: string, args: Record<string, string>, over: Partial<F["evidence"][number]> = {}): F["evidence"][number] => ({
@@ -3125,6 +3137,29 @@ describe("ParamedicCard: Turn it back on (B3)", () => {
     expect(applyCalls()).toHaveLength(0);
   });
 
+  it("matches by the ledger's rec id when the drift carries one, and by title only for a drift title with no id (B3b)", async () => {
+    const withRecs = (titles: string[], recs: string[]) => [{ ...drift(titles)[0], recs }];
+    // The same title under another rec id (a different recommendation): no button, though the titles match.
+    await open({ drifts: withRecs([TITLE], ["visual-effects-v2"]), reverted: [rev("visual-effects", TITLE)], onChanged: vi.fn() });
+    expect(screen.queryByTestId("paramedic-turn-on")).toBeNull();
+    cleanup();
+    // A catalog title renamed since: the id still finds it, and the button names the ledger's own title.
+    await open({ drifts: withRecs(["Visual effects (renamed)"], ["visual-effects"]), reverted: [rev("visual-effects", TITLE)], onChanged: vi.fn() });
+    expect(screen.getAllByTestId("paramedic-turn-on").map((b) => b.textContent)).toEqual([`Turn “${TITLE}” back on`]);
+    fireEvent.click(screen.getByTestId("paramedic-turn-on"));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Turn it on" }));
+    await waitFor(() => expect(screen.getByTestId("paramedic-turned-on")).toBeTruthy());
+    expect(applyCalls()).toEqual([["apply_recommendation", { recId: "visual-effects", recTitle: TITLE }]]);
+    cleanup();
+    // One title with an id, one without (""): the first by id, the second by title.
+    await open({
+      drifts: withRecs([TITLE, OTHER], ["visual-effects", ""]),
+      reverted: [rev("visual-effects", TITLE), rev("hags", OTHER), rev("other-id", "Not named")],
+      onChanged: vi.fn(),
+    });
+    expect(screen.getAllByTestId("paramedic-turn-on").map((b) => b.textContent)).toEqual([`Turn “${TITLE}” back on`, `Turn “${OTHER}” back on`]);
+  });
+
   it("no button when the ledger is not read, the setting already reads on, or there is no confirm dialog", async () => {
     await open({ reverted: null });
     expect(screen.queryByTestId("paramedic-turn-on")).toBeNull();
@@ -3223,14 +3258,14 @@ describe("ParamedicCard: Turn it back on (B3)", () => {
     openAll();
     fireEvent.click(screen.getAllByTestId("paramedic-turn-on")[0]);
     const first = await screen.findByRole("alertdialog");
-    expect(first).not.toHaveTextContent("a moment ago");
+    expect(first).not.toHaveTextContent("earlier from this card");
     fireEvent.click(within(first).getByRole("button", { name: "Turn it on" }));
     await waitFor(() => expect(screen.getByTestId("paramedic-turned-on")).toBeTruthy());
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     fireEvent.click(screen.getByTestId("paramedic-turn-on"));
     const second = await screen.findByRole("alertdialog");
     expect(second).toHaveTextContent(
-      `You turned on “${TITLE}” a moment ago. If you change two things before you play, Compy can't tell which one made the difference.`,
+      `You turned on “${TITLE}” earlier from this card. If you change two things before you play, Compy can't tell which one made the difference.`,
     );
   });
 });

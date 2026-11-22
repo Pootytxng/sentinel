@@ -816,10 +816,22 @@ fn summary(findings: &[Finding], gap: &Gap) -> RecoverySummary {
 /// A row reads "points to it" only when nothing else changed in the stretch between the rough sessions and
 /// the normal ones (not counting the change the row itself names) and Windows' records for it were read
 /// completely. Otherwise the row reads "still can't tell"; its evidence lines stay as they are.
+///
+/// B3b (owner rule: nothing above Possible without two independent supports; state mechanisms, not outcomes): a
+/// row also loses it while any OTHER row is still standing (not pointed away from; a count of changes that went
+/// back with the setting is the setting's own story). One recovery observation is one support, so the chip
+/// ("Fits this") can never sit beside "Still between: …".
 pub(super) fn settle(c: &Ctx, rec: &[&SessionFacts], findings: &mut [Finding]) {
     let gap = gap_of(c, rec);
+    let standing: Vec<&'static str> = findings
+        .iter()
+        .filter(|f| f.now != Some(NowStatus::PointsAway))
+        .filter(|f| !(gap.count_explained && f.id == "compy-change"))
+        .map(|f| f.id)
+        .collect();
     for f in findings.iter_mut() {
-        if f.now == Some(NowStatus::PointsTo) && gap.unclean_except(f.id) {
+        let others_open = standing.iter().any(|id| *id != f.id);
+        if f.now == Some(NowStatus::PointsTo) && (gap.unclean_except(f.id) || others_open) {
             f.now = Some(NowStatus::CantTell);
         }
     }

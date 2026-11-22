@@ -54,7 +54,8 @@ export async function turnBackOn(
   try {
     await after?.();
   } catch {
-    // The apply is recorded and announced; the caller's own screen re-reads on the ledger event.
+    // The apply is recorded and announced (writeLedger fires the ledger event; Check and App do not listen to it).
+    // A failed refresh is not a failed apply: the result stays `done`, and the screen shows what it read last.
   }
   return { kind: "done", change };
 }

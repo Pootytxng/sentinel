@@ -536,7 +536,7 @@
       "turningOn": "Turning it back on…",
       "turnedOn": "You turned “{{title}}” back on with Compy at {{when}}. Play {{game}} once, for at least 10 minutes, then press Something's wrong again.",
       "turnedOnNoTime": "You turned “{{title}}” back on with Compy. Play {{game}} once, for at least 10 minutes, then press Something's wrong again.",
-      "secondChange": "You turned on “{{other}}” a moment ago. If you change two things before you play, Compy can't tell which one made the difference.",
+      "secondChange": "You turned on “{{other}}” earlier from this card. If you change two things before you play, Compy can't tell which one made the difference.",
       "step2": "Play {{game}} once, then press Something's wrong again.",
       "stepBackOn": "Compy read it back on by {{restored}}. Play {{game}} once, then press Something's wrong again.",
       "openCheck": "Open {{room}}"
@@ -787,14 +787,14 @@
     "nowTitle": "Since it ran normally again:"
   },
   "now": {
-    "pointsTo": "Points to it",
+    "pointsTo": "Matches the timing",
     "pointsAway": "Points away from it",
     "cantTell": "Still can't tell"
   },
   "recovered": {
     "title": "{{game}}'s last two sessions ran the way it usually does",
     "numbers": "Its dips stayed at about {{beforePct}}% of its average before, fell to about {{roughPct}}% while it was rough, and are at about {{nowPct}}% now.",
-    "pointsTo": "The evidence now points to: {{what}}.",
+    "pointsTo": "Of the changes listed, only one is still standing after these sessions: {{what}}. That matches the timing, but two sessions can't show why it ran better.",
     "between": "Still between: {{list}}.",
     "settingBack_one": "Compy read the setting back on before those two sessions. Among the changes Compy keeps track of (drivers, Windows updates, game files, installed programs), it found no other one in that stretch. That's consistent with the setting being what mattered, but it doesn't prove it.",
     "settingBack_other": "Compy read those settings back on before those two sessions. Among the changes Compy keeps track of (drivers, Windows updates, game files, installed programs), it found no other one in that stretch. That's consistent with those settings being what mattered, but it doesn't prove it.",

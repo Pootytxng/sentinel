@@ -189,6 +189,10 @@ pub(crate) struct Drift {
     /// n1-drift: when each of `titles` was applied, from the ledger's own per-change stamp (same
     /// order). Never `last_ready_at`, which is a scan time for the whole row.
     pub applied_at: Vec<String>,
+    /// B3b: the rec id of each of `titles` (same order; empty when the scan had none), so the card offers
+    /// "Turn it back on" by the ledger's id, not by a title that a catalog rename could change. Wire-only:
+    /// `Drift` is built per scan and never stored (the stored record is `DriftState`).
+    pub recs: Vec<String>,
 }
 
 // #283 — serialized so two concurrent readiness scans can't interleave load → detect → save.
@@ -351,6 +355,7 @@ pub(crate) fn detect_seen(
                     last_ready_value: state.last_ready_value.get(id).cloned(),
                     titles: read.titles.clone(),
                     applied_at: read.applied_at.clone(),
+                    recs: if read.recs.len() == read.titles.len() { read.recs.clone() } else { Vec::new() },
                 });
             }
             // An active drift whose check now reads unknown: still a notice (last seen changed), with
@@ -369,6 +374,7 @@ pub(crate) fn detect_seen(
                     last_ready_value: state.last_ready_value.get(id).cloned(),
                     titles: Vec::new(),
                     applied_at: Vec::new(),
+                    recs: Vec::new(),
                 });
             }
             // advisory / unknown with no active drift / attention-that-was-never-good → not a regression.
@@ -904,6 +910,30 @@ mod drift_tests {
         // different thing and is never what a surface says "you turned it on" with.
         assert_eq!(d1[0].applied_at, vec!["2026-11-01T10:00:00Z".to_string()]);
         assert_eq!(d1[0].last_ready_at.as_deref(), Some("T0"));
+        // No rec ids read: none sent (the card then matches by title).
+        assert!(d1[0].recs.is_empty());
+    }
+
+    /// B3b: the rec id of each title travels with it, so the card offers "Turn it back on" by id. Ids that do not
+    /// line up with the titles are not sent at all (never a wrong pairing).
+    #[test]
+    fn applied_changes_drift_carries_the_rec_id_of_each_title_only_when_they_line_up() {
+        let (good, _) = obs_val("applied-changes", "ready", Some("2 active"));
+        let (_d0, s0) = detect(&[good], &DriftState::default(), "T0");
+        let seen_with = |recs: Vec<String>| {
+            let mut m = HashMap::new();
+            m.insert(
+                "applied-changes".to_string(),
+                Seen { titles: vec!["Enable Windows Game Mode".into(), "Trim visual effects".into()], recs, ..Seen::default() },
+            );
+            m
+        };
+        let both = seen_with(vec!["game-mode".into(), "visual-fx".into()]);
+        let (d1, _) = detect_seen(&[obs("applied-changes", "attention")], &both, &s0, "T1");
+        assert_eq!(d1[0].recs, vec!["game-mode".to_string(), "visual-fx".to_string()]);
+        let short = seen_with(vec!["game-mode".into()]);
+        let (d2, _) = detect_seen(&[obs("applied-changes", "attention")], &short, &s0, "T1");
+        assert!(d2[0].recs.is_empty(), "{:?}", d2[0].recs);
     }
 
     /// B2: a driver getting older reaches Attention with nothing changed, so it is never a drift:

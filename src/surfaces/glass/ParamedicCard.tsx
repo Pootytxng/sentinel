@@ -1135,14 +1135,21 @@ function Problem({ d, ctx, skipLater }: { d: ParamedicDiagnosis; ctx: Ctx; skipL
   );
 }
 
-function chipFor(f: ParamedicFinding, recovered: boolean, t: T): { text: string; tone?: string } {
-  if (recovered && f.now) {
-    return { text: nowText(f.now, t), tone: f.now === "points-to" ? "accent" : f.now === "points-away" ? "ok" : undefined };
-  }
+function certaintyChip(f: ParamedicFinding, t: T): { text: string; tone?: string } {
   if (f.confidence === "likely") return { text: t("paramedic.answer.likely"), tone: "accent" };
   if (f.confidence === "measured") return { text: t("paramedic.answer.measured"), tone: "accent" };
   if (f.confidence === "mechanism") return { text: t("paramedic.answer.mechanism") };
   return { text: t("paramedic.answer.possible") };
+}
+
+/** B3b: "Matches the timing" is one recovery observation, never a strength of its own, so the row's certainty word
+ *  (Possible) stays beside it and the chip carries no accent tone. */
+function chipFor(f: ParamedicFinding, recovered: boolean, t: T): { text: string; tone?: string; certainty?: { text: string; tone?: string } } {
+  if (recovered && f.now) {
+    if (f.now === "points-to") return { text: nowText(f.now, t), certainty: certaintyChip(f, t) };
+    return { text: nowText(f.now, t), tone: f.now === "points-away" ? "ok" : undefined };
+  }
+  return certaintyChip(f, t);
 }
 
 /** One candidate as ONE line (name, when, a short chip). Its evidence and steps open on a tap. */
@@ -1164,6 +1171,11 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
         {since && (
           <span className="gl-para-row-when" title={since}>
             {since}
+          </span>
+        )}
+        {chip.certainty && (
+          <span className="gl-chip" data-tone={chip.certainty.tone} data-testid="paramedic-row-certainty">
+            {chip.certainty.text}
           </span>
         )}
         <span className="gl-chip" data-tone={chip.tone}>
@@ -1668,10 +1680,17 @@ export function ParamedicCard({
   // B3: the settings the card may turn back on: ones the ledger says Compy applied and that read off now (the Lab's own
   // list), that the live drift names too. A setting turned on from this card keeps its dated line after the refresh
   // takes it out of both lists. No ledger list, no drift names or no confirm dialog: nothing is offered.
-  const liveTitles = (drifts ?? []).find((d) => d.id === "applied-changes")?.titles ?? [];
+  // B3b: matched by the ledger's rec id the drift carries per title; a title is used only for a drift title that has
+  // no id recorded (a scan from a build that sent none), so a renamed catalog title can't hide or swap a button.
+  const live = (drifts ?? []).find((d) => d.id === "applied-changes");
+  const liveTitles = live?.titles ?? [];
+  const liveRecs: string[] = live?.recs && live.recs.length === liveTitles.length ? live.recs : [];
+  const liveIds = new Set(liveRecs.filter((id) => id !== ""));
+  const titlesWithoutId = new Set(liveTitles.filter((_, i) => !liveRecs[i]));
+  const isLive = (r: RevertedChange) => liveIds.has(r.rec_id) || titlesWithoutId.has(r.title);
   const offer: RevertedChange[] = [
-    ...(confirm && reverted ? reverted.filter((r) => liveTitles.includes(r.title)) : []),
-    ...turnedOn.filter((x) => !(reverted ?? []).some((r) => r.rec_id === x.rec_id && liveTitles.includes(r.title))),
+    ...(confirm && reverted ? reverted.filter(isLive) : []),
+    ...turnedOn.filter((x) => !(reverted ?? []).some((r) => r.rec_id === x.rec_id && isLive(r))),
   ];
   const press = (rev: RevertedChange) => {
     if (!confirm || pressing.current) return;

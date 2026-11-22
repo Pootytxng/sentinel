@@ -2986,7 +2986,7 @@ mod export_tests {
             "value_now": null, "last_ready_at": "t", "last_ready_value": "High performance", "titles": [], "applied_at": [] });
         let drift_changes = json!({ "id": "applied-changes", "label": "Applied changes", "detail": format!("2 changes are off: {title}, {short}"),
             "noticed_at": "t", "unreadable_now": false, "value_now": null, "last_ready_at": null, "last_ready_value": null,
-            "titles": [title, short], "applied_at": ["t", "t"] });
+            "titles": [title, short], "applied_at": ["t", "t"], "recs": [format!("startup-entry:{C_STARTUP}"), "startup-entry:QQ"] });
         let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming Rig".into(), guid: "dddddddd-1111-2222-3333-444444444444".into() }) };
         let (s, r) = lone(
             [
@@ -3019,6 +3019,7 @@ mod export_tests {
         assert_eq!(d[2]["titles"], json!(["Disable startup entry: other program 1", "Disable startup entry: other program 2"]));
         assert_eq!(s[3]["checks"][0]["drifted_titles"], d[2]["titles"]);
         assert_eq!(d[2]["applied_at"], json!(["t", "t"]), "stamps are untouched");
+        assert_eq!(d[2]["recs"], json!(["startup-entry:other program 1", "startup-entry:other program 2"]), "B3b: the drift's rec ids too");
         assert!(r.power_plan_names >= 3 && r.startup_entry_names >= 2);
     }
 
@@ -3053,7 +3054,7 @@ mod export_tests {
         assert_eq!(unreadable_seconds, 30);
         let drift = crate::drift::Drift {
             id: String::new(), label: String::new(), detail: String::new(), noticed_at: String::new(), unreadable_now: false,
-            value_now: None, last_ready_at: None, last_ready_value: None, titles: vec![], applied_at: vec![],
+            value_now: None, last_ready_at: None, last_ready_value: None, titles: vec![], applied_at: vec![], recs: vec![],
         };
         let crate::drift::Drift {
             // Fixed check id and label, stamps, a flag.
@@ -3063,6 +3064,8 @@ mod export_tests {
             detail: _, value_now: _, last_ready_value: _,
             // Applied-change titles: startup-entry titles by the startup loop.
             titles: _,
+            // Applied-change rec ids: a startup entry's "startup-entry:<name>" by the startup loop's exact-id pass.
+            recs: _,
         } = drift;
         // The unmeasured seconds reach the export as a number and Compy's fixed sentence.
         let mut sources = canary_sources();
@@ -3615,7 +3618,7 @@ mod export_tests {
         ("HwFingerprint", "hash ram_gb", "gpu gpu_driver display", ""),
         ("GameReadiness", "checks ready_count attention_count unknown_count advisory_count advisory drifts", "", "dismissed_ids"),
         ("ReadinessCheck", "id label status action_uri action_label", "", "detail value drifted_titles"),
-        ("Drift", "noticed_at unreadable_now last_ready_at applied_at", "", "id label detail value_now last_ready_value titles"),
+        ("Drift", "noticed_at unreadable_now last_ready_at applied_at", "", "id label detail value_now last_ready_value titles recs"),
         ("DiagnosticSection", "entries", "", "name"),
         ("DiagnosticEntry", "", "", "label value note"),
         ("Recommendation", "id category severity applies_to currently_applied provenance eligible risk_dimensions", "", "title description impact downside ineligible_reason"),

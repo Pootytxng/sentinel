@@ -109,6 +109,31 @@ describe("shared confidence words never say a retired strength word", () => {
     expect(hits, `probability words in locale files: ${hits.join(", ")}`).toEqual([]);
   });
 
+  // B3b (2026-11-22): the Something's-wrong card's recovery said "Points to it" / "The evidence now points to" on one
+  // recovery observation (one support; never above Possible). That is an attribution claim, so it is retired in the
+  // card's strings: a row "matches the timing", and the summary says only one listed change is still standing. Only a
+  // negated use ("can't point to" / 不能…指向 / 无法…指向) may remain.
+  it("no Something's-wrong card string says the evidence points to something, in either language", () => {
+    const flat = (o: unknown, at = ""): [string, string][] =>
+      typeof o === "string" ? [[at, o]] : o && typeof o === "object" ? Object.entries(o).flatMap(([k, v]) => flat(v, at ? `${at}.${k}` : k)) : [];
+    const AFFIRMED_EN = /(?<!can't |cannot |can not |not )\bpoints? to\b/i;
+    // "不指向它" (the old "points away" chip) is caught too: the row chips say what matches, not what points.
+    const AFFIRMED_ZH = /(?<!不能|无法|不能单凭这一点|无法单凭这一点)指向/;
+    const hits: string[] = [];
+    for (const loc of ["en", "zh-CN"]) {
+      const strings = flat(JSON.parse(readFileSync(join("src", "i18n", "locales", loc, "paramedic.json"), "utf8")));
+      expect(strings.length, `${loc}: paramedic strings not read`).toBeGreaterThan(100);
+      for (const [key, s] of strings) if (AFFIRMED_EN.test(s) || AFFIRMED_ZH.test(s)) hits.push(`${loc}:${key}: ${s}`);
+    }
+    expect(hits, hits.join("\n")).toEqual([]);
+    // The two keys that carried it say the mechanism now.
+    const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8"));
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8"));
+    expect([en.now.pointsTo, zh.now.pointsTo]).toEqual(["Matches the timing", "时间上吻合"]);
+    expect(en.recovered.pointsTo).toMatch(/^Of the changes listed, only one is still standing .*two sessions can't show why it ran better\.$/);
+    expect(zh.recovered.pointsTo).toMatch(/只剩一项还没有被排除.*两次运行无法说明它为什么变好。$/);
+  });
+
   it("no band or row can produce the word 'likely'", () => {
     for (const band of ["high", "medium", "low", "unknown", null, undefined] as const) {
       expect(wordFromBand(band as never)).not.toBe("likely");
