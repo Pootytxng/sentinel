@@ -2565,14 +2565,20 @@ mod tests {
 
     #[test]
     fn a_failing_query_is_unreadable_with_the_windows_reason() {
-        let r = run_wevtutil("No-Such-Channel/Operational", None, 1, false, Duration::from_secs(5));
+        // Real wevtutil, so REAL_LOG_BUDGET (load-tolerant); a timeout is still a failure: it is
+        // Ok(timed_out) here, and TimedOutBeforeAnyRecord through the reader, neither of which passes.
+        let r = run_wevtutil("No-Such-Channel/Operational", None, 1, false, REAL_LOG_BUDGET);
         assert!(
             matches!(r, Err(UnreadableReason::ChannelNotFound | UnreadableReason::QueryFailed(_))),
             "a missing channel must not look like an empty log: {r:?}"
         );
-        // And through the reader: a channel that does not exist is Unreadable.
+        // And through the reader: a channel that does not exist is Unreadable for that reason.
         let q = event_query(None, 1, Utc::now() - ChronoDuration::days(1), Utc::now());
-        assert!(read_channel("No-Such-Channel/Operational", &q, Duration::from_secs(5), parse_pnp).is_err());
+        match read_channel("No-Such-Channel/Operational", &q, REAL_LOG_BUDGET, parse_pnp) {
+            Err(UnreadableReason::ChannelNotFound | UnreadableReason::QueryFailed(_)) => {}
+            Err(other) => panic!("through the reader: {other:?}"),
+            Ok(_) => panic!("through the reader: a missing channel read as a log"),
+        }
     }
 
     #[test]
@@ -2938,9 +2944,15 @@ mod tests {
     fn a_log_read_that_is_cut_at_a_past_window_end_returns_only_rows_up_to_it() {
         // Real log: a window that ended 40 days ago must not be answered from the newest rows.
         let until = Utc::now() - ChronoDuration::days(40);
-        match read_windows_updates(until - ChronoDuration::days(20), until, Duration::from_secs(5)) {
+        // REAL_LOG_BUDGET (load-tolerant), not the 5 s product limit; a timeout here is a failure, not a
+        // pass (with 5 s a loaded run could time out and pass without checking a single row).
+        match read_windows_updates(until - ChronoDuration::days(20), until, REAL_LOG_BUDGET) {
             SourceRead::Read(ok) => {
+                assert!(!ok.timed_out(), "a real read must not time out within {REAL_LOG_BUDGET:?}");
                 assert!(ok.events.iter().all(|e| e.when.at.unwrap() <= until + ChronoDuration::milliseconds(1)));
+            }
+            SourceRead::Unreadable(UnreadableReason::TimedOutBeforeAnyRecord) => {
+                panic!("a real read returned nothing within {REAL_LOG_BUDGET:?}")
             }
             SourceRead::Unreadable(_) => {} // a log that does not reach back that far is Unreadable-or-gap territory
         }
@@ -3065,6 +3077,10 @@ mod tests {
     //  - a timeout is still a FAILURE, never a skip: a real read that returns no record within 120 s is a
     //    hung or broken reader, and a skip on timeout would let that pass silently forever. Only a log
     //    that is empty, switched off or denied is skipped (see `log_readable`).
+    //  - D1e (lane B gate flake): every other test that runs the REAL wevtutil uses this budget too,
+    //    never the 5 s product limit (a_failing_query_is_unreadable_with_the_windows_reason,
+    //    a_missing_channel_exit_code_is_a_fixed_reason, a_log_read_that_is_cut_at_a_past_window_end_...,
+    //    a_wevtutil_planted_beside_the_executable_is_never_run). The deliberate zero-budget test stays.
     const REAL_LOG_BUDGET: Duration = Duration::from_secs(120);
 
     #[test]
@@ -3139,7 +3155,9 @@ mod tests {
 
     #[test]
     fn a_missing_channel_exit_code_is_a_fixed_reason() {
-        match run_wevtutil("No-Such-Channel/Operational", None, 1, false, Duration::from_secs(5)) {
+        // Real wevtutil: REAL_LOG_BUDGET, not the 5 s product limit (a busy gate run once hit 5 s here).
+        // A timeout still fails: it comes back as Ok(timed_out) and lands in `other`.
+        match run_wevtutil("No-Such-Channel/Operational", None, 1, false, REAL_LOG_BUDGET) {
             Err(UnreadableReason::ChannelNotFound) | Err(UnreadableReason::QueryFailed(Some(_))) => {}
             other => panic!("{other:?}"),
         }
