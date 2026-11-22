@@ -3788,6 +3788,41 @@ mod recovery_f3 {
     }
 
     #[test]
+    fn the_owners_case_a_setting_read_back_on_then_one_clear_session_rescores_nothing_and_is_one_change() {
+        // Setting noticed off, rough on the 9th, read back on the 12th, one clear session on the 13th.
+        let rough_only = follow(episode());
+        let d = follow(with_extra(episode(), vec![on(13, 50.0, Some("2.0"))]));
+        assert_eq!(d.state, unclear(false, true, false), "{:?}", d.state);
+        let shape = |d: &Diagnosis| d.findings.iter().map(|f| (f.id, f.confidence, f.in_play, f.now)).collect::<Vec<_>>();
+        assert_eq!(shape(&d), shape(&rough_only), "the setting row and every other row keep their strength and place");
+        assert_eq!(finding_of(&d, "setting-drift").confidence, Certainty::Possible);
+        let m = d.measured_once.as_ref().expect("measured once");
+        assert!(m.between.contains(&"setting-drift"), "the setting is still one of the candidates: {:?}", m.between);
+        assert!(!m.cant_attribute, "turning the setting back on is one change: {:?}", m.also_changed);
+    }
+
+    #[test]
+    fn the_measured_once_wire_shape_is_what_the_card_reads() {
+        let d = with_report(with_extra(episode(), vec![on(10, 50.0, Some("2.0"))]), Vec::new());
+        let v = serde_json::to_value(&d).expect("serialises");
+        let m = v["measured_once"].as_object().expect("measured_once on the wire");
+        let mut keys: Vec<&str> = m.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        // The fields of `ParamedicMeasuredOnce` in src/types.ts.
+        assert_eq!(keys, ["also_changed", "before", "between", "cant_attribute", "now", "rough", "session"]);
+        for metric in ["before", "rough", "now"] {
+            let mut k: Vec<&str> = m[metric].as_object().expect("a metric").keys().map(String::as_str).collect();
+            k.sort_unstable();
+            assert_eq!(k, ["avg_fps", "p99_ms", "ratio"], "{metric}");
+        }
+        assert!(m["session"]["started_at"].is_string());
+        assert!(m["between"].is_array() && m["also_changed"].is_array() && m["cant_attribute"].is_boolean());
+        // Absent, not null, when there is no one-clear session.
+        let rough = serde_json::to_value(run(episode())).expect("serialises");
+        assert!(rough.get("measured_once").is_none());
+    }
+
+    #[test]
     fn a_second_change_in_the_stretch_means_compy_cant_attribute_the_clear_session() {
         let sess = with_extra(episode(), vec![on(10, 50.0, Some("3.0"))]);
         let driver = || vec![gpu("2026-10-09T18:00:00Z", "2.0", "3.0")];

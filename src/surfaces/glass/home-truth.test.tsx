@@ -252,7 +252,7 @@ describe("Home's quiet follow-through line (B2)", () => {
       home(false);
       await settle();
       expect(screen.getByTestId("home-back-in-range")).toHaveTextContent(
-        "仅测得一次：Skyline Drift 上一次游戏在它平时的范围内（低帧约为平均帧率的 63%；平时约 64%）。",
+        "仅测得一次：Skyline Drift 上一次的运行在它平时的范围内（低帧约为平均帧率的 63%；平时约 64%）。",
       );
     } finally {
       await act(async () => {
