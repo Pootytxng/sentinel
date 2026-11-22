@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 mod actions;
+mod install_location; // A3: where this compy.exe runs from (Program Files vs the user's own folder) and whether an old per-user copy is left; read-only, one support-log line per launch.
 mod sys_exe; // The ONE resolver for Windows system tools (absolute path from the real system dir) + pinned child environment. Hardening slice 1.
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
 mod atomic_write; // Whole-file byte replacement for SECONDARY on-disk state (benchmark/comparison/readiness/drift JSON, plus the license token's exact plain-text bytes — the one caller here that is not JSON): a save interrupted part-way leaves the previous complete file rather than a truncated one. NOT power-loss durability, NOT a lock, NOT a transaction — and deliberately NOT used by the Trust Ledger or the signed remote rules, which carry their own rules.
@@ -2115,6 +2116,9 @@ pub fn run() {
                 support_evidence::Outcome::Ok,
                 &format!("Compy {} started ({})", env!("CARGO_PKG_VERSION"), build_stamp()),
             );
+            // A3: where this copy runs from, and an old per-user copy left for this account (a
+            // standard user's elevated installer cannot see it). Read-only, fixed words, no path.
+            install_location::record_at_start();
             // Trial Protocol #583: resolve any experiment start that a crash or kill interrupted, before
             // the first window can read the store. Read-only against Windows (it never restores at
             // launch). Every interrupted start is closed and saved; one closed while the change history
