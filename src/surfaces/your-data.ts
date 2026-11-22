@@ -63,7 +63,9 @@ export const REFUSAL_CODES = [
   "root_unreadable",
   "root_not_a_plain_folder",
   "data_root_unavailable",
-  "store_lock_unavailable",
+  // A stop reason only (in the Trial store's gate, C1 review B4): a change was applied after the list was made.
+  "trials_tied_to_changes",
+  // `store_lock_unavailable` is not here: only "clear everything" can give it (data_clear.rs `clear_everything_at`).
 ] as const;
 
 /** Kept-reason codes the screen explains. Anything else: `kept.other` with the code. */
@@ -138,11 +140,13 @@ export function sizeLabel(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export type ResultKind = "nothing" | "deleted" | "stopped" | "not_finished";
+export type ResultKind = "nothing" | "all_gone" | "deleted" | "stopped" | "not_finished";
 
-/** The one headline a report may have. "deleted" only when `complete` and something was listed. */
+/** The one headline a report may have. "deleted" only when `complete` and this run deleted at least one file;
+ *  a complete run whose listed files were all already gone says so instead. */
 export function resultKind(r: ClearReport): ResultKind {
   if (r.complete && r.nothing_to_do) return "nothing";
+  if (r.complete && r.deleted.length === 0) return "all_gone";
   if (r.complete) return "deleted";
   if (r.stopped.length > 0) return "stopped";
   return "not_finished";
@@ -188,6 +192,46 @@ export function clearWebviewTargets(targets: WebviewTarget[], local: StorageLike
     }
   }
   return { removed, stillThere };
+}
+
+/**
+ * Which sentence a failed delete gets. The backend's `error` is developer English (data_clear.rs `delete_one`,
+ * `remove_by_handle`, or a Windows message ending in "(os error N)"); the screen never shows it, only its own
+ * words and, for an unnamed Windows error, the number.
+ */
+export type FailureKind =
+  | { kind: "in_use" }
+  | { kind: "denied" }
+  | { kind: "still_there" }
+  | { kind: "moved" }
+  | { kind: "os"; code: number }
+  | { kind: "other" };
+
+export function failureKind(error: string): FailureKind {
+  if (error.includes("is still there after the delete")) return { kind: "still_there" };
+  if (/not where it was planned|leads outside|is a link or not a folder|is not a plain file/.test(error)) return { kind: "moved" };
+  const os = /\(os error (\d+)\)/.exec(error);
+  if (os) {
+    const code = Number(os[1]);
+    if (code === 32 || code === 33) return { kind: "in_use" };
+    if (code === 5) return { kind: "denied" };
+    return { kind: "os", code };
+  }
+  return { kind: "other" };
+}
+
+/** The locale key (under `settings.yourData.`) and values for one failed delete. */
+export function failureLine(f: FailedDelete): { key: string; opts: Record<string, string | number> } {
+  const why = failureKind(f.error);
+  const key = {
+    in_use: "fileFailedInUse",
+    denied: "fileFailedDenied",
+    still_there: "fileFailedStillThere",
+    moved: "fileFailedMoved",
+    os: "fileFailedCode",
+    other: "fileFailedOther",
+  }[why.kind];
+  return { key, opts: why.kind === "os" ? { file: f.rel, code: why.code } : { file: f.rel } };
 }
 
 /** Restart reasons the screen handles itself. Others are shown by code with "close and reopen Compy". */

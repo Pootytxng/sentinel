@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { BentoTile } from "../design/bento/BentoGrid";
 import {
   clearWebviewTargets,
+  failureLine,
   groupDeletes,
   groupKept,
   knownRefusal,
@@ -14,6 +15,7 @@ import {
   type ClearOutcome,
   type ClearPlan,
   type ClearReport,
+  type FailedDelete,
   type Refusal,
   type WebviewResult,
 } from "./your-data";
@@ -191,6 +193,7 @@ function ConfirmStep(props: {
             ))}
             {plan.webview.length > 0 && <li>{t(k("webviewLine"))}</li>}
           </ul>
+          {plan.delete.some((d) => d.rel === "drift.json") && <p className="receipts-hint">{t(k("driftNotice"))}</p>}
         </>
       )}
 
@@ -205,6 +208,7 @@ function ConfirmStep(props: {
               {t(k("keptFiles"), { files: g.files.join(", ") })}
             </li>
           ))}
+        <li>{t(k("keptReports"))}</li>
         {plan.unknown.length > 0 && <li>{t(k("unknownFiles"), { files: plan.unknown.join(", ") })}</li>}
         {plan.legacy_folder_present && <li>{t(k("legacyFolder"))}</li>}
       </ul>
@@ -241,19 +245,23 @@ function ConfirmStep(props: {
 function Result({ report, webview, onClose }: { report: ClearReport; webview: WebviewResult | null; onClose: () => void }) {
   const { t } = useTranslation();
   const kind = resultKind(report);
-  const gone = report.deleted.length + report.already_gone.length;
+  // Only files this run deleted count as deleted (C1 review B1); files already gone are said separately.
+  const n = report.deleted.length;
+  const m = report.already_gone.length;
   const others = otherRestartReasons(report);
   const showReload = report.complete && report.restart_reasons.includes(SCREEN_MEMORY);
   return (
     <div data-testid="your-data-result">
-      <p className={`receipts-hint ${kind === "deleted" || kind === "nothing" ? "sev-notice" : "sev-warn"}`}>
+      <p className={`receipts-hint ${kind === "deleted" || kind === "nothing" || kind === "all_gone" ? "sev-notice" : "sev-warn"}`}>
         {kind === "nothing" && t(k("resultNothing"))}
-        {kind === "deleted" && t(k(gone === 1 ? "resultDeletedOne" : "resultDeleted"), { n: gone })}
+        {kind === "all_gone" && t(k("resultAllGone"))}
+        {kind === "deleted" && t(k(n === 1 ? "resultDeletedOne" : "resultDeleted"), { n })}
         {kind === "stopped" &&
-          t(k("resultStopped"), { n: gone, left: report.not_attempted.length })}
+          t(k("resultStopped"), { n, left: report.not_attempted.length })}
         {kind === "not_finished" &&
-          t(k("resultNotFinished"), { n: gone, failed: report.failed.length, left: report.not_attempted.length })}
+          t(k("resultNotFinished"), { n, failed: report.failed.length, left: report.not_attempted.length })}
       </p>
+      {m > 0 && kind !== "all_gone" && <p className="receipts-hint">{t(k("alreadyGoneCount"), { m })}</p>}
       {report.stopped.length > 0 && (
         <ul className="receipts-hint">
           {report.stopped.map((r) => (
@@ -271,7 +279,9 @@ function Result({ report, webview, onClose }: { report: ClearReport; webview: We
           <li key={`g-${f}`}>{t(k("fileAlreadyGone"), { file: f })}</li>
         ))}
         {report.failed.map((f) => (
-          <li key={`f-${f.rel}`}>{t(k("fileFailed"), { file: f.rel, error: f.error })}</li>
+          <li key={`f-${f.rel}`}>
+            <FailedLine f={f} />
+          </li>
         ))}
         {report.not_attempted.map((f) => (
           <li key={`n-${f}`}>{t(k("fileNotTried"), { file: f })}</li>
@@ -301,6 +311,13 @@ function Result({ report, webview, onClose }: { report: ClearReport; webview: We
       </div>
     </div>
   );
+}
+
+/** "Could not delete" in the screen's own words (your-data.ts `failureLine`): the backend's English never shows. */
+function FailedLine({ f }: { f: FailedDelete }) {
+  const { t } = useTranslation();
+  const line = failureLine(f);
+  return <>{t(k(line.key), line.opts)}</>;
 }
 
 export default YourData;

@@ -233,7 +233,8 @@ fresh, empty ledger. The support record can be cleared or deleted at any time an
 new empty one; the only consequence is that if you later ask for help with something that already went
 wrong, there is no record of it left to show — so clear it *after* a support conversation, not before.
 
-Compy has no "delete my data" button yet. To remove its data by hand, close Compy and delete the files
+Settings, Your data, "Clear play history" deletes the play history it lists on screen after you confirm, and keeps
+the Trust Ledger so every change can still be undone; there is no in-app way yet to delete everything. To remove its data by hand, close Compy and delete the files
 above. Deleting the whole `%APPDATA%\Compy` folder removes what Compy stored there, with one catch: if
 an older `%APPDATA%\Sentinel` folder exists, Compy copies it back in at its next start, so delete that
 folder as well. The window's storage under `%LOCALAPPDATA%\gg.compy.app\` and the window-state file are

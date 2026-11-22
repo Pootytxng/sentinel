@@ -167,7 +167,11 @@ describe("command-authority guard: no window holds authority it does not need", 
       "start_experiment", "conclude_experiment", "conclude_realplay", "restore_experiment",
       "apply_outcome_choice", "undo_outcome_choice", "record_changed_outside",
       "start_tweak_trial", "start_stack_trial", "start_calibration", "export_report",
+      // C1: deletes play history; its plan lists file names in the data folder.
+      "clear_play_history", "plan_clear_play_history",
     ];
+    // Every name here must be a real registered command, or the check above passes vacuously for it.
+    expect(FORBIDDEN_FOR_OVERLAY.filter((c) => !registered.includes(c))).toEqual([]);
     const overlay = caps.find((c) => c.windows.includes("overlay"))!;
     const granted = new Set(grantedCommands(overlay));
     expect(FORBIDDEN_FOR_OVERLAY.filter((c) => granted.has(c))).toEqual([]);

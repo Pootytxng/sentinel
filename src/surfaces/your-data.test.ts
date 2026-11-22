@@ -6,6 +6,8 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import {
   clearWebviewTargets,
+  failureKind,
+  failureLine,
   groupDeletes,
   groupKept,
   KEPT_CODES,
@@ -105,6 +107,55 @@ describe("your-data: what the screen says", () => {
   });
 });
 
+describe("your-data: the confirm list names every play-history store the inventory has (review B3)", () => {
+  // Every data-folder row the play-history clear deletes as a store of its own (category PlayHistory or
+  // HardwareFacts; set-asides and working files group under their store, ledger rows are never in it) must have
+  // its own words, so a new store of play data can't be deleted under the "other working files" label.
+  const src = readFileSync(join("src-tauri", "src", "data_inventory.rs"), "utf8");
+  const rows = [...src.matchAll(/InventoryRow \{([\s\S]*?)\n\s{4}\},/g)].map((m) => {
+    const body = m[1];
+    return {
+      id: /\bid: "([^"]+)"/.exec(body)?.[1] ?? "",
+      base: /\bbase: (?:Base::)?(\w+)/.exec(body)?.[1] ?? "",
+      category: /\bcategory: (?:Category::)?(\w+)/.exec(body)?.[1] ?? "",
+    };
+  });
+  const ids = new Set(rows.map((r) => r.id));
+  const stores = rows.filter((r) => r.base === "DataRoot" && (r.category === "PlayHistory" || r.category === "HardwareFacts"));
+
+  it("parses the inventory (non-vacuous)", () => {
+    expect(rows.length).toBeGreaterThan(50);
+    expect(stores.map((r) => r.id)).toContain("sessions");
+    expect(stores.length).toBeGreaterThanOrEqual(11);
+  });
+
+  it("every play-history or hardware store row has a STORE_GROUPS entry", () => {
+    expect(stores.map((r) => r.id).filter((id) => !(id in STORE_GROUPS))).toEqual([]);
+  });
+
+  it("every STORE_GROUPS key is an inventory id", () => {
+    expect(Object.keys(STORE_GROUPS).filter((id) => !ids.has(id))).toEqual([]);
+  });
+});
+
+describe("your-data: a failed delete never shows the backend's English (review should-fix)", () => {
+  it("names the kinds it can and keeps only a Windows error number otherwise", () => {
+    expect(failureKind("The process cannot access the file because it is being used by another process. (os error 32)")).toEqual({ kind: "in_use" });
+    expect(failureKind("Access is denied. (os error 5)")).toEqual({ kind: "denied" });
+    expect(failureKind("is still there after the delete")).toEqual({ kind: "still_there" });
+    expect(failureKind("is not where it was planned (a folder was swapped for a link), so nothing was deleted")).toEqual({ kind: "moved" });
+    expect(failureKind("Something else (os error 1920)")).toEqual({ kind: "os", code: 1920 });
+    expect(failureKind("the identity log lock is poisoned")).toEqual({ kind: "other" });
+    const line = failureLine({ rel: "drift.json", error: "Something else (os error 1920)" });
+    expect(line).toEqual({ key: "fileFailedCode", opts: { file: "drift.json", code: 1920 } });
+    expect(JSON.stringify(line)).not.toContain("Something else");
+  });
+
+  it("a complete run whose files were all already gone does not say deleted", () => {
+    expect(resultKind({ ...REPORT, deleted: [], already_gone: ["a"], complete: true, nothing_to_do: false })).toBe("all_gone");
+  });
+});
+
 describe("your-data: every code has words in both languages", () => {
   const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "settings.json"), "utf8")).yourData;
   const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "settings.json"), "utf8")).yourData;
@@ -124,7 +175,7 @@ describe("your-data: every code has words in both languages", () => {
   it("every refusal code the Rust planner can give for play history has its own sentence", () => {
     const rust = readFileSync(join("src-tauri", "src", "data_clear.rs"), "utf8").split("#[cfg(test)]\nmod tests")[0];
     // Codes a play-history plan or run can refuse with (the ledger/everything-only codes are C2's).
-    const everythingOnly = new Set(["changes_applied", "ledger_unreadable", "ledger_set_aside", "ledger_busy", "gaming_orphan", "trial_record_set_aside", "clear_intent_unreadable", "clear_intent_unwritable", "ledger_lock_required", "no_clear_in_progress", "clear_files_pending", "clear_intent_not_removed"]);
+    const everythingOnly = new Set(["store_lock_unavailable", "changes_applied", "ledger_unreadable", "ledger_set_aside", "ledger_busy", "gaming_orphan", "trial_record_set_aside", "clear_intent_unreadable", "clear_intent_unwritable", "ledger_lock_required", "no_clear_in_progress", "clear_files_pending", "clear_intent_not_removed"]);
     const found = new Set<string>();
     for (const m of rust.matchAll(/(?:refuse\(\s*|Verdict::Refuse\(\s*|out\.push\(\(|code:\s*)"([a-z_]+)"/g)) found.add(m[1]);
     const missing = [...found].filter((c) => !everythingOnly.has(c) && !(REFUSAL_CODES as readonly string[]).includes(c) && !(KEPT_CODES as readonly string[]).includes(c));

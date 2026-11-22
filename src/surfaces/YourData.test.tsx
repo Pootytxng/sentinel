@@ -128,9 +128,40 @@ describe("Your data: clear play history", () => {
     await screen.findByTestId("your-data-result");
     expect(screen.queryByText(/^Deleted \d+ files?\.$/)).toBeNull();
     expect(screen.getByText(/^Not finished: 1 files deleted, 1 could not be deleted, 0 not tried/)).toBeTruthy();
-    expect(screen.getByTestId("your-data-files").textContent).toContain("Could not delete: care/incident-observer.json (in use)");
+    expect(screen.getByTestId("your-data-files").textContent).toContain("Could not delete: care/incident-observer.json");
+    expect(screen.getByTestId("your-data-files").textContent).not.toContain("(in use)");
     expect(window.localStorage.getItem("compy_last_check_v1")).toBe("x");
     expect(screen.queryByTestId("your-data-reload")).toBeNull();
+  });
+
+  it("counts only files this run deleted; files already gone are said apart (review B1)", async () => {
+    const mixed: ClearReport = { ...REPORT, deleted: ["sessions.json"], already_gone: ["care/incident-observer.json"] };
+    answer(PLAN, { status: "done", detail: mixed });
+    render(<YourData />);
+    await openPlan();
+    fireEvent.click(screen.getByLabelText("I understand"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete play history" }));
+    await screen.findByTestId("your-data-result");
+    expect(screen.getByText("Deleted 1 file.")).toBeTruthy();
+    expect(screen.getByText("1 were already gone.")).toBeTruthy();
+    expect(screen.queryByText("Deleted 2 files.")).toBeNull();
+  });
+
+  it("a failed delete shows the screen's own words, never the backend's text", async () => {
+    const failed: ClearReport = {
+      ...REPORT,
+      deleted: ["sessions.json"],
+      failed: [{ rel: "care/incident-observer.json", error: "The process cannot access the file because it is being used by another process. (os error 32)" }],
+      complete: false,
+    };
+    answer(PLAN, { status: "done", detail: failed });
+    render(<YourData />);
+    await openPlan();
+    fireEvent.click(screen.getByLabelText("I understand"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete play history" }));
+    const files = (await screen.findByTestId("your-data-files")).textContent ?? "";
+    expect(files).toContain("Could not delete: care/incident-observer.json (another program has it open)");
+    expect(files).not.toContain("The process cannot access");
   });
 
   it("a refused plan shows each reason in words, never the backend's text, and has no delete button", async () => {

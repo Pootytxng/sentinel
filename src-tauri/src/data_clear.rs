@@ -269,6 +269,29 @@ fn live_state_refusals(state: &LiveState) -> Vec<(&'static str, &'static str)> {
     out
 }
 
+const TRIAL_RUNNING_DETAIL: &str =
+    "A Trial is starting, running or was interrupted mid-start, so a change it made may still be on. Let it finish or stop it first.";
+const TRIAL_UNKNOWN_DETAIL: &str =
+    "Compy can't read its Trial records, so it can't confirm that no Trial change is still on. The file was left exactly as it is.";
+const TRIALS_TIED_DETAIL: &str =
+    "Trial results stay while changes are applied or the change history cannot be read: they are linked to it.";
+
+/// What the Trial store's gate re-reads, under that store's lock, immediately before the Trial store (or one
+/// of its working files) is deleted: a Trial that is pending or running, Trial records that can't be read, or
+/// a change history that is no longer clean (a change applied since the plan) each stop the run there.
+fn trial_gate_refusals(root: &Path) -> Vec<(&'static str, &'static str)> {
+    let mut out = Vec::new();
+    match read_trial_store(root) {
+        TrialRead::Active => out.push(("trial_running", TRIAL_RUNNING_DETAIL)),
+        TrialRead::Unknown(_) => out.push(("trial_state_unknown", TRIAL_UNKNOWN_DETAIL)),
+        TrialRead::Idle | TrialRead::NoStore => {}
+    }
+    if !matches!(check_ledger(root), LedgerCheck::Clean) {
+        out.push(("trials_tied_to_changes", TRIALS_TIED_DETAIL));
+    }
+    out
+}
+
 enum LedgerCheck {
     /// Readable, and every row is rolled back (or there is no ledger).
     Clean,
@@ -590,10 +613,7 @@ impl Run<'_> {
             return Verdict::Keep("licence_kept", "The Compy Pro licence stays unless you tick the box to remove it.");
         }
         if class.id == EXPERIMENTS_ID && !matches!(self.ledger, LedgerCheck::Clean) {
-            return Verdict::Keep(
-                "trials_tied_to_changes",
-                "Trial results stay while changes are applied or the change history cannot be read: they are linked to it.",
-            );
+            return Verdict::Keep("trials_tied_to_changes", TRIALS_TIED_DETAIL);
         }
         if row.category == Category::Transient && !self.stale(mtime) {
             return Verdict::Keep("working_file_in_use", "A working file less than an hour old may belong to something running.");
@@ -680,16 +700,8 @@ pub(crate) fn plan_clear(root: &Path, scope: Scope, facts: &ClearFacts) -> Clear
     match read_trial_store(root) {
         TrialRead::Idle | TrialRead::NoStore => {}
         // Pending is a start that may have changed Windows (its receipt can be missing): a change may be on.
-        TrialRead::Active => plan.refuse(
-            "trial_running",
-            "A Trial is starting, running or was interrupted mid-start, so a change it made may still be on. Let it finish or stop it first.",
-            None,
-        ),
-        TrialRead::Unknown(_) => plan.refuse(
-            "trial_state_unknown",
-            "Compy can't read its Trial records, so it can't confirm that no Trial change is still on. The file was left exactly as it is.",
-            None,
-        ),
+        TrialRead::Active => plan.refuse("trial_running", TRIAL_RUNNING_DETAIL, None),
+        TrialRead::Unknown(_) => plan.refuse("trial_state_unknown", TRIAL_UNKNOWN_DETAIL, None),
     }
     let ledger = check_ledger(root);
     if scope == Scope::Everything {
@@ -1271,7 +1283,13 @@ fn delete_rows(
         // unsaved session that started since is seen, and nothing more is deleted (D7).
         let tripped: std::cell::RefCell<Vec<Refusal>> = std::cell::RefCell::new(Vec::new());
         let mut run = || {
-            let why = live_state_refusals(&gates.live_state());
+            let mut why = live_state_refusals(&gates.live_state());
+            if gate == Gate::Experiment {
+                // Inside the Trial store's own lock (C1 review B4): `start_experiment` holds the same lock for
+                // its record and its apply, so a Trial started since the plan, or a change applied since, is
+                // seen here and the Trial results are kept.
+                why.extend(trial_gate_refusals(root));
+            }
             if !why.is_empty() {
                 *tripped.borrow_mut() = why.into_iter().map(|(code, detail)| Refusal { code, detail: detail.to_string(), files: Vec::new() }).collect();
                 return Err("the live state changed".to_string());
@@ -4078,6 +4096,58 @@ mod tests {
             }
             assert_eq!(before, t.listing(), "{code}: nothing deleted");
             assert!(!t.has(INTENT_FILE), "{code}: no record");
+        }
+    }
+
+    /// A gate double that, when the Trial store's gate is taken, first does what a Trial start or an apply
+    /// from another surface would do while the clear waited for that lock.
+    struct InterleaveAtTrialGate<'a> {
+        root: &'a Path,
+        meanwhile: &'a dyn Fn(&Path),
+    }
+
+    impl ClearGates for InterleaveAtTrialGate<'_> {
+        fn with_gate(&self, gate: Gate, _store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            if gate == Gate::Experiment {
+                (self.meanwhile)(self.root);
+            }
+            delete()
+        }
+        fn live_state(&self) -> LiveState {
+            LiveState::default()
+        }
+    }
+
+    /// C1 review B4: a Trial that starts (pending or running), or a change applied, between the plan check and
+    /// the Trial store's delete is seen inside that store's gate. The Trial store and every file after it stay,
+    /// and the report names why.
+    #[test]
+    fn w0d_a_trial_start_or_an_apply_between_the_check_and_the_trial_delete_keeps_the_trial_store() {
+        #[allow(clippy::type_complexity)]
+        let cases: Vec<(&str, Box<dyn Fn(&Path)>)> = vec![
+            ("trial_running", Box::new(|r: &Path| fs::write(r.join("experiments.json"), trial_store("pending")).unwrap())),
+            ("trial_running", Box::new(|r: &Path| fs::write(r.join("experiments.json"), trial_store("running")).unwrap())),
+            ("trial_state_unknown", Box::new(|r: &Path| fs::write(r.join("experiments.json"), "{ half written").unwrap())),
+            (
+                "trials_tied_to_changes",
+                Box::new(|r: &Path| {
+                    fs::write(r.join("history.json"), r#"[{"id":"c9","rec_id":"r9","rec_title":"Core parking","applied_at":"2026-11-01T00:00:00Z","snapshot":{},"status":"applied"}]"#).unwrap()
+                }),
+            ),
+        ];
+        for (code, meanwhile) in cases {
+            let t = Tmp::new("w0d");
+            seed(&t);
+            let shown = plan_clear(&t.root, Scope::PlayHistory, &later());
+            assert!(rels(&shown).contains(&"experiments.json"), "{code}: the plan lists the Trial store");
+            let gates = InterleaveAtTrialGate { root: &t.root, meanwhile: &*meanwhile };
+            let report = done(clear_play_history_at(&t.root, &shown.fingerprint, &later(), &gates));
+            assert!(t.has("experiments.json"), "{code}: the Trial store must survive");
+            assert!(!report.deleted.contains(&"experiments.json".to_string()), "{code}");
+            assert!(report.not_attempted.contains(&"experiments.json".to_string()), "{code}: {report:?}");
+            assert!(!report.complete, "{code}: never reported as complete");
+            assert_eq!(report.stopped.iter().map(|r| r.code).collect::<Vec<_>>(), [code], "{code}");
+            assert!(!t.has(INTENT_FILE), "{code}");
         }
     }
 
