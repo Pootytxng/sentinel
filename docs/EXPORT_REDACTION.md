@@ -53,12 +53,14 @@ the report is written, Compy changes these things in the copy it exports:
   machine name, domain, user name), and is left as it is in running text; the last lines of the report say
   how many other places it was left in. The path rule in one sentence: a path starts at a drive, a
   network-path start or `file:`, always ends at `" < > |` or a line break, and ends at a comma, a semicolon,
-  or a full stop, colon, `!` or `?` followed by a space unless the next word contains the kind of slash the
-  path has been using, so `C:/Games/Hello, World/Max/save.dat` is one path while in
-  `C:\a.txt; Power/Performance` the path ends at the semicolon. Where this errs it errs toward the path: prose
-  right after a forward-slash path whose next word has a `/` can lose a word to `<user>` or `<host>`.
+  or a full stop, colon, `!` or `?` followed by a space unless a slash of a kind the path has already used
+  comes before the next break of either kind, so `C:/Games/Hello, big World/Max/save.dat` is one path while in
+  `C:\a.txt; Power/Performance` the path ends at the semicolon. This can go wrong both ways: a backslash path
+  whose folder name holds a comma and whose next separator is a forward slash (`C:\Games\Hello, World/Max/x`)
+  ends at the comma, so a name after it is left as it is; and prose right after a forward-slash path that has
+  a `/` before its next break can lose a word to `<user>` or `<host>`.
   A name that is also an everyday word of Compy's report text (Max, Will, May or Major, for example) stays
-  in running text.
+  in running text: it is replaced only in the name fields and next to a path separator.
   "Compy's own report text" means the fixed words of Compy's report, readiness, hardware, diagnostics,
   recommendation, ledger, drift and session text; a name that only Windows supplies is not in it.
 
