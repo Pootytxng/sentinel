@@ -501,6 +501,16 @@ fn dir_identity(_p: &Path) -> Option<(u32, u64)> {
     None
 }
 
+/// The hard-link count of an open file (hardening slice 2: the elevation ticket must have exactly one
+/// name). Through the one `GetFileInformationByHandle` declaration above. `None` when it cannot be read.
+#[cfg(windows)]
+pub(crate) fn link_count(handle: std::os::windows::io::RawHandle) -> Option<u32> {
+    let mut info: ByHandleFileInformation = unsafe { std::mem::zeroed() };
+    // SAFETY: a live file handle owned by the caller; `info` is the repr(C) BY_HANDLE_FILE_INFORMATION.
+    let ok = unsafe { GetFileInformationByHandle(handle, &mut info) };
+    (ok != 0).then_some(info.number_of_links)
+}
+
 /// Receipt count of a ledger. `Some(0)` = absent or genuinely empty; `None` = present but
 /// unreadable, which every caller must treat as "may hold receipts". Read-only.
 fn ledger_receipts(path: &Path) -> Option<usize> {

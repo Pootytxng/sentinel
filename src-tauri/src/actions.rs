@@ -1582,8 +1582,8 @@ fn consume_ticket_by_handle(expected: &[u8], path: &std::path::Path) -> Result<(
     if ticket_link_count(file.as_raw_handle()) != Some(1) {
         return Err("hard link");
     }
-    let final_path = crate::data_clear::win_handle::final_path(file.as_raw_handle()).map_err(|_| "final path")?;
-    if crate::data_clear::win_handle::normalize(&final_path) != crate::data_clear::win_handle::normalize(&path.to_string_lossy()) {
+    let final_path = crate::win_handle::final_path(file.as_raw_handle()).map_err(|_| "final path")?;
+    if crate::win_handle::normalize(&final_path) != crate::win_handle::normalize(&path.to_string_lossy()) {
         return Err("moved");
     }
     let mut content = Vec::with_capacity(expected.len() + 1);
@@ -1591,25 +1591,17 @@ fn consume_ticket_by_handle(expected: &[u8], path: &std::path::Path) -> Result<(
     if content != expected {
         return Err("mismatch");
     }
-    crate::data_clear::win_handle::delete_on_close(file.as_raw_handle()).map_err(|_| "delete")?;
+    crate::win_handle::delete_on_close(file.as_raw_handle()).map_err(|_| "delete")?;
     Ok(())
     // The handle closes here: the ticket is gone.
 }
 
-/// The open file's hard-link count (GetFileInformationByHandle, declared by hand so no `windows` crate
-/// feature is added). None when it cannot be read.
+/// The open file's hard-link count, through data_root.rs's one hand declaration of
+/// GetFileInformationByHandle (a second declaration with another signature does not compile). None
+/// when it cannot be read.
 #[cfg(windows)]
 fn ticket_link_count(handle: std::os::windows::io::RawHandle) -> Option<u32> {
-    // BY_HANDLE_FILE_INFORMATION: attributes, three FILETIMEs (two u32 each), volume serial,
-    // size high, size low, number of links, index high, index low = 13 u32.
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn GetFileInformationByHandle(handle: *mut std::ffi::c_void, info: *mut [u32; 13]) -> i32;
-    }
-    let mut info = [0u32; 13];
-    // SAFETY: a live file handle owned by the caller's `File`; `info` is a writable buffer of the
-    // documented 52-byte size and 4-byte alignment.
-    (unsafe { GetFileInformationByHandle(handle.cast(), &mut info) } != 0).then_some(info[10])
+    crate::data_root::link_count(handle)
 }
 
 #[cfg(not(windows))]
@@ -1938,6 +1930,7 @@ mod batch_elevation_tests {
     #[test]
     fn a_ticket_name_that_is_a_folder_or_link_is_refused() {
         let s = crate::test_scratch::scratch_child("ticket-folder", "runtime");
+        std::fs::create_dir_all(&*s).unwrap();
         let dir = s.canonicalize().unwrap().join("elev-1-5.ticket");
         std::fs::create_dir(&dir).unwrap();
         assert!(!super::consume_elevation_ticket("", &dir.to_string_lossy()));

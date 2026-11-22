@@ -2636,8 +2636,12 @@ mod capture_generation_tests {
         let src = include_str!("monitoring.rs");
         let start = src.find(concat!("pub(crate) fn ", "start_fps_capture()")).expect("start");
         let body = &src[start..src[start..].find(concat!("pub(crate) fn ", "uac_disabled()")).map(|e| start + e).expect("next fn")];
-        assert_eq!(body.matches(concat!("while capture_", "live(generation)")).count(), 2, "heartbeat and recorder");
+        // Hardening slice 2: the heartbeat thread is gone (the pipe is the heartbeat), so the recorder is
+        // the one loop left in the start; the pipe's reader asks for its own capture in
+        // start_capture_pipe (pinned below, outside this body).
+        assert_eq!(body.matches(concat!("while capture_", "live(generation)")).count(), 1, "the recorder");
         assert!(!body.contains(concat!("while fps_", "active().load")), "a loop that reads only the flag outlives a stop");
+        assert_eq!(src.matches(concat!("let wanted = || capture_", "live(generation) && !done.load(Ordering::Acquire);")).count(), 1, "the pipe reader");
     }
 
     // CR-capture-async: start and stop now run on the blocking pool. A stop issued while a start is
