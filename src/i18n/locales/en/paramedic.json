@@ -294,7 +294,9 @@
     },
     "settingDrift": {
       "what": "A setting Compy watches changed",
-      "applied": "A setting Compy applied is no longer on"
+      "applied": "A setting Compy applied is no longer on",
+      "restored": "A setting Compy watches went off, then came back on",
+      "appliedRestored": "A setting Compy applied went off, then came back on"
     },
     "compyChange": {
       "what": "Compy had a different number of changes on"
@@ -375,6 +377,15 @@
     "driftSeenThenChanged": "Compy last saw it unchanged at {{seen}} and noticed the change at {{noticed}}.",
     "driftOther": "Compy noticed a setting it watches had changed.",
     "driftOtherNamed": "Compy noticed a setting it watches had changed: {{what}}.",
+    "driftRestored": "Compy found it off on {{noticed}}. It was back on by {{restored}}.",
+    "driftRestoredNone": "No {{game}} session has been recorded since it was back on.",
+    "driftRestoredUnjudged_one": "{{count}} {{game}} session has been recorded since it was back on, but it was too short or only partly measured, so Compy didn't judge it.",
+    "driftRestoredUnjudged_other": "{{count}} {{game}} sessions have been recorded since it was back on, but they were too short or only partly measured, so Compy didn't judge them.",
+    "driftRestoredRough_one": "After it was back on ({{restored}}), {{game}} still ran rough on {{date}}.",
+    "driftRestoredRough_other": "After it was back on ({{restored}}), {{game}} still ran rough in {{count}} sessions, the first on {{date}}.",
+    "driftRestoredClear": "After it was back on, {{game}}'s next session ran in its usual range. One session; Compy needs one more to be sure.",
+    "driftRestoredBetween": "The sessions since it was back on weren't clearly in {{game}}'s usual range, so Compy can't tell yet.",
+    "recoveredDriftBack": "Compy read that setting back on at {{restored}}, before the sessions that ran normally. That is consistent with that setting, but it doesn't prove it.",
     "whichNotRecorded": "Which setting it was, and what changed it, isn't recorded.",
     "whichChangedNotRecorded": "What changed it isn't recorded.",
     "whichNotLoaded": "Compy couldn't read which setting it was just now. What changed it isn't recorded.",
@@ -501,7 +512,7 @@
       "step2": "Open Display adapters, double-click your graphics card, then open the Driver tab.",
       "step3": "If \"Roll Back Driver\" can be clicked, click it and restart. Your previous version was {{from}}.",
       "step4": "If it's greyed out, download {{from}} from the graphics maker's previous-drivers page, run it, and choose the clean install option.",
-      "step5": "Then play {{game}} once and press Something's wrong again. Compy will compare it with how it usually runs."
+      "step5": "Then play {{game}} for one session and press Something's wrong again. Compy will say whether that session was rough or in the usual range. It needs two sessions in the usual range before it says {{game}} is back to normal."
     },
     "backgroundLoad": {
       "step1": "Close {{names}} while you play.",
@@ -514,8 +525,10 @@
       "step2": "Play {{game}} once, then press Something's wrong again."
     },
     "settingDrift": {
-      "step1": "Open History to see what Compy changed, and check any Windows setting you changed yourself.",
-      "step2": "Play {{game}} once, then press Something's wrong again."
+      "step1": "Turn the setting back on from the health check, where Compy asks you to confirm first. Also check any Windows setting you changed yourself.",
+      "step2": "Play {{game}} once, then press Something's wrong again.",
+      "stepBackOn": "Compy read it back on by {{restored}}. Play {{game}} once, then press Something's wrong again.",
+      "openCheck": "Open the health check"
     },
     "compyChange": {
       "step1": "Open History and look at the changes Compy has on. Undo the newest one.",
@@ -642,12 +655,12 @@
   },
   "nothingChanged": {
     "title": "Compy measured the problem, but nothing it records changed before it",
-    "next": "Play once more and Compy will compare again."
+    "next": "Play one more session, then press Something's wrong again. Compy will say whether it was rough or in the usual range."
   },
-  "footer": "Compy lists what changed before the problem. It doesn't claim to know the cause until a fix is checked.",
+  "footer": "Compy lists what changed before the problem. It doesn't claim to know the cause.",
   "notSeparable": {
     "title": "Compy can't tell which of these it is yet",
-    "next": "To find out: play {{game}} once with nothing else running. Compy will compare.",
+    "next": "To find out: play one session of {{game}} with nothing else running, then press Something's wrong again. Compy will say whether that session was rough or in the usual range.",
     "nextOther": "Play {{game}} once more. Compy may still not be able to tell these apart."
   },
   "cap": {
@@ -656,6 +669,8 @@
     "at": "{{fps}} fps"
   },
   "seen": {
+    "settingMoved": "Compy noticed a setting it watches off on {{noticed}}.",
+    "settingMovedBack": "Compy noticed a setting it watches off on {{noticed}}. It was back on by {{restored}}.",
     "updatesMinor": "{{n}} security definition and {{m}} app updates (listed for completeness).",
     "programsInstalled_one": "{{count}} program was installed on {{day}}: {{names}}.",
     "programsInstalled_other": "{{count}} programs were installed on {{day}}: {{names}}.",
@@ -742,11 +757,12 @@
   "verdict": {
     "likely": "One change lines up best with what happened. It's listed first.",
     "possible": "A change lines up with when it started, but Compy can't prove it.",
-    "possibleMeasured": "Compy measured something different during the rough session, but can't tie it to when the problem started."
+    "possibleMeasured": "Compy measured something different during the rough session, but can't tie it to when the problem started.",
+    "testOne": "Try one thing at a time; if you change two things before the next session, Compy can't tell which one mattered."
   },
   "next": {
     "likely": "Try the steps under the first one, play {{game}} once, then press Something's wrong again.",
-    "possible": "Check it, play {{game}} once, then press Something's wrong again. Compy will compare."
+    "possible": "Check it, play {{game}} once, then press Something's wrong again. Compy will say whether that session was rough or in the usual range. It needs two sessions in the usual range before it says {{game}} is back to normal."
   },
   "row": {
     "nowTitle": "Since it ran normally again:"
@@ -762,7 +778,7 @@
     "pointsTo": "The evidence now points to: {{what}}.",
     "between": "Still between: {{list}}.",
     "nothing": "Compy can't narrow it down from this recovery.",
-    "next": "If it runs rough again, press Something's wrong again and Compy will compare.",
+    "next": "If it runs rough again, press Something's wrong again and Compy will say whether that session was rough or in the usual range.",
     "notProven": "This is what the recorded sessions show. It doesn't prove why it got better.",
     "gapGameFiles": "{{game}}'s files changed",
     "gapProgram": "A program was installed"

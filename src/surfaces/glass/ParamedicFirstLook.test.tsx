@@ -205,7 +205,7 @@ describe("the card with no games (the question step)", () => {
     await waitFor(() => expect(screen.getByText("Nothing looks wrong")).toBeTruthy());
     expect(screen.queryByTestId("first-look")).toBeNull();
     expect(screen.queryByText("When did it start?")).toBeNull();
-    expect(screen.getByText(/It doesn't claim to know the cause until a fix is checked/)).toBeTruthy();
+    expect(screen.getByText(/It doesn't claim to know the cause\./)).toBeTruthy();
   });
 });
 

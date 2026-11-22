@@ -145,6 +145,44 @@ pub(super) fn outcome(sess: &[&SessionFacts], judged: &[Judgement], f: usize, en
     outcome_within(sess, judged, f, end, RECOVERY_SHOWN_FOR)
 }
 
+/// What this game's sessions since a setting was read back on say. Dated facts only: none of these is
+/// "the reason".
+pub(super) enum Since {
+    /// No session of this game started after it.
+    Nothing,
+    /// Sessions started after it, none judgeable (too short, or mostly unread).
+    Unjudged { count: usize },
+    /// At least one judgeable session since was rough: the first one's start, and how many.
+    Rough { at: String, count: usize },
+    /// Every judgeable session since ran clear (the recovery's own rule): the newest one's start, and how many.
+    Clear { at: String, count: usize },
+    /// Judgeable sessions since, none rough, not all clear.
+    Between,
+}
+
+/// The game's sessions that started at or after `restored`, read with the recovery's own rules.
+pub(super) fn since_restore(c: &Ctx, restored: DateTime<Utc>) -> Since {
+    let after: Vec<usize> = (0..c.sess.len()).filter(|&i| c.sess[i].start().is_some_and(|t| t >= restored)).collect();
+    if after.is_empty() {
+        return Since::Nothing;
+    }
+    if let Some(&first) = after.iter().find(|&&i| c.judged[i].verdict == Verdict::Fired) {
+        let count = after.iter().filter(|&&i| c.judged[i].verdict == Verdict::Fired).count();
+        return Since::Rough { at: c.sess[first].started_at.clone(), count };
+    }
+    let judged: Vec<usize> = after.iter().copied().filter(|&i| c.judged[i].verdict != Verdict::Unjudged).collect();
+    let Some(&newest) = judged.last() else { return Since::Unjudged { count: after.len() } };
+    let first_idx = c.sess.iter().position(|s| std::ptr::eq(*s, c.first_bad));
+    let base = first_idx.and_then(|f| c.judged[f].base.as_ref());
+    let rough_cap = c.affected.iter().copied().max_by_key(|s| s.start()).unwrap_or(c.first_bad).cap;
+    match base {
+        Some(b) if judged.iter().all(|&i| clear_session(&c.sess, c.judged, i, b, rough_cap)) => {
+            Since::Clear { at: c.sess[newest].started_at.clone(), count: judged.len() }
+        }
+        _ => Since::Between,
+    }
+}
+
 /// The newest earlier episode before the one starting at `first`, if it recovered.
 pub(super) fn earlier_episode(sess: &[&SessionFacts], judged: &[Judgement], first: usize) -> Option<EarlierEpisode> {
     let ef = (0..first).rev().find(|&i| judged[i].verdict == Verdict::Fired)?;
@@ -527,15 +565,40 @@ fn drift(rc: &Rc, cand: &Cand) -> (NowStatus, Vec<Evidence>) {
     }
     let checks: Vec<&str> =
         cand.evidence.iter().filter(|e| e.code == "drift-noticed").filter_map(|e| e.args.get("check").map(String::as_str)).collect();
-    let notices: Vec<&DriftFact> = rc.c.inp.drift.iter().filter(|n| checks.contains(&n.id.as_str())).collect();
-    // Compy keeps only the notices that still stand. One noticed before the recovered session started and still
-    // standing means the setting was still off when the game ran normally. Anything else is a time Compy
-    // cannot place.
-    if !notices.is_empty() && notices.iter().all(|n| ts(&n.noticed_at).is_some_and(|t| t <= rc.rec_start)) {
+    // The notices this candidate's own lines are about (same check and same `noticed_at`), standing or cleared.
+    let noticed: Vec<&str> =
+        cand.evidence.iter().filter(|e| e.code == "drift-noticed").filter_map(|e| e.args.get("noticed").map(String::as_str)).collect();
+    let notices: Vec<&DriftFact> = rc
+        .c
+        .inp
+        .drift
+        .iter()
+        .filter(|n| checks.contains(&n.id.as_str()) && (noticed.is_empty() || noticed.contains(&n.noticed_at.as_str())))
+        .collect();
+    // One noticed before the recovered session started and still standing means the setting was still off
+    // when the game ran normally.
+    if !notices.is_empty() && notices.iter().all(|n| n.cleared_at.is_none() && ts(&n.noticed_at).is_some_and(|t| t <= rc.rec_start)) {
         return (
             NowStatus::PointsAway,
             vec![ev(EvidenceKind::Measured, "recovered-drift-still", "drift", true, &[("check", notices[0].id.clone())])],
         );
+    }
+    // f1-follow: a notice Compy has since read ready again. After a re-apply the answer no longer needs the notice
+    // to stand: the setting was back on before the first session that ran normally, and no session after it
+    // was rough. Anything else is a time Compy cannot place.
+    let back: Vec<DateTime<Utc>> = notices.iter().filter_map(|n| n.cleared_at.as_deref().and_then(ts)).collect();
+    if !notices.is_empty() && back.len() == notices.len() {
+        let latest = back.iter().copied().max().unwrap_or(rc.rec_start);
+        if let Some(rough) = rc.c.affected.iter().filter(|s| s.start().is_some_and(|t| t >= latest)).min_by_key(|s| s.start()) {
+            let args = [("restored", iso(latest)), ("at", rough.started_at.clone()), ("count", "1".to_string())];
+            return (NowStatus::PointsAway, vec![ev(EvidenceKind::Measured, "drift-restored-rough", "sessions", true, &args)]);
+        }
+        if latest <= rc.rec_start {
+            return (
+                NowStatus::PointsTo,
+                vec![ev(EvidenceKind::SupportedInference, "recovered-drift-back", "sessions", false, &[("restored", iso(latest))])],
+            );
+        }
     }
     (NowStatus::CantTell, unread("recovery-drift-unknown"))
 }

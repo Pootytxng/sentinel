@@ -2,5 +2,12 @@
   "start_record": { "recorded": 3, "rough": 4, "normal_recorded": 0, "normal": 10, "open": ["OBS Studio"] },
   "already_running_arg_keys": ["id", "name", "n", "of"],
   "drift_noticed_arg_keys": ["check", "noticed", "ready"],
+  "drift_noticed_restored_arg_keys": ["check", "noticed", "ready", "restored"],
+  "drift_restored_none_arg_keys": ["restored"],
+  "drift_restored_rough_arg_keys": ["restored", "at", "count"],
+  "drift_restored_clear_arg_keys": ["restored", "at"],
+  "drift_restored_unjudged_arg_keys": ["restored", "count"],
+  "recovered_drift_back_arg_keys": ["restored"],
+  "setting_drift_moved_arg_keys": ["check", "noticed", "restored"],
   "recorded": { "state": "read", "total": 33, "game": 20, "unmatched": false, "need": 3 }
 }

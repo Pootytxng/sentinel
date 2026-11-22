@@ -21,6 +21,7 @@ import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
 import { useExpertView } from "../design/use-expert-view";
 import { ScanStream } from "./ScanStream";
 import { driftSentence } from "./drift-named";
+import { takeCheckFocus } from "./check-focus";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 import { upgradeFitLine } from "./upgrade-fit";
 import { prettyGameName } from "./game-name";
@@ -287,6 +288,13 @@ export default function Check({
     }
   };
   const gameModeDrifted = reverted.some((r) => r.rec_id === "game-mode");
+  // The "Something's wrong" card can open this screen asking for the "turn it back on" row: focus it once, when it
+  // is shown. Navigation only; nothing is applied from here by this.
+  useEffect(() => {
+    if (reverted.length === 0) return;
+    const row = document.querySelector<HTMLElement>('[data-check-row="applied-changes"]');
+    if (row && takeCheckFocus("applied-changes")) row.focus();
+  }, [reverted.length, phase]);
 
   // startup-load: name the apps + let the user turn them off RIGHT HERE (not "go to the Startup tab").
   // Fetched lazily only when the limiter is present; the toggle is the same reversible non-elevated
@@ -769,7 +777,7 @@ export default function Check({
                 // drifted setting(s) and carry the inline fix, not "1 setting(s) — go to another tab".
                 if (lim.id === "applied-changes" && reverted.length > 0) {
                   return (
-                    <li key={lim.id} className="check-row">
+                    <li key={lim.id} className="check-row" data-check-row="applied-changes" tabIndex={-1}>
                       <div className="check-row-main">
                         <div className="check-row-head">
                           <span className="check-row-title">

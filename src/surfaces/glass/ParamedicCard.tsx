@@ -7,6 +7,7 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as 
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { driftShort, stampOf } from "../drift-named";
+import { requestCheckFocus } from "../check-focus";
 import type {
   Drift,
   ParamedicDiagnosis,
@@ -42,6 +43,8 @@ type Ctx = {
   lang?: string;
   startRecord?: StartRecord;
   driftState?: DriftState;
+  /** Opens the health check (where the one-press "turn it back on" lives). Absent where the card has no such screen. */
+  onOpenCheck?: () => void;
 };
 
 const RAW = { interpolation: { escapeValue: false } } as const;
@@ -153,6 +156,12 @@ function whatText(id: string, t: T): string | null {
 function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | null {
   if (f.id === "setting-drift") {
     const drift = f.evidence.filter((e) => e.code === "drift-noticed");
+    // Every setting listed came back on: the heading says it went off and came back, not that it is no longer on.
+    if (drift.length > 0 && drift.every((e) => !!e.args.restored)) {
+      return drift.every((e) => e.args.check === "applied-changes")
+        ? t("paramedic.finding.settingDrift.appliedRestored")
+        : t("paramedic.finding.settingDrift.restored");
+    }
     if (drift.length > 0 && drift.every((e) => e.args.check === "applied-changes")) return t("paramedic.finding.settingDrift.applied");
   }
   // Steam's time moves on an update, a file verification or added content: the heading says only that the files changed.
@@ -396,7 +405,21 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.ramWarning");
     case "ram-lower":
       return t("paramedic.evidence.ramLower", { peakGb: a.peakGb });
+    case "drift-restored-none":
+      return t("paramedic.evidence.driftRestoredNone", { game });
+    case "drift-restored-unjudged":
+      return t("paramedic.evidence.driftRestoredUnjudged", { game, count: Number(a.count ?? 1) });
+    case "drift-restored-rough":
+      return t("paramedic.evidence.driftRestoredRough", { game, count: Number(a.count ?? 1), restored: dates.dayTime(a.restored), date: dates.day(a.at) });
+    case "drift-restored-clear":
+      return t("paramedic.evidence.driftRestoredClear", { game });
+    case "drift-restored-between":
+      return t("paramedic.evidence.driftRestoredBetween", { game });
+    case "recovered-drift-back":
+      return t("paramedic.evidence.recoveredDriftBack", { restored: dates.dayTime(a.restored) });
     case "drift-noticed": {
+      // It went off and Compy has since read it on again: the two dates, and nothing about who turned it on.
+      if (a.restored) return t("paramedic.evidence.driftRestored", { noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored) });
       // Named from the same drift list Home names it from (drift-named.ts rules), and only when that list's drift is
       // the notice the engine found (same `noticed_at`): otherwise the line stays general and the next line says why.
       const line = driftLine(a.check, a.noticed, ctx, driftState(a.check, a.noticed, ctx));
@@ -489,7 +512,7 @@ function badge(e: ParamedicEvidence, t: T): string {
   return t("paramedic.badge.measured");
 }
 
-function stepLines(fix: ParamedicFix, { t, game }: Ctx): string[] {
+function stepLines(fix: ParamedicFix, { t, game, dates }: Ctx, restored?: string): string[] {
   if (fix.kind !== "steps") return [];
   const a = fix.args;
   switch (fix.code) {
@@ -522,6 +545,8 @@ function stepLines(fix: ParamedicFix, { t, game }: Ctx): string[] {
         t("paramedic.fix.memoryPressure.step2", { game }),
       ];
     case "setting-drift":
+      // Already read back on: there is nothing left to turn on, only a session to play.
+      if (restored) return [t("paramedic.fix.settingDrift.stepBackOn", { game, restored: dates.dayTime(restored) })];
       return [t("paramedic.fix.settingDrift.step1"), t("paramedic.fix.settingDrift.step2", { game })];
     case "compy-change":
       return [t("paramedic.fix.compyChange.step1"), t("paramedic.fix.compyChange.step2", { game })];
@@ -677,6 +702,11 @@ function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null 
   switch (s.id) {
     case "gpu-temp":
       return t("paramedic.seen.gpuTemp", { count: Number(a.count), rough: a.rough, base: a.base });
+    case "setting-drift-moved":
+      // A setting went off, or came back on, after the rough sessions began: said as dates, never "no changes".
+      return a.restored
+        ? t("paramedic.seen.settingMovedBack", { noticed: dates.dayTime(a.noticed), restored: dates.dayTime(a.restored) })
+        : t("paramedic.seen.settingMoved", { noticed: dates.dayTime(a.noticed) });
     case "game-crashes": {
       // A partial read says "at least" in the line itself. The program name is always matched; when the
       // install folder or the report's path was not there to check, the line says it went by name only.
@@ -860,10 +890,20 @@ function Evidence({ list, ctx: base, hideInstallAt }: { list: ParamedicEvidence[
   );
 }
 
+/** When Compy read the setting back on, when every setting the row lists came back (the latest of them); else undefined. */
+function restoredAt(f: ParamedicFinding): string | undefined {
+  const drift = f.evidence.filter((e) => e.code === "drift-noticed");
+  if (drift.length === 0 || !drift.every((e) => !!e.args.restored)) return undefined;
+  const all = drift.map((e) => e.args.restored).sort();
+  return all[all.length - 1];
+}
+
 /** The steps for one candidate; they sit inside its row, which opens on a tap. */
-function FixBlock({ fix, ctx, possible }: { fix: ParamedicFix; ctx: Ctx; possible: boolean }) {
-  const steps = stepLines(fix, ctx);
+function FixBlock({ fix, ctx, possible, restored }: { fix: ParamedicFix; ctx: Ctx; possible: boolean; restored?: string }) {
+  const steps = stepLines(fix, ctx, restored);
   if (steps.length > 0) {
+    // Navigation only: the one-press "turn it back on" already lives in the health check, with its own confirm.
+    const toCheck = fix.kind === "steps" && fix.code === "setting-drift" && !restored && ctx.onOpenCheck;
     return (
       <div>
         {/* Under a suspect that is only possible the steps are a way to find out, not a fix to make on a maybe. */}
@@ -873,6 +913,11 @@ function FixBlock({ fix, ctx, possible }: { fix: ParamedicFix; ctx: Ctx; possibl
             <li key={i}>{s}</li>
           ))}
         </ol>
+        {toCheck && (
+          <button type="button" className="gl-ghost" data-testid="paramedic-open-check" onClick={toCheck}>
+            {ctx.t("paramedic.fix.settingDrift.openCheck")}
+          </button>
+        )}
       </div>
     );
   }
@@ -1046,7 +1091,7 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
             </div>
           )}
           {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
-          {!recovered && <FixBlock fix={f.fix} ctx={ctx} possible={f.confidence === "possible"} />}
+          {!recovered && <FixBlock fix={f.fix} ctx={ctx} possible={f.confidence === "possible"} restored={restoredAt(f)} />}
           {!recovered && f === d.findings[0] && f.confidence !== "possible" && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
         </div>
       )}
@@ -1246,6 +1291,12 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
           {verdict}
         </p>
         <Candidates rows={rows} rest={rest} d={d} ctx={ctx} recovered={false} />
+        {/* Two things to test: change one before the next session, never both. */}
+        {inPlay.filter((f) => stepLines(f.fix, ctx, restoredAt(f)).length > 0).length >= 2 && (
+          <p className="gl-para-note" data-testid="paramedic-test-one">
+            {t("paramedic.verdict.testOne")}
+          </p>
+        )}
         {/* The lead's own last step already says "play once, then press the button again": not said twice. */}
         {!endsWithReplay && <p className="gl-para-note">{next}</p>}
         <Checked d={d} ctx={ctx} />
@@ -1342,7 +1393,12 @@ function isLayer(n: HTMLElement): boolean {
 const MORE_SLACK_PX = 4;
 
 /** `drifts`: null/undefined while the readiness scan has not loaded (no default: "not loaded" is not "no drift"). */
-export function ParamedicCard({ noGames = false, games = [], drifts }: { noGames?: boolean; games?: RecordedGame[]; drifts?: Drift[] | null } = {}) {
+export function ParamedicCard({
+  noGames = false,
+  games = [],
+  drifts,
+  onOpenCheck,
+}: { noGames?: boolean; games?: RecordedGame[]; drifts?: Drift[] | null; onOpenCheck?: () => void } = {}) {
   const { t, i18n } = useTranslation();
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
@@ -1420,7 +1476,16 @@ export function ParamedicCard({ noGames = false, games = [], drifts }: { noGames
 
   const answer = view.kind === "done" ? view.d : view.kind === "busy" ? view.prev : null;
   const ctx: Ctx | null = answer
-    ? { t, dates, game: answer.game_name ?? answer.game ?? "", drifts, lang: i18n.language, startRecord: answer.start_record }
+    ? {
+          t,
+          dates,
+          game: answer.game_name ?? answer.game ?? "",
+          drifts,
+          lang: i18n.language,
+          startRecord: answer.start_record,
+          // Opening the health check asks for the "turn it back on" row to take focus there.
+          onOpenCheck: onOpenCheck ? () => { requestCheckFocus("applied-changes"); onOpenCheck(); } : undefined,
+        }
     : null;
   const showQuestions = questions;
   const open = answer != null || showQuestions;

@@ -31,13 +31,45 @@ pub(crate) struct DriftState {
     /// (never stale); a state file from before this field simply has none, and the UI says so.
     #[serde(default)]
     last_ready_value: HashMap<String, String>,
+    /// f1-follow (additive): one entry per watched setting that was noticed off and then read ready again:
+    /// when it was noticed off, when Compy next read it ready, and the last time it had been read ready
+    /// before it went off. Kept so the Paramedic can still say "it went off, and it was back on by X"
+    /// after the notice itself is gone. Pruned after `CLEARED_KEEP_DAYS`; an older file has none, and an
+    /// older app reading a newer file ignores it.
+    #[serde(default)]
+    cleared: HashMap<String, ClearedDrift>,
+}
+
+/// How long a cleared record is kept.
+pub(crate) const CLEARED_KEEP_DAYS: i64 = 30;
+
+/// A setting noticed off that later read ready again (timestamps only; no names, no values).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct ClearedDrift {
+    pub noticed_at: String,
+    /// The first scan that read the check ready again: "back on by" this time, not "turned on at" it.
+    pub cleared_at: String,
+    /// The last ready scan before it went off (the earlier bound), when one was recorded.
+    #[serde(default)]
+    pub last_ready_at: Option<String>,
+}
+
+/// Drops cleared records older than `CLEARED_KEEP_DAYS` as of `now`. A stamp that cannot be read as a
+/// time is kept (a record is never dropped on a guess).
+fn prune_cleared(cleared: &mut HashMap<String, ClearedDrift>, now: &str) {
+    let Ok(now) = chrono::DateTime::parse_from_rfc3339(now) else { return };
+    cleared.retain(|_, c| match chrono::DateTime::parse_from_rfc3339(&c.cleared_at) {
+        Ok(at) => now.signed_duration_since(at) <= chrono::Duration::days(CLEARED_KEEP_DAYS),
+        Err(_) => true,
+    });
 }
 
 #[cfg(test)]
 impl DriftState {
     /// True when any part of this state still mentions the check (tests only).
     pub(crate) fn has_record_for(&self, id: &str) -> bool {
-        self.last_good.contains_key(id)
+        self.cleared.contains_key(id)
+            || self.last_good.contains_key(id)
             || self.noticed_at.contains_key(id)
             || self.labels.contains_key(id)
             || self.last_ready_seen.contains_key(id)
@@ -167,9 +199,11 @@ pub(crate) fn detect_seen(
     now: &str,
 ) -> (Vec<Drift>, DriftState) {
     let mut state = prior.clone();
+    prune_cleared(&mut state.cleared, now);
     let mut drifts = Vec::new();
     for (id, label, status, detail) in checks {
         if TIME_ONLY_CHECKS.contains(&id.as_str()) {
+            state.cleared.remove(id);
             state.last_good.remove(id);
             state.noticed_at.remove(id);
             state.labels.remove(id);
@@ -181,7 +215,13 @@ pub(crate) fn detect_seen(
         match status.as_str() {
             "ready" => {
                 state.last_good.insert(id.clone(), true);
-                state.noticed_at.remove(id);
+                // The notice ends here, but the fact that it ended is kept (one entry per check).
+                if let Some(noticed) = state.noticed_at.remove(id) {
+                    state.cleared.insert(
+                        id.clone(),
+                        ClearedDrift { noticed_at: noticed, cleared_at: now.to_string(), last_ready_at: state.last_ready_seen.get(id).cloned() },
+                    );
+                }
                 state.labels.remove(id);
                 state.last_ready_seen.insert(id.clone(), now.to_string());
                 match read.value {
@@ -303,16 +343,49 @@ pub(crate) fn active_drift_notices() -> Vec<DriftNotice> {
     notices_from(&load_state())
 }
 
-/// PC Paramedic: the active drift notices from a state file, READ-ONLY and strict. An absent file is no
-/// notices; one that is there and cannot be read or parsed is an error, not "nothing drifted".
-pub(crate) fn read_notices_readonly_from(path: &std::path::Path) -> Result<Vec<DriftNotice>, String> {
+/// What the Paramedic reads of one watched setting: a notice that still stands (`cleared_at` None) or one
+/// that was noticed off and later read ready again (`cleared_at` Some).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DriftRecord {
+    pub id: String,
+    pub last_ready_at: Option<String>,
+    pub noticed_at: String,
+    pub cleared_at: Option<String>,
+}
+
+/// Pure mapping: every standing notice, then every cleared one (sorted by id within each).
+fn records_from(s: &DriftState) -> Vec<DriftRecord> {
+    let mut v: Vec<DriftRecord> = notices_from(s)
+        .into_iter()
+        .map(|n| DriftRecord { id: n.id, last_ready_at: n.last_ready_at, noticed_at: n.noticed_at, cleared_at: None })
+        .collect();
+    let mut c: Vec<DriftRecord> = s
+        .cleared
+        .iter()
+        .map(|(id, c)| DriftRecord {
+            id: id.clone(),
+            last_ready_at: c.last_ready_at.clone(),
+            noticed_at: c.noticed_at.clone(),
+            cleared_at: Some(c.cleared_at.clone()),
+        })
+        .collect();
+    c.sort_by(|a, b| a.id.cmp(&b.id));
+    v.extend(c);
+    v
+}
+
+/// PC Paramedic: the standing drift notices and the cleared records from a state file, READ-ONLY and
+/// strict. An absent file is no records; one that is there and cannot be read or parsed is an error, not
+/// "nothing drifted".
+pub(crate) fn read_records_readonly_from(path: &std::path::Path) -> Result<Vec<DriftRecord>, String> {
     let raw = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e.to_string()),
     };
-    serde_json::from_str::<DriftState>(&raw).map(|s| notices_from(&s)).map_err(|e| e.to_string())
+    serde_json::from_str::<DriftState>(&raw).map(|s| records_from(&s)).map_err(|e| e.to_string())
 }
+
 
 /// Runs `f` with every writer of drift.json held off: the clear's delete (D6). Takes this
 /// module's one lock and nothing else; `f` must not take another store's lock.
@@ -774,6 +847,95 @@ mod drift_tests {
         assert!(!s1.last_ready_value.contains_key("vrr"));
         let (d2, _) = detect(&[obs("vrr", "attention")], &s1, "T2");
         assert_eq!((d2[0].last_ready_value.clone(), d2[0].last_ready_at.clone()), (None, Some("T1".into())));
+    }
+
+    // ---- f1-follow: a setting that went off and came back keeps one dated record ----------------
+
+    const NOV19: &str = "2026-11-19T20:00:00Z";
+    const NOV21: &str = "2026-11-21T18:10:00Z";
+
+    #[test]
+    fn a_ready_scan_after_a_notice_keeps_when_it_went_off_and_when_it_was_back() {
+        let (_d, s0) = detect(&[obs("visual-effects", "ready")], &DriftState::default(), "2026-11-10T10:00:00Z");
+        let (_d, s1) = detect(&[obs("visual-effects", "attention")], &s0, NOV19);
+        let (d2, s2) = detect(&[obs("visual-effects", "ready")], &s1, NOV21);
+        assert!(d2.is_empty() && s2.noticed_at.is_empty(), "the notice itself still ends");
+        let c = s2.cleared.get("visual-effects").expect("the clear is kept");
+        assert_eq!((c.noticed_at.as_str(), c.cleared_at.as_str()), (NOV19, NOV21));
+        assert_eq!(c.last_ready_at.as_deref(), Some("2026-11-10T10:00:00Z"), "the earlier bound is the ready scan before it went off");
+        // A ready scan with no notice before it records nothing.
+        let (_d, s3) = detect(&[obs("visual-effects", "ready")], &s2, "2026-11-22T10:00:00Z");
+        assert_eq!(s3.cleared.get("visual-effects"), s2.cleared.get("visual-effects"), "a later ready scan changes nothing");
+        let (_d, fresh) = detect(&[obs("other", "ready")], &DriftState::default(), NOV21);
+        assert!(fresh.cleared.is_empty());
+    }
+
+    #[test]
+    fn one_entry_per_setting_a_second_clear_replaces_the_first() {
+        let (_d, s) = detect(&[obs("vrr", "ready")], &DriftState::default(), "2026-11-01T00:00:00Z");
+        let (_d, s) = detect(&[obs("vrr", "attention")], &s, "2026-11-02T00:00:00Z");
+        let (_d, s) = detect(&[obs("vrr", "ready")], &s, "2026-11-03T00:00:00Z");
+        let (_d, s) = detect(&[obs("vrr", "attention")], &s, "2026-11-04T00:00:00Z");
+        let (_d, s) = detect(&[obs("vrr", "ready")], &s, "2026-11-05T00:00:00Z");
+        assert_eq!(s.cleared.len(), 1);
+        assert_eq!(s.cleared["vrr"].noticed_at, "2026-11-04T00:00:00Z");
+        assert_eq!(s.cleared["vrr"].cleared_at, "2026-11-05T00:00:00Z");
+    }
+
+    #[test]
+    fn a_record_older_than_thirty_days_is_pruned_and_one_inside_is_kept() {
+        let mut s = DriftState::default();
+        s.cleared.insert("old".into(), ClearedDrift { noticed_at: "2026-10-01T00:00:00Z".into(), cleared_at: "2026-10-02T00:00:00Z".into(), last_ready_at: None });
+        s.cleared.insert("inside".into(), ClearedDrift { noticed_at: "2026-10-20T00:00:00Z".into(), cleared_at: "2026-10-22T00:00:00Z".into(), last_ready_at: None });
+        // 2026-11-02 is 31 days after the first and 11 after the second.
+        let (_d, after) = detect(&[obs("x", "ready")], &s, "2026-11-02T00:00:01Z");
+        assert!(!after.cleared.contains_key("old"), "31 days old: pruned");
+        assert!(after.cleared.contains_key("inside"));
+        // A stamp that is not a time is kept, never dropped on a guess.
+        let mut odd = DriftState::default();
+        odd.cleared.insert("odd".into(), ClearedDrift { noticed_at: "T1".into(), cleared_at: "T2".into(), last_ready_at: None });
+        let (_d, after) = detect(&[obs("x", "ready")], &odd, "2026-11-02T00:00:01Z");
+        assert!(after.cleared.contains_key("odd"));
+    }
+
+    #[test]
+    fn an_old_file_without_the_field_loads_and_a_newer_file_loads_in_an_older_shape() {
+        let old = r#"{"last_good":{"vrr":true},"noticed_at":{},"labels":{}}"#;
+        let s: DriftState = serde_json::from_str(old).expect("an older drift.json still loads");
+        assert!(s.cleared.is_empty());
+        // The record round-trips, and an entry written without its optional earlier bound still loads.
+        let (_d, s0) = detect(&[obs("vrr", "ready")], &DriftState::default(), NOV19);
+        let (_d, s1) = detect(&[obs("vrr", "attention")], &s0, NOV21);
+        let (_d, s2) = detect(&[obs("vrr", "ready")], &s1, "2026-11-22T00:00:00Z");
+        let json = serde_json::to_string(&s2).unwrap();
+        assert!(json.contains("\"cleared\""));
+        let back: DriftState = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.cleared, s2.cleared);
+        let bare = r#"{"last_good":{},"noticed_at":{},"cleared":{"vrr":{"noticed_at":"a","cleared_at":"b"}}}"#;
+        assert_eq!(serde_json::from_str::<DriftState>(bare).unwrap().cleared["vrr"].last_ready_at, None);
+        // The older app's struct has no `cleared` and no `deny_unknown_fields`: it ignores the key.
+        #[derive(serde::Deserialize)]
+        struct OlderShape {
+            last_good: HashMap<String, bool>,
+        }
+        let older: OlderShape = serde_json::from_str(&json).expect("an older shape ignores the new key");
+        assert_eq!(older.last_good.len(), s2.last_good.len());
+    }
+
+    #[test]
+    fn the_paramedic_reads_standing_notices_and_cleared_records_and_an_unreadable_file_is_an_error() {
+        let (_d, s0) = detect(&[obs("a", "ready"), obs("b", "ready")], &DriftState::default(), NOV19);
+        let (_d, s1) = detect(&[obs("a", "attention"), obs("b", "attention")], &s0, NOV19);
+        let (_d, s2) = detect(&[obs("a", "ready"), obs("b", "attention")], &s1, NOV21);
+        let recs = records_from(&s2);
+        assert_eq!(recs.len(), 2);
+        assert!(recs.iter().any(|r| r.id == "b" && r.cleared_at.is_none()));
+        assert!(recs.iter().any(|r| r.id == "a" && r.cleared_at.as_deref() == Some(NOV21)));
+        let dir = std::env::temp_dir().join(format!("compy-drift-records-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(read_records_readonly_from(&dir.join("absent.json")), Ok(Vec::new()));
+        std::fs::write(dir.join("bad.json"), "{\"last_good\": {").unwrap();
+        assert!(read_records_readonly_from(&dir.join("bad.json")).is_err());
     }
 
     /// Couldn't read it now: the notice keeps its before and when, claims no current value.

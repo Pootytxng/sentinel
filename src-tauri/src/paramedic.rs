@@ -248,6 +248,10 @@ pub(crate) struct DriftFact {
     #[serde(default)]
     last_ready_at: Option<String>,
     noticed_at: String,
+    /// f1-follow: when Compy first read the setting ready again after noticing it off ("back on by"
+    /// this time). `None`: the notice still stands.
+    #[serde(default)]
+    cleared_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -1126,7 +1130,7 @@ impl Drop for FlightGuard {
 pub(crate) fn read_inputs_from(dir: &std::path::Path) -> Result<DiagnoseInputs, String> {
     let sessions = crate::sessions::read_sessions_readonly_from(&dir.join("sessions.json"))?;
     let snapshots = intelligence::read_snapshots_readonly_from(&dir.join("intelligence.json"));
-    let notices = crate::drift::read_notices_readonly_from(&dir.join("drift.json"));
+    let notices = crate::drift::read_records_readonly_from(&dir.join("drift.json"));
     let mut inp = inputs_from_parts(&sessions, snapshots.as_deref().unwrap_or(&[]), notices.as_deref().unwrap_or(&[]));
     inp.sightings_unread = snapshots.is_err();
     inp.drift_unread = notices.is_err();
@@ -1219,7 +1223,7 @@ pub(crate) fn facts_from(s: &crate::sessions::SessionSummary) -> SessionFacts {
 fn inputs_from_parts(
     sessions: &[crate::sessions::SessionSummary],
     snapshots: &[intelligence::IdentitySnapshot],
-    notices: &[crate::drift::DriftNotice],
+    notices: &[crate::drift::DriftRecord],
 ) -> DiagnoseInputs {
     DiagnoseInputs {
         sessions: sessions.iter().map(facts_from).collect(),
@@ -1233,7 +1237,12 @@ fn inputs_from_parts(
             .collect(),
         drift: notices
             .iter()
-            .map(|n| DriftFact { id: n.id.clone(), last_ready_at: n.last_ready_at.clone(), noticed_at: n.noticed_at.clone() })
+            .map(|n| DriftFact {
+                id: n.id.clone(),
+                last_ready_at: n.last_ready_at.clone(),
+                noticed_at: n.noticed_at.clone(),
+                cleared_at: n.cleared_at.clone(),
+            })
             .collect(),
         sightings_unread: false,
         drift_unread: false,
@@ -2620,9 +2629,30 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
     let mut evidence = Vec::new();
     let mut since = When::Unknown;
     let mut ambiguous = false;
+    // f1-follow: a setting that went off or came back on after the window opened is never "no changes noticed".
+    let mut moved: Vec<&DriftFact> = Vec::new();
+    // The settings noticed off in the window that Compy has since read ready again, with when.
+    let mut restored: Vec<DateTime<Utc>> = Vec::new();
+    // How many of the listed settings had a rough session after Compy read them back on. The row is weakened
+    // only when that is every one: a setting still off in that session is not contradicted by it.
+    let mut contradicted = 0usize;
     for n in &c.inp.drift {
-        let Some(noticed) = ts(&n.noticed_at) else { continue };
+        let noticed = ts(&n.noticed_at);
+        let back = n.cleared_at.as_deref().and_then(ts);
+        let after_open = noticed.is_some_and(|t| t > c.win_start) || back.is_some_and(|t| t > c.win_start);
+        let Some(noticed) = noticed else { continue };
+        // A clear stamp that cannot be read as a time says nothing about when it was back on: the setting is
+        // not listed as a candidate with a date it does not have, and the card still does not say "none".
+        if n.cleared_at.is_some() && back.is_none() {
+            if after_open {
+                moved.push(n);
+            }
+            continue;
+        }
         if n.id == "power-profile" && power_same {
+            if after_open {
+                moved.push(n);
+            }
             continue;
         }
         let ready = n.last_ready_at.as_deref().and_then(ts);
@@ -2634,6 +2664,9 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
             continue;
         }
         if !noticed_in_window {
+            if after_open {
+                moved.push(n);
+            }
             continue;
         }
         if evidence.is_empty() {
@@ -2648,14 +2681,63 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
         if let Some(r) = n.last_ready_at.as_deref().filter(|r| ts(r).is_some()) {
             args.push(("ready", r.to_string()));
         }
+        if let (Some(b), Some(raw)) = (back, n.cleared_at.as_ref()) {
+            args.push(("restored", raw.clone()));
+            restored.push(b);
+        }
         evidence.push(ev(EvidenceKind::Known, "drift-noticed", "drift", false, &args));
+    }
+    // What the sessions after it was back on say: dated facts, never "the reason". A rough one is a contradiction
+    // (kept visibly, never removed); one usual-range session is "measured once"; the rest say what is missing.
+    let listed = evidence.len();
+    for r in &restored {
+        let when = iso(*r);
+        match recovery::since_restore(c, *r) {
+            recovery::Since::Nothing => evidence.push(ev(EvidenceKind::Unknown, "drift-restored-none", "sessions", false, &[("restored", when)])),
+            recovery::Since::Unjudged { count } => evidence.push(ev(
+                EvidenceKind::Unknown,
+                "drift-restored-unjudged",
+                "sessions",
+                false,
+                &[("restored", when), ("count", count.to_string())],
+            )),
+            recovery::Since::Rough { at, count } => {
+                contradicted += 1;
+                evidence.push(ev(
+                    EvidenceKind::Measured,
+                    "drift-restored-rough",
+                    "sessions",
+                    true,
+                    &[("restored", when), ("at", at), ("count", count.to_string())],
+                ));
+            }
+            recovery::Since::Clear { at, count: 1 } => {
+                evidence.push(ev(EvidenceKind::Measured, "drift-restored-clear", "sessions", false, &[("restored", when), ("at", at)]));
+            }
+            // Two usual-range sessions are the recovery's own answer (`recovery::drift`), said under "since".
+            recovery::Since::Clear { .. } => {}
+            recovery::Since::Between => {
+                evidence.push(ev(EvidenceKind::Unknown, "drift-restored-between", "sessions", false, &[("restored", when)]));
+            }
+        }
     }
     if evidence.is_empty() {
         if ambiguous {
             out.unknown("drift-timing");
         } else if !c.inp.drift_unread {
-            // An unread store is not "no changes noticed".
-            out.ruled_out("setting-drift", &[]);
+            if moved.is_empty() {
+                // An unread store is not "no changes noticed".
+                out.ruled_out("setting-drift", &[]);
+            } else {
+                // Something went off or came back on after the window opened: say what, never "no changes".
+                for n in moved {
+                    let mut args = vec![("check", n.id.clone()), ("noticed", n.noticed_at.clone())];
+                    if let Some(b) = n.cleared_at.as_ref().filter(|b| ts(b).is_some()) {
+                        args.push(("restored", b.clone()));
+                    }
+                    out.see("setting-drift-moved", &args);
+                }
+            }
         }
         return;
     }
@@ -2668,7 +2750,7 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
         confounded: false,
         r: false,
         m: false,
-        c1: false,
+        c1: contradicted > 0 && contradicted == listed,
         since,
         fix: steps("setting-drift", &[]),
         evidence,

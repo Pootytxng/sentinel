@@ -502,7 +502,7 @@ pub(crate) static INVENTORY: &[InventoryRow] = &[
         writers: &["drift.rs"],
         category: PlayHistory,
         personal: &[HardwareSpecs, Personal::UserText],
-        contains: "Which of Compy's checks were last good, when a drift was first noticed, and the short reading each check had when it was last good (for example a refresh rate, a drive's name and health, or the active power plan's name, which can be text you typed).",
+        contains: "Which of Compy's checks were last good, when a drift was first noticed, the short reading each check had when it was last good (for example a refresh rate, a drive's name and health, or the active power plan's name, which can be text you typed), and, for 30 days, when a setting that had been noticed off was next read back on (times only, one per setting).",
         created: "when the first drift check runs",
         sandbox: Follows,
         names_in_code: &[],
