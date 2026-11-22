@@ -1147,7 +1147,8 @@ function certaintyChip(f: ParamedicFinding, t: T): { text: string; tone?: string
 function chipFor(f: ParamedicFinding, recovered: boolean, t: T): { text: string; tone?: string; certainty?: { text: string; tone?: string } } {
   if (recovered && f.now) {
     if (f.now === "points-to") return { text: nowText(f.now, t), certainty: certaintyChip(f, t) };
-    return { text: nowText(f.now, t), tone: f.now === "points-away" ? "ok" : undefined };
+    // Neutral, like the timing chip: one recovery observation weakens a row, it never marks it cleared (no green).
+    return { text: nowText(f.now, t) };
   }
   return certaintyChip(f, t);
 }

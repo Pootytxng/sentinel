@@ -788,7 +788,7 @@
   },
   "now": {
     "pointsTo": "Matches the timing",
-    "pointsAway": "Points away from it",
+    "pointsAway": "Doesn't match the timing",
     "cantTell": "Still can't tell"
   },
   "recovered": {

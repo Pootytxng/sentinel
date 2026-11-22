@@ -742,7 +742,9 @@ describe("ParamedicCard: recovered", () => {
     const timing = within(rows()[0]).getByText("Matches the timing");
     expect(timing.getAttribute("data-tone")).toBeNull();
     expect(within(rows()[1]).queryByTestId("paramedic-row-certainty")).toBeNull();
-    expect(rows()[1].textContent).toMatch(/Your graphics driver was updated.*Points away from it/);
+    expect(rows()[1].textContent).toMatch(/Your graphics driver was updated.*Doesn't match the timing/);
+    // A single observation is never green: the "doesn't match" chip is neutral too.
+    expect(within(rows()[1]).getByText("Doesn't match the timing").getAttribute("data-tone")).toBeNull();
     expect(screen.getByText(/If it runs rough again, press Something's wrong again/)).toBeTruthy();
     openAll();
     expect(screen.queryByText("How to fix it")).toBeNull();

@@ -116,7 +116,8 @@ describe("shared confidence words never say a retired strength word", () => {
   it("no Something's-wrong card string says the evidence points to something, in either language", () => {
     const flat = (o: unknown, at = ""): [string, string][] =>
       typeof o === "string" ? [[at, o]] : o && typeof o === "object" ? Object.entries(o).flatMap(([k, v]) => flat(v, at ? `${at}.${k}` : k)) : [];
-    const AFFIRMED_EN = /(?<!can't |cannot |can not |not )\bpoints? to\b/i;
+    // "Points away from it" is the same attribution the other way round (review r1): retired too.
+    const AFFIRMED_EN = /(?<!can't |cannot |can not |not )\bpoints? (to|away from)\b/i;
     // "不指向它" (the old "points away" chip) is caught too: the row chips say what matches, not what points.
     const AFFIRMED_ZH = /(?<!不能|无法|不能单凭这一点|无法单凭这一点)指向/;
     const hits: string[] = [];
@@ -130,6 +131,7 @@ describe("shared confidence words never say a retired strength word", () => {
     const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8"));
     const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8"));
     expect([en.now.pointsTo, zh.now.pointsTo]).toEqual(["Matches the timing", "时间上吻合"]);
+    expect([en.now.pointsAway, zh.now.pointsAway]).toEqual(["Doesn't match the timing", "时间上不吻合"]);
     expect(en.recovered.pointsTo).toMatch(/^Of the changes listed, only one is still standing .*two sessions can't show why it ran better\.$/);
     expect(zh.recovered.pointsTo).toMatch(/只剩一项还没有被排除.*两次运行无法说明它为什么变好。$/);
   });
