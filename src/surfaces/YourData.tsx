@@ -157,6 +157,13 @@ export function YourData() {
     setPhase({ kind: "idle" });
     setUnderstood(false);
     setUndo(null);
+    // The licence box never carries over to another time the list is opened (C2b review B2).
+    setRemoveLicence(false);
+  }
+
+  function openEverything() {
+    setRemoveLicence(false);
+    void loadPlan("everything", false, false);
   }
 
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
@@ -201,7 +208,7 @@ export function YourData() {
                 <div className="set-row-title">{t(k("everythingTitle"))}</div>
                 <div className="set-row-sub">{t(k("everythingSub"))}</div>
               </div>
-              <button className="set-action" onClick={() => loadPlan("everything")} disabled={busyPlanning}>
+              <button className="set-action" onClick={openEverything} disabled={busyPlanning}>
                 {busyPlanning && phase.scope === "everything" ? t(k("reading")) : t(k("everythingAction"))}
               </button>
             </div>
@@ -364,6 +371,14 @@ function ConfirmStep(props: {
       {!nothing && (
         <>
           <p className="receipts-hint">{t(k(everything ? "afterwardsEverything" : "afterwards"))}</p>
+          {everything && (
+            <ul className="receipts-hint sev-warn" data-testid="your-data-everything-warnings">
+              <li>{t(k("warnNoRecord"))}</li>
+              <li>{t(k("warnAdminLeftovers"))}</li>
+              <li>{t(k("warnFinishAtStart"))}</li>
+              {props.removeLicence && <li>{t(k("warnLicence"))}</li>}
+            </ul>
+          )}
           <p className="receipts-hint sev-warn">{t(k("cantUndo"))}</p>
           <label className="receipts-hint">
             <input
@@ -457,7 +472,9 @@ function Result({
         <p className="receipts-hint sev-warn">{t(k("webviewLeft"), { keys: webview.stillThere.join(", ") })}</p>
       )}
       {!report.complete && <p className="receipts-hint">{t(k("webviewNotTouched"))}</p>}
-      {everything && !report.complete && <p className="receipts-hint sev-warn">{t(k("everythingNotFinished"))}</p>}
+      {everything && !report.complete && (
+        <p className="receipts-hint sev-warn">{t(k(report.record_not_updated ? "recordNotUpdated" : "everythingNotFinished"))}</p>
+      )}
       {ack === "failed" && <p className="receipts-hint sev-warn">{t(k("ackFailed"))}</p>}
       {report.deleted.some((f) => f.startsWith("care/")) && <p className="receipts-hint">{t(k("crashNotesReturn"))}</p>}
       {showReload && (

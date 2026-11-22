@@ -264,13 +264,23 @@ describe("your-data C2b: clear everything", () => {
     });
     expect(statusLine(s({ record: "abandoned", abandoned_code: "brand_new" }))).toEqual({ key: "abandoned_other", code: "brand_new", dismiss: true });
     expect(statusLine(s({ record: "unreadable" }))).toEqual({ key: "kept", dismiss: false });
+    // C2b review B4: a start-up attempt that could not mark its record says the next start may go on.
+    expect(
+      statusLine(s({ roll_forward: { status: "abandoned", detail: { code: "changes_applied", record_not_updated: true } }, record: "files_pending" })),
+    ).toEqual({ key: "record_not_updated", dismiss: false });
+    expect(statusLine(s({ roll_forward: { status: "incomplete", detail: { record_not_updated: true } }, record: "files_pending" }))).toEqual({
+      key: "record_not_updated",
+      dismiss: false,
+    });
+    // C2b review B1: the only "deferred" the backend passes through is a record that changed while it was read.
+    expect(statusLine(s({ roll_forward: { status: "deferred", detail: [{ code: "no_clear_in_progress" }] } }))).toEqual({ key: "deferred", dismiss: false });
   });
 
   it("every status line and every new string has words in both languages", () => {
     const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "settings.json"), "utf8")).yourData;
     const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "settings.json"), "utf8")).yourData;
     for (const lang of [en, zh]) {
-      for (const key of ["completed", "incomplete", "webview_pending", "kept", "deferred", "abandoned_needs_reconfirm", "abandoned_changes_applied", "abandoned_ledger_unreadable", "abandoned_ledger_set_aside", "abandoned_other"]) {
+      for (const key of ["completed", "incomplete", "webview_pending", "kept", "deferred", "record_not_updated", "abandoned_needs_reconfirm", "abandoned_changes_applied", "abandoned_ledger_unreadable", "abandoned_ledger_set_aside", "abandoned_other"]) {
         expect(lang.status[key], `status.${key}`).toBeTruthy();
       }
       for (const g of new Set(Object.values(EVERYTHING_GROUPS).concat(["changeHistory", "reports"]))) expect(lang.store[g], `store.${g}`).toBeTruthy();

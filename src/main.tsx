@@ -133,24 +133,36 @@ applyMotionAttribute();
 // assistive tech / the OS, before first paint, same as every other data-* attribute above.
 document.documentElement.lang = readLanguage();
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    {isOverlay ? (
-      <Overlay />
-    ) : (
-      <ErrorBoundary>
-        <ConfirmProvider>
-          <WindowChrome />
-          <App />
-        </ConfirmProvider>
-      </ErrorBoundary>
-    )}
-  </React.StrictMode>,
-);
+function renderApp() {
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      {isOverlay ? (
+        <Overlay />
+      ) : (
+        <ErrorBoundary>
+          <ConfirmProvider>
+            <WindowChrome />
+            <App />
+          </ConfirmProvider>
+        </ErrorBoundary>
+      )}
+    </React.StrictMode>,
+  );
+}
 
 // "Clear everything" (C2b): when its files are all gone but this window's own notes were not removed yet
-// (Compy was closed right after the clear), remove exactly the inventory's keys now, then reload so nothing read
-// from the old notes stays on screen. Main window only: the overlay has no access to these commands.
-if (!isOverlay) {
-  void finishPendingClearAtBoot(window.localStorage, window.sessionStorage, () => window.location.reload());
+// (Compy was closed right after the clear), remove exactly the inventory's keys BEFORE the app first renders, so
+// nothing on screen reads or rewrites an old note, then reload so the attributes above are read again. Main window
+// only: the overlay has no access to these commands. The app renders anyway if the check does not answer within
+// two seconds, so a stuck call never leaves an empty window.
+if (isOverlay) {
+  renderApp();
+} else {
+  const twoSeconds = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 2000));
+  void Promise.race([
+    finishPendingClearAtBoot(window.localStorage, window.sessionStorage, () => window.location.reload()),
+    twoSeconds,
+  ]).then((result) => {
+    if (result !== "finished") renderApp();
+  });
 }

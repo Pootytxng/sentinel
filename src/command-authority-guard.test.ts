@@ -169,6 +169,8 @@ describe("command-authority guard: no window holds authority it does not need", 
       "start_tweak_trial", "start_stack_trial", "start_calibration", "export_report",
       // C1: deletes play history; its plan lists file names in the data folder.
       "clear_play_history", "plan_clear_play_history",
+      // C2b: deletes everything Compy keeps / reads and removes the record of a clear.
+      "clear_everything", "plan_clear_everything", "get_clear_status", "acknowledge_clear",
     ];
     // Every name here must be a real registered command, or the check above passes vacuously for it.
     expect(FORBIDDEN_FOR_OVERLAY.filter((c) => !registered.includes(c))).toEqual([]);

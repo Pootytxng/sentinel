@@ -47,6 +47,8 @@ export type ClearReport = {
   restart_required: boolean;
   restart_reasons: string[];
   webview: WebviewTarget[];
+  /** "Clear everything" only: its record could not be marked stopped (C2b review B4). Absent on older answers. */
+  record_not_updated?: boolean;
 };
 
 export type ClearOutcome =
@@ -299,6 +301,10 @@ export const ABANDON_CODES = ["needs_reconfirm", "changes_applied", "ledger_unre
  *  to say. A start-up result is said first; otherwise an abandoned record still on disk. */
 export function statusLine(s: ClearStatus): { key: string; code?: string; dismiss: boolean } | null {
   const rf = s.roll_forward?.status;
+  // C2b review B4: the start-up attempt stopped but could not mark its record, so the NEXT start may go on.
+  if ((s.roll_forward?.detail as { record_not_updated?: boolean } | undefined)?.record_not_updated === true) {
+    return { key: "record_not_updated", dismiss: false };
+  }
   if (rf === "abandoned" || (!rf && s.record === "abandoned")) {
     const fromRf = (s.roll_forward?.detail as { code?: string } | undefined)?.code;
     const code = fromRf ?? s.abandoned_code ?? "needs_reconfirm";

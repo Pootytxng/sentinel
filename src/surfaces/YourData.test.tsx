@@ -374,6 +374,52 @@ describe("Your data: clear everything", () => {
     expect(screen.queryByTestId("your-data-reopen")).toBeNull();
   });
 
+  it("the licence box never carries over: tick, Cancel, reopen asks for a plan without it (review B2)", async () => {
+    const plans: unknown[] = [];
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: (args) => {
+        plans.push(args?.removeLicence);
+        return EVERY_PLAN;
+      },
+    });
+    render(<YourData />);
+    await openEverything();
+    await screen.findByTestId("your-data-confirm");
+    fireEvent.click(screen.getByLabelText("Also remove my Compy Pro licence from this PC"));
+    await waitFor(() => expect(plans).toEqual([false, true]));
+    expect(screen.getByTestId("your-data-everything-warnings").textContent).toContain("you will need your licence key");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await openEverything();
+    await screen.findByTestId("your-data-confirm");
+    await waitFor(() => expect(plans).toEqual([false, true, false]));
+    expect((screen.getByLabelText("Also remove my Compy Pro licence from this PC") as HTMLInputElement).checked).toBe(false);
+    const warnings = screen.getByTestId("your-data-everything-warnings").textContent ?? "";
+    expect(warnings).toContain("no record on this PC of anything Compy ever changed");
+    expect(warnings).toContain("admin-rights step");
+    expect(warnings).toContain("finishes it the next time it starts, without asking again");
+    expect(warnings).not.toContain("licence key");
+  });
+
+  it("an unfinished clear whose record could not be updated says the next start may finish it (review B4)", async () => {
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: () => EVERY_PLAN,
+      clear_everything: () => ({
+        status: "done",
+        detail: { ...EVERY_REPORT, deleted: ["history.json.bak"], failed: [{ rel: "sessions.json", error: "x" }], complete: false, record_not_updated: true },
+      }),
+    });
+    render(<YourData />);
+    await openEverything();
+    await screen.findByTestId("your-data-confirm");
+    fireEvent.click(screen.getByLabelText("I understand"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete everything" }));
+    const result = await screen.findByTestId("your-data-result");
+    expect(result.textContent).toContain("When it next starts, it may finish deleting the files you confirmed");
+    expect(result.textContent).not.toContain("Nothing more will be deleted until you confirm it again");
+  });
+
   it("an abandoned clear from start-up is said in words and can be dismissed", async () => {
     let record = "abandoned";
     everything({

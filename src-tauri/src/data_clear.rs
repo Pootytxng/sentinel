@@ -860,6 +860,10 @@ pub(crate) struct ClearReport {
     /// Why, one code per thing that could not be reset. Empty when `restart_required` is false.
     pub(crate) restart_reasons: Vec<&'static str>,
     pub(crate) webview: Vec<WebviewTarget>,
+    /// "Clear everything" only (C2b review B4): the run did not finish and its record could not be marked
+    /// stopped (or removed). The record may still say "files pending", so the next start may finish deleting the
+    /// confirmed files. The screen says so instead of "nothing more will be deleted".
+    pub(crate) record_not_updated: bool,
 }
 
 impl ClearReport {
@@ -1250,6 +1254,7 @@ fn new_report(now: &ClearPlan) -> ClearReport {
         restart_required: !restart_reasons_in(MEMORY_COPIES, now.scope).is_empty(),
         restart_reasons: restart_reasons_in(MEMORY_COPIES, now.scope),
         webview: now.webview.clone(),
+        record_not_updated: false,
     }
 }
 
@@ -1330,7 +1335,8 @@ fn settle_run(mut report: ClearReport, stopped: Vec<Refusal>) -> ClearOutcome {
     if stopped.is_empty() {
         return settle(report);
     }
-    if report.deleted.is_empty() && report.already_gone.is_empty() && report.failed.is_empty() {
+    // A record that could not be updated must reach the screen, so that answer is never folded into a refusal.
+    if report.deleted.is_empty() && report.already_gone.is_empty() && report.failed.is_empty() && !report.record_not_updated {
         return ClearOutcome::Refused(stopped);
     }
     report.stopped = stopped;
@@ -1468,10 +1474,17 @@ pub(crate) fn finish_everything(root: &Path, phase: LedgerPhase, gates: &dyn Cle
         }
     } else if !progress && !rolled_forward {
         if let Err(why) = remove_intent(root) {
+            // Nothing was deleted, but a pending record left behind would be finished at the next start without
+            // asking. Mark it stopped instead; only if that fails too is the screen told (C2b review B4).
             eprintln!("[data_clear] nothing was deleted but the clear's record could not be removed ({why})");
+            if let Err(why) = set_abandoned(root, "needs_reconfirm", NEEDS_RECONFIRM) {
+                eprintln!("[data_clear] ...and it could not be marked stopped either ({why})");
+                report.record_not_updated = true;
+            }
         }
     } else if let Err(why) = set_abandoned(root, "needs_reconfirm", NEEDS_RECONFIRM) {
         eprintln!("[data_clear] the clear did not finish and its record could not be marked ({why})");
+        report.record_not_updated = true;
     }
     settle_run(report, stopped)
 }
@@ -1800,8 +1813,9 @@ pub(crate) enum RollForward {
     Incomplete(ClearReport),
     /// The files were already gone; only the screen's browser storage is left. Nothing was deleted.
     WebviewPending,
-    /// The clear was given up on, with a typed reason, and nothing more was deleted.
-    Abandoned { code: String, detail: String },
+    /// The clear was given up on, with a typed reason, and nothing more was deleted. `record_not_updated`: the
+    /// record could not be marked stopped, so the NEXT start may try again (C2b review B4); the screen says so.
+    Abandoned { code: String, detail: String, record_not_updated: bool },
     /// The record can't be read. Kept as it is, reported, and nothing was deleted.
     Kept { code: &'static str, detail: String },
     /// No data root, or the record on disk was not the one this attempt read: nothing was deleted and the
@@ -1830,6 +1844,7 @@ pub(crate) fn roll_forward_at(root: &Path, facts: &dyn Fn() -> ClearFacts, gates
             return RollForward::Abandoned {
                 code: intent.abandoned_code.unwrap_or_default(),
                 detail: intent.abandoned_detail.unwrap_or_default(),
+                record_not_updated: false,
             }
         }
         IntentStage::FilesPending => {}
@@ -1837,10 +1852,14 @@ pub(crate) fn roll_forward_at(root: &Path, facts: &dyn Fn() -> ClearFacts, gates
     let remove_licence = intent.remove_licence;
     let facts_of_record = || ClearFacts { remove_licence, ..facts() };
     let abandon = |code: &'static str, detail: String| {
-        if let Err(why) = set_abandoned(root, code, &detail) {
-            eprintln!("[data_clear] the clear was abandoned ({code}) but its record could not be updated ({why})");
-        }
-        RollForward::Abandoned { code: code.to_string(), detail }
+        let record_not_updated = match set_abandoned(root, code, &detail) {
+            Ok(()) => false,
+            Err(why) => {
+                eprintln!("[data_clear] the clear was abandoned ({code}) but its record could not be updated ({why})");
+                true
+            }
+        };
+        RollForward::Abandoned { code: code.to_string(), detail, record_not_updated }
     };
     // One attempt only. Whatever does not finish now becomes `Abandoned` ("needs_reconfirm"): what is left
     // is whatever the user has now, and only a screen may confirm deleting that.
@@ -2163,7 +2182,13 @@ pub(crate) fn get_clear_status() -> ClearStatus {
 
 /// `get_clear_status` on a given root (or the reason there is none) and a given roll-forward result.
 pub(crate) fn clear_status_on(root: Result<PathBuf, Refusal>, roll_forward: Option<serde_json::Value>) -> ClearStatus {
-    let roll_forward = roll_forward.filter(|v| v.get("status").and_then(|s| s.as_str()) != Some("nothing_to_do"));
+    // Nothing to say when no record was read: no record at all, or no normal data folder (C2b review B1: that
+    // start read nothing, so "it did not finish an interrupted clear" would be false at every start).
+    let roll_forward = roll_forward.filter(|v| {
+        let status = v.get("status").and_then(|s| s.as_str());
+        let first_code = v.get("detail").and_then(|d| d.get(0)).and_then(|r| r.get("code")).and_then(|c| c.as_str());
+        status != Some("nothing_to_do") && !(status == Some("deferred") && first_code == Some("data_root_unavailable"))
+    });
     let (record, abandoned_code) = match root {
         Err(_) => ("no_root", None),
         Ok(root) => match read_intent(&root) {
@@ -3796,7 +3821,7 @@ mod tests {
         let before = listing_but_intent(&t);
         let ledger_before = t.read("history.json");
         let outcome = roll(&t);
-        let RollForward::Abandoned { code, detail } = &outcome else { panic!("expected Abandoned, got {outcome:?}") };
+        let RollForward::Abandoned { code, detail, .. } = &outcome else { panic!("expected Abandoned, got {outcome:?}") };
         assert_eq!(code, "changes_applied");
         assert!(!detail.is_empty());
         assert_eq!(before, listing_but_intent(&t), "nothing more was deleted: not even a file outside the ledger family");
@@ -4427,10 +4452,84 @@ mod tests {
         assert_eq!(acknowledge_clear_on(none).unwrap_err().code, "data_root_unavailable");
     }
 
+    /// C2b review B1: a start with no normal data folder read nothing, so it has nothing to say; the other
+    /// deferral (the record changed while it was read) is passed through.
+    #[test]
+    fn z1b_no_data_folder_is_not_reported_as_an_unfinished_clear() {
+        let t = Tmp::new("z1b");
+        let no_root = serde_json::to_value(RollForward::Deferred(vec![Refusal { code: "data_root_unavailable", detail: "x".into(), files: vec![] }])).unwrap();
+        assert!(clear_status_on(Ok(t.root.clone()), Some(no_root)).roll_forward.is_none());
+        let changed = serde_json::to_value(RollForward::Deferred(vec![no_clear_in_progress()])).unwrap();
+        assert_eq!(clear_status_on(Ok(t.root.clone()), Some(changed.clone())).roll_forward, Some(changed));
+    }
+
+    /// Fails the delete of one store's file and arms the next atomic write on this thread to fail too, so the
+    /// record of the clear cannot be marked stopped afterwards.
+    struct FailOneAndTheRecord {
+        store: &'static str,
+    }
+
+    impl ClearGates for FailOneAndTheRecord {
+        fn with_gate(&self, _gate: Gate, store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            if store == self.store {
+                crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::AfterWrite);
+                return Err("held by another program".to_string());
+            }
+            delete()
+        }
+        fn live_state(&self) -> LiveState {
+            LiveState::default()
+        }
+    }
+
+    /// C2b review B4: an unfinished "clear everything" whose record cannot be marked stopped says so: the record
+    /// is still pending and the next start may finish deleting what was confirmed.
+    #[test]
+    fn z4_an_unfinished_clear_whose_record_cannot_be_marked_says_the_next_start_may_finish_it() {
+        let t = Tmp::new("z4");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(rels(&shown).contains(&"sessions.json"));
+        let report = done(clear_everything_at(&t.root, &shown.fingerprint, &later, &FailOneAndTheRecord { store: "sessions" }));
+        assert!(!report.complete && report.record_not_updated, "{report:?}");
+        assert_eq!(intent_of(&t).stage, IntentStage::FilesPending, "the record could not be marked stopped");
+        // With the record writable, the same failure marks it stopped and says nothing more.
+        let t2 = Tmp::new("z4b");
+        seed(&t2);
+        let shown = plan_clear(&t2.root, Scope::Everything, &later());
+        struct FailOnly;
+        impl ClearGates for FailOnly {
+            fn with_gate(&self, _g: Gate, store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+                if store == "sessions" { Err("held".into()) } else { delete() }
+            }
+            fn live_state(&self) -> LiveState {
+                LiveState::default()
+            }
+        }
+        let report = done(clear_everything_at(&t2.root, &shown.fingerprint, &later, &FailOnly));
+        assert!(!report.complete && !report.record_not_updated);
+        assert_eq!(intent_of(&t2).stage, IntentStage::Abandoned);
+    }
+
+    /// C2b review B4, start-up side: a roll-forward that gives up but cannot mark the record says so.
+    #[test]
+    fn z5_a_start_up_roll_forward_that_cannot_mark_its_record_says_so() {
+        let t = Tmp::new("z5");
+        seed(&t);
+        pend(&t, &later()).unwrap();
+        t.ledger(&[("Game mode", "applied")]); // a change is on again: the roll-forward gives up
+        crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::AfterWrite);
+        let outcome = roll_forward_at(&t.root, &later, &NoGates);
+        assert!(matches!(&outcome, RollForward::Abandoned { code, record_not_updated: true, .. } if code == "changes_applied"), "{outcome:?}");
+        assert_eq!(intent_of(&t).stage, IntentStage::FilesPending);
+        let v = serde_json::to_value(&outcome).unwrap();
+        assert_eq!(v["detail"]["record_not_updated"], true);
+    }
+
     /// C2b: which start-up results become a support-record entry, and with which code.
     #[test]
     fn z3_a_start_up_roll_forward_that_did_not_finish_is_named_in_the_support_record() {
-        let ab = serde_json::to_value(RollForward::Abandoned { code: "changes_applied".into(), detail: "x".into() }).unwrap();
+        let ab = serde_json::to_value(RollForward::Abandoned { code: "changes_applied".into(), detail: "x".into(), record_not_updated: false }).unwrap();
         assert_eq!(roll_forward_evidence(&ab).map(|e| (e.0, e.1)), Some(("changes_applied".to_string(), false)));
         let kept = serde_json::to_value(RollForward::Kept { code: "clear_intent_unreadable", detail: "x".into() }).unwrap();
         assert_eq!(roll_forward_evidence(&kept).map(|e| (e.0, e.1)), Some(("clear_intent_unreadable".to_string(), true)));
