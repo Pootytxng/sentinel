@@ -610,8 +610,16 @@ fn resolve_tier_elevation(
     receipts_text: &str,
     items: &[(String, String)],
 ) -> TierDecision {
+    // A2b (the rule history.rs `elevated_item_outcome` uses for `ok`): a receipt for a staged item,
+    // `ok` or `fail`, can exist only if the script ran, so it outweighs an error text that says
+    // nothing ran. Then the staged changes are never dropped: they stay and the session aborts +
+    // restores (an `ok` item is on Windows; restoring an unchanged one is a no-op by value).
+    let any_receipt = || {
+        let receipts = actions::parse_batch_receipts(receipts_text);
+        items.iter().any(|(id, _)| receipts.contains_key(id.as_str()))
+    };
     match elevation {
-        Err(e) if actions::elevation_error_nothing_ran(&e) => {
+        Err(e) if actions::elevation_error_nothing_ran(&e) && !any_receipt() => {
             TierDecision::DropStaged(format!("Advanced options: {e}"))
         }
         Err(e) => TierDecision::KeepStagedAbort(format!("Advanced options: {e}")),
@@ -745,11 +753,10 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
 
     // Phase 2 — the ONE elevation.
     let elevation = actions::run_elevated_powershell(&script);
-    let receipts_text = if elevation.is_ok() {
-        std::fs::read_to_string(&receipts_path).unwrap_or_default()
-    } else {
-        String::new()
-    };
+    // Read on every outcome (A2b): the file was removed before this elevation, so any receipt in it
+    // was written by THIS run, and an `ok` one must keep its change in the contract even when the
+    // elevation reported "nothing ran" (resolve_tier_elevation).
+    let receipts_text = std::fs::read_to_string(&receipts_path).unwrap_or_default();
     let _ = std::fs::remove_file(&receipts_path);
     match resolve_tier_elevation(elevation, &receipts_text, &id_labels) {
         TierDecision::Confirmed => Ok(()),
@@ -2104,6 +2111,26 @@ mod elevation_batch_tests {
         match resolve_tier_elevation(Err(ELEVATION_DECLINED_MSG.into()), "", &items) {
             TierDecision::DropStaged(m) => assert!(m.contains(ELEVATION_DECLINED_MSG)),
             other => panic!("a decline must drop staged, got {other:?}"),
+        }
+        // A2b: a receipt for any staged item means the script ran, whatever the error text says:
+        // never DropStaged then (an `ok` item is on Windows), keep staged and abort + restore. With
+        // no receipt at all, "nothing ran" still drops.
+        for nothing_ran in [ELEVATION_DECLINED_MSG, crate::actions::HELPER_POWERSHELL_NOT_STARTED_MSG] {
+            for receipts in ["adv-usb:ok\n", "adv-usb:fail\nadv-pcie:ok\n", "adv-pcie:fail\n"] {
+                match resolve_tier_elevation(Err(nothing_ran.into()), receipts, &items) {
+                    TierDecision::KeepStagedAbort(m) => assert!(m.contains("Advanced options"), "{m}"),
+                    other => panic!("a receipt must keep staged ({nothing_ran}, {receipts:?}), got {other:?}"),
+                }
+            }
+            match resolve_tier_elevation(Err(nothing_ran.into()), "", &items) {
+                TierDecision::DropStaged(_) => {}
+                other => panic!("no receipt: nothing ran ({nothing_ran}), got {other:?}"),
+            }
+            // A receipt for an id that is not staged here is not evidence about these items.
+            match resolve_tier_elevation(Err(nothing_ran.into()), "other:ok\n", &items) {
+                TierDecision::DropStaged(_) => {}
+                other => panic!("a foreign receipt is not evidence ({nothing_ran}), got {other:?}"),
+            }
         }
         // The process RAN and failed → conservative: keep staged, abort + restore everything.
         let ran_failed = "You approved the elevation, but the operation itself failed (exit code 1) — the prompt was fine; the command hit an error.";

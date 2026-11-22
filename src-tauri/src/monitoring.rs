@@ -1235,7 +1235,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
     // already carries a full admin token, so we can launch the helper DIRECTLY
     // and it inherits the rights needed to open the ETW session. With UAC on,
     // we elevate via the "runas" verb (prompt or auto-approve per policy).
-    if uac_disabled() {
+    if uac_disabled_refreshed() {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         match std::process::Command::new(&exe) // spawn-allow: self-spawn of current_exe() (absolute path); install-dir risk is a later slice
@@ -1847,11 +1847,46 @@ fn prompt_free_from(plain_applies: bool, start_failed: bool) -> bool {
     plain_applies && !start_failed
 }
 
+/// The last `EnableLUA` read (A2b): 0 = not read yet, 1 = UAC off, 2 = UAC on. The status poll reads
+/// this cache instead of the registry every time; a capture start re-reads the registry
+/// ([`uac_disabled_refreshed`]), so a change is picked up at the next start.
+fn uac_cache() -> &'static std::sync::atomic::AtomicU8 {
+    static C: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+    &C
+}
+
+/// PURE: the cache value for a registry answer, and the answer for a cache value (`None` = not read).
+fn uac_cache_value(off: bool) -> u8 {
+    if off { 1 } else { 2 }
+}
+fn uac_from_cache(v: u8) -> Option<bool> {
+    match v {
+        1 => Some(true),
+        2 => Some(false),
+        _ => None,
+    }
+}
+
+/// Read `EnableLUA` now and remember it (a capture start).
+fn uac_disabled_refreshed() -> bool {
+    let off = uac_disabled();
+    uac_cache().store(uac_cache_value(off), std::sync::atomic::Ordering::Release);
+    off
+}
+
+/// The remembered `EnableLUA` answer, reading the registry only the first time (the status poll).
+fn uac_disabled_cached() -> bool {
+    match uac_from_cache(uac_cache().load(std::sync::atomic::Ordering::Acquire)) {
+        Some(off) => off,
+        None => uac_disabled_refreshed(),
+    }
+}
+
 fn prompt_free_now() -> bool {
     static ELEVATED: OnceLock<Option<bool>> = OnceLock::new();
     let elevated = *ELEVATED.get_or_init(process_is_elevated);
     prompt_free_from(
-        plain_start_applies(uac_disabled(), elevated, perf_log_access()),
+        plain_start_applies(uac_disabled_cached(), elevated, perf_log_access()),
         plain_start_failed().load(std::sync::atomic::Ordering::Acquire),
     )
 }
@@ -1914,6 +1949,10 @@ fn fall_back_in_order(
     }
 }
 
+/// The plain (unelevated) start of the capture helper: our own exe, the same five arguments, no
+/// console window. The child INHERITS this app's (the user's) environment, unchanged, like the
+/// UAC-off direct spawn: it runs with the user's own rights, so that environment gives it nothing
+/// the user does not already have (the elevated launch is the one that clears it).
 fn spawn_plain_helper(exe: &std::path::Path, out: &str, alive: &str) -> Result<std::process::Child, String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -3019,5 +3058,29 @@ mod plain_start_tests {
                 assert!(!text.contains(token), "{} changes group membership ({token})", f.display());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod uac_cache_tests {
+    use super::{uac_cache_value, uac_from_cache};
+
+    /// A2b: the status poll reads a cached EnableLUA answer; only a capture start re-reads the registry.
+    #[test]
+    fn the_status_poll_uses_the_cached_uac_read_and_a_capture_start_refreshes_it() {
+        assert_eq!(uac_from_cache(0), None, "not read yet");
+        for off in [true, false] {
+            assert_eq!(uac_from_cache(uac_cache_value(off)), Some(off));
+        }
+        let src = include_str!("monitoring.rs").replace("\r\n", "\n");
+        let body = |head: &str| {
+            let f = src.find(head).unwrap_or_else(|| panic!("{head}"));
+            src[f..f + src[f..].find("\n}\n").unwrap()].to_string()
+        };
+        let poll = body(concat!("fn prompt_free_", "now()"));
+        assert!(poll.contains(concat!("uac_disabled_", "cached()")), "{poll}");
+        assert!(!poll.contains(concat!("uac_disabled()", "")), "the poll must not read the registry: {poll}");
+        let start = body(concat!("fn start_fps_capture_", "locked()"));
+        assert!(start.contains(concat!("if uac_disabled_", "refreshed() {")), "a capture start re-reads EnableLUA");
     }
 }

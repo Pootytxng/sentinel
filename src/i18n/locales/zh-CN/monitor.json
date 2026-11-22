@@ -58,7 +58,7 @@
     "estSuffix": " · 估算",
     "declinedStatus": "管理员权限被拒绝——点击「开始采集」重新授权",
     "capturingStatus": "采集中——切换到 DX11/DX12 游戏窗口",
-    "noPromptSetUp": "这台电脑已设置为无需 Windows 管理员提示即可采集。",
+    "noPromptSetUp": "你的登录账户属于 Performance Log Users 组，因此 Compy 会先尝试在不弹出管理员提示的情况下进行采集。",
     "idleStatus": "开始采集后即可游玩",
     "overlayOn": "浮层已开启",
     "overlayLabel": "浮层",

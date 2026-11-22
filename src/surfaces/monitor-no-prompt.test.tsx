@@ -37,9 +37,16 @@ afterEach(async () => {
 const line = () => screen.queryByTestId("mc-no-prompt");
 
 describe("Live room: the no-prompt line (D1-S1)", () => {
-  it("the shipped wording, verbatim, in both languages", () => {
-    expect(en.monitorConsole.noPromptSetUp).toBe("This PC is set up to measure without a Windows administrator prompt.");
-    expect(zh.monitorConsole.noPromptSetUp).toBe("这台电脑已设置为无需 Windows 管理员提示即可采集。");
+  it("the shipped wording, verbatim, in both languages: the mechanism, not a forecast (A2b)", () => {
+    expect(en.monitorConsole.noPromptSetUp).toBe(
+      "Your sign-in is in Performance Log Users, so Compy first tries to measure without an administrator prompt.",
+    );
+    expect(zh.monitorConsole.noPromptSetUp).toBe(
+      "你的登录账户属于 Performance Log Users 组，因此 Compy 会先尝试在不弹出管理员提示的情况下进行采集。",
+    );
+    // It says what Compy tries, never that it will work ("is set up to" was a forecast).
+    expect(en.monitorConsole.noPromptSetUp).toMatch(/first tries/);
+    expect(en.monitorConsole.noPromptSetUp).not.toMatch(/is set up|will|always|never/i);
   });
 
   for (const lng of ["en", "zh-CN"] as const) {

@@ -59,7 +59,7 @@
     "declinedStatus": "admin permission declined — tap Start capture to allow it",
     "capturingStatus": "capturing — focus a DX11/DX12 game",
     "idleStatus": "start capture, then play",
-    "noPromptSetUp": "This PC is set up to measure without a Windows administrator prompt.",
+    "noPromptSetUp": "Your sign-in is in Performance Log Users, so Compy first tries to measure without an administrator prompt.",
     "overlayOn": "Overlay on",
     "overlayLabel": "Overlay",
     "overlayCornerAria": "Overlay corner {{corner}}",
