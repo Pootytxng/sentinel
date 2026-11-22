@@ -2004,9 +2004,10 @@ impl ClearGates for LiveGates<'_> {
     }
 }
 
-/// The facts only the running app knows.
-fn live_facts(remove_licence: bool) -> ClearFacts {
-    let live = ProcessEffects.live_state();
+/// The facts only the running app knows, read from `fx` (the app passes [`ProcessEffects`]; the same
+/// `live_state` the in-gate re-check reads).
+fn facts_from(fx: &dyn ClearEffects, remove_licence: bool) -> ClearFacts {
+    let live = fx.live_state();
     ClearFacts {
         capture_active: live.capture_active,
         recorder_busy: live.recorder_busy,
@@ -2026,18 +2027,33 @@ fn live_root() -> Result<PathBuf, Refusal> {
     })
 }
 
+// C2a: each live wrapper below is ONE expression: its `_on` function called with the resolved root, its own
+// arguments and the process's effects (test `v1` pins the exact text). Everything else lives in the `_on`
+// function, which takes the root (or the reason there is none) and the effects as arguments, so the tests drive
+// all of it with a temp root and their own effects; the one line no test runs is the root resolution itself.
+
 /// What "Clear play history" would delete, keep and leave alone, right now. A pure read.
 pub(crate) fn plan_clear_play_history() -> ClearPlan {
-    match live_root() {
-        Ok(root) => plan_clear(&root, Scope::PlayHistory, &live_facts(false)),
+    plan_play_history_on(live_root(), &ProcessEffects)
+}
+
+/// `plan_clear_play_history` on a given root (or the reason there is none) and given effects.
+pub(crate) fn plan_play_history_on(root: Result<PathBuf, Refusal>, fx: &dyn ClearEffects) -> ClearPlan {
+    match root {
+        Ok(root) => plan_clear(&root, Scope::PlayHistory, &facts_from(fx, false)),
         Err(r) => ClearPlan::refused(Scope::PlayHistory, r.code, &r.detail),
     }
 }
 
 /// What "Clear everything" would delete, keep and leave alone, right now. A pure read.
 pub(crate) fn plan_clear_everything(remove_licence: bool) -> ClearPlan {
-    match live_root() {
-        Ok(root) => plan_clear(&root, Scope::Everything, &live_facts(remove_licence)),
+    plan_everything_on(live_root(), remove_licence, &ProcessEffects)
+}
+
+/// `plan_clear_everything` on a given root (or the reason there is none) and given effects.
+pub(crate) fn plan_everything_on(root: Result<PathBuf, Refusal>, remove_licence: bool, fx: &dyn ClearEffects) -> ClearPlan {
+    match root {
+        Ok(root) => plan_clear(&root, Scope::Everything, &facts_from(fx, remove_licence)),
         Err(r) => ClearPlan::refused(Scope::Everything, r.code, &r.detail),
     }
 }
@@ -2058,8 +2074,14 @@ pub(crate) fn clear_play_history_at(root: &Path, expected_fingerprint: &str, fac
 /// Deletes the play history the plan with `expected_fingerprint` listed. Never touches `history.json*`.
 /// Blocking: wait on store locks, so call it from `spawn_blocking`, never the UI thread.
 pub(crate) fn clear_play_history(expected_fingerprint: &str) -> ClearOutcome {
-    match live_root() {
-        Ok(root) => clear_play_history_at(&root, expected_fingerprint, &live_facts(false), &LiveGates(&ProcessEffects)),
+    clear_play_history_on(live_root(), expected_fingerprint, &ProcessEffects)
+}
+
+/// `clear_play_history` on a given root (or the reason there is none) and given effects: the real store gates
+/// (`LiveGates`) with `fx`'s epoch, resets and live state.
+pub(crate) fn clear_play_history_on(root: Result<PathBuf, Refusal>, expected_fingerprint: &str, fx: &dyn ClearEffects) -> ClearOutcome {
+    match root {
+        Ok(root) => clear_play_history_at(&root, expected_fingerprint, &facts_from(fx, false), &LiveGates(fx)),
         Err(r) => ClearOutcome::Refused(vec![r]),
     }
 }
@@ -2068,8 +2090,18 @@ pub(crate) fn clear_play_history(expected_fingerprint: &str) -> ClearOutcome {
 /// the Trial gate then the ledger lock for the change-history family; see `clear_everything_at`.
 /// Blocking, like `clear_play_history`.
 pub(crate) fn clear_everything(expected_fingerprint: &str, remove_licence: bool) -> ClearOutcome {
-    match live_root() {
-        Ok(root) => clear_everything_at(&root, expected_fingerprint, &|| live_facts(remove_licence), &LiveGates(&ProcessEffects)),
+    clear_everything_on(live_root(), expected_fingerprint, remove_licence, &ProcessEffects)
+}
+
+/// `clear_everything` on a given root (or the reason there is none) and given effects.
+pub(crate) fn clear_everything_on(
+    root: Result<PathBuf, Refusal>,
+    expected_fingerprint: &str,
+    remove_licence: bool,
+    fx: &dyn ClearEffects,
+) -> ClearOutcome {
+    match root {
+        Ok(root) => clear_everything_at(&root, expected_fingerprint, &|| facts_from(fx, remove_licence), &LiveGates(fx)),
         Err(r) => ClearOutcome::Refused(vec![r]),
     }
 }
@@ -2081,8 +2113,13 @@ pub(crate) fn clear_everything(expected_fingerprint: &str, remove_licence: bool)
 /// from a surviving `history.json`). A sandbox, redirected or conflicted root defers (nothing is touched).
 /// Blocking: it takes store locks, so it must not run on the UI thread after start-up.
 pub(crate) fn finish_interrupted_clear() -> RollForward {
-    match live_root() {
-        Ok(root) => roll_forward_at(&root, &|| live_facts(false), &LiveGates(&ProcessEffects)),
+    finish_interrupted_clear_on(live_root(), &ProcessEffects)
+}
+
+/// `finish_interrupted_clear` on a given root (or the reason there is none) and given effects.
+pub(crate) fn finish_interrupted_clear_on(root: Result<PathBuf, Refusal>, fx: &dyn ClearEffects) -> RollForward {
+    match root {
+        Ok(root) => roll_forward_at(&root, &|| facts_from(fx, false), &LiveGates(fx)),
         Err(r) => RollForward::Deferred(vec![r]),
     }
 }
@@ -3232,8 +3269,10 @@ mod tests {
         // The live fact comes from the recorder (a gauge the accumulator and `save_session` move), and a
         // capture flag alone is not read as "done".
         let src = include_str!("data_clear.rs");
-        let facts_fn = src.split("fn live_facts(").nth(1).unwrap().split("\n}\n").next().unwrap();
-        assert!(facts_fn.contains("ProcessEffects.live_state()"), "the facts and the in-gate re-check read the same function");
+        // C2a: the facts come from the effects the wrapper passes (`&ProcessEffects` in every live wrapper, test
+        // v1), through the same `live_state` the in-gate re-check calls.
+        let facts_fn = src.split("fn facts_from(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(facts_fn.contains("fx.live_state()"), "the facts and the in-gate re-check read the same function");
         let live = src.split("impl ClearEffects for ProcessEffects").nth(1).unwrap().split("fn live_state(&self) -> LiveState {").nth(1).unwrap().split("\n    }\n").next().unwrap();
         assert!(live.contains("sessions::recorder_busy()"), "{live}");
         assert!(live.contains("fps_active()"), "the capture flag is still read too");
@@ -4196,6 +4235,165 @@ mod tests {
         for not_yet in [concat!("data_clear::clear_", "everything"), concat!("data_clear::plan_clear_", "everything")] {
             assert!(!lib.contains(not_yet), "{not_yet} is C2's");
         }
+    }
+
+    // ---- C2a: the live wrappers are one line; everything else runs here on temp roots ----------------------
+
+    /// The core (non-test) source.
+    fn core_src() -> &'static str {
+        include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap()
+    }
+
+    /// The body of `pub(crate) fn <name>(` in the core, between its first `{` and the closing `\n}\n`.
+    fn body_of(name: &str) -> &'static str {
+        let after = core_src().split(&format!("pub(crate) fn {name}(")).nth(1).unwrap_or_else(|| panic!("{name} not found"));
+        let open = after.find("{\n").unwrap_or_else(|| panic!("{name}: no body"));
+        after[open + 2..].split("\n}\n").next().unwrap()
+    }
+
+    const LIVE_WRAPPERS: &[(&str, &str)] = &[
+        ("plan_clear_play_history", "plan_play_history_on(live_root(), &ProcessEffects)"),
+        ("plan_clear_everything", "plan_everything_on(live_root(), remove_licence, &ProcessEffects)"),
+        ("clear_play_history", "clear_play_history_on(live_root(), expected_fingerprint, &ProcessEffects)"),
+        ("clear_everything", "clear_everything_on(live_root(), expected_fingerprint, remove_licence, &ProcessEffects)"),
+        ("finish_interrupted_clear", "finish_interrupted_clear_on(live_root(), &ProcessEffects)"),
+    ];
+
+    /// C2a shape guard: each live wrapper is exactly "resolve the verified root, hand it and the process's effects
+    /// to the root-taking function". A wrapper that gains any other statement fails here, and so does a
+    /// root-taking function that resolves a root or names the process's effects itself.
+    #[test]
+    fn v1_each_live_wrapper_is_one_line_and_only_wrappers_resolve_the_root() {
+        for (name, expected) in LIVE_WRAPPERS {
+            assert_eq!(body_of(name).trim(), *expected, "{name} must be exactly one call");
+            let on = expected.split('(').next().unwrap();
+            let on_body = body_of(on);
+            assert!(!on_body.contains("live_root") && !on_body.contains("ProcessEffects") && !on_body.contains("data_root::"), "{on} must take the root and the effects as arguments");
+        }
+        // `live_root()` is called by the five wrappers and nowhere else; `&ProcessEffects` likewise.
+        let core = core_src();
+        assert_eq!(core.matches("live_root()").count(), LIVE_WRAPPERS.len() + 1, "five wrapper calls + the definition");
+        assert_eq!(core.matches("&ProcessEffects").count(), LIVE_WRAPPERS.len(), "only the wrappers pass the process's effects");
+    }
+
+    fn unavailable() -> Result<PathBuf, Refusal> {
+        Err(Refusal { code: "data_root_unavailable", detail: "test: no canonical root".into(), files: Vec::new() })
+    }
+
+    /// Play history through the root-taking functions with the real store gates and the test's own effects:
+    /// plan -> fingerprint -> clear -> report equals the plan; no root is a typed refusal that touches
+    /// nothing; a capture the effects report refuses.
+    #[test]
+    fn v2_play_history_through_the_root_taking_functions() {
+        let t = Tmp::new("v2");
+        seed(&t);
+        // The real clock: the freshly seeded working file is kept ("less than an hour old") and not listed.
+        let fx = TestEffects::new();
+        let shown = plan_play_history_on(Ok(t.root.clone()), &fx);
+        assert!(shown.can_proceed(), "{:?}", shown.refusals);
+        let report = done(clear_play_history_on(Ok(t.root.clone()), &shown.fingerprint, &fx));
+        let mut deleted = report.deleted.clone();
+        deleted.sort();
+        let mut listed: Vec<String> = shown.delete.iter().map(|d| d.rel.clone()).collect();
+        listed.sort();
+        assert_eq!(deleted, listed);
+        assert!(report.complete && t.has("history.json") && !t.has(INTENT_FILE));
+        // A stale fingerprint deletes nothing.
+        let t2 = Tmp::new("v2b");
+        seed(&t2);
+        let before = t2.listing();
+        assert!(matches!(clear_play_history_on(Ok(t2.root.clone()), "stale", &fx), ClearOutcome::PlanChanged));
+        assert_eq!(before, t2.listing());
+        // No root: typed refusal, nothing read or deleted.
+        let plan = plan_play_history_on(unavailable(), &fx);
+        assert_eq!(plan.refusals.iter().map(|r| r.code).collect::<Vec<_>>(), ["data_root_unavailable"]);
+        assert!(plan.delete.is_empty());
+        match clear_play_history_on(unavailable(), &shown.fingerprint, &fx) {
+            ClearOutcome::Refused(r) => assert_eq!(r[0].code, "data_root_unavailable"),
+            other => panic!("expected Refused, got {other:?}"),
+        }
+        // The facts come from the effects passed in.
+        fx.live.set(LiveState { capture_active: true, ..LiveState::default() });
+        let plan = plan_play_history_on(Ok(t2.root.clone()), &fx);
+        assert!(plan.refusals.iter().any(|r| r.code == "capture_running"), "{:?}", plan.refusals);
+        assert!(matches!(clear_play_history_on(Ok(t2.root.clone()), &plan.fingerprint, &fx), ClearOutcome::Refused(_)));
+        assert_eq!(before, t2.listing());
+    }
+
+    /// Effects that start a Trial in the root at the first in-gate live read (the first read is the plan's).
+    struct TrialStartsMidRun<'a> {
+        inner: TestEffects,
+        root: &'a Path,
+        reads: std::cell::Cell<u32>,
+    }
+
+    impl ClearEffects for TrialStartsMidRun<'_> {
+        fn deleted(&self, store: &'static str) {
+            self.inner.deleted(store)
+        }
+        fn with_benchmark_locked(&self, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            self.inner.with_benchmark_locked(delete)
+        }
+        fn forget_trial_result(&self) {
+            self.inner.forget_trial_result()
+        }
+        fn forget_incident_failures(&self) {
+            self.inner.forget_incident_failures()
+        }
+        fn forget_support_preview(&self) {
+            self.inner.forget_support_preview()
+        }
+        fn forget_identity_throttle(&self) {
+            self.inner.forget_identity_throttle()
+        }
+        fn live_state(&self) -> LiveState {
+            self.reads.set(self.reads.get() + 1);
+            if self.reads.get() == 2 {
+                fs::write(self.root.join("experiments.json"), trial_store("pending")).unwrap();
+            }
+            self.inner.live_state()
+        }
+    }
+
+    /// C1 review B4 through the root-taking function and the real Trial gate: the Trial store stays.
+    #[test]
+    fn v3_a_trial_started_mid_run_keeps_the_trial_store_through_the_live_path() {
+        let t = Tmp::new("v3");
+        seed(&t);
+        let fx = TrialStartsMidRun { inner: TestEffects::new(), root: &t.root, reads: Default::default() };
+        // The plan through the same path with the inner effects (their reads are not counted).
+        let shown = plan_play_history_on(Ok(t.root.clone()), &fx.inner);
+        assert!(rels(&shown).contains(&"experiments.json"));
+        let report = done(clear_play_history_on(Ok(t.root.clone()), &shown.fingerprint, &fx));
+        assert!(t.has("experiments.json"), "the Trial store must survive");
+        assert!(!report.complete && report.not_attempted.contains(&"experiments.json".to_string()));
+        assert_eq!(report.stopped.iter().map(|r| r.code).collect::<Vec<_>>(), ["trial_running"]);
+    }
+
+    /// "Clear everything" and the roll-forward through their root-taking functions (still unregistered and
+    /// uncalled by the app): no root refuses or defers; a temp-root clear completes and waits for the screen.
+    #[test]
+    fn v4_everything_and_the_roll_forward_through_the_root_taking_functions() {
+        let fx = TestEffects::new();
+        let plan = plan_everything_on(unavailable(), false, &fx);
+        assert_eq!(plan.refusals.iter().map(|r| r.code).collect::<Vec<_>>(), ["data_root_unavailable"]);
+        assert!(matches!(clear_everything_on(unavailable(), "x", false, &fx), ClearOutcome::Refused(r) if r[0].code == "data_root_unavailable"));
+        assert!(matches!(finish_interrupted_clear_on(unavailable(), &fx), RollForward::Deferred(r) if r[0].code == "data_root_unavailable"));
+        let t = Tmp::new("v4");
+        seed(&t);
+        assert!(matches!(finish_interrupted_clear_on(Ok(t.root.clone()), &fx), RollForward::NothingToDo));
+        let shown = plan_everything_on(Ok(t.root.clone()), false, &fx);
+        assert!(shown.can_proceed(), "{:?}", shown.refusals);
+        assert!(!rels(&shown).contains(&"license.key"), "the licence goes only when asked");
+        let report = done(clear_everything_on(Ok(t.root.clone()), &shown.fingerprint, false, &fx));
+        let mut deleted = report.deleted.clone();
+        deleted.sort();
+        let mut listed: Vec<String> = shown.delete.iter().map(|d| d.rel.clone()).collect();
+        listed.sort();
+        assert_eq!(deleted, listed);
+        assert!(report.complete && t.has("license.key") && !t.has("history.json"));
+        assert_eq!(intent_of(&t).stage, IntentStage::WebviewPending);
+        assert!(matches!(finish_interrupted_clear_on(Ok(t.root.clone()), &fx), RollForward::WebviewPending));
     }
 
     #[test]
