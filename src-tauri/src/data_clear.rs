@@ -3994,6 +3994,11 @@ mod tests {
         assert!(!t.base.join("evil.json").exists());
     }
 
+    // C2e review r1 (coordinator-approved change of the expected outcome kind only): every file left at start-up
+    // was saved after the clear began, so the roll-forward now counts the clear as finished, keeps those files
+    // and advances the record: `Completed` with `kept_saved_after_clear`, where it used to be `Incomplete`. The
+    // protective assertions are unchanged: nothing is deleted (listing unchanged, `deleted` empty) and every
+    // skip is `newer_than_clear`. Added: the record was advanced, so a second roll-forward does nothing.
     #[test]
     fn w1b_a_file_modified_after_the_clear_started_is_never_deleted() {
         let t = Tmp::new("w1b2");
@@ -4002,9 +4007,14 @@ mod tests {
         edit_record(&t, |i| i.started_at = 1000); // every file now looks newer than the clear
         let before = listing_but_intent(&t);
         let outcome = roll(&t);
-        let skipped = skipped_of(&outcome);
-        assert!(!skipped.is_empty() && skipped.iter().all(|(_, why)| *why == "newer_than_clear"), "{skipped:?}");
-        assert_eq!(before, listing_but_intent(&t));
+        let RollForward::Completed(report) = &outcome else { panic!("expected Completed, got {outcome:?}") };
+        assert!(report.deleted.is_empty(), "nothing was deleted: {:?}", report.deleted);
+        assert!(!report.skipped.is_empty() && report.skipped.iter().all(|s| s.reason == "newer_than_clear"), "{:?}", report.skipped);
+        assert_eq!(before, listing_but_intent(&t), "nothing was deleted");
+        assert!(report.kept_saved_after_clear, "{report:?}");
+        assert_eq!(intent_of(&t).stage, IntentStage::WebviewPending, "the record was advanced");
+        assert!(matches!(roll(&t), RollForward::WebviewPending), "a second roll-forward finds nothing to do");
+        assert_eq!(before, listing_but_intent(&t), "the second roll-forward deleted nothing");
     }
 
     #[test]
