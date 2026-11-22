@@ -1090,6 +1090,17 @@ pub(crate) const HELPER_POWERSHELL_NOT_STARTED: i32 = 0x4350_5334;
 pub(crate) const HELPER_POWERSHELL_NOT_STARTED_MSG: &str =
     "Windows PowerShell did not start in the administrator helper, so no command ran.";
 
+/// Exit code of the elevated command helper when it refused the dispatch because its one-time ticket
+/// did not check out (missing, not a plain single-link file at the planned place, or not this command):
+/// it refuses before running anything. Hardening slice 2 (review r1): this used to be exit 3, which the
+/// parent read as "you approved, but the operation itself failed". Chosen beside
+/// [`HELPER_POWERSHELL_NOT_STARTED`], far from the small codes PowerShell and the system tools return.
+pub(crate) const HELPER_TICKET_REFUSED: i32 = 0x4350_5333;
+
+/// What the parent says for [`HELPER_TICKET_REFUSED`]. Matched exactly by `elevation_error_nothing_ran`.
+pub(crate) const HELPER_TICKET_REFUSED_MSG: &str =
+    "The administrator helper could not confirm this command was the one Compy sent, so no command ran.";
+
 /// Quote one argument per the MSVC CommandLineToArgvW rules: bare if it has no space/tab/quote,
 /// else wrapped in quotes with `"` escaped as `\"` and backslashes doubled ONLY where they precede
 /// a quote (mid-path backslashes stay literal). Pure; unit-tested.
@@ -1184,18 +1195,30 @@ pub(crate) fn elevate_and_wait(
     file: &std::ffi::OsStr,
     args: &[&std::ffi::OsStr],
 ) -> std::io::Result<std::process::ExitStatus> {
+    elevate_and_wait_with(file, args, |_| ())
+}
+
+/// [`elevate_and_wait`], and `on_started` is told the elevated process's pid once it runs, before the
+/// wait (hardening slice 2, review r1 B5: the capture pipe accepts exactly that pid). The target check
+/// is still the first statement; the launch is still the one `shell_runas_and_wait` call.
+pub(crate) fn elevate_and_wait_with(
+    file: &std::ffi::OsStr,
+    args: &[&std::ffi::OsStr],
+    on_started: impl FnOnce(u32),
+) -> std::io::Result<std::process::ExitStatus> {
     if let Some(refused) = elevation_target_refused(file) {
         return Err(refused);
     }
-    shell_runas_and_wait(file, args)
+    shell_runas_and_wait(file, args, on_started)
 }
 
 /// The UAC "runas" launch itself (ShellExecuteExW) and the wait for the real exit code. Only
-/// [`elevate_and_wait`] calls it in shipped code, after its target check; the end-to-end FFI test
+/// [`elevate_and_wait_with`] calls it in shipped code, after its target check; the end-to-end FFI test
 /// calls it directly with a path that does not exist.
 fn shell_runas_and_wait(
     file: &std::ffi::OsStr,
     args: &[&std::ffi::OsStr],
+    on_started: impl FnOnce(u32),
 ) -> std::io::Result<std::process::ExitStatus> {
     use std::os::windows::ffi::OsStrExt;
     use std::os::windows::process::ExitStatusExt;
@@ -1204,7 +1227,7 @@ fn shell_runas_and_wait(
     use windows::Win32::System::Com::{
         CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
     };
-    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
+    use windows::Win32::System::Threading::{GetExitCodeProcess, GetProcessId, WaitForSingleObject, INFINITE};
     use windows::Win32::UI::Shell::{
         ShellExecuteExW, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS,
         SHELLEXECUTEINFOW,
@@ -1258,6 +1281,8 @@ fn shell_runas_and_wait(
             // attribution and the KeepStagedAbort polarity.
             return Ok(std::process::ExitStatus::from_raw(u32::MAX));
         }
+        // The pid of the process we hold: it cannot be reused while `hProcess` is open (until below).
+        on_started(GetProcessId(sei.hProcess));
         let _ = WaitForSingleObject(sei.hProcess, INFINITE);
         let mut code: u32 = 0;
         let status = match GetExitCodeProcess(sei.hProcess, &mut code) {
@@ -1288,6 +1313,7 @@ pub(crate) fn elevation_outcome(
         Err(e) if e.raw_os_error() == Some(ERROR_CANCELLED) => Err(ELEVATION_DECLINED_MSG.into()),
         Err(e) => Err(format!("could not launch elevated process: {}", e)),
         Ok(s) if s.code() == Some(HELPER_POWERSHELL_NOT_STARTED) => Err(HELPER_POWERSHELL_NOT_STARTED_MSG.into()),
+        Ok(s) if s.code() == Some(HELPER_TICKET_REFUSED) => Err(HELPER_TICKET_REFUSED_MSG.into()),
         Ok(s) if !s.success() => Err(format!(
             "You approved the elevation, but the operation itself failed (exit code {}) — the prompt was fine; the command hit an error.",
             s.code().map(|c| c.to_string()).unwrap_or_else(|| "?".into())
@@ -1308,6 +1334,7 @@ pub(crate) fn elevation_outcome(
 pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
     err == ELEVATION_DECLINED_MSG
         || err == HELPER_POWERSHELL_NOT_STARTED_MSG
+        || err == HELPER_TICKET_REFUSED_MSG
         || err.starts_with("could not launch elevated process")
         || err.starts_with("cannot find own exe")
         || err.starts_with("elevated command is too long to dispatch")
@@ -2155,11 +2182,14 @@ mod elevation_attribution_tests {
         // io::Error that downstream classifies as launch-level, never Ok(-1)/approved-but-failed.
         // The FFI layer directly: elevate_and_wait itself now refuses this path before the shell
         // (see elevate_and_wait_refuses_anything_but_its_own_targets).
+        let started = std::cell::Cell::new(false);
         let err = super::shell_runas_and_wait(
             std::ffi::OsStr::new(r"C:\__compy_qa_missing__\definitely-not-here.exe"),
             &[],
+            |_| started.set(true),
         )
         .expect_err("a nonexistent exe must surface as a LAUNCH error, not Ok(-1)");
+        assert!(!started.get(), "a launch that failed reports no started pid");
         assert!(err.raw_os_error().is_some(), "got: {err}");
         let msg = elevation_outcome(Err(err)).unwrap_err();
         assert!(
@@ -2212,19 +2242,30 @@ mod elevation_attribution_tests {
         assert!(super::elevation_target_refused(real_ps.as_os_str()).is_none(), "{real_ps:?}");
         let cmd = crate::sys_exe::system_dir().join("cmd.exe");
         assert!(super::elevation_target_refused(cmd.as_os_str()).is_some(), "{cmd:?}");
-        // shell_runas_and_wait (the FFI launch) is reached only through elevate_and_wait in shipped
+        // shell_runas_and_wait (the FFI launch) is reached only through elevate_and_wait_with in shipped
         // code: its definition, that one call, and the FFI test.
         let whole = include_str!("actions.rs").replace("\r\n", "\n");
         assert_eq!(whole.matches(concat!("shell_runas_", "and_wait(")).count(), 3);
-        // The check is the FIRST statement of elevate_and_wait, before any COM or shell call.
+        // The check is the FIRST statement of elevate_and_wait_with, before any COM or shell call, and
+        // elevate_and_wait is nothing but elevate_and_wait_with with a no-op callback (hardening slice 2).
         let src = include_str!("actions.rs").replace("\r\n", "\n");
-        let start = src.find("pub(crate) fn elevate_and_wait(").expect("elevate_and_wait");
+        let start = src.find(concat!("pub(crate) fn elevate_and_", "wait_with(")).expect("elevate_and_wait_with");
         let body = &src[start..];
         let open = body.find("{\n").expect("body") + 2;
         assert!(
             body[open..].trim_start().starts_with("if let Some(refused) = elevation_target_refused(file) {"),
-            "elevate_and_wait must refuse a non-absolute path before anything else"
+            "elevate_and_wait_with must refuse a non-absolute path before anything else"
         );
+        let start = src.find(concat!("pub(crate) fn elevate_and_", "wait(")).expect("elevate_and_wait");
+        let body = &src[start..start + src[start..].find("\n}\n").unwrap()];
+        let open = body.find("{\n").expect("body") + 2;
+        assert_eq!(body[open..].trim(), concat!("elevate_and_wait_", "with(file, args, |_| ())"), "elevate_and_wait only delegates");
+        // elevate_and_wait_with has exactly two callers in the crate: elevate_and_wait, and the FPS
+        // capture's elevated launch (monitoring.rs), which needs the started pid.
+        let mon = include_str!("monitoring.rs");
+        assert_eq!(whole.matches(concat!("elevate_and_", "wait_with(")).count(), 2, "its definition and elevate_and_wait");
+        assert_eq!(mon.matches(concat!("crate::actions::elevate_and_", "wait_with(")).count(), 1);
+        assert_eq!(mon.matches(concat!("elevate_and_", "wait(")).count(), 0);
     }
 
     #[test]

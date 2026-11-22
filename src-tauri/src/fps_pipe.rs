@@ -10,13 +10,29 @@
 //! local clients only, a DACL for this user and Administrators), and starts the helper with
 //! `--pipe <name> --parent-pid <pid>`. The helper opens NO path but that pipe, opens it so the app can
 //! identify but never impersonate it (SECURITY_IDENTIFICATION), and checks that the pipe's server is the
-//! process that started it and runs Compy's own image. The app checks that the connected client is a
-//! Compy it started. The helper writes one line per report; the APP writes `fps.json` and the marker with
+//! `--parent-pid` it was given (see below for what that is worth). The app checks that the connected
+//! client is exactly the process it launched. The helper writes one line per report; the APP writes `fps.json` and the marker with
 //! the user's own rights, so every reader is unchanged. The pipe is also the heartbeat: when the app closes
 //! it (stop, exit, crash), the helper's next write fails and it exits.
 //!
 //! Win32 calls are declared by hand (as data_clear.rs and data_root.rs do), so no `windows` crate feature
-//! is added. Nothing here opens another process: identities come from the process snapshot (other_load).
+//! is added. Nothing here opens another process: identities come from the process snapshot (other_load),
+//! the pipe's own pid calls and `ProcessIdToSessionId`, none of which takes a process handle.
+//!
+//! What each end can know about the other (review r1):
+//! - The APP knows exactly which process it launched: it holds that process (the `Child`, or the
+//!   elevated launch's process handle) for the whole capture, so the pid cannot be reused while it waits.
+//!   It accepts a client only if the pipe's client pid IS that pid (`client_is_our_helper`), and, as a
+//!   second check, if it runs an image of the app's own name. A same-user program cannot pass the first
+//!   check: it can fake its parent and its name, but not be the process the app started.
+//! - The HELPER cannot verify the server against a same-user program. That program could start
+//!   `compy.exe --fps-capture --pipe <its own pipe> --parent-pid <its own pid>` itself and run under any
+//!   name. So the server check (`server_is_the_app`: the server pid is `--parent-pid`, runs an image of the
+//!   helper's own name, in the helper's own logon session) is a consistency check against cross-talk, NOT
+//!   a security boundary. The helper's safety does not depend on it: it opens only a
+//!   `\\.\pipe\compy-fps-<32 hex>` name (never a file), opens it write-only, never reads a byte from it,
+//!   and opens it at identification level, so the server can never act with the helper's token. A
+//!   hostile server learns FPS lines (game process names and frame rates) and nothing else.
 
 use std::ffi::c_void;
 use std::io::{BufRead, Write};
@@ -43,6 +59,8 @@ extern "system" {
     fn GetNamedPipeClientProcessId(pipe: *mut c_void, pid: *mut u32) -> i32;
     fn GetNamedPipeServerProcessId(pipe: *mut c_void, pid: *mut u32) -> i32;
     fn LocalFree(mem: *mut c_void) -> *mut c_void;
+    fn WaitNamedPipeW(name: *const u16, timeout_ms: u32) -> i32;
+    fn ProcessIdToSessionId(pid: u32, session: *mut u32) -> i32;
 }
 
 #[link(name = "advapi32")]
@@ -219,16 +237,38 @@ impl ServerPipe {
         }
         // SAFETY: the OwnedHandle is moved into the File, which now owns and closes it.
         let file = unsafe { std::fs::File::from_raw_handle(std::os::windows::io::IntoRawHandle::into_raw_handle(self.handle)) };
-        let reader = std::io::BufReader::new(file);
-        for line in reader.lines() {
-            let Ok(line) = line else { return ServeEnd::HelperGone };
-            // Checked before the relay: once the capture is stopped, nothing more is written.
-            if !wanted() {
-                return ServeEnd::NotWanted;
-            }
-            relay(classify_line(&line));
+        relay_lines(std::io::BufReader::new(file), wanted, relay)
+    }
+}
+
+/// The longest line the app reads from the pipe, newline excluded. A real report is a few KiB; anything
+/// longer ends the read, so a client can never grow the app's memory (review r1 B2).
+pub(crate) const MAX_LINE: usize = 64 * 1024;
+
+/// Read lines (at most [`MAX_LINE`] bytes each) and relay them while `wanted()` holds. `wanted()` is
+/// checked before each relay: once the capture is stopped, nothing more is written. A line that is not
+/// UTF-8 is relayed as junk (which writes nothing); an over-long line ends the read.
+pub(crate) fn relay_lines(mut reader: impl BufRead, wanted: &dyn Fn() -> bool, relay: &mut dyn FnMut(Line)) -> ServeEnd {
+    use std::io::Read;
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match (&mut reader).take(MAX_LINE as u64 + 1).read_until(b'\n', &mut buf) {
+            Ok(0) | Err(_) => return ServeEnd::HelperGone,
+            Ok(_) => {}
         }
-        ServeEnd::HelperGone
+        if buf.last() == Some(&b'\n') {
+            buf.pop();
+        } else if buf.len() > MAX_LINE {
+            return ServeEnd::Overlong;
+        }
+        if !wanted() {
+            return ServeEnd::NotWanted;
+        }
+        match std::str::from_utf8(&buf) {
+            Ok(line) => relay(classify_line(line.trim_end_matches('\r'))),
+            Err(_) => relay(Line::Junk),
+        }
     }
 }
 
@@ -237,6 +277,8 @@ impl ServerPipe {
 pub(crate) enum ServeEnd {
     HelperGone,
     NotWanted,
+    /// A line longer than [`MAX_LINE`]: the read stopped there and the pipe was closed.
+    Overlong,
     Failed,
 }
 
@@ -288,6 +330,9 @@ pub(crate) enum Line {
     Report(String),
     /// The helper could not read the process snapshot this tick; its running count.
     Unreadable(u64),
+    /// The helper's running count of lines it had to drop (its queue was full). The app counts each as
+    /// a tick it could not measure, never as a lost one (review r1, non-blocking).
+    Dropped(u64),
     /// Nothing to report this tick (keeps the pipe busy, so a stop is noticed within a tick).
     Alive,
     /// Anything else: ignored.
@@ -301,15 +346,24 @@ pub(crate) fn unreadable_line(total: u64) -> String {
     format!(r#"{{"unreadable_ticks":{total}}}"#)
 }
 
+/// PURE: the helper's line for its running count of dropped lines.
+pub(crate) fn dropped_line(total: u64) -> String {
+    format!(r#"{{"dropped_lines":{total}}}"#)
+}
+
 /// PURE: what a line is. A report must parse as the FpsReport shape the readers expect (a `pid` and a
-/// `fps` field); the two control lines are matched exactly.
+/// `fps` field); the three control lines are matched exactly.
 pub(crate) fn classify_line(line: &str) -> Line {
     let t = line.trim();
     if t == ALIVE_LINE {
         return Line::Alive;
     }
-    if let Some(n) = t.strip_prefix(r#"{"unreadable_ticks":"#).and_then(|r| r.strip_suffix('}')).and_then(|n| n.parse().ok()) {
+    let count = |prefix: &str| t.strip_prefix(prefix).and_then(|r| r.strip_suffix('}')).and_then(|n| n.parse::<u64>().ok());
+    if let Some(n) = count(r#"{"unreadable_ticks":"#) {
         return Line::Unreadable(n);
+    }
+    if let Some(n) = count(r#"{"dropped_lines":"#) {
+        return Line::Dropped(n);
     }
     match serde_json::from_str::<serde_json::Value>(t) {
         Ok(v) if v.get("pid").is_some_and(|p| p.is_u64()) && v.get("fps").is_some_and(|f| f.is_number()) => Line::Report(t.to_string()),
@@ -317,26 +371,31 @@ pub(crate) fn classify_line(line: &str) -> Line {
     }
 }
 
-/// PURE: the helper side's check of the pipe's server. The server must be the process that started the
-/// helper (`--parent-pid`, which must also be the helper's own parent in the snapshot) and run an image
-/// of the helper's own name. Any unknown is a refusal.
-pub(crate) fn server_is_our_parent(
+/// PURE: the helper side's consistency check of the pipe's server (NOT a security boundary: see the
+/// module doc). The server pid is the `--parent-pid` the helper was given, it runs an image of the
+/// helper's own name, and in the helper's own logon session. Any unknown is a refusal. (Review r1: the
+/// helper no longer also requires its snapshot parent to be `--parent-pid`. That stopped no attacker,
+/// who passes its own pid, and made capture depend on how Windows parents an elevated process.)
+pub(crate) fn server_is_the_app(
     server_pid: Option<u32>,
     parent_arg: u32,
-    own_parent: Option<u32>,
     server_image: Option<&str>,
     own_image: &str,
+    server_session: Option<u32>,
+    own_session: Option<u32>,
 ) -> bool {
-    server_pid == Some(parent_arg)
-        && own_parent == Some(parent_arg)
-        && parent_arg != 0
+    parent_arg != 0
+        && server_pid == Some(parent_arg)
         && server_image.is_some_and(|n| n.eq_ignore_ascii_case(own_image))
+        && own_session.is_some()
+        && server_session == own_session
 }
 
-/// PURE: the app side's check of a connected client: a process the app itself started (its snapshot
-/// parent is the app) running an image of the app's own name.
-pub(crate) fn client_is_our_helper(client_parent: Option<u32>, client_image: Option<&str>, own_pid: u32, own_image: &str) -> bool {
-    client_parent == Some(own_pid) && client_image.is_some_and(|n| n.eq_ignore_ascii_case(own_image))
+/// PURE: the app side's check of a connected client. The client pid is EXACTLY the process this launch
+/// started (`launched`, `None` while the launch has not reported it), and, as a second check, it runs an
+/// image of the app's own name.
+pub(crate) fn client_is_our_helper(client_pid: u32, launched: Option<u32>, client_image: Option<&str>, own_image: &str) -> bool {
+    client_pid != 0 && launched == Some(client_pid) && client_image.is_some_and(|n| n.eq_ignore_ascii_case(own_image))
 }
 
 /// The image file name of the running exe (`compy.exe`).
@@ -344,37 +403,86 @@ pub(crate) fn own_image_name() -> Option<String> {
     std::env::current_exe().ok()?.file_name().map(|n| n.to_string_lossy().into_owned())
 }
 
-/// App side, production: is `pid` a Compy this app started? From one process snapshot; no process opened.
-pub(crate) fn is_our_helper(pid: u32) -> bool {
+/// The pid one launch started, as the launch reports it (0 = not yet). Waits up to `wait` for it: the
+/// helper can connect a moment before its launch has handed the pid over.
+pub(crate) fn launched_pid(launched: &std::sync::atomic::AtomicU32, wait: std::time::Duration) -> Option<u32> {
+    let until = std::time::Instant::now() + wait;
+    loop {
+        let pid = launched.load(std::sync::atomic::Ordering::Acquire);
+        if pid != 0 {
+            return Some(pid);
+        }
+        if std::time::Instant::now() >= until {
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+/// App side, production: is `client_pid` exactly the process this launch started, running Compy's own
+/// image name? The pid from the launch (waited for up to ~2 s), the name from one process snapshot; no
+/// process opened.
+pub(crate) fn is_our_helper(client_pid: u32, launched: &std::sync::atomic::AtomicU32) -> bool {
+    let launched = launched_pid(launched, std::time::Duration::from_secs(2));
+    if launched != Some(client_pid) {
+        return false;
+    }
     let (Some(rows), Some(own)) = (crate::other_load::read_process_rows(), own_image_name()) else {
         return false;
     };
-    let row = crate::other_load::find_row(&rows, pid);
-    client_is_our_helper(row.map(|r| r.parent), row.and_then(|r| r.name.as_deref()), std::process::id(), &own)
+    let image = crate::other_load::find_row(&rows, client_pid).and_then(|r| r.name.as_deref());
+    client_is_our_helper(client_pid, launched, image, &own)
+}
+
+/// The logon session of `pid`, without opening it.
+fn session_of(pid: u32) -> Option<u32> {
+    let mut s = 0u32;
+    // SAFETY: a plain pid and a u32 out-value; no handle is involved.
+    (unsafe { ProcessIdToSessionId(pid, &mut s) } != 0).then_some(s)
+}
+
+const ERROR_PIPE_BUSY: i32 = 231;
+
+/// How long the helper keeps trying a busy pipe before it gives up (review r1 B3).
+const BUSY_PIPE_PATIENCE: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Open the pipe write-only at identification level. A busy pipe (another client holds or is leaving
+/// the single instance) is waited for with `WaitNamedPipeW` and retried, up to [`BUSY_PIPE_PATIENCE`].
+fn open_pipe_for_writing(name: &str) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    let until = std::time::Instant::now() + BUSY_PIPE_PATIENCE;
+    let name_w = wide(name);
+    loop {
+        match std::fs::OpenOptions::new().write(true).security_qos_flags(SECURITY_IDENTIFICATION).open(Path::new(name)) {
+            Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY) && std::time::Instant::now() < until => {
+                // SAFETY: a NUL-terminated name that outlives the call.
+                if unsafe { WaitNamedPipeW(name_w.as_ptr(), 1000) } == 0 {
+                    // The wait itself failed (the instance is between clients): a short pause, never a spin.
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+            }
+            other => return other,
+        }
+    }
 }
 
 /// Helper side: open the app's pipe, after checking its name, for writing, so the server can identify
-/// but never impersonate this (possibly elevated) process, and check the server is the process that
-/// started this helper. `Err` = run nothing, exit.
+/// but never impersonate this (possibly elevated) process, and run the consistency check on the server.
+/// `Err` = run nothing, exit.
 pub(crate) fn connect_to_parent(name: &str, parent_arg: u32) -> Result<std::fs::File, String> {
-    use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::io::AsRawHandle;
     if !is_valid_pipe_name(name) {
         return Err("refused: not a Compy capture pipe name".into());
     }
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .security_qos_flags(SECURITY_IDENTIFICATION)
-        .open(Path::new(name))
-        .map_err(|e| format!("could not open the capture pipe: {e}"))?;
+    let file = open_pipe_for_writing(name).map_err(|e| format!("could not open the capture pipe: {e}"))?;
     let mut server = 0u32;
     // SAFETY: a live pipe handle owned by `file`; a u32 out-value.
     let server_pid = (unsafe { GetNamedPipeServerProcessId(file.as_raw_handle(), &mut server) } != 0).then_some(server);
     let rows = crate::other_load::read_process_rows().ok_or("refused: the process snapshot could not be read")?;
-    let own_parent = crate::other_load::find_row(&rows, std::process::id()).map(|r| r.parent);
     let server_image = server_pid.and_then(|p| crate::other_load::find_row(&rows, p)).and_then(|r| r.name.clone());
     let own = own_image_name().ok_or("refused: own image name unknown")?;
-    if server_is_our_parent(server_pid, parent_arg, own_parent, server_image.as_deref(), &own) {
+    let sessions = (server_pid.and_then(session_of), session_of(std::process::id()));
+    if server_is_the_app(server_pid, parent_arg, server_image.as_deref(), &own, sessions.0, sessions.1) {
         Ok(file)
     } else {
         Err("refused: the capture pipe is not served by the Compy that started this helper".into())
@@ -382,11 +490,13 @@ pub(crate) fn connect_to_parent(name: &str, parent_arg: u32) -> Result<std::fs::
 }
 
 /// Helper side: a writer thread over the pipe, so a stalled reader can never stall the capture loop.
-/// `send` never blocks (a full queue drops that line); `broken()` turns true once a write fails (the app
-/// closed the pipe: stop, exit or crash), which is the helper's signal to exit.
+/// `send` never blocks (a full queue drops that line, and the drop is counted); `broken()` turns true
+/// once a write fails (the app closed the pipe: stop, exit or crash), which is the helper's signal to exit.
 pub(crate) struct PipeWriter {
     tx: std::sync::mpsc::SyncSender<String>,
     broken: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    dropped: std::sync::atomic::AtomicU64,
+    told: std::sync::atomic::AtomicU64,
 }
 
 impl PipeWriter {
@@ -402,12 +512,31 @@ impl PipeWriter {
                 }
             }
         });
-        PipeWriter { tx, broken }
+        PipeWriter { tx, broken, dropped: Default::default(), told: Default::default() }
     }
 
-    /// Queue one line; false when the queue is full or the writer has stopped (the line is dropped).
+    /// Queue one line; false when the queue is full or the writer has stopped (the line is dropped and
+    /// counted).
     pub(crate) fn send(&self, line: String) -> bool {
-        self.tx.try_send(line).is_ok()
+        let sent = self.tx.try_send(line).is_ok();
+        if !sent {
+            self.dropped.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        }
+        sent
+    }
+
+    /// If lines were dropped since the app was last told, queue the running count. A count line that
+    /// does not fit is not itself counted; it is tried again on the next call.
+    pub(crate) fn tell_dropped(&self) {
+        use std::sync::atomic::Ordering;
+        let total = self.dropped.load(Ordering::Acquire);
+        if total > self.told.load(Ordering::Acquire) && self.tx.try_send(dropped_line(total)).is_ok() {
+            self.told.store(total, Ordering::Release);
+        }
+    }
+
+    pub(crate) fn dropped(&self) -> u64 {
+        self.dropped.load(std::sync::atomic::Ordering::Acquire)
     }
 
     pub(crate) fn broken(&self) -> bool {
@@ -452,31 +581,155 @@ mod tests {
         assert_eq!(classify_line(report), Line::Report(report.to_string()));
         assert_eq!(classify_line(ALIVE_LINE), Line::Alive);
         assert_eq!(classify_line(&unreadable_line(7)), Line::Unreadable(7));
-        for junk in ["", "hello", r#"{"pid":"x","fps":1}"#, r#"{"fps":1}"#, r#"{"unreadable_ticks":-1}"#, "[1,2]"] {
+        assert_eq!(classify_line(&dropped_line(3)), Line::Dropped(3));
+        for junk in ["", "hello", r#"{"pid":"x","fps":1}"#, r#"{"fps":1}"#, r#"{"unreadable_ticks":-1}"#, r#"{"dropped_lines":x}"#, "[1,2]"] {
             assert_eq!(classify_line(junk), Line::Junk, "{junk}");
         }
     }
 
+    /// Review r1: a consistency check (server pid, image name, logon session), and the helper's own
+    /// snapshot parent is no longer asked.
     #[test]
-    fn the_helper_accepts_only_the_compy_that_started_it_as_server() {
-        assert!(server_is_our_parent(Some(100), 100, Some(100), Some("compy.exe"), "compy.exe"));
-        assert!(server_is_our_parent(Some(100), 100, Some(100), Some("COMPY.EXE"), "compy.exe"));
-        assert!(!server_is_our_parent(Some(101), 100, Some(100), Some("compy.exe"), "compy.exe"), "a squatter's server");
-        assert!(!server_is_our_parent(Some(100), 100, Some(55), Some("compy.exe"), "compy.exe"), "--parent-pid is not our parent");
-        assert!(!server_is_our_parent(Some(100), 100, Some(100), Some("evil.exe"), "compy.exe"), "another image");
-        assert!(!server_is_our_parent(None, 100, Some(100), Some("compy.exe"), "compy.exe"));
-        assert!(!server_is_our_parent(Some(100), 100, None, Some("compy.exe"), "compy.exe"));
-        assert!(!server_is_our_parent(Some(100), 100, Some(100), None, "compy.exe"));
-        assert!(!server_is_our_parent(Some(0), 0, Some(0), Some("compy.exe"), "compy.exe"));
+    fn the_helper_checks_server_pid_image_and_session_and_not_its_own_parent() {
+        let ok = |pid, arg, img, s_sess, o_sess| server_is_the_app(pid, arg, img, "compy.exe", s_sess, o_sess);
+        assert!(ok(Some(100), 100, Some("compy.exe"), Some(1), Some(1)));
+        assert!(ok(Some(100), 100, Some("COMPY.EXE"), Some(1), Some(1)));
+        assert!(!ok(Some(101), 100, Some("compy.exe"), Some(1), Some(1)), "a server that is not --parent-pid");
+        assert!(!ok(Some(100), 100, Some("evil.exe"), Some(1), Some(1)), "another image");
+        assert!(!ok(Some(100), 100, Some("compy.exe"), Some(2), Some(1)), "another logon session");
+        assert!(!ok(None, 100, Some("compy.exe"), Some(1), Some(1)));
+        assert!(!ok(Some(100), 100, None, Some(1), Some(1)));
+        assert!(!ok(Some(100), 100, Some("compy.exe"), None, Some(1)));
+        assert!(!ok(Some(100), 100, Some("compy.exe"), None, None), "two unknown sessions are not a match");
+        assert!(!ok(Some(0), 0, Some("compy.exe"), Some(1), Some(1)));
+        // The function no longer takes the helper's own parent at all.
+        let src = include_str!("fps_pipe.rs");
+        let f = src.find(concat!("pub(crate) fn server_is_", "the_app(")).unwrap();
+        let sig = &src[f..f + src[f..].find(") -> bool").unwrap()];
+        assert!(!sig.contains("own_parent"), "the helper's snapshot parent is not part of the check");
+    }
+
+    /// Review r1 B5: the client must be EXACTLY the process the launch started; the image name is a
+    /// second check, never enough alone.
+    #[test]
+    fn the_app_accepts_only_the_exact_process_it_launched_as_client() {
+        assert!(client_is_our_helper(7, Some(7), Some("compy.exe"), "compy.exe"));
+        assert!(client_is_our_helper(7, Some(7), Some("Compy.EXE"), "compy.exe"));
+        assert!(!client_is_our_helper(8, Some(7), Some("compy.exe"), "compy.exe"), "a process named compy.exe the app did not launch");
+        assert!(!client_is_our_helper(7, None, Some("compy.exe"), "compy.exe"), "the launch has not reported its pid");
+        assert!(!client_is_our_helper(7, Some(7), Some("evil.exe"), "compy.exe"));
+        assert!(!client_is_our_helper(7, Some(7), None, "compy.exe"));
+        assert!(!client_is_our_helper(0, Some(0), Some("compy.exe"), "compy.exe"));
     }
 
     #[test]
-    fn the_app_accepts_only_a_compy_it_started_as_client() {
-        assert!(client_is_our_helper(Some(7), Some("compy.exe"), 7, "compy.exe"));
-        assert!(!client_is_our_helper(Some(8), Some("compy.exe"), 7, "compy.exe"), "started by someone else");
-        assert!(!client_is_our_helper(Some(7), Some("evil.exe"), 7, "compy.exe"));
-        assert!(!client_is_our_helper(None, Some("compy.exe"), 7, "compy.exe"));
-        assert!(!client_is_our_helper(Some(7), None, 7, "compy.exe"));
+    fn the_launched_pid_is_waited_for_briefly_and_never_invented() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+        let slot = Arc::new(AtomicU32::new(0));
+        let t = std::time::Instant::now();
+        assert_eq!(launched_pid(&slot, std::time::Duration::from_millis(100)), None);
+        assert!(t.elapsed() >= std::time::Duration::from_millis(100), "it waited the whole window");
+        let late = slot.clone();
+        let setter = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            late.store(4242, Ordering::Release);
+        });
+        assert_eq!(launched_pid(&slot, std::time::Duration::from_secs(2)), Some(4242), "a pid set a moment late is seen");
+        setter.join().unwrap();
+        // A client that is not the launched pid is refused before any snapshot is read.
+        assert!(!is_our_helper(4243, &slot));
+    }
+
+    /// Review r1 B2: a line longer than MAX_LINE ends the read; nothing of it is relayed.
+    #[test]
+    fn an_over_long_line_ends_the_read_and_grows_nothing() {
+        let mut input = Vec::new();
+        input.extend_from_slice(ALIVE_LINE.as_bytes());
+        input.push(b'\n');
+        input.resize(input.len() + MAX_LINE + 10, b'x');
+        input.extend_from_slice(b"\n{\"unreadable_ticks\":1}\n");
+        let mut got = Vec::new();
+        let end = relay_lines(std::io::Cursor::new(input), &|| true, &mut |l| got.push(l));
+        assert_eq!(end, ServeEnd::Overlong);
+        assert_eq!(got, vec![Line::Alive], "nothing after the over-long line");
+        // Exactly MAX_LINE bytes before the newline (a CR included) is still a line; a missing final
+        // newline at EOF still counts.
+        let mut fit = vec![b'y'; MAX_LINE - 1];
+        fit.extend_from_slice(b"\r\n");
+        fit.extend_from_slice(unreadable_line(2).as_bytes());
+        let mut got = Vec::new();
+        assert_eq!(relay_lines(std::io::Cursor::new(fit), &|| true, &mut |l| got.push(l)), ServeEnd::HelperGone);
+        assert_eq!(got, vec![Line::Junk, Line::Unreadable(2)]);
+        // Not wanted: nothing is relayed at all.
+        let mut got = Vec::new();
+        let end = relay_lines(std::io::Cursor::new(format!("{ALIVE_LINE}\n")), &|| false, &mut |l| got.push(l));
+        assert_eq!((end, got.len()), (ServeEnd::NotWanted, 0));
+    }
+
+    /// Review r1 B3: a pipe held by another client is waited for, not given up on at once.
+    #[test]
+    fn a_busy_pipe_is_retried_until_the_instance_is_free() {
+        let server = ServerPipe::create().expect("create pipe");
+        let name = server.name.clone();
+        let squat_name = name.clone();
+        let squatter = std::thread::spawn(move || {
+            let f = loop {
+                match std::fs::OpenOptions::new().write(true).open(&squat_name) {
+                    Ok(f) => break f,
+                    Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+                }
+            };
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            drop(f);
+        });
+        // The server lets the squatter go, then listens again, as `serve` does for a client that is not ours.
+        let srv = std::thread::spawn(move || {
+            server.accept().unwrap();
+            squatter.join().unwrap();
+            server.disconnect();
+            server.accept().unwrap();
+            server
+        });
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let t = std::time::Instant::now();
+        let opened = open_pipe_for_writing(&name);
+        assert!(opened.is_ok(), "the busy pipe was retried: {opened:?}");
+        assert!(t.elapsed() < BUSY_PIPE_PATIENCE, "and within the patience window");
+        drop(srv.join().unwrap());
+    }
+
+    /// Dropped lines are counted and the count reaches the app as its own line.
+    #[test]
+    fn dropped_lines_are_counted_and_told() {
+        struct Gate(std::sync::Arc<std::sync::Mutex<Vec<u8>>>, std::sync::Arc<std::sync::Barrier>);
+        impl Write for Gate {
+            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(b);
+                Ok(b.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                self.1.wait(); // hold the writer thread until the test lets it go, once per line
+                Ok(())
+            }
+        }
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let gate = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let w = PipeWriter::start(Gate(seen.clone(), gate.clone()));
+        // One line in the writer (held at flush) + 4 queued; the rest are dropped and counted.
+        let sent = (0..10).filter(|_| w.send(ALIVE_LINE.into())).count();
+        assert!(sent <= 5 && w.dropped() == (10 - sent) as u64, "sent {sent}, dropped {}", w.dropped());
+        let dropped = w.dropped();
+        assert!(dropped >= 5);
+        for _ in 0..sent {
+            gate.wait();
+        }
+        w.tell_dropped();
+        gate.wait();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let text = String::from_utf8(seen.lock().unwrap().clone()).unwrap();
+        assert_eq!(text.lines().last().map(classify_line), Some(Line::Dropped(dropped)), "{text}");
+        assert_eq!(w.dropped(), dropped, "the count line itself was not a drop");
     }
 
     /// A real pipe, in this process: the server relays a client's lines; a client that is not ours is

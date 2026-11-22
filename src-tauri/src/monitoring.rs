@@ -882,16 +882,25 @@ pub(crate) fn shutdown_for_exit() {
     fps_active().store(false, Ordering::Release);
 }
 
-/// One launch's pipe: its name (for the helper's argv) and a flag the launch sets once its helper process
-/// has ended, so a reader still waiting for a client stops waiting.
+/// One launch's pipe: its name (for the helper's argv), the pid the launch started (0 until the launch
+/// reports it), and a flag the launch sets once its helper process has ended, so a reader still waiting
+/// for a client stops waiting.
 struct CapturePipe {
     name: String,
+    launched: std::sync::Arc<std::sync::atomic::AtomicU32>,
     done: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl CapturePipe {
     fn argv(&self) -> [String; 5] {
         helper_argv(&self.name, std::process::id())
+    }
+
+    /// The launch started its helper as `pid` (the `Child`'s id, or the elevated process handle's pid).
+    /// The launch holds that process until it ends, so the pid is not reused meanwhile. Review r1 B5:
+    /// the reader accepts exactly this pid as its client.
+    fn launched_as(&self, pid: u32) {
+        self.launched.store(pid, std::sync::atomic::Ordering::Release);
     }
 
     /// The helper process this pipe was made for has ended: stop the reader if it is still waiting for
@@ -902,34 +911,58 @@ impl CapturePipe {
     }
 }
 
-/// Create a fresh pipe for one helper launch and start its reader thread. The reader accepts only a
-/// Compy this app started (`fps_pipe::is_our_helper`), and while this capture is live and the launch
-/// has not ended, writes each report line to fps.json and each unreadable count to the marker, as the
-/// user (`relay_line`). It ends when the helper closes its end, or at the first line after the capture
-/// stops; dropping the pipe then is what ends the helper.
+/// Create a fresh pipe for one helper launch and start its reader thread. The reader accepts only the
+/// exact process this launch started, running Compy's image name (`fps_pipe::is_our_helper`), and while
+/// this capture is live and the launch has not ended, writes each report line to fps.json and each
+/// count to the marker, as the user (`relay_line`). It ends when the helper closes its end, at an
+/// over-long line, or at the first line after the capture stops; dropping the pipe then is what ends the
+/// helper.
 fn start_capture_pipe(generation: u64) -> Result<CapturePipe, String> {
     use std::sync::atomic::Ordering;
     let pipe = crate::fps_pipe::ServerPipe::create().map_err(|e| format!("could not create the capture pipe: {e}"))?;
     let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let handle = CapturePipe { name: pipe.name.clone(), done: done.clone() };
+    let launched = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let handle = CapturePipe { name: pipe.name.clone(), launched: launched.clone(), done: done.clone() };
     std::thread::spawn(move || {
         let (out, marker) = (fps_out_path(), fps_unreadable_path());
         let wanted = || capture_live(generation) && !done.load(Ordering::Acquire);
-        let _ = pipe.serve(&wanted, &crate::fps_pipe::is_our_helper, &mut |line| relay_line(line, &out, &marker));
+        let client_ok = |pid: u32| crate::fps_pipe::is_our_helper(pid, &launched);
+        let mut counts = RelayCounts::default();
+        let _ = pipe.serve(&wanted, &client_ok, &mut |line| relay_line(line, &mut counts, &out, &marker));
     });
     Ok(handle)
 }
 
-/// PURE-ish: what the app does with one helper line. A report replaces fps.json, an unreadable count
-/// replaces the marker (each written beside itself and renamed over, so a reader never sees half a
-/// file); a keepalive and anything else write nothing. This is exactly what the helper used to write
-/// itself, now written by the app with the user's own rights.
-fn relay_line(line: crate::fps_pipe::Line, out: &std::path::Path, marker: &std::path::Path) {
+/// The two running counts one helper sends: ticks whose snapshot it could not read, and lines its queue
+/// had to drop.
+#[derive(Default, Debug, PartialEq, Eq)]
+struct RelayCounts {
+    unreadable: u64,
+    dropped: u64,
+}
+
+/// What the app does with one helper line. A report replaces fps.json; a count replaces the marker
+/// (each written beside itself and renamed over, so a reader never sees half a file); a keepalive and
+/// anything else write nothing. This is exactly what the helper used to write itself, now written by the
+/// app with the user's own rights.
+///
+/// The marker holds the unreadable count PLUS the dropped-line count (review r1, non-blocking): a tick
+/// whose line was dropped is one Compy could not deliver, so it reads like an unreadable tick ("Compy
+/// couldn't read this second", counted as unmeasured), never as "no frames" and never silently lost.
+/// With nothing dropped the marker is exactly the helper's old count.
+fn relay_line(line: crate::fps_pipe::Line, counts: &mut RelayCounts, out: &std::path::Path, marker: &std::path::Path) {
     use crate::fps_pipe::Line;
     match line {
         Line::Report(json) => write_replacing(out, &json),
-        Line::Unreadable(n) => write_replacing(marker, &n.to_string()),
-        Line::Alive | Line::Junk => {}
+        Line::Unreadable(n) => {
+            counts.unreadable = counts.unreadable.max(n);
+            write_replacing(marker, &(counts.unreadable + counts.dropped).to_string());
+        }
+        Line::Dropped(n) if n > counts.dropped => {
+            counts.dropped = n;
+            write_replacing(marker, &(counts.unreadable + counts.dropped).to_string());
+        }
+        Line::Dropped(_) | Line::Alive | Line::Junk => {}
     }
 }
 
@@ -1149,15 +1182,31 @@ fn superseded_start_answer(capture_on: bool) -> Result<(), String> {
 
 /// PURE: the capture status after the elevated helper's launch ended. A clean exit is "stopped";
 /// `elevate_and_wait`'s own refusal (a target that is not Compy's exe: InvalidInput with no OS error
-/// code) never showed a prompt, so it is a failed launch, never "declined" (a1b review); anything
-/// else keeps today's coarse "declined".
+/// code) never showed a prompt, so it is a failed launch, never "declined" (a1b review). The helper's
+/// own refusals (review r1 B1: exit 2, its arguments were refused; exit 4, it could not confirm the pipe
+/// was Compy's) come AFTER the user approved the prompt, so they are failed launches too, never
+/// "declined". Anything else keeps today's coarse "declined".
 fn elevated_helper_status(res: &std::io::Result<std::process::ExitStatus>) -> String {
     match res {
         Ok(s) if s.success() => "stopped".to_string(),
         Err(e) if e.kind() == std::io::ErrorKind::InvalidInput && e.raw_os_error().is_none() => {
             format!("failed to launch helper: {e}")
         }
+        Ok(s) => match helper_refusal(s.code()) {
+            Some(why) => format!("failed to launch helper: {why}"),
+            None => "declined".to_string(),
+        },
         _ => "declined".to_string(),
+    }
+}
+
+/// PURE: what a helper exit code means when it is one of the helper's own refusals (nothing was
+/// started in either case). `None` for any other code.
+fn helper_refusal(code: Option<i32>) -> Option<&'static str> {
+    match code {
+        Some(crate::fps::EXIT_PIPE_NOT_CONFIRMED) => Some("the capture helper could not confirm it was talking to Compy"),
+        Some(crate::fps::EXIT_REFUSED_ARGS) => Some("the capture helper refused its arguments"),
+        _ => None,
     }
 }
 
@@ -1192,7 +1241,9 @@ fn launch_elevated_helper(exe: std::path::PathBuf, generation: u64) {
     std::thread::spawn(move || {
         use std::ffi::OsStr;
         let argv = pipe.argv();
-        let res = crate::actions::elevate_and_wait(exe.as_os_str(), &argv.each_ref().map(OsStr::new));
+        let res = crate::actions::elevate_and_wait_with(exe.as_os_str(), &argv.each_ref().map(OsStr::new), |pid| {
+            pipe.launched_as(pid)
+        });
         pipe.finished();
         helper_running().store(false, Ordering::Release);
         // Only this capture's flag and status, as the direct-spawn wait above.
@@ -1295,6 +1346,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
             .spawn()
         {
             Ok(mut child) => {
+                pipe.launched_as(child.id());
                 helper_running().store(true, Ordering::Release);
                 *lock_status() = "running".into();
                 support_record(SupportOutcome::Ok, "direct_spawn", "helper started without a UAC prompt (EnableLUA=0)");
@@ -2012,11 +2064,26 @@ fn spawn_plain_helper(exe: &std::path::Path, pipe: &CapturePipe) -> Result<std::
         .map_err(|e| e.to_string())
 }
 
+/// PURE: how a plain helper's exit reads in the support log and the fallback reason. One of the helper's
+/// own refusals says which (review r1 B1), after the exit status.
+fn plain_exit_text(status: &std::io::Result<std::process::ExitStatus>) -> String {
+    match status {
+        Ok(s) => match helper_refusal(s.code()) {
+            Some(why) => format!("{s}: {why}"),
+            None => s.to_string(),
+        },
+        Err(e) => format!("could not observe exit: {e}"),
+    }
+}
+
 /// A pipe and the plain start over it; on a failed start the pipe's reader is stopped at once.
 fn spawn_plain_with_pipe(exe: &std::path::Path, generation: u64) -> Result<(std::process::Child, CapturePipe), String> {
     let pipe = start_capture_pipe(generation)?;
     match spawn_plain_helper(exe, &pipe) {
-        Ok(child) => Ok((child, pipe)),
+        Ok(child) => {
+            pipe.launched_as(child.id());
+            Ok((child, pipe))
+        }
         Err(e) => {
             pipe.finished();
             Err(e)
@@ -2059,10 +2126,7 @@ fn start_plain_or_elevated(exe: std::path::PathBuf, generation: u64) {
         let status = child.wait();
         pipe.finished();
         helper_running().store(false, Ordering::Release);
-        let text = match &status {
-            Ok(s) => s.to_string(),
-            Err(e) => format!("could not observe exit: {e}"),
-        };
+        let text = plain_exit_text(&status);
         let ran_for = started_at.elapsed();
         let fell_back = fall_back_in_order(
             capture_ctl(),
@@ -2377,26 +2441,49 @@ mod runtime_dir_tests {
 #[cfg(test)]
 mod capture_pipe_tests {
     //! Hardening slice 2: the app writes the helper's lines itself, as the user; readers see the same files.
-    use super::{relay_line, write_replacing};
+    use super::{relay_line, write_replacing, RelayCounts};
     use crate::fps_pipe::Line;
 
     #[test]
     fn a_report_line_becomes_fps_json_and_a_count_becomes_the_marker() {
         let s = crate::test_scratch::scratch("relay-line");
         let (out, marker) = (s.join("fps.json"), s.join("fps.json.snapshot-unreadable"));
+        let mut c = RelayCounts::default();
         let report = r#"{"pid":7,"process_name":"g.exe","fps":60.0}"#;
-        relay_line(Line::Report(report.into()), &out, &marker);
+        relay_line(Line::Report(report.into()), &mut c, &out, &marker);
         assert_eq!(std::fs::read_to_string(&out).unwrap(), report, "the exact line, as the helper used to write it");
         assert!(!marker.exists());
-        relay_line(Line::Unreadable(5), &out, &marker);
+        relay_line(Line::Unreadable(5), &mut c, &out, &marker);
         assert_eq!(std::fs::read_to_string(&marker).unwrap(), "5", "the marker's old content: the bare count");
         assert_eq!(super::parse_unreadable_ticks(&std::fs::read_to_string(&marker).unwrap()), Some(5));
-        relay_line(Line::Alive, &out, &marker);
-        relay_line(Line::Junk, &out, &marker);
+        relay_line(Line::Alive, &mut c, &out, &marker);
+        relay_line(Line::Junk, &mut c, &out, &marker);
         assert_eq!(std::fs::read_to_string(&out).unwrap(), report, "a keepalive or junk writes nothing");
         assert_eq!(std::fs::read_to_string(&marker).unwrap(), "5");
         let names: Vec<_> = std::fs::read_dir(&*s).unwrap().map(|e| e.unwrap().file_name()).collect();
         assert_eq!(names.len(), 2, "no .tmp left behind: {names:?}");
+    }
+
+    /// Review r1 (non-blocking): lines the helper had to drop are counted in the marker (a tick Compy
+    /// could not deliver reads as unmeasured, never as "no frames"); a count that did not grow writes
+    /// nothing.
+    #[test]
+    fn dropped_lines_raise_the_marker_count_and_are_never_lost() {
+        let s = crate::test_scratch::scratch("relay-dropped");
+        let (out, marker) = (s.join("fps.json"), s.join("fps.json.snapshot-unreadable"));
+        let read = || std::fs::read_to_string(&marker).unwrap();
+        let mut c = RelayCounts::default();
+        relay_line(Line::Dropped(2), &mut c, &out, &marker);
+        assert_eq!(read(), "2");
+        relay_line(Line::Unreadable(3), &mut c, &out, &marker);
+        assert_eq!(read(), "5", "unreadable plus dropped");
+        std::fs::write(&marker, "sentinel").unwrap();
+        relay_line(Line::Dropped(2), &mut c, &out, &marker);
+        assert_eq!(read(), "sentinel", "a count that did not grow writes nothing");
+        relay_line(Line::Dropped(4), &mut c, &out, &marker);
+        assert_eq!(read(), "7");
+        assert_eq!(c, RelayCounts { unreadable: 3, dropped: 4 });
+        assert!(!out.exists(), "counts never touch fps.json");
     }
 
     #[test]
@@ -2418,9 +2505,12 @@ mod capture_pipe_tests {
             assert!(!src.contains(gone), "{gone} must be gone from the app");
         }
         assert_eq!(src.matches(concat!(".args(pipe", ".argv())")).count(), 2, "UAC-off and plain launches use the pipe argv");
-        assert_eq!(src.matches(concat!("elevate_and_wait(exe.as_os_str(), ", "&argv.each_ref().map(OsStr::new))")).count(), 1);
-        assert_eq!(src.matches(concat!("&crate::fps_pipe::", "is_our_helper")).count(), 1, "the reader checks its client");
+        assert_eq!(src.matches(concat!("elevate_and_wait_with(exe.as_os_str(), ", "&argv.each_ref().map(OsStr::new), |pid| {")).count(), 1);
+        assert_eq!(src.matches(concat!("crate::fps_pipe::", "is_our_helper(pid, &launched)")).count(), 1, "the reader checks its client");
         assert_eq!(src.matches(concat!("pipe.", "finished();")).count(), 5, "every helper end stops its reader");
+        // Review r1 B5: each of the three launches hands its started pid to the pipe.
+        assert_eq!(src.matches(concat!("pipe.launched_", "as(")).count(), 3, "elevated (pid), UAC-off and plain (child.id())");
+        assert_eq!(src.matches(concat!("pipe.launched_", "as(child.id());")).count(), 2);
     }
 }
 
@@ -2862,6 +2952,26 @@ mod elevated_helper_status_tests {
         assert_eq!(elevated_helper_status(&Ok(std::process::ExitStatus::from_raw(1))), "declined");
         assert_eq!(elevated_helper_status(&Ok(std::process::ExitStatus::from_raw(0))), "stopped");
     }
+
+    /// Review r1 B1: the helper's own refusals happen after the user APPROVED the prompt, so they are
+    /// failed launches that say which, never "declined". Both the elevated status and the plain path's
+    /// fallback text read them.
+    #[test]
+    fn the_helpers_own_refusals_are_failed_launches_not_declines() {
+        let pipe = elevated_helper_status(&Ok(std::process::ExitStatus::from_raw(crate::fps::EXIT_PIPE_NOT_CONFIRMED as u32)));
+        assert_eq!(pipe, "failed to launch helper: the capture helper could not confirm it was talking to Compy");
+        let args = elevated_helper_status(&Ok(std::process::ExitStatus::from_raw(crate::fps::EXIT_REFUSED_ARGS as u32)));
+        assert_eq!(args, "failed to launch helper: the capture helper refused its arguments");
+        // Neighbours keep their meaning: 1 (the ETW session failed) and 3 stay "declined" as before.
+        for other in [1u32, 3, 5] {
+            assert_eq!(elevated_helper_status(&Ok(std::process::ExitStatus::from_raw(other))), "declined", "{other}");
+        }
+        let plain = super::plain_exit_text(&Ok(std::process::ExitStatus::from_raw(4)));
+        assert!(plain.ends_with(": the capture helper could not confirm it was talking to Compy"), "{plain}");
+        assert!(super::plain_exit_fallback_reason(&plain, std::time::Duration::from_millis(300), true)
+            .is_some_and(|r| r.contains("could not confirm it was talking to Compy")));
+        assert_eq!(super::plain_exit_text(&Ok(std::process::ExitStatus::from_raw(1))), std::process::ExitStatus::from_raw(1).to_string());
+    }
 }
 
 // D1-S1: starting the capture helper without elevation when the account already allows it. Nothing
@@ -3103,8 +3213,8 @@ mod plain_start_tests {
             Ok(crate::fps::CaptureMode::Pipe { name: pipe.clone(), parent_pid: 4242 })
         );
         let src = include_str!("monitoring.rs");
-        assert_eq!(src.matches(concat!("crate::actions::", "elevate_and_wait(")).count(), 1);
-        let call = src.find(concat!("crate::actions::", "elevate_and_wait(")).unwrap();
+        assert_eq!(src.matches(concat!("crate::actions::", "elevate_and_wait_with(")).count(), 1);
+        let call = src.find(concat!("crate::actions::", "elevate_and_wait_with(")).unwrap();
         let args = &src[call..call + src[call..].find(");").unwrap()];
         assert!(args.contains(concat!("&argv.each_ref()", ".map(OsStr::new)")), "the elevated launch passes the same argv");
         let pre = &src[..call];

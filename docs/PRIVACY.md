@@ -147,9 +147,11 @@ Everything below stays on your PC. The complete list of what the code writes is 
   checked. The signed token inside it carries a **one-way hash of the email address you purchased
   with** — not the address itself — along with the tier name and the issue and expiry dates. Compy
   reads it locally to decide whether Pro features are unlocked; nothing sends it back out.
-- **FPS monitoring working files:** temporary data under `%APPDATA%\Compy\runtime\`
-  (`fps.json`, `fps.alive`) used to pass live capture data between Compy and its local
-  capture helper. `fps.json` contains the name and id of the game process being measured. Local only.
+- **FPS monitoring working files:** temporary data under `%APPDATA%\Compy\runtime\` (`fps.json` and its
+  `fps.json.snapshot-unreadable` marker), which Compy writes itself from the live readings its local capture
+  helper sends over a private pipe that only your account and administrators can open. `fps.json` contains
+  the name and id of the game process being measured. Local only. Older versions also kept an `fps.alive`
+  file there; Compy removes one left behind when a capture starts.
 - **Temporary and leftover files:** while Compy works it writes short-lived files in
   `%APPDATA%\Compy\` (`.tmp` copies beside a file being replaced, the elevated helper's result files and
   one-time launch tickets). They are normally deleted when the operation ends; a crash can leave one

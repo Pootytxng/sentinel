@@ -97,13 +97,14 @@ pub fn run_fps_capture() {
 ///
 /// Boundary-side second lock (defense-in-depth, 2026-07-15): the hex must byte-match the one-time
 /// dispatch ticket minted by `run_elevated_powershell` — the sole dispatch point, where every command
-/// has already passed validation — or NOTHING runs (exit 3). A hypothetical future confused-deputy
+/// has already passed validation — or NOTHING runs (`actions::HELPER_TICKET_REFUSED`, which the parent
+/// reads as "no command ran"; it was exit 3 before hardening slice 2). A hypothetical future confused-deputy
 /// bug handing this entry attacker-influenced hex has no matching ticket and executes zero
 /// PowerShell. The ticket is consumed (deleted) before the command runs, so a dispatch executes at
 /// most once. See `actions::mint_elevation_ticket` / `consume_elevation_ticket`.
 pub fn run_elevated_helper(hex: &str, ticket_path: &str) -> i32 {
     if !actions::consume_elevation_ticket(hex, ticket_path) {
-        return 3;
+        return actions::HELPER_TICKET_REFUSED;
     }
     let Some(bytes) = actions::from_hex(hex) else {
         return 2;
@@ -2344,17 +2345,17 @@ mod safety_tests {
 
     #[test]
     fn elevated_helper_runs_nothing_without_a_matching_ticket() {
-        // Foreign hex with no ticket: exit 3 and ZERO PowerShell executed — proven by a command
+        // Foreign hex with no ticket: HELPER_TICKET_REFUSED and ZERO PowerShell executed — proven by a command
         // whose side effect (a marker file) must not appear.
         let scratch = crate::test_scratch::scratch("boundary-marker");
         let marker = scratch.join("compy-boundary.txt");
         let cmd = format!("Set-Content -Path '{}' -Value x", marker.display());
         let hex = actions::to_hex(cmd.as_bytes());
-        assert_eq!(run_elevated_helper(&hex, r"C:\__compy_qa_missing__\no.ticket"), 3);
-        // A real ticket for OTHER hex in a ticket-shaped place: still exit 3, still nothing run.
+        assert_eq!(run_elevated_helper(&hex, r"C:\__compy_qa_missing__\no.ticket"), actions::HELPER_TICKET_REFUSED);
+        // A real ticket for OTHER hex in a ticket-shaped place: still refused, still nothing run.
         let runtime = crate::test_scratch::scratch_child("boundary-other-ticket", "runtime");
         let other = actions::mint_elevation_ticket_in(&runtime, &actions::to_hex(b"exit 0"), 1).expect("mint");
-        assert_eq!(run_elevated_helper(&hex, &other.to_string_lossy()), 3);
+        assert_eq!(run_elevated_helper(&hex, &other.to_string_lossy()), actions::HELPER_TICKET_REFUSED);
         assert!(other.exists(), "a mismatch leaves the ticket");
         assert!(!marker.exists(), "rejected hex must execute ZERO PowerShell");
     }
@@ -2371,7 +2372,7 @@ mod safety_tests {
         let ticket_s = ticket.to_string_lossy().to_string();
         assert_eq!(run_elevated_helper(&hex, &ticket_s), 0);
         assert!(!ticket.exists(), "the verified dispatch consumes its ticket");
-        assert_eq!(run_elevated_helper(&hex, &ticket_s), 3, "replay must be refused");
+        assert_eq!(run_elevated_helper(&hex, &ticket_s), actions::HELPER_TICKET_REFUSED, "replay must be refused");
     }
 
     // §C build stamp: the format is the contract both surfaces (About + dev title) render.
@@ -2771,6 +2772,24 @@ mod elevated_helper_tests {
         assert_eq!(helper_exit_code(Started::Ran(Ok(std::process::ExitStatus::from_raw(1)))), 1);
         let ran_failed = elevation_outcome(Ok(std::process::ExitStatus::from_raw(1))).unwrap_err();
         assert!(!elevation_error_nothing_ran(&ran_failed), "{ran_failed}");
+    }
+
+    /// Hardening slice 2 (review r1): a refused ticket is its own exit code, read as "no command ran",
+    /// never "approved, but the operation failed". The match is exact.
+    #[test]
+    fn a_refused_ticket_reads_as_nothing_ran() {
+        use crate::actions::{HELPER_TICKET_REFUSED, HELPER_TICKET_REFUSED_MSG};
+        use std::os::windows::process::ExitStatusExt;
+        let err = elevation_outcome(Ok(std::process::ExitStatus::from_raw(HELPER_TICKET_REFUSED as u32))).unwrap_err();
+        assert_eq!(err, HELPER_TICKET_REFUSED_MSG);
+        assert!(!err.contains("You approved the elevation"), "{err}");
+        assert!(elevation_error_nothing_ran(&err));
+        assert!(!elevation_error_nothing_ran(&format!("{err} (extra)")), "near miss");
+        assert!(!elevation_error_nothing_ran(&err[..err.len() - 1]), "near miss");
+        assert_ne!(HELPER_TICKET_REFUSED, HELPER_POWERSHELL_NOT_STARTED);
+        // The old code 3 is now an ordinary failure again (nothing in the helper returns it).
+        let three = elevation_outcome(Ok(std::process::ExitStatus::from_raw(3))).unwrap_err();
+        assert!(!elevation_error_nothing_ran(&three), "{three}");
     }
 
     /// a1b review B1: PowerShell STARTED and then its wait failed. The script may have changed

@@ -549,6 +549,21 @@ impl Sink {
     fn closed(&self) -> bool {
         matches!(self, Sink::Pipe(w) if w.broken())
     }
+
+    /// Tell the app the running count of lines the queue had to drop, if it grew (the app counts them
+    /// as ticks it could not measure, never as frames lost silently).
+    fn tell_dropped(&self) {
+        if let Sink::Pipe(w) = self {
+            w.tell_dropped();
+        }
+    }
+
+    fn dropped(&self) -> u64 {
+        match self {
+            Sink::Pipe(w) => w.dropped(),
+            Sink::Console => 0,
+        }
+    }
 }
 
 /// What one tick's identity step produced. `skipped` = the snapshot was unreadable: nothing was
@@ -617,6 +632,22 @@ pub(crate) enum CaptureMode {
     Console,
     /// `--pipe <name> --parent-pid <pid>`: send lines to the app's pipe; exit when it closes.
     Pipe { name: String, parent_pid: u32 },
+}
+
+/// The helper's exit code for refused arguments (old file flags, a malformed pipe or pid, or console
+/// mode in a release build). Nothing was started. monitoring.rs `elevated_helper_status` reads it.
+pub(crate) const EXIT_REFUSED_ARGS: i32 = 2;
+/// The helper's exit code when the pipe could not be opened or its server failed the consistency check.
+/// Nothing was started. monitoring.rs `elevated_helper_status` reads it.
+pub(crate) const EXIT_PIPE_NOT_CONFIRMED: i32 = 4;
+
+/// PURE: console mode (no `--pipe`: an elevated capture with no way to be told to stop) is for a
+/// developer at a console, so a release build refuses it (review r1, non-blocking).
+pub(crate) fn mode_allowed(mode: CaptureMode, debug_build: bool) -> Result<CaptureMode, &'static str> {
+    match mode {
+        CaptureMode::Console if !debug_build => Err("refused: console mode is for debug builds; the app passes --pipe"),
+        m => Ok(m),
+    }
 }
 
 /// PURE: parse the capture args. Hardening slice 2: the helper takes no path. `--fps-out` and
@@ -807,17 +838,17 @@ pub fn run_capture() {
     // the logman stop). A refused argv exits 2, a pipe that is not the starting Compy's exits 4; in
     // both cases nothing was written and nothing was started.
     let args: Vec<String> = std::env::args().collect();
-    let sink = match parse_capture_args(&args) {
+    let sink = match parse_capture_args(&args).and_then(|m| mode_allowed(m, cfg!(debug_assertions))) {
         Err(why) => {
             eprintln!("[compy-fps] {why}");
-            std::process::exit(2);
+            std::process::exit(EXIT_REFUSED_ARGS);
         }
         Ok(CaptureMode::Console) => Sink::Console,
         Ok(CaptureMode::Pipe { name, parent_pid }) => match crate::fps_pipe::connect_to_parent(&name, parent_pid) {
             Ok(pipe) => Sink::Pipe(crate::fps_pipe::PipeWriter::start(pipe)),
             Err(why) => {
                 eprintln!("[compy-fps] {why}");
-                std::process::exit(4);
+                std::process::exit(EXIT_PIPE_NOT_CONFIRMED);
             }
         },
     };
@@ -895,12 +926,13 @@ pub fn run_capture() {
         // A non-elevated parent can't kill us, so this is how the elevated helper shuts down cleanly.
         // The pipe replaced the old heartbeat file: the helper watches no file.
         if sink.closed() {
-            eprintln!("[compy-fps] the app closed the capture pipe - exiting.");
+            eprintln!("[compy-fps] the app closed the capture pipe - exiting ({} lines dropped).", sink.dropped());
             break;
         }
         if !std::mem::replace(&mut sent, false) {
             sink.alive();
         }
+        sink.tell_dropped();
 
         let Ok(mut map) = state.lock() else {
             continue;
@@ -1609,7 +1641,7 @@ mod handle_free_identity_tests {
     //! The attached game's identity comes from snapshot rows (pid + image name + creation time), with no
     //! process opened. These drive `identity_step` (the function the capture loop calls) over synthetic rows.
     use super::{
-        identity_step, note_unreadable_tick, parse_capture_args, select_game_presenter, track_created, Attachment,
+        identity_step, mode_allowed, note_unreadable_tick, parse_capture_args, select_game_presenter, track_created, Attachment,
         CaptureMode, FpsReport, IdentityStep, PresenterCandidate, Sink, UnreadableTicks, WindowEvidence,
         ATTACH_STREAK_TICKS,
     };
@@ -1830,6 +1862,22 @@ mod handle_free_identity_tests {
         ] {
             assert!(parse_capture_args(&bad).is_err(), "{bad:?}");
         }
+    }
+
+    /// Review r1: console mode (an elevated capture nobody can stop) only in a debug build; the pipe mode
+    /// in both. The two refusal exit codes are distinct and are the ones the app reads.
+    #[test]
+    fn console_mode_is_refused_in_a_release_build() {
+        let pipe = CaptureMode::Pipe { name: crate::fps_pipe::pipe_name_from([2; 16]), parent_pid: 9 };
+        assert_eq!(mode_allowed(CaptureMode::Console, true), Ok(CaptureMode::Console));
+        assert!(mode_allowed(CaptureMode::Console, false).is_err());
+        assert!(mode_allowed(pipe, false).is_ok());
+        assert_ne!(super::EXIT_REFUSED_ARGS, super::EXIT_PIPE_NOT_CONFIRMED);
+        assert_eq!((super::EXIT_REFUSED_ARGS, super::EXIT_PIPE_NOT_CONFIRMED), (2, 4));
+        let src = include_str!("fps.rs");
+        let f = src.find(concat!("pub fn run_", "capture()")).unwrap();
+        let head = &src[f..f + src[f..].find(concat!("let freq = ", "perf_frequency()")).unwrap()];
+        assert!(head.contains(concat!("mode_allowed(m, cfg!(", "debug_assertions))")), "run_capture applies the release refusal");
     }
 
     /// Source guard: the helper's production code opens, writes, renames, removes and stats no file.
