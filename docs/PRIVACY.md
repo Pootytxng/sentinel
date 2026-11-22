@@ -281,7 +281,9 @@ going on to the clear by itself. It also refuses while the change history can't 
 was set aside, while a Trial or Gaming Mode may still have a change on, or for the same reasons as "Clear play
 history". Before the first file goes it writes a small record (`clear-intent.json`) of exactly which files you
 confirmed. If Compy is closed part way, its next start makes one attempt to finish: it deletes only files on
-that record that have not changed since, and otherwise stops and asks you to confirm again. If that record
+that record that have not changed since, and otherwise stops and asks you to confirm again. If the only files
+left are ones saved after that clear began, it counts the clear as finished, keeps those files and says: "Files
+saved after that clear began were kept." If that record
 can't be read, Compy deletes nothing and "Clear everything" stays unavailable until you close Compy, delete
 `clear-intent.json` from `%APPDATA%\Compy` and open Compy again.
 It never removes the `%APPDATA%\Compy` folder itself, so an older `%APPDATA%\Sentinel` folder is not copied back
