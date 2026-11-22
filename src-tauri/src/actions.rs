@@ -2815,19 +2815,19 @@ pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
     let Some((path, name)) = resolved_task_target(task) else {
         return "Unknown".into();
     };
-    match quiet_command(SysTool::PowerShell)
-        .args([
-            "-NoProfile",
-            "-Command",
-            &format!("(Get-ScheduledTask -TaskPath '{}' -TaskName '{}').State", path, name),
-        ])
-        .output()
-    {
-        Ok(o) => {
+    let mut cmd = quiet_command(SysTool::PowerShell);
+    cmd.args([
+        "-NoProfile",
+        "-Command",
+        &format!("(Get-ScheduledTask -TaskPath '{}' -TaskName '{}').State", path, name),
+    ]);
+    // D1e: bounded; a query that doesn't answer in time reads "Unknown", like one that failed.
+    match output_within(cmd, QUERY_READ_LIMIT) {
+        Some(o) => {
             let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if s.is_empty() { "Unknown".into() } else { s }
         }
-        Err(_) => "Unknown".into(),
+        None => "Unknown".into(),
     }
 }
 
@@ -2835,7 +2835,8 @@ pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
 /// allowlisted task path. The ledger's live re-check (#620) reads it once per History / Health pass and
 /// shares it across rows, so those UI-thread reads cost one spawn however many task rows there are.
 /// Paths are FIXED enum constants, guarded by ps_safe_squoted, inside '...'; each row echoes the loop's
-/// own path, so it compares exactly. None only when PowerShell can't be started.
+/// own path, so it compares exactly. None only when PowerShell can't be started or doesn't answer
+/// within [`QUERY_READ_LIMIT`].
 pub(crate) fn known_task_listing() -> Option<String> {
     let mut paths: Vec<&str> =
         [KnownBloatTask::CompatibilityAppraiser, KnownBloatTask::CeipConsolidator, KnownBloatTask::CeipUsb]
@@ -2848,18 +2849,18 @@ pub(crate) fn known_task_listing() -> Option<String> {
         return None;
     }
     let quoted: Vec<String> = paths.iter().map(|p| format!("'{p}'")).collect();
-    let out = quiet_command(SysTool::PowerShell)
-        .args([
-            "-NoProfile",
-            "-Command",
-            &format!(
-                "foreach ($p in {}) {{ Get-ScheduledTask -TaskPath $p -ErrorAction SilentlyContinue | \
-                 ForEach-Object {{ $p + [char]9 + $_.TaskName + [char]9 + $_.State }} }}",
-                quoted.join(",")
-            ),
-        ])
-        .output()
-        .ok()?;
+    let mut cmd = quiet_command(SysTool::PowerShell);
+    cmd.args([
+        "-NoProfile",
+        "-Command",
+        &format!(
+            "foreach ($p in {}) {{ Get-ScheduledTask -TaskPath $p -ErrorAction SilentlyContinue | \
+             ForEach-Object {{ $p + [char]9 + $_.TaskName + [char]9 + $_.State }} }}",
+            quoted.join(",")
+        ),
+    ]);
+    // D1e: bounded; a listing that doesn't answer in time is None, like one that can't start.
+    let out = output_within(cmd, QUERY_READ_LIMIT)?;
     // Like `resolve_task_name`, the exit code is not the read: a path that fails prints no row, and
     // its tasks then answer None.
     Some(String::from_utf8_lossy(&out.stdout).into_owned())
@@ -2992,21 +2993,27 @@ pub(crate) fn installed_preload_app(
     // package_name is a FIXED enum constant; guard anyway before interpolation (defense in depth).
     let name = app.package_name();
     ps_safe(name)?;
-    let out = quiet_command(SysTool::PowerShell)
-        .args([
-            "-NoProfile",
-            "-Command",
-            // Always emits exactly ONE JSON object ('{}' when absent), so stray host output or a
-            // short read is DETECTED as a parse failure (Err) instead of silently shifting a
-            // positional parse or reading as "not installed".
-            &format!(
-                "$p = Get-AppxPackage -Name '{}' | Select-Object -First 1; \
-                 if ($p) {{ @{{ full = \"$($p.PackageFullName)\"; family = \"$($p.PackageFamilyName)\"; version = \"$($p.Version)\" }} | ConvertTo-Json -Compress }} else {{ '{{}}' }}",
-                name
-            ),
-        ])
-        .output()
-        .map_err(|e| format!("couldn't read the app's install state: {e}"))?;
+    let mut cmd = quiet_command(SysTool::PowerShell);
+    cmd.args([
+        "-NoProfile",
+        "-Command",
+        // Always emits exactly ONE JSON object ('{}' when absent), so stray host output or a
+        // short read is DETECTED as a parse failure (Err) instead of silently shifting a
+        // positional parse or reading as "not installed".
+        &format!(
+            "$p = Get-AppxPackage -Name '{}' | Select-Object -First 1; \
+             if ($p) {{ @{{ full = \"$($p.PackageFullName)\"; family = \"$($p.PackageFamilyName)\"; version = \"$($p.Version)\" }} | ConvertTo-Json -Compress }} else {{ '{{}}' }}",
+            name
+        ),
+    ]);
+    // D1e: bounded. A probe that can't start or doesn't answer in time is Err (unknown state), never
+    // "not installed".
+    let out = output_within(cmd, QUERY_READ_LIMIT).ok_or_else(|| {
+        format!(
+            "couldn't read the app's install state: PowerShell could not be started or did not answer within {} seconds",
+            QUERY_READ_LIMIT.as_secs()
+        )
+    })?;
     if !out.status.success() {
         return Err(format!(
             "couldn't read the app's install state: {}",
@@ -3054,17 +3061,14 @@ pub(crate) fn installed_preload_ids() -> Vec<&'static str> {
     if safe_names.is_empty() {
         return Vec::new();
     }
-    let Ok(out) = quiet_command(SysTool::PowerShell)
-        .args([
-            "-NoProfile",
-            "-Command",
-            &format!(
-                "foreach ($n in @({})) {{ if (Get-AppxPackage -Name $n) {{ $n }} }}",
-                safe_names.join(",")
-            ),
-        ])
-        .output()
-    else {
+    let mut cmd = quiet_command(SysTool::PowerShell);
+    cmd.args([
+        "-NoProfile",
+        "-Command",
+        &format!("foreach ($n in @({})) {{ if (Get-AppxPackage -Name $n) {{ $n }} }}", safe_names.join(",")),
+    ]);
+    // D1e: bounded; a listing that doesn't answer in time shows nothing, like one that fails.
+    let Some(out) = output_within(cmd, QUERY_READ_LIMIT) else {
         return Vec::new();
     };
     let text = String::from_utf8_lossy(&out.stdout).to_string();
@@ -3726,12 +3730,12 @@ pub(crate) fn parse_powercfg_ac_dc_index(text: &str) -> (Option<u32>, Option<u32
 
 // Returns (ac_value, dc_value) by parsing `powercfg /query SCHEME_CURRENT
 // <subgroup> <setting>`. Returns None if the call fails or the AC index can't
-// be parsed (DC is best-effort, defaulting to 0).
+// be parsed (DC is best-effort, defaulting to 0). D1e: also None when powercfg doesn't answer
+// within POWERCFG_READ_LIMIT (it is ended, never waited on forever).
 pub(crate) fn query_power_setting_ac_dc(subgroup: &str, setting: &str) -> Option<(u32, u32)> {
-    let output = quiet_command(SysTool::Powercfg)
-        .args(["/query", "SCHEME_CURRENT", subgroup, setting])
-        .output()
-        .ok()?;
+    let mut cmd = quiet_command(SysTool::Powercfg);
+    cmd.args(["/query", "SCHEME_CURRENT", subgroup, setting]);
+    let output = output_within(cmd, POWERCFG_READ_LIMIT)?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let (ac_value, dc_value) = parse_powercfg_ac_dc_index(&stdout);
     Some((ac_value?, dc_value.unwrap_or(0)))
@@ -3923,8 +3927,11 @@ pub(crate) fn select_best_existing_high_perf_plan(list_stdout: &str) -> Option<S
     high
 }
 
+/// D1e: bounded; None when powercfg can't start or doesn't answer within POWERCFG_READ_LIMIT.
 fn list_power_plans_stdout() -> Option<String> {
-    let out = quiet_command(SysTool::Powercfg).args(["/list"]).output().ok()?;
+    let mut cmd = quiet_command(SysTool::Powercfg);
+    cmd.args(["/list"]);
+    let out = output_within(cmd, POWERCFG_READ_LIMIT)?;
     Some(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
@@ -4233,6 +4240,12 @@ fn power_plan_queried(guid: &str) -> Option<bool> {
 /// receipt reads (sonnet SHOULD-FIX: the plan check makes up to four reads in a row).
 pub(crate) const POWERCFG_READ_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// D1e: how long a read-only PowerShell or netsh query (task state, app install state, TCP settings)
+/// may take. One that doesn't answer in time is ended and reads as "couldn't read", never as a value,
+/// so a hung query can no longer hold its caller forever. Generous because PowerShell itself can take
+/// several seconds to start on a busy PC.
+pub(crate) const QUERY_READ_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// A command's output, or `None` when it couldn't start, its output couldn't be read, or it didn't
 /// finish within `limit` (then it is killed and waited on, never left running). On a timeout the
 /// two pipe readers are left to end on their own once the pipes close; a program that started a
@@ -4309,6 +4322,50 @@ mod output_within_tests {
     use super::{output_within, quiet_command};
     use crate::sys_exe::SysTool;
     use std::time::{Duration, Instant};
+
+    // D1e: the read-only queries are bounded. Each of these functions reads Windows without changing it,
+    // so it runs its command through output_within (ended at a limit, "couldn't read" on timeout) and
+    // never through an unbounded `.output()`. The apply/rollback commands (apply_remove_preload_app,
+    // rollback_reinstall_preload_app_typed, powercfg_setactive_unelevated) are deliberately NOT here,
+    // and two reads are left unbounded on purpose because their "couldn't read" answer would become a
+    // false claim (resolve_task_name: "not found on this system"; resolve_eee: "no eligible adapter").
+    #[test]
+    fn the_read_only_queries_run_through_output_within_never_an_unbounded_output() {
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        fn body<'a>(src: &'a str, name: &str) -> &'a str {
+            let head = format!("fn {name}(");
+            let at = src.find(&head).unwrap_or_else(|| panic!("{name} not found"));
+            let open = at + src[at..].find('{').expect("a body");
+            let mut depth = 0usize;
+            for (i, c) in src[open..].char_indices() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return &src[open..open + i + 1];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            panic!("{name}: unbalanced body")
+        }
+        for name in [
+            "scheduled_task_state",
+            "known_task_listing",
+            "installed_preload_app",
+            "installed_preload_ids",
+            "query_power_setting_ac_dc",
+            "list_power_plans_stdout",
+            "read_core_parking_priors",
+            "read_tcp_autotuning_disabled",
+        ] {
+            let b = body(&src, name);
+            assert!(b.contains("output_within("), "{name} reads through output_within");
+            assert!(!b.contains(".output()"), "{name} must not wait on a child with no limit");
+        }
+    }
 
     // Hardening slice 1: the shared probe constructor never hands std a bare name (std would search
     // the app's own, user-writable directory first).
@@ -5322,10 +5379,12 @@ fn read_mpo_prior() -> Result<Option<u32>, String> {
 /// Parse `powercfg /q SCHEME_CURRENT SUB_PROCESSOR CPMINCORES` for the AC + DC index values.
 /// Reuses the shared `parse_powercfg_ac_dc_index` so this and the USB/PCIe reader can't drift.
 fn read_core_parking_priors() -> Result<(Option<u32>, Option<u32>), String> {
-    let out = quiet_command(SysTool::Powercfg)
-        .args(["/q", "SCHEME_CURRENT", "SUB_PROCESSOR", "CPMINCORES"])
-        .output()
-        .map_err(|e| format!("cannot read core parking: {e}"))?;
+    let mut cmd = quiet_command(SysTool::Powercfg);
+    cmd.args(["/q", "SCHEME_CURRENT", "SUB_PROCESSOR", "CPMINCORES"]);
+    // D1e: bounded; a read that doesn't answer in time refuses, like one that can't start.
+    let out = output_within(cmd, POWERCFG_READ_LIMIT).ok_or_else(|| {
+        format!("cannot read core parking: powercfg could not be started or did not answer within {} seconds", POWERCFG_READ_LIMIT.as_secs())
+    })?;
     if !out.status.success() {
         return Err("powercfg core-parking query failed".to_string());
     }
@@ -5339,10 +5398,12 @@ fn read_core_parking_priors() -> Result<(Option<u32>, Option<u32>), String> {
 }
 
 fn read_tcp_autotuning_disabled() -> Result<bool, String> {
-    let out = quiet_command(SysTool::Netsh)
-        .args(["int", "tcp", "show", "global"])
-        .output()
-        .map_err(|e| format!("cannot read TCP global: {e}"))?;
+    let mut cmd = quiet_command(SysTool::Netsh);
+    cmd.args(["int", "tcp", "show", "global"]);
+    // D1e: bounded; a read that doesn't answer in time refuses, like one that can't start.
+    let out = output_within(cmd, QUERY_READ_LIMIT).ok_or_else(|| {
+        format!("cannot read TCP global: netsh could not be started or did not answer within {} seconds", QUERY_READ_LIMIT.as_secs())
+    })?;
     if !out.status.success() {
         return Err("netsh TCP query failed".to_string());
     }
