@@ -45,7 +45,14 @@ const invoke = (scenario, sourcePath) => {
 // D1e: every folder `write` makes is removed when the file's tests end (they used to stay in %TEMP%).
 const made = [];
 afterAll(() => {
-  for (const dir of made) rmSync(dir, { recursive: true, force: true });
+  for (const dir of made) {
+    // `force` does not swallow EBUSY/EPERM on Windows: a failed cleanup must not turn the gate red.
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch {
+      /* left in the temp folder */
+    }
+  }
 });
 
 const write = (text, label) => {
