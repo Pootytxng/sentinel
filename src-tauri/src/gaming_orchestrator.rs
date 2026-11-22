@@ -644,6 +644,16 @@ fn resolve_tier_elevation(
     }
 }
 
+/// Delete the elevated tier's receipts file before the elevation. `Ok` when it is gone (deleted, or it
+/// was never there); any other failure is an `Err`, and the caller must not elevate (A3a).
+fn clear_receipts_before_elevation(receipts_path: &std::path::Path) -> Result<(), String> {
+    match std::fs::remove_file(receipts_path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("the receipts file could not be cleared before the elevated step: {e}")),
+    }
+}
+
 /// Apply the advanced (elevated) tier under ONE UAC prompt. Phase 1: every item runs with the
 /// elevation-deferral sink armed — it reads + snapshots and parks its elevated command (no
 /// mutation). Phase 2: the parked commands run under a single elevation with per-item file
@@ -724,7 +734,10 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
     if let Some(dir) = receipts_path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    let _ = std::fs::remove_file(&receipts_path);
+    // A3a (a2b review): the receipts file must really be gone before the elevation, so every receipt
+    // read afterwards is this run's. A failed delete (other than "not there") refuses to elevate,
+    // before any staged entry is recorded: the caller's abort-restore then undoes only the core.
+    clear_receipts_before_elevation(&receipts_path)?;
     let script = actions::compose_batch_script(&script_items, &receipts_path.to_string_lossy())?;
 
     // Crash-safe fail-safe ordering: the contract carries every staged change BEFORE the one
@@ -2097,6 +2110,34 @@ mod elevation_batch_tests {
         assert_eq!(elevation_dispatch_count(), 0, "no advanced picks → zero prompts");
         assert!(file.changes.is_empty());
         assert!(load_session().is_none(), "an empty tier must not even write the contract");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A3a (a2b review): the receipts file is really cleared before the elevation, or Compy refuses
+    /// to elevate. Gone or never there: Ok. A delete that fails for another reason (here: the name is
+    /// a folder): Err, and apply_elevated_tier returns before recording or elevating anything.
+    #[test]
+    fn a_receipts_file_that_cannot_be_cleared_refuses_the_elevation() {
+        let dir = std::env::temp_dir().join(format!("compy-a3a-receipts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("gaming-elevation-x.receipts");
+        assert_eq!(clear_receipts_before_elevation(&file), Ok(()), "never there");
+        std::fs::write(&file, "adv-usb:ok\n").unwrap();
+        assert_eq!(clear_receipts_before_elevation(&file), Ok(()), "deleted");
+        assert!(!file.exists(), "a stale receipt must be gone before the elevation");
+        let blocked = dir.join("blocked.receipts");
+        std::fs::create_dir_all(&blocked).unwrap(); // remove_file on a folder fails, and not NotFound
+        let err = clear_receipts_before_elevation(&blocked).expect_err("must refuse");
+        assert!(err.contains("could not be cleared before the elevated step"), "{err}");
+        // Wired before the staged entries are recorded and before the one elevation.
+        let src = include_str!("gaming_orchestrator.rs").replace("\r\n", "\n");
+        let f = src.find("fn apply_elevated_tier(").unwrap();
+        let body = &src[f..f + src[f..].find("\n}\n").unwrap()];
+        let clear = body.find("clear_receipts_before_elevation(&receipts_path)?;").expect("wired with ?");
+        assert!(clear < body.find("file.changes.push(SessionChange").unwrap(), "cleared before recording");
+        assert!(clear < body.find("actions::run_elevated_powershell(&script)").unwrap(), "cleared before elevating");
+        assert!(!body.contains("let _ = std::fs::remove_file(&receipts_path);\n    let script"), "the ignored delete is back");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
