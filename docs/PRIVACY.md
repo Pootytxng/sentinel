@@ -236,8 +236,30 @@ fresh, empty ledger. The support record can be cleared or deleted at any time an
 new empty one; the only consequence is that if you later ask for help with something that already went
 wrong, there is no record of it left to show — so clear it *after* a support conversation, not before.
 
-Settings, Your data, "Clear play history" deletes the play history it lists on screen after you confirm, and keeps
-the Trust Ledger so every change can still be undone; there is no in-app way yet to delete everything. To remove its data by hand, close Compy and delete the files
+**Clearing play history in the app.** Settings, Your data, "Clear play history" first lists every file it would
+delete, with counts and sizes, what it keeps and why, and any file in the folder that Compy did not create (Compy
+never deletes those). Nothing is deleted until you tick "I understand" and press "Delete play history", and if any
+listed file changed since the list was made, nothing is deleted and the list is shown again. It deletes the play
+sessions, the Trial results (kept while a change is still applied or the change history can't be read, because
+they are linked to it), the benchmark baseline, the scoreboard and the noise readings, before-and-after
+comparisons, the notes on which checks were last as expected, the crash and freeze notes, the last-seen hardware
+and the hardware, driver and Windows history, their damaged copies (except a damaged copy of the Trial records,
+which is kept) and their working files more than an hour old, and the play-history notes the window keeps in its
+own storage. It does not touch the Trust Ledger (`history.json` and its backup), so every change Compy made can
+still be undone, and it keeps the support record, saved reports, dismissed items, your sharing choice, your
+licence, downloaded rule files, Gaming Mode files and files an admin helper left behind. Saved reports can hold
+session data and the names of programs you ran; delete them yourself if you want them gone. It refuses, and
+deletes nothing, while a game is being measured, a session is still being saved, a Trial or benchmark trial is
+running, the Trial records can't be read, Gaming Mode holds changes or left a working file behind, or Compy is not
+using its normal data folder. If a Trial has started, or a change has been applied, by the time it reaches the
+Trial records, it stops there and keeps them.
+Compy deletes the files directly, with no backup and not to the Recycle Bin. Afterwards the screen lists each
+file as deleted, already gone, could not be deleted, or not tried, and it says "Deleted" only when every listed
+file is gone. Compy reads crash notes from Windows' own logs, so recent crashes may be noted again at its next
+check.
+
+There is no in-app way yet to delete everything (the Trust Ledger, the support record, saved reports and your
+choices). To remove its data by hand, close Compy and delete the files
 above. Deleting the whole `%APPDATA%\Compy` folder removes what Compy stored there, with one catch: if
 an older `%APPDATA%\Sentinel` folder exists, Compy copies it back in at its next start, so delete that
 folder as well. The window's storage under `%LOCALAPPDATA%\gg.compy.app\` and the window-state file are
