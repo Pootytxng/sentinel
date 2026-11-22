@@ -1829,7 +1829,7 @@ pub(crate) fn open_export_folder() -> Result<(), String> {
     let dir = compy_data_dir().join("exports");
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not open the export folder: {e}"))?;
     // Reveal the folder in Explorer — read-only, no elevation, no UAC.
-    std::process::Command::new("explorer")
+    crate::sys_exe::sys_command(crate::sys_exe::SysTool::Explorer)
         .arg(dir.as_os_str())
         .spawn()
         .map_err(|e| format!("could not open folder: {e}"))?;

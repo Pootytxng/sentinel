@@ -2921,7 +2921,7 @@ pub(crate) fn reveal_ledger_folder() -> Result<(), String> {
         // A first run that never wrote a ledger still has a folder to show.
         std::fs::create_dir_all(dir).map_err(|e| format!("could not open the Compy folder: {e}"))?;
     }
-    std::process::Command::new("explorer")
+    crate::sys_exe::sys_command(crate::sys_exe::SysTool::Explorer)
         .arg(ledger_reveal_arg(&path))
         .spawn()
         .map_err(|e| format!("could not open the folder: {e}"))?;

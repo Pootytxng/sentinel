@@ -19,6 +19,7 @@ use winreg::RegKey;
 use wmi::{COMLibrary, WMIConnection};
 
 use crate::history::AppliedChange;
+use crate::sys_exe::SysTool;
 // State probes stay in lib (least-wrong place until a cleaner seam); some
 // apply_* fns read them to snapshot prior state before mutating.
 use crate::{fast_startup_state_checked, hags_state_checked, reserved_storage_enabled_checked};
@@ -26,12 +27,11 @@ use crate::{fast_startup_state_checked, hags_state_checked, reserved_storage_ena
 /// Build a `Command` that never flashes a console window. EVERY non-elevated CLI probe (powercfg,
 /// sc, logman, powershell) MUST use this — without `CREATE_NO_WINDOW`, Windows briefly pops a
 /// console per spawn, which on launch reads as the terminal rapidly flashing open and closed.
-pub(crate) fn quiet_command(program: &str) -> Command {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let mut c = Command::new(program);
-    c.creation_flags(CREATE_NO_WINDOW);
-    c
+///
+/// The program is a [`SysTool`], never a string: it is run from its absolute path in the real system
+/// directory (see `sys_exe`), so a file planted beside `compy.exe` can never be what starts.
+pub(crate) fn quiet_command(tool: SysTool) -> Command {
+    crate::sys_exe::sys_command(tool)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -1149,7 +1149,7 @@ pub(crate) fn elevate_and_wait(
     };
     use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
     use windows::Win32::UI::Shell::{
-        ShellExecuteExW, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS,
+        ShellExecuteExW, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, // spawn-allow: the one UAC runas launch (elevate_and_wait)
         SHELLEXECUTEINFOW,
     };
     use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
@@ -1189,7 +1189,7 @@ pub(crate) fn elevate_and_wait(
             nShow: SW_HIDE.0,
             ..Default::default()
         };
-        if let Err(e) = ShellExecuteExW(&mut sei) {
+        if let Err(e) = ShellExecuteExW(&mut sei) { // spawn-allow: the one UAC runas launch (elevate_and_wait)
             // Launch never happened. Preserve the win32 error as a real os error — 1223 here IS
             // the user declining the UAC prompt.
             return Err(shell_launch_error_to_io(e));
@@ -1315,8 +1315,9 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
         // paths) that -Command mangles. Test-only; cleaned up after. (Production hex-encodes instead.)
         let tmp = std::env::temp_dir().join(format!("compy-qa-{}.ps1", std::process::id()));
         std::fs::write(&tmp, command).map_err(|e| format!("qa seam: temp write failed: {e}"))?;
+        let ps_exe = crate::sys_exe::sys_tool_path(SysTool::PowerShell);
         let out = elevation_outcome(elevate_and_wait(
-            std::ffi::OsStr::new("powershell"),
+            ps_exe.as_os_str(),
             &[
                 std::ffi::OsStr::new("-NoProfile"),
                 std::ffi::OsStr::new("-ExecutionPolicy"),
@@ -1766,7 +1767,7 @@ mod batch_elevation_tests {
             ("charlie-ok".to_string(), vec!["$null = 1".to_string()]),
         ];
         let script = compose_batch_script(&items, rf.to_string_lossy().as_ref()).expect("compose");
-        let status = super::quiet_command("powershell.exe")
+        let status = super::quiet_command(crate::sys_exe::SysTool::PowerShell)
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
             .status()
             .expect("powershell runs");
@@ -2408,7 +2409,7 @@ fn resolve_task_name(path: &str, base: &str) -> Option<String> {
     if ps_safe_squoted(path).is_err() || ps_safe_squoted(base).is_err() {
         return None;
     }
-    let out = quiet_command("powershell")
+    let out = quiet_command(SysTool::PowerShell)
         .args([
             "-NoProfile",
             "-Command",
@@ -2452,7 +2453,7 @@ pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
     let Some((path, name)) = resolved_task_target(task) else {
         return "Unknown".into();
     };
-    match quiet_command("powershell")
+    match quiet_command(SysTool::PowerShell)
         .args([
             "-NoProfile",
             "-Command",
@@ -2485,7 +2486,7 @@ pub(crate) fn known_task_listing() -> Option<String> {
         return None;
     }
     let quoted: Vec<String> = paths.iter().map(|p| format!("'{p}'")).collect();
-    let out = quiet_command("powershell")
+    let out = quiet_command(SysTool::PowerShell)
         .args([
             "-NoProfile",
             "-Command",
@@ -2629,7 +2630,7 @@ pub(crate) fn installed_preload_app(
     // package_name is a FIXED enum constant; guard anyway before interpolation (defense in depth).
     let name = app.package_name();
     ps_safe(name)?;
-    let out = quiet_command("powershell")
+    let out = quiet_command(SysTool::PowerShell)
         .args([
             "-NoProfile",
             "-Command",
@@ -2691,7 +2692,7 @@ pub(crate) fn installed_preload_ids() -> Vec<&'static str> {
     if safe_names.is_empty() {
         return Vec::new();
     }
-    let Ok(out) = quiet_command("powershell")
+    let Ok(out) = quiet_command(SysTool::PowerShell)
         .args([
             "-NoProfile",
             "-Command",
@@ -2730,7 +2731,7 @@ pub(crate) fn apply_remove_preload_app(app: KnownPreloadApp) -> Result<ApplyResu
     // The full name came from a system read — re-guard before interpolating. Appx full names are
     // [A-Za-z0-9._-] by construction, so ps_safe (no spaces) is the right guard.
     ps_safe(&installed.full_name)?;
-    let out = quiet_command("powershell")
+    let out = quiet_command(SysTool::PowerShell)
         .args([
             "-NoProfile",
             "-Command",
@@ -2782,7 +2783,7 @@ pub(crate) fn rollback_reinstall_preload_app_typed(
     }
     // Family name comes from the apply-time snapshot (a system read) — guard before interpolating.
     if ps_safe(prior_family_name).is_ok() {
-        let _ = quiet_command("powershell")
+        let _ = quiet_command(SysTool::PowerShell)
             .args([
                 "-NoProfile",
                 "-Command",
@@ -2798,7 +2799,7 @@ pub(crate) fn rollback_reinstall_preload_app_typed(
     }
     // Tier 2: hand off to the Store page (fixed curated ProductId — no dynamic data enters the
     // command). Same open-via-explorer idiom as open_export_folder: no shell, no elevation.
-    let _ = std::process::Command::new("explorer")
+    let _ = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Explorer)
         .arg(format!("ms-windows-store://pdp/?ProductId={}", app.store_product_id()))
         .spawn();
     Err("Couldn't restore it silently — Compy opened its Microsoft Store page instead. \
@@ -3245,7 +3246,7 @@ mod bloat_task_tests {
 /// [`POWERCFG_READ_LIMIT`] (CR-active-plan-unread: it is ended, never waited on forever), exited
 /// non-zero, or printed no GUID. `None` never means "no plan is active".
 pub(crate) fn current_power_plan_guid() -> Option<String> {
-    let mut cmd = quiet_command("powercfg");
+    let mut cmd = quiet_command(SysTool::Powercfg);
     cmd.args(["/getactivescheme"]);
     let output = output_within(cmd, POWERCFG_READ_LIMIT)?;
     if !output.status.success() {
@@ -3365,7 +3366,7 @@ pub(crate) fn parse_powercfg_ac_dc_index(text: &str) -> (Option<u32>, Option<u32
 // <subgroup> <setting>`. Returns None if the call fails or the AC index can't
 // be parsed (DC is best-effort, defaulting to 0).
 pub(crate) fn query_power_setting_ac_dc(subgroup: &str, setting: &str) -> Option<(u32, u32)> {
-    let output = quiet_command("powercfg")
+    let output = quiet_command(SysTool::Powercfg)
         .args(["/query", "SCHEME_CURRENT", subgroup, setting])
         .output()
         .ok()?;
@@ -3561,7 +3562,7 @@ pub(crate) fn select_best_existing_high_perf_plan(list_stdout: &str) -> Option<S
 }
 
 fn list_power_plans_stdout() -> Option<String> {
-    let out = quiet_command("powercfg").args(["/list"]).output().ok()?;
+    let out = quiet_command(SysTool::Powercfg).args(["/list"]).output().ok()?;
     Some(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
@@ -3569,7 +3570,7 @@ fn list_power_plans_stdout() -> Option<String> {
 /// if the OS unexpectedly requires elevation) surfaces as Err — we never
 /// silently elevate.
 fn powercfg_setactive_unelevated(guid: &str) -> Result<(), String> {
-    let out = quiet_command("powercfg")
+    let out = quiet_command(SysTool::Powercfg)
         .args(["/setactive", guid])
         .output()
         .map_err(|e| e.to_string())?;
@@ -3846,7 +3847,7 @@ pub(crate) fn plan_listed_in(guids: Option<Vec<String>>, guid: &str) -> Option<b
 /// `None` = the query couldn't be run or read: never "gone".
 fn power_plan_queried(guid: &str) -> Option<bool> {
     let query = |g: &str| {
-        let mut cmd = quiet_command("powercfg");
+        let mut cmd = quiet_command(SysTool::Powercfg);
         cmd.args(["/query", g]);
         output_within(cmd, POWERCFG_READ_LIMIT).map(|o| PowercfgRead {
             code: o.status.code(),
@@ -3944,7 +3945,18 @@ mod plan_query_live_tests {
 #[cfg(test)]
 mod output_within_tests {
     use super::{output_within, quiet_command};
+    use crate::sys_exe::SysTool;
     use std::time::{Duration, Instant};
+
+    // Hardening slice 1: the shared probe constructor never hands std a bare name (std would search
+    // the app's own, user-writable directory first).
+    #[test]
+    fn quiet_command_program_is_absolute() {
+        for t in [SysTool::Powercfg, SysTool::PowerShell, SysTool::Netsh, SysTool::Sc, SysTool::Logman, SysTool::Bcdedit] {
+            let c = quiet_command(t);
+            assert!(std::path::Path::new(c.get_program()).is_absolute(), "{t:?}: {:?}", c.get_program());
+        }
+    }
 
     // s37 (s35 opus NIT): a read that doesn't answer in time is unread (`None`), and is ended, not
     // left running; one that answers in time is read as it printed.
@@ -3955,12 +3967,12 @@ mod output_within_tests {
         // outcome, not a scheduler-dependent upper bound on elapsed time: the read is unread
         // (`None`), it returned long before the child could have finished by itself, and the child
         // is no longer running (looked up by its marker; `output_within` killed and waited on it).
-        let mut slow = quiet_command("ping");
+        let mut slow = quiet_command(SysTool::Ping);
         slow.args(["-n", "120", "-l", "1117", "127.0.0.1"]);
         let t = Instant::now();
         assert!(output_within(slow, Duration::from_millis(300)).is_none(), "an unanswered command is unread");
         assert!(t.elapsed() < Duration::from_secs(60), "returned at the deadline, not when the child ended: {:?}", t.elapsed());
-        let mut lookup = quiet_command("powershell");
+        let mut lookup = quiet_command(SysTool::PowerShell);
         lookup.args([
             "-NoProfile",
             "-Command",
@@ -3968,17 +3980,18 @@ mod output_within_tests {
         ]);
         let still = output_within(lookup, Duration::from_secs(120)).expect("the process lookup answered");
         assert_eq!(String::from_utf8_lossy(&still.stdout).trim(), "0", "the timed-out child must have been ended");
-        let mut quick = quiet_command("cmd");
+        let mut quick = quiet_command(SysTool::Cmd);
         quick.args(["/C", "echo plan-read"]);
         // A generous limit: this side must not time out on a loaded machine.
         let out = output_within(quick, Duration::from_secs(120)).expect("answered in time");
         assert!(out.status.success());
         assert!(String::from_utf8_lossy(&out.stdout).contains("plan-read"));
         // A program that can't start is unread too.
-        assert!(output_within(quiet_command("no-such-program-s37"), Duration::from_secs(1)).is_none());
+        let missing = std::process::Command::new(r"C:\__compy_s37_missing__\no-such-program.exe"); // spawn-allow: QA - an absolute path that does not exist
+        assert!(output_within(missing, Duration::from_secs(1)).is_none());
         // s37 sonnet SHOULD-FIX: output far past a pipe's buffer is drained while it runs, never a
         // deadlock: all of it is read (20000 lines of 20 bytes plus CRLF = 440000 bytes).
-        let mut loud = quiet_command("cmd");
+        let mut loud = quiet_command(SysTool::Cmd);
         loud.args(["/C", "for /L %i in (1,1,20000) do @echo xxxxxxxxxxxxxxxxxxxx"]);
         let out = output_within(loud, Duration::from_secs(300)).expect("answered in time");
         assert_eq!(out.stdout.len(), 20000 * 22, "{}", out.stdout.len());
@@ -4272,7 +4285,7 @@ foreach ($a in $adapters) {{
         names = EEE_DISPLAY_NAME_PATTERN,
         keywords = EEE_REGISTRY_KEYWORD_PATTERN,
     );
-    let output = quiet_command("powershell.exe")
+    let output = quiet_command(SysTool::PowerShell)
         .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
         .output();
     let stdout = match output {
@@ -4947,7 +4960,7 @@ fn read_mpo_prior() -> Result<Option<u32>, String> {
 /// Parse `powercfg /q SCHEME_CURRENT SUB_PROCESSOR CPMINCORES` for the AC + DC index values.
 /// Reuses the shared `parse_powercfg_ac_dc_index` so this and the USB/PCIe reader can't drift.
 fn read_core_parking_priors() -> Result<(Option<u32>, Option<u32>), String> {
-    let out = quiet_command("powercfg")
+    let out = quiet_command(SysTool::Powercfg)
         .args(["/q", "SCHEME_CURRENT", "SUB_PROCESSOR", "CPMINCORES"])
         .output()
         .map_err(|e| format!("cannot read core parking: {e}"))?;
@@ -4964,7 +4977,7 @@ fn read_core_parking_priors() -> Result<(Option<u32>, Option<u32>), String> {
 }
 
 fn read_tcp_autotuning_disabled() -> Result<bool, String> {
-    let out = quiet_command("netsh")
+    let out = quiet_command(SysTool::Netsh)
         .args(["int", "tcp", "show", "global"])
         .output()
         .map_err(|e| format!("cannot read TCP global: {e}"))?;
@@ -6373,7 +6386,7 @@ mod rollback_tests {
         // (output_within), so a stalled child fails this test with a message instead of hanging it.
         const PS_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
         let bounded = |what: &str, script: &str| -> std::process::Output {
-            let mut cmd = quiet_command("powershell");
+            let mut cmd = quiet_command(SysTool::PowerShell);
             cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
             output_within(cmd, PS_LIMIT).unwrap_or_else(|| {
                 panic!("the PowerShell child for `{what}` did not start or did not finish within {PS_LIMIT:?}; it was killed")
@@ -6727,7 +6740,7 @@ mod ipc_input_fuzz_tests {
     // instead — the whole elevated call fails loudly, which is the correct outcome for a mutation.
     #[test]
     fn an_embedded_nul_fails_the_command_instead_of_truncating_it() {
-        let err = std::process::Command::new("cmd.exe")
+        let err = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
             .args(["/c", "echo hi\0 && whoami"])
             .output()
             .expect_err("an embedded NUL must be refused, not silently truncated into a shorter command");
@@ -7463,7 +7476,7 @@ mod all_or_nothing_tests {
     // ── elevated scripts: the same wrapper, run for real (unelevated, temp files only) ──
 
     fn run_ps(script: &str) -> bool {
-        super::quiet_command("powershell.exe")
+        super::quiet_command(crate::sys_exe::SysTool::PowerShell)
             .args(["-NoProfile", "-NonInteractive", "-Command", &format!("$ErrorActionPreference='Stop'; {script}")])
             .status()
             .expect("powershell runs")

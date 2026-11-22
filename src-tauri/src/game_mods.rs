@@ -2952,7 +2952,7 @@ mod tests {
         let target = temp_root("junction_target");
         put(&target, "ReShade.ini", b"x");
         put(&root, "Game.exe", b"MZ");
-        let status = std::process::Command::new("cmd.exe")
+        let status = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
             .args(["/c", "mklink", "/J"])
             .arg(root.join("linked"))
             .arg(&target)
@@ -3387,7 +3387,7 @@ mod tests {
         let root = temp_root("search_link");
         let target = temp_root("search_link_target");
         put(&target, "x.exe", b"MZ");
-        let made = std::process::Command::new("cmd.exe")
+        let made = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
             .args(["/c", "mklink", "/J"])
             .arg(root.join("linked"))
             .arg(&target)

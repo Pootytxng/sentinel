@@ -1148,7 +1148,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
     if uac_disabled() {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        match std::process::Command::new(&exe)
+        match std::process::Command::new(&exe) // spawn-allow: self-spawn of current_exe() (absolute path); install-dir risk is a later slice
             .args([
                 "--fps-capture",
                 "--fps-out",
@@ -1966,7 +1966,7 @@ mod game_running_tests {
 
     #[test]
     fn the_probe_reads_an_exited_process_as_closed() {
-        let mut child = std::process::Command::new("cmd").args(["/C", "exit 0"]).spawn().expect("spawn cmd");
+        let mut child = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd).args(["/C", "exit 0"]).spawn().expect("spawn cmd");
         let pid = child.id();
         child.wait().expect("cmd exits");
         // `wait()` reaps the child but keeps its handle open (`child` is still in scope), the same

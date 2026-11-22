@@ -2500,7 +2500,7 @@ mod tests {
     // (f) a junction or link is never followed
     #[cfg(windows)]
     fn junction(link: &Path, target: &Path) {
-        let out = std::process::Command::new("cmd").args(["/c", "mklink", "/J"]).arg(link).arg(target).output().unwrap();
+        let out = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd).args(["/c", "mklink", "/J"]).arg(link).arg(target).output().unwrap();
         assert!(out.status.success(), "mklink failed: {}", String::from_utf8_lossy(&out.stdout));
     }
 

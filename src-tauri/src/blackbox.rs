@@ -1522,7 +1522,7 @@ fn collect_event_log() -> (Vec<RawEvent>, Option<String>, bool) {
     // `props` gives language-independent faulting app/module/code. Errors are swallowed
     // (SilentlyContinue) so "no events found" on a clean machine yields empty output, not a failure.
     let script = event_log_script();
-    let Ok(out) = crate::actions::quiet_command("powershell.exe")
+    let Ok(out) = crate::actions::quiet_command(crate::sys_exe::SysTool::PowerShell)
         .args(["-NoProfile", "-NonInteractive", "-Command", script.as_str()])
         .output()
     else {
@@ -1875,7 +1875,7 @@ fn collect_reliability() -> (Vec<ReliabilityRecord>, Option<String>) {
  Sort-Object TimeGenerated -Descending | Select-Object -First 120 |\
  ForEach-Object { [pscustomobject]@{ source=[string]$_.SourceName; id=[int]$_.EventIdentifier; time=$_.TimeGenerated.ToString('o'); message=[string]$_.Message; product=[string]$_.ProductName } }) |\
  ConvertTo-Json -Depth 3 -Compress";
-    let Ok(out) = crate::actions::quiet_command("powershell.exe")
+    let Ok(out) = crate::actions::quiet_command(crate::sys_exe::SysTool::PowerShell)
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .output()
     else {

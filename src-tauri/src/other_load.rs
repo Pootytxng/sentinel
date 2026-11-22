@@ -1155,10 +1155,10 @@ mod tests {
     /// (the handle stays open), then probed repeatedly. The observed form is counted and printed.
     #[test]
     fn an_exited_child_whose_handle_is_still_open_is_not_alive_in_the_snapshot() {
-        use std::process::{Command, Stdio};
+        use std::process::Stdio;
         let mut kids: Vec<std::process::Child> = (0..20)
             .map(|_| {
-                Command::new("cmd")
+                crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
                     .args(["/C", "ping -n 3 127.0.0.1 >nul"])
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
@@ -1555,7 +1555,7 @@ mod tests {
         let script = "Add-Type -AssemblyName PresentationFramework; $w=New-Object Windows.Window; \
             $w.WindowStyle='None'; $w.Width=40; $w.Height=40; $w.ShowInTaskbar=$false; $w.Left=0; $w.Top=0; \
             $w.Show(); $e=(Get-Date).AddSeconds(25); while((Get-Date) -lt $e){ Start-Sleep -Milliseconds 100 }";
-        let mut child = std::process::Command::new("powershell.exe")
+        let mut child = crate::sys_exe::sys_command(crate::sys_exe::SysTool::PowerShell)
             .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", script])
             .spawn()
             .expect("spawn");

@@ -2738,7 +2738,7 @@ mod gaming_mode_qa {
         save_session(&file).expect("save fixture");
 
         // Someone changes the active plan OUTSIDE Compy, mid-session (non-elevated setactive).
-        let _ = std::process::Command::new("powercfg").args(["/setactive", external]).output();
+        let _ = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Powercfg).args(["/setactive", external]).output();
         let mid = crate::actions::current_power_plan_guid();
 
         // Restore must target the STORED prior GUID, not the externally-changed current.
@@ -2747,7 +2747,7 @@ mod gaming_mode_qa {
         eprintln!("[QA8] before={} external={} mid={:?} restore={:?} after={:?}", before, external, mid, res, after);
 
         // Cleanup FIRST (owner away): guarantee the rig is back on its original plan regardless of asserts.
-        let _ = std::process::Command::new("powercfg").args(["/setactive", &before]).output();
+        let _ = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Powercfg).args(["/setactive", &before]).output();
         let _ = clear_session();
 
         res.expect("restore should succeed (the stored plan exists)");

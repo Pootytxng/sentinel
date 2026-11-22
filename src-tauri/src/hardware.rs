@@ -2619,7 +2619,7 @@ pub(crate) fn parse_netsh_wlan_interfaces(out: &str) -> Option<WifiLink> {
 /// Read-only Wi-Fi link probe via `netsh wlan show interfaces` (no admin, no mutation, no network).
 /// Called only when the active connection is Wi-Fi, so wired rigs never pay for the spawn.
 fn detect_wifi_link() -> Option<WifiLink> {
-    let out = crate::actions::quiet_command("netsh")
+    let out = crate::actions::quiet_command(crate::sys_exe::SysTool::Netsh)
         .args(["wlan", "show", "interfaces"])
         .output()
         .ok()?;

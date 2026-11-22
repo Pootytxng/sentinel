@@ -40,7 +40,6 @@ use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, NaiveDateTime, Tim
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
-use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -418,33 +417,16 @@ pub(crate) enum ChangeError {
 // System tools: absolute path only
 // ---------------------------------------------------------------------------------------------
 
-/// The Windows system directory from `GetSystemDirectoryW` (not an environment variable).
-fn system_directory() -> Option<PathBuf> {
-    use std::os::windows::ffi::OsStringExt;
-    let mut buf = [0u16; 260];
-    // SAFETY: the buffer outlives the call and its length is passed with it.
-    let n = unsafe { windows::Win32::System::SystemInformation::GetSystemDirectoryW(Some(&mut buf)) } as usize;
-    if n == 0 || n >= buf.len() {
-        return None;
-    }
-    Some(PathBuf::from(std::ffi::OsString::from_wide(&buf[..n])))
-}
-
-/// Absolute path of a tool in the system directory, or `ToolMissing`. A bare name would be looked
-/// up in compy.exe's own folder first, which a per-user install lets another program write to.
-fn system_tool(name: &str) -> Result<PathBuf, UnreadableReason> {
-    let p = system_directory().ok_or(UnreadableReason::ToolMissing)?.join(name);
-    if p.is_absolute() && p.is_file() {
-        Ok(p)
+/// A command for a system tool, or `ToolMissing` when its file is not there. The path comes from
+/// `sys_exe` (absolute, from the real system directory, never the app folder or `PATH`): a bare
+/// name would be looked up in compy.exe's own folder first, which a per-user install lets another
+/// program write to.
+fn system_command(tool: crate::sys_exe::SysTool) -> Result<std::process::Command, UnreadableReason> {
+    if crate::sys_exe::sys_tool_path(tool).is_file() {
+        Ok(crate::sys_exe::sys_command(tool))
     } else {
         Err(UnreadableReason::ToolMissing)
     }
-}
-
-fn system_command(name: &str) -> Result<std::process::Command, UnreadableReason> {
-    let path = system_tool(name)?;
-    let s = path.to_str().ok_or(UnreadableReason::ToolMissing)?;
-    Ok(crate::actions::quiet_command(s))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -603,7 +585,7 @@ fn run_wevtutil(
     newest_first: bool,
     budget: Duration,
 ) -> Result<LogText, UnreadableReason> {
-    let mut cmd = system_command("wevtutil.exe")?;
+    let mut cmd = system_command(crate::sys_exe::SysTool::Wevtutil)?;
     cmd.arg("qe").arg(channel);
     if let Some(q) = xpath {
         cmd.arg(format!("/q:{q}"));
@@ -2072,6 +2054,7 @@ pub(crate) fn changes_between_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use chrono::FixedOffset;
 
     const DISPLAY: &str = "{4d36e968-e325-11ce-bfc1-08002be10318}";
@@ -2571,7 +2554,7 @@ mod tests {
         // budget (5 s) is long enough for it to start and print on a busy PC and the child dwarfs
         // it, so what is asserted is the outcome: timed out, killed, the partial output kept, and
         // returned long before the child could have ended by itself.
-        let mut cmd = system_command("ping.exe").unwrap();
+        let mut cmd = system_command(crate::sys_exe::SysTool::Ping).unwrap();
         cmd.args(["-n", "120", "127.0.0.1"]);
         let started = Instant::now();
         let out = run_with_budget(cmd, Duration::from_secs(5)).unwrap();
@@ -2615,14 +2598,14 @@ mod tests {
 
     #[test]
     fn wevtutil_is_resolved_to_an_absolute_path_inside_the_system_directory() {
-        let sys = system_directory().expect("system directory");
+        let sys = crate::sys_exe::system_dir();
         assert!(sys.is_absolute());
-        let tool = system_tool("wevtutil.exe").expect("wevtutil in the system directory");
+        let tool = crate::sys_exe::sys_tool_path(crate::sys_exe::SysTool::Wevtutil);
         assert!(tool.is_absolute(), "{tool:?}");
-        assert_eq!(tool.parent().unwrap(), sys.as_path());
+        assert_eq!(tool.parent().unwrap(), sys);
         assert!(tool.is_file());
-        // A name that is not in the system directory is ToolMissing, never a PATH search.
-        assert_eq!(system_tool("compy-no-such-tool.exe"), Err(UnreadableReason::ToolMissing));
+        // The tool is named by the closed SysTool enum: there is no string to resolve through PATH.
+        assert!(system_command(crate::sys_exe::SysTool::Wevtutil).is_ok());
     }
 
     /// Removes the planted file even if an assertion fails.
@@ -2643,13 +2626,13 @@ mod tests {
 
     /// g4: no skip branch passes. Every set-up problem FAILS with "could not set up"; the decoy is
     /// never spawned (a bad "MZ" image can raise a modal error box or an antivirus hold, which hung
-    /// this test); the property is proven at the resolver (the exact GetSystemDirectoryW path, never
+    /// this test); the property is proven at the resolver (the exact system-directory path, never
     /// the test executable's folder) and by the real read, which is bounded by its 10 s kill budget.
     #[test]
     fn a_wevtutil_planted_beside_the_executable_is_never_run() {
         let _serial = PLANT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
-        let sys = system_directory().expect("could not set up: GetSystemDirectoryW gave no directory");
+        let sys = crate::sys_exe::system_dir();
         let planted = exe_dir.join("wevtutil.exe");
         // A decoy left by a run that was killed before its drop guard ran is removed, not trusted:
         // only this test writes the name, and the lock serialises it inside one run.
@@ -2663,7 +2646,7 @@ mod tests {
         assert!(planted.is_file(), "could not set up: the decoy {planted:?} vanished (antivirus?)");
 
         // With the decoy in place, the resolver names exactly the system directory's wevtutil.exe.
-        let cmd = system_command("wevtutil.exe").expect("system command");
+        let cmd = system_command(crate::sys_exe::SysTool::Wevtutil).expect("system command");
         let program = PathBuf::from(cmd.get_program());
         assert!(program.is_absolute(), "{program:?}");
         assert_eq!(lower(&program), lower(&sys.join("wevtutil.exe")), "resolved outside the system directory");
@@ -2871,7 +2854,8 @@ mod tests {
         // (paramedic.rs, the one planned consumer) may name it. Scanning the whole source directory
         // covers every payload module without listing (or naming) any of them.
         let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let allowed = ["lib.rs", "change_sources.rs", "paramedic.rs", "game_mods.rs"];
+        // sys_exe.rs: its spawn-guard allowlist names this file; no data flows.
+        let allowed = ["lib.rs", "change_sources.rs", "paramedic.rs", "game_mods.rs", "sys_exe.rs"];
         let mut scanned = 0;
         for entry in std::fs::read_dir(&src_dir).unwrap().flatten() {
             let path = entry.path();
@@ -3475,7 +3459,7 @@ mod tests {
         // itself and quickly; the budget is generous (it failed a real push when a 20000-line child
         // ran past a 30 s budget on a loaded PC), so what is asserted is the outcome: not timed out,
         // child ended with success, output capped and flagged. No elapsed-time assumption.
-        let mut cmd = system_command("cmd.exe").expect("cmd.exe");
+        let mut cmd = system_command(crate::sys_exe::SysTool::Cmd).expect("cmd.exe");
         cmd.args(["/c", "for /l %i in (1,1,3000) do @echo xxxxxxxxxxxxxxxxxxxx"]);
         let out = run_capped(cmd, Duration::from_secs(300), 1000).expect("ran");
         assert!(!out.timed_out, "the child ended by itself within the budget");
@@ -3582,6 +3566,7 @@ mod tests {
 #[cfg(test)]
 mod steam_listing_tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn acf(id: u32, name: &str, dir: &str, updated: Option<i64>) -> String {
         let lu = updated.map(|u| format!("\t\"LastUpdated\"\t\t\"{u}\"\n")).unwrap_or_default();

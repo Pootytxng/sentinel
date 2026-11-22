@@ -730,7 +730,7 @@ pub(crate) fn launch_sensor_app(id: &str) -> Result<(), String> {
     if !is_allowed_executable(spec, &path) {
         return Err(format!("refusing to start {}", path.display()));
     }
-    std::process::Command::new("explorer.exe")
+    crate::sys_exe::sys_command(crate::sys_exe::SysTool::Explorer)
         .arg(&path)
         .spawn()
         .map(|_| ())

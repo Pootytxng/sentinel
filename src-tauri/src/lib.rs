@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 mod actions;
+mod sys_exe; // The ONE resolver for Windows system tools (absolute path from the real system dir) + pinned child environment. Hardening slice 1.
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
 mod atomic_write; // Whole-file byte replacement for SECONDARY on-disk state (benchmark/comparison/readiness/drift JSON, plus the license token's exact plain-text bytes — the one caller here that is not JSON): a save interrupted part-way leaves the previous complete file rather than a truncated one. NOT power-loss durability, NOT a lock, NOT a transaction — and deliberately NOT used by the Trust Ledger or the signed remote rules, which carry their own rules.
 mod blackbox; // Black Box v1 (Paramedic Mode) — READ-ONLY crash/freeze evidence reader (Event Log + last-vitals overlay). Zero causal claims, zero mutation.
@@ -106,11 +107,20 @@ pub fn run_elevated_helper(hex: &str, ticket_path: &str) -> i32 {
     let Ok(command) = String::from_utf8(bytes) else {
         return 2;
     };
-    actions::quiet_command("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &command])
+    elevated_powershell_command(&command)
         .status()
         .map(|s| s.code().unwrap_or(1))
         .unwrap_or(1)
+}
+
+/// The command the elevated helper runs: the real `powershell.exe` from the system directory (never
+/// a file beside `compy.exe`), started from System32 with the inherited environment CLEARED and only a
+/// short allowlist restored, then `PSModulePath`/`PATH`/`COMSPEC` pinned to the system locations. The
+/// elevated child must not inherit an environment the user shaped. Same arguments as before.
+fn elevated_powershell_command(script: &str) -> std::process::Command {
+    let mut c = sys_exe::elevated_command(sys_exe::SysTool::PowerShell);
+    c.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+    c
 }
 
 use serde::Serialize;
@@ -155,7 +165,7 @@ pub(crate) fn notify_care_incident(headline: &str) {
 }
 
 pub(crate) fn current_power_plan_name() -> Option<String> {
-    let output = crate::actions::quiet_command("powercfg")
+    let output = crate::actions::quiet_command(crate::sys_exe::SysTool::Powercfg)
         .args(["/getactivescheme"])
         .output()
         .ok()?;
@@ -224,7 +234,7 @@ pub(crate) fn stock_power_scheme(guid: &str) -> Option<(PowerPlanClass, &'static
 
 /// The active plan's class and its printed name, from one `powercfg /getactivescheme` read.
 pub(crate) fn current_power_plan() -> Option<(PowerPlanClass, String)> {
-    let output = crate::actions::quiet_command("powercfg")
+    let output = crate::actions::quiet_command(crate::sys_exe::SysTool::Powercfg)
         .args(["/getactivescheme"])
         .output()
         .ok()?;
@@ -235,7 +245,7 @@ pub(crate) fn current_power_plan() -> Option<(PowerPlanClass, String)> {
 /// `powercfg /getactivescheme`. `None` when no GUID can be read: unreadable, never guessed
 /// (CR-unconfirmed-remedy records the GUID it saw, so a later Trial can check it is still the one).
 pub(crate) fn current_power_scheme() -> Option<history::ObservedPlan> {
-    let output = crate::actions::quiet_command("powercfg")
+    let output = crate::actions::quiet_command(crate::sys_exe::SysTool::Powercfg)
         .args(["/getactivescheme"])
         .output()
         .ok()?;
@@ -289,7 +299,7 @@ pub(crate) fn scheme_guid_of(stdout: &str) -> Option<String> {
 /// when the read fails, doesn't answer within `POWERCFG_READ_LIMIT` (s37) or lists none: unread,
 /// never "no plans".
 pub(crate) fn power_plan_guids() -> Option<Vec<String>> {
-    let mut cmd = crate::actions::quiet_command("powercfg");
+    let mut cmd = crate::actions::quiet_command(crate::sys_exe::SysTool::Powercfg);
     cmd.args(["/list"]);
     let output = crate::actions::output_within(cmd, crate::actions::POWERCFG_READ_LIMIT)?;
     if !output.status.success() {
@@ -323,7 +333,7 @@ pub(crate) fn game_mode_enabled() -> bool {
 /// in effect" when nothing was read at all (#392); its last callers (three catalog recs) moved here
 /// in the 2026-11-02 codebase review, and it is gone.
 pub(crate) fn service_running_checked(name: &str) -> Option<bool> {
-    let output = crate::actions::quiet_command("sc")
+    let output = crate::actions::quiet_command(crate::sys_exe::SysTool::Sc)
         .args(["query", name])
         .output()
         .ok()?;
@@ -570,7 +580,7 @@ pub(crate) fn hags_state_checked() -> Result<Option<u32>, String> {
 // via powercfg — the instantaneous "which cores are parked right now" is kernel-only (dropped, same
 // class as CPU temp). Unreadable → None / "Unknown", never guessed.
 pub(crate) fn core_parking_min_cores_ac() -> Option<u32> {
-    let output = crate::actions::quiet_command("powercfg")
+    let output = crate::actions::quiet_command(crate::sys_exe::SysTool::Powercfg)
         .args([
             "/q",
             "SCHEME_CURRENT",
@@ -2309,7 +2319,7 @@ mod safety_tests {
         // git bound to the temp repo with a hermetic identity: no signing, no CRLF munging, so the
         // predicate reads the same on any machine.
         let git = |args: &[&str]| -> Option<std::process::Output> {
-            Command::new("git")
+            Command::new("git") // spawn-allow: test-only, never shipped; git is not a Windows system tool
                 .args([
                     "-c", "user.name=compy-test",
                     "-c", "user.email=compy-test@example.invalid",
@@ -2608,5 +2618,67 @@ mod safety_tests {
             }
             _ => panic!("variant changed on round-trip"),
         }
+    }
+}
+
+#[cfg(test)]
+mod elevated_helper_tests {
+    use super::elevated_powershell_command;
+    use crate::sys_exe::{sys_tool_path, system_dir, SysTool, ELEVATED_ENV_ALLOWLIST};
+    use std::path::Path;
+
+    /// Hardening slice 1: the elevated helper command runs the REAL powershell.exe by absolute path,
+    /// from System32, with the same arguments as before, and sets only allowlisted or pinned variables.
+    /// Shape only: `get_envs()` cannot show that the rest was cleared (the next test spawns it).
+    #[test]
+    fn the_elevated_helper_command_has_the_right_shape() {
+        let c = elevated_powershell_command("Get-Date");
+        assert_eq!(Path::new(c.get_program()), sys_tool_path(SysTool::PowerShell).as_path());
+        assert!(Path::new(c.get_program()).is_absolute());
+        let args: Vec<_> = c.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args, ["-NoProfile", "-NonInteractive", "-Command", "Get-Date"]);
+        assert_eq!(c.get_current_dir(), Some(system_dir()));
+        let pins = ["PSMODULEPATH", "PATH", "COMSPEC", "PATHEXT", "PSEXECUTIONPOLICYPREFERENCE"];
+        let allowed: Vec<String> = ELEVATED_ENV_ALLOWLIST.iter().map(|s| s.to_ascii_uppercase()).collect();
+        let mut seen_pins = 0;
+        for (k, v) in c.get_envs() {
+            let k = k.to_string_lossy().to_ascii_uppercase();
+            assert!(allowed.contains(&k) || pins.contains(&k.as_str()), "{k} must not reach the elevated child");
+            if pins.contains(&k.as_str()) && k != "PSEXECUTIONPOLICYPREFERENCE" {
+                assert!(v.is_some(), "{k} must be set");
+                seen_pins += 1;
+            }
+        }
+        assert_eq!(seen_pins, 4, "PSModulePath, PATH, COMSPEC and PATHEXT are pinned");
+    }
+
+    /// Runs the helper's command UNELEVATED with a read-only script that prints environment facts, with
+    /// a sentinel set in the parent. Nothing is changed and nothing is elevated; this fails if
+    /// `env_clear()` is removed or a pin is dropped.
+    #[test]
+    fn the_elevated_helper_command_really_runs_with_a_cleared_and_pinned_environment() {
+        const SENTINEL: &str = "COMPY_H1_LIB_SENTINEL";
+        std::env::set_var(SENTINEL, "leak");
+        let script = "$n=(Get-ChildItem Env:).Name -join ','; 'ENVNAMES='+$n; 'PSMP='+$env:PSModulePath; \
+                      'CWD='+(Get-Location).Path; 'MMBASE='+(Get-Command Get-MMAgent).Module.ModuleBase";
+        let out = elevated_powershell_command(script).output().expect("powershell starts");
+        std::env::remove_var(SENTINEL);
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(out.status.success(), "{text}\n{}", String::from_utf8_lossy(&out.stderr));
+        let field = |k: &str| {
+            text.lines().find_map(|l| l.trim().strip_prefix(k)).unwrap_or_else(|| panic!("no {k} in {text}")).to_string()
+        };
+        let names = field("ENVNAMES=").to_ascii_uppercase();
+        let names: Vec<&str> = names.split(',').collect();
+        assert!(!names.contains(&SENTINEL), "an inherited, non-allowlisted variable reached the child: {names:?}");
+        assert!(names.contains(&"SYSTEMROOT"), "the allowlist must be restored: {names:?}");
+        let psmp = field("PSMP=").to_ascii_lowercase();
+        assert!(!psmp.contains(r"\documents\"), "{psmp}");
+        if let Ok(user) = std::env::var("USERPROFILE") { // data-root-allow: a test comparing against the profile folder; no data path is composed
+            assert!(!psmp.contains(&user.to_ascii_lowercase()), "user profile in PSModulePath: {psmp}");
+        }
+        let sys = system_dir().to_string_lossy().to_ascii_lowercase();
+        assert_eq!(field("CWD=").to_ascii_lowercase(), sys, "working directory must be System32");
+        assert!(field("MMBASE=").to_ascii_lowercase().starts_with(&sys), "Get-MMAgent must come from System32");
     }
 }

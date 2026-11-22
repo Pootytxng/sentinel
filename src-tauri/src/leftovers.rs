@@ -730,7 +730,7 @@ fn bcdedit_flag_or_absent(text_lower: &str, name: &str) -> Option<bool> {
 /// bcdedit /enum {current} — READ-ONLY. Non-elevated reads are usually denied; that is the
 /// honest "needs admin to check" path, never a guess.
 fn probe_bcdedit() -> Value {
-    match crate::actions::quiet_command("bcdedit").args(["/enum", "{current}"]).output() {
+    match crate::actions::quiet_command(crate::sys_exe::SysTool::Bcdedit).args(["/enum", "{current}"]).output() {
         Err(_) => json!({ "readable": false, "needs_admin": false }),
         Ok(o) if !o.status.success() => json!({ "readable": false, "needs_admin": true }),
         Ok(o) => {
@@ -750,7 +750,7 @@ fn probe_bcdedit() -> Value {
 /// powercfg /q for the core-parking min-cores override (READ-ONLY). Parses the AC index; the
 /// plan name and class ride along so the evaluator flags only the stock Balanced plan.
 fn probe_core_parking() -> Value {
-    let out = crate::actions::quiet_command("powercfg")
+    let out = crate::actions::quiet_command(crate::sys_exe::SysTool::Powercfg)
         .args(["/q", "SCHEME_CURRENT", "SUB_PROCESSOR", "CPMINCORES"])
         .output();
     let Ok(o) = out else { return json!({ "readable": false }) };
@@ -800,7 +800,7 @@ fn probe_defender_policy() -> Value {
 /// netsh TCP global (READ-ONLY). Locale-honest: only explicit known tokens are judged; anything
 /// else (non-English output) reports unreadable rather than guessing either way.
 fn probe_tcp() -> Value {
-    let out = crate::actions::quiet_command("netsh").args(["int", "tcp", "show", "global"]).output();
+    let out = crate::actions::quiet_command(crate::sys_exe::SysTool::Netsh).args(["int", "tcp", "show", "global"]).output();
     let Ok(o) = out else { return json!({ "readable": false }) };
     if !o.status.success() {
         return json!({ "readable": false });
@@ -871,7 +871,7 @@ pub(crate) fn qa_restore_gate_bypassed() -> bool {
 /// reported as (None, needs_admin=true) and the detector says "needs admin to check" honestly.
 /// PowerShell exits 0 even on that non-terminating error, so stderr is the signal, not the code.
 pub(crate) fn read_memory_compression_probe() -> (Option<bool>, bool) {
-    let Ok(out) = crate::actions::quiet_command("powershell.exe")
+    let Ok(out) = crate::actions::quiet_command(crate::sys_exe::SysTool::PowerShell)
         .args(["-NoProfile", "-NonInteractive", "-Command", "(Get-MMAgent).MemoryCompression"])
         .output()
     else {
