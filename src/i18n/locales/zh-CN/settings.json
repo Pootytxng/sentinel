@@ -196,6 +196,7 @@
     "statusDismiss": "知道了",
     "status": {
       "completed": "Compy 启动时，完成了一次之前被中断的「清除全部数据」。",
+      "completed_kept_newer": "Compy 启动时，完成了一次之前被中断的「清除全部数据」。在那次清除开始之后保存的文件已保留。",
       "incomplete": "Compy 启动时，完成了一次被中断的「清除全部数据」的一部分。其余部分需要你再次确认。",
       "webview_pending": "Compy 启动时，一次被中断的「清除全部数据」已经删除了它的文件；只剩此窗口自己保存的信息需要移除。",
       "kept": "Compy 无法读取一次被中断的「清除全部数据」的记录（Compy 数据文件夹中的 clear-intent.json 文件）。它保持原样，没有删除任何内容。在该文件被移除之前，「清除全部数据」无法使用：请关闭 Compy，从 %APPDATA%\\Compy 中删除 clear-intent.json，再重新打开 Compy。",

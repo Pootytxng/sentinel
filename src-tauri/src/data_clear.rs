@@ -869,6 +869,9 @@ pub(crate) struct ClearReport {
     /// deletes if it was made after the clear started). The screen says so instead of the generic "couldn't
     /// remove its note".
     pub(crate) record_not_advanced: bool,
+    /// Start-up roll-forward only (C2e review r1): every file left was saved after the clear began, so the clear
+    /// is finished and those files were kept. Reported as `Completed`, with its own status sentence.
+    pub(crate) kept_saved_after_clear: bool,
 }
 
 impl ClearReport {
@@ -1180,6 +1183,7 @@ fn new_report(now: &ClearPlan) -> ClearReport {
         webview: now.webview.clone(),
         record_not_updated: false,
         record_not_advanced: false,
+        kept_saved_after_clear: false,
     }
 }
 
@@ -1294,6 +1298,8 @@ pub(crate) struct LedgerPhase {
     ledger_failed: bool,
     /// Run from the start-up roll-forward: an unfinished run is never silently dropped, only abandoned.
     rolled_forward: bool,
+    /// The record's start (seconds since 1970) when this is the start-up roll-forward.
+    started_at: Option<u64>,
 }
 
 /// "Clear everything", phase 1: the change-history family and the Trial store. The caller must hold the
@@ -1377,19 +1383,27 @@ fn ledger_phase_with(
             }
         }
     }
-    Ok(LedgerPhase { report, rest, ledger_failed, rolled_forward: confine.is_some() })
+    Ok(LedgerPhase { report, rest, ledger_failed, rolled_forward: confine.is_some(), started_at: confine.map(|i| i.started_at) })
 }
 
 /// "Clear everything", phase 2, run AFTER the Trial gate and the ledger lock are released: every other
 /// file, each under its own store's lock one at a time, the support record last.
 pub(crate) fn finish_everything(root: &Path, phase: LedgerPhase, gates: &dyn ClearGates) -> ClearOutcome {
-    let LedgerPhase { mut report, rest, mut ledger_failed, rolled_forward } = phase;
+    let LedgerPhase { mut report, rest, mut ledger_failed, rolled_forward, started_at } = phase;
     let stopped = delete_rows(root, &rest, gates, &[], &mut report, &mut ledger_failed);
     // What the record does now. A record may outlive the call only if at least one file was deleted:
     // otherwise the screen is told "refused/nothing changed" and a leftover record would wipe everything at
     // the next start without asking.
     let progress = !report.deleted.is_empty() || !report.already_gone.is_empty();
-    let clean = stopped.is_empty() && report.failed.is_empty() && report.not_attempted.is_empty() && report.skipped.is_empty();
+    let nothing_failed = stopped.is_empty() && report.failed.is_empty() && report.not_attempted.is_empty();
+    // C2e review r1: a start-up roll-forward that left only files SAVED AFTER the clear began has finished
+    // the clear (every confirmed file is gone or was replaced since); it is not "part done, confirm the rest".
+    // A skip counts only if it is `newer_than_clear`, or `not_in_confirmed_plan` for a file whose modified
+    // time is after the record's start; any other skip (changed, invalid entry) still needs the user.
+    report.kept_saved_after_clear = nothing_failed
+        && !report.skipped.is_empty()
+        && started_at.is_some_and(|at| report.skipped.iter().all(|s| saved_after(root, s, at)));
+    let clean = nothing_failed && (report.skipped.is_empty() || report.kept_saved_after_clear);
     if clean {
         // Every file is gone: the backend's part is finished, only the screen's browser storage is left. If
         // the record cannot be advanced it stays pending, and the next start's roll-forward (confined to
@@ -1413,6 +1427,19 @@ pub(crate) fn finish_everything(root: &Path, phase: LedgerPhase, gates: &dyn Cle
         report.record_not_updated = true;
     }
     settle_run(report, stopped)
+}
+
+/// A roll-forward skip that is a file saved after the clear began (`started_at`, seconds since 1970).
+fn saved_after(root: &Path, s: &Skipped, started_at: u64) -> bool {
+    match s.reason {
+        "newer_than_clear" => true,
+        "not_in_confirmed_plan" => fs::symlink_metadata(root.join(&s.rel))
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .is_some_and(|d| d.as_secs() > started_at),
+        _ => false,
+    }
 }
 
 /// Why an unfinished clear is never finished by itself: what is left is whatever the user has now, so the
@@ -1801,7 +1828,9 @@ pub(crate) fn roll_forward_at(root: &Path, facts: &dyn Fn() -> ClearFacts, gates
         }
         // Cannot happen with no expected fingerprint.
         ClearOutcome::PlanChanged => abandon("needs_reconfirm", NEEDS_RECONFIRM.to_string()),
-        ClearOutcome::Done(report) if report.complete && report.skipped.is_empty() && report.stopped.is_empty() => RollForward::Completed(report),
+        ClearOutcome::Done(report) if report.complete && report.stopped.is_empty() && (report.skipped.is_empty() || report.kept_saved_after_clear) => {
+            RollForward::Completed(report)
+        }
         // `finish_everything` has already marked the record `Abandoned`.
         ClearOutcome::Done(report) => RollForward::Incomplete(report),
     }
@@ -4489,6 +4518,43 @@ mod tests {
         let report = done(clear_everything_at(&t2.root, &shown.fingerprint, &later, &NoGates));
         assert!(report.complete && !report.record_not_advanced, "{report:?}");
         assert_eq!(intent_of(&t2).stage, IntentStage::WebviewPending);
+    }
+
+    /// C2e review r1: every confirmed file is gone and only files saved AFTER the clear began are left (the clear
+    /// finished, the record was not advanced, the app kept writing). The next start keeps them, calls the clear
+    /// finished and advances the record. Mirror: a left file saved BEFORE the clear began still needs the user.
+    /// Break check: make `kept_saved_after_clear` always false in `finish_everything` -> Incomplete, this fails.
+    #[test]
+    fn z7_a_roll_forward_that_leaves_only_files_saved_after_the_clear_reports_it_finished() {
+        fn put_at(t: &Tmp, rel: &str, body: &str, at: std::time::SystemTime) {
+            t.put(rel, body);
+            fs::File::options().write(true).open(t.root.join(rel)).unwrap().set_modified(at).unwrap();
+        }
+        let after = SystemTime::now() + Duration::from_secs(3 * 3600); // `later()` starts the clear at now + 2 h
+        let t = Tmp::new("z7");
+        seed(&t);
+        pend(&t, &later()).unwrap();
+        for e in intent_of(&t).confirmed {
+            let _ = fs::remove_file(t.root.join(&e.rel)); // the interrupted clear had deleted every confirmed file
+        }
+        put_at(&t, "sessions.json", "a session played after the clear", after); // confirmed name, saved after
+        put_at(&t, "sessions.json.corrupt.5", "set aside after the clear", after); // never confirmed, saved after
+        let outcome = roll(&t);
+        let RollForward::Completed(report) = &outcome else { panic!("expected Completed, got {outcome:?}") };
+        assert!(report.kept_saved_after_clear, "{report:?}");
+        assert!(t.has("sessions.json") && t.has("sessions.json.corrupt.5"), "files saved after the clear are kept");
+        assert_eq!(intent_of(&t).stage, IntentStage::WebviewPending, "the record moved on");
+        assert_eq!(serde_json::to_value(&outcome).unwrap()["detail"]["kept_saved_after_clear"], true);
+        // Mirror: an unconfirmed file whose time is BEFORE the clear began is not "saved after": still Incomplete.
+        let t = Tmp::new("z7b");
+        seed(&t);
+        pend(&t, &later()).unwrap();
+        for e in intent_of(&t).confirmed {
+            let _ = fs::remove_file(t.root.join(&e.rel));
+        }
+        t.put("sessions.json.corrupt.6", "older than the clear"); // modified now, before `later()`'s start
+        let outcome = roll(&t);
+        assert!(matches!(&outcome, RollForward::Incomplete(r) if !r.kept_saved_after_clear), "{outcome:?}");
     }
 
     /// C2b review B4, start-up side: a roll-forward that gives up but cannot mark the record says so.

@@ -318,6 +318,10 @@ export function statusLine(s: ClearStatus): { key: string; code?: string; dismis
     const known = (ABANDON_CODES as readonly string[]).includes(code);
     return { key: known ? `abandoned_${code}` : "abandoned_other", code, dismiss: s.record === "abandoned" };
   }
+  // C2e review r1: finished, and only files saved after the clear began were left (and kept).
+  if (rf === "completed" && (s.roll_forward?.detail as { kept_saved_after_clear?: boolean } | undefined)?.kept_saved_after_clear === true) {
+    return { key: "completed_kept_newer", dismiss: s.record === "abandoned" };
+  }
   if (rf && (ROLL_FORWARD_STATUSES as readonly string[]).includes(rf)) {
     return { key: rf, dismiss: s.record === "abandoned" };
   }

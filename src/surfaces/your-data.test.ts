@@ -303,6 +303,11 @@ describe("your-data C2b: clear everything", () => {
       key: "record_not_updated",
       dismiss: false,
     });
+    // C2e review r1 (break check: drop the completed_kept_newer branch -> this reads "completed" and fails).
+    expect(statusLine(s({ roll_forward: { status: "completed", detail: { kept_saved_after_clear: true } }, record: "webview_pending" }))).toEqual({
+      key: "completed_kept_newer",
+      dismiss: false,
+    });
     // C2b review B1: the only "deferred" the backend passes through is a record that changed while it was read.
     expect(statusLine(s({ roll_forward: { status: "deferred", detail: [{ code: "no_clear_in_progress" }] } }))).toEqual({ key: "deferred", dismiss: false });
   });
@@ -311,7 +316,7 @@ describe("your-data C2b: clear everything", () => {
     const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "settings.json"), "utf8")).yourData;
     const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "settings.json"), "utf8")).yourData;
     for (const lang of [en, zh]) {
-      for (const key of ["completed", "incomplete", "webview_pending", "kept", "deferred", "record_not_updated", "abandoned_needs_reconfirm", "abandoned_changes_applied", "abandoned_ledger_unreadable", "abandoned_ledger_set_aside", "abandoned_other"]) {
+      for (const key of ["completed", "completed_kept_newer", "incomplete", "webview_pending", "kept", "deferred", "record_not_updated", "abandoned_needs_reconfirm", "abandoned_changes_applied", "abandoned_ledger_unreadable", "abandoned_ledger_set_aside", "abandoned_other"]) {
         expect(lang.status[key], `status.${key}`).toBeTruthy();
       }
       for (const g of new Set(Object.values(EVERYTHING_GROUPS).concat(["changeHistory", "reports"]))) expect(lang.store[g], `store.${g}`).toBeTruthy();

@@ -196,6 +196,7 @@
     "statusDismiss": "Dismiss",
     "status": {
       "completed": "When Compy started, it finished a \"clear everything\" that had been interrupted.",
+      "completed_kept_newer": "When Compy started, it finished a \"clear everything\" that had been interrupted. Files saved after that clear began were kept.",
       "incomplete": "When Compy started, it finished part of an interrupted \"clear everything\". The rest needs you to confirm it again.",
       "webview_pending": "When Compy started, an interrupted \"clear everything\" had already deleted its files; only this window's own notes were left to remove.",
       "kept": "Compy can't read the record of an interrupted \"clear everything\" (the file clear-intent.json in Compy's data folder). It left it as it is and deleted nothing. \"Clear everything\" stays unavailable until that file is gone: close Compy, delete clear-intent.json from %APPDATA%\\Compy, and open Compy again.",
