@@ -229,7 +229,7 @@ Compy working; delete them while Compy is closed and it recreates what it needs.
 Trust Ledger, so past changes stop being reversible from it. Compy also keeps one backup copy of the
 ledger beside it, `history.json.bak`, and if `history.json` is missing or damaged it restores the ledger
 from that copy (leaving a small `history.json.restored` note that it did), so deleting only
-`history.json` brings the old ledger back. To erase your change history for good, undo the changes you
+`history.json` brings the old ledger back. To delete your change history, undo the changes you
 want undone first, close Compy, and delete every file in that folder whose name starts with `history.json`
 (the ledger, its `.bak` backup copy, and any `.restored`, `.tmp` or `.corrupt` files); Compy then starts a
 fresh, empty ledger. The support record can be cleared or deleted at any time and Compy simply starts a
@@ -244,19 +244,25 @@ sessions, the Trial results (kept while a change is still applied or the change 
 they are linked to it), the benchmark baseline, the scoreboard and the noise readings, before-and-after
 comparisons, the notes on which checks were last as expected, the crash and freeze notes, the last-seen hardware
 and the hardware, driver and Windows history, their damaged copies (except a damaged copy of the Trial records,
-which is kept) and their working files more than an hour old, and the play-history notes the window keeps in its
-own storage. It does not touch the Trust Ledger (`history.json` and its backup), so every change Compy made can
-still be undone, and it keeps the support record, saved reports, dismissed items, your sharing choice, your
-licence, downloaded rule files, Gaming Mode files and files an admin helper left behind. Saved reports can hold
-session data and the names of programs you ran; delete them yourself if you want them gone. It refuses, and
-deletes nothing, while a game is being measured, a session is still being saved, a Trial or benchmark trial is
-running, the Trial records can't be read, Gaming Mode holds changes or left a working file behind, or Compy is not
-using its normal data folder. If a Trial has started, or a change has been applied, by the time it reaches the
-Trial records, it stops there and keeps them.
-Compy deletes the files directly, with no backup and not to the Recycle Bin. Afterwards the screen lists each
-file as deleted, already gone, could not be deleted, or not tried, and it says "Deleted" only when every listed
-file is gone. Compy reads crash notes from Windows' own logs, so recent crashes may be noted again at its next
-check.
+which is kept) and their working files more than an hour old, the frame-rate helper's leftover files in `runtime\`
+more than an hour old, and the play-history and hardware notes the window keeps in its own storage (only once
+every listed file is gone). It does not touch the Trust Ledger (`history.json` and its backup), so every change
+Compy made can still be undone, and it keeps the support record, saved reports, dismissed items, your sharing
+choice, your licence, your other window settings, a "don't download case notes" marker if you made one,
+downloaded rule files, Gaming Mode files and files an admin helper left behind. Saved reports can hold session
+data and the names of programs you ran; delete them yourself if you want them gone. Clearing does not undo
+changes Compy made to Windows, and sends nothing. It refuses, and deletes nothing, while a game is being
+measured, a session is still being saved, a Trial or benchmark trial is running, the Trial records can't be read,
+Gaming Mode holds changes or left a working file behind, Compy is not using its normal data folder, or that
+folder (or a folder in it) can't be read or is a link. A measurement or session save that starts after the list
+was made also stops it before it deletes anything more. If a Trial has started, or a change has been applied, by
+the time it reaches the Trial records, it stops there and keeps them.
+Compy deletes the files directly, not to the Recycle Bin, and keeps no copy of them; it makes no claim about what
+disk-recovery tools could still find. Afterwards the screen lists each file as deleted, already gone, could not
+be deleted, or not tried; its headline says "Deleted" only when every listed file is gone, and otherwise "Stopped
+part way" or "Not finished". When every listed file is gone, the screen asks you to reload the window or to close
+and reopen Compy, because the window still shows what it had loaded. Compy reads crash notes from Windows' own logs, so recent crashes may be
+noted again at its next check.
 
 There is no in-app way yet to delete everything (the Trust Ledger, the support record, saved reports and your
 choices). To remove its data by hand, close Compy and delete the files
