@@ -637,6 +637,19 @@ describe("data inventory guard: everything Compy stores is listed, and every lis
       expect(problems.some((p) => p.includes("`ghost`") && p.includes("delete the row"))).toBe(true);
     });
 
+    // D1d (D1c review r1): the per-text results are cached by text, so a file with the SAME text at a
+    // different path must still be judged by its path. game_mods.rs is exempt by NAME (NOT_DATA_MODULES)
+    // and spells log file names; its byte-for-byte copy under another name is not exempt.
+    it("a byte-for-byte copy of an exempt module at a new path is judged by its new path", () => {
+      const original = files.find((f) => f.name === "game_mods.rs");
+      expect(original, "game_mods.rs is the NOT_DATA_MODULES example").toBeDefined();
+      expect(checkInventory(files, inv).some((p) => p.includes("optiscaler.log")), "the exempt original raises nothing").toBe(false);
+      const copy = { ...original, file: join(BACKEND, "game_mods_copy.rs"), name: "game_mods_copy.rs" };
+      const problems = checkInventory([...files, copy], inv);
+      expect(problems.some((p) => p.includes("game_mods_copy.rs") && p.includes("optiscaler.log"))).toBe(true);
+      expect(problems.some((p) => p.startsWith(original.file)), "the original stays exempt").toBe(false);
+    });
+
     it("a planted row naming a module that does not exist fails", () => {
       const fake = { ...inv, rows: [...inv.rows, { id: "orphan", base: "Base::DataRoot", path: "orphan.json", writers: ["no_such_module.rs"] }] };
       expect(checkInventory(files, fake).some((p) => p.includes("no_such_module.rs"))).toBe(true);

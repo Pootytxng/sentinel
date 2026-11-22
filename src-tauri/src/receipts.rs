@@ -651,7 +651,7 @@ mod receipts_tests {
 
     #[test]
     fn a_corrupt_or_missing_consent_file_can_silence_sharing_but_never_start_it() {
-        let dir = std::env::temp_dir().join(format!("compy-consent-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("consent", format!("compy-consent-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
 
         let missing = dir.join("nope.json");
@@ -670,7 +670,7 @@ mod receipts_tests {
 
     #[test]
     fn consent_round_trips_and_leaves_no_temp_file_behind() {
-        let dir = std::env::temp_dir().join(format!("compy-consent-rt-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("consent-rt", format!("compy-consent-rt-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("receipts-consent.json");
 

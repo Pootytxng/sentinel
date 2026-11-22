@@ -813,8 +813,8 @@ pub fn clear_support_evidence() -> Result<(), String> {
 mod tests {
     use super::*;
 
-    fn temp_dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("compy-support-{tag}-{}", std::process::id()));
+    fn temp_dir(tag: &str) -> crate::test_scratch::Scratch {
+        let dir = crate::test_scratch::scratch_child("support", format!("compy-support-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -1006,7 +1006,8 @@ mod tests {
 
     #[test]
     fn the_file_keeps_only_the_newest_records_and_stays_under_the_ceiling() {
-        let path = temp_dir("retention").join("evidence.jsonl");
+        let dir = temp_dir("retention");
+        let path = dir.join("evidence.jsonl");
         for i in 0..(MAX_EVENTS + 25) {
             append_to(&path, &event(&format!("event {i}"))).unwrap();
         }
@@ -1022,7 +1023,8 @@ mod tests {
 
     #[test]
     fn a_damaged_file_reads_as_what_survives_and_reports_the_rest() {
-        let path = temp_dir("damaged").join("evidence.jsonl");
+        let dir = temp_dir("damaged");
+        let path = dir.join("evidence.jsonl");
         let good = serde_json::to_string(&event("intact")).unwrap();
         std::fs::write(&path, format!("{good}\nnot json at all\n{{\"at\":\"x\"}}\n\n")).unwrap();
         let (events, unreadable) = read_events_from(&path);

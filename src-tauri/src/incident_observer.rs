@@ -1019,7 +1019,7 @@ mod tests {
     // real one. The writer's read now says it failed, and nothing is set aside.
     #[test]
     fn a_state_that_cant_be_read_right_now_is_an_error_for_the_writer() {
-        let dir = std::env::temp_dir().join(format!("compy-observer-unreadable-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("observer-unreadable", format!("compy-observer-unreadable-{}", std::process::id()));
         let path = dir.join("incident-observer.json");
         std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
         assert!(load_checked(&path).is_err());
@@ -1032,7 +1032,7 @@ mod tests {
     // that failed left no support event and told the window nothing. It now does both.
     #[test]
     fn a_choice_that_cannot_be_saved_is_an_error_with_one_support_event() {
-        let dir = std::env::temp_dir().join(format!("compy-observer-nosave-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("observer-nosave", format!("compy-observer-nosave-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         // The state's folder is a FILE, so the save's create_dir_all fails on every platform.
         let blocker = dir.join("care");
@@ -1051,7 +1051,7 @@ mod tests {
 
     #[test]
     fn a_choice_that_cannot_be_read_first_is_an_error_too_and_nothing_is_written() {
-        let dir = std::env::temp_dir().join(format!("compy-observer-noread-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("observer-noread", format!("compy-observer-noread-{}", std::process::id()));
         let path = dir.join("incident-observer.json");
         std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
         let mut events: Vec<StoreFailure> = Vec::new();
@@ -1066,7 +1066,7 @@ mod tests {
 
     #[test]
     fn a_saved_choice_reports_nothing() {
-        let dir = std::env::temp_dir().join(format!("compy-observer-saves-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("observer-saves", format!("compy-observer-saves-{}", std::process::id()));
         let path = dir.join("incident-observer.json");
         let mut reported = false;
         let out = mutate_at(&path, "care.incident_dismissed", |s, _| s.clear_pending(), |_, _| {
@@ -1082,7 +1082,7 @@ mod tests {
     // exactly like "no crash". It is now an error; undecodable bytes still read as no card.
     #[test]
     fn the_home_card_read_says_when_it_could_not_read() {
-        let dir = std::env::temp_dir().join(format!("compy-observer-cardread-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("observer-cardread", format!("compy-observer-cardread-{}", std::process::id()));
         let unreadable = dir.join("a").join("incident-observer.json");
         std::fs::create_dir_all(&unreadable).unwrap();
         let err = pending_at(&unreadable, Utc::now()).unwrap_err();
@@ -1571,8 +1571,8 @@ mod tests {
 
     // ── Persistence ─────────────────────────────────────────────────────────────────────────────
 
-    fn tmpdir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("compy-observer-{name}-{}", std::process::id()));
+    fn tmpdir(name: &str) -> crate::test_scratch::Scratch {
+        let d = crate::test_scratch::scratch_child("observer", format!("compy-observer-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
@@ -1755,15 +1755,14 @@ mod tests {
         use super::*;
         use crate::atomic_write::ClearEpoch;
 
-        fn scratch(tag: &str) -> PathBuf {
+        /// D1d: the state file sits in a fresh scratch root (a name no other run reuses, removed when the
+        /// caller's test ends), which replaces the start-empty fix this helper had.
+        fn scratch(tag: &str) -> crate::test_scratch::Scratch {
             static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-            let dir = std::env::temp_dir()
-                .join(format!("compy-d6-incident-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
-            // The name repeats whenever Windows reuses a process id and the folder outlives its process: start
-            // empty (same fix as sessions.rs `d6_clear_tests::fresh`).
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).unwrap();
-            dir.join("incident-observer.json")
+            let name = format!("compy-d6-incident-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed));
+            let path = crate::test_scratch::scratch_child("d6-incident", std::path::Path::new(&name).join("incident-observer.json"));
+            std::fs::create_dir_all(path.parent().expect("a folder")).unwrap();
+            path
         }
 
         fn stamp(state: &mut IncidentObserverState) {

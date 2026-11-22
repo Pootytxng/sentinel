@@ -204,8 +204,10 @@ describe("mutation-boundary guard: Compy changes Windows from exactly one place"
   it("reads the compiled-out module list from the real declarations", () => {
     // If this parse silently returned nothing, test-only modules would be scanned as production —
     // noisy but safe. If it over-matched, production modules would go unscanned — the dangerous
-    // direction. Pin both ends against the declaration that exists today.
-    expect([...testOnly]).toEqual([join(BACKEND, "fuzz_support.rs")]);
+    // direction. Pin both ends against the declarations that exist today. (D1d added test_scratch.rs:
+    // %TEMP% scratch folders for tests, `#[cfg(test)] mod test_scratch;` in lib.rs; it changes no Windows
+    // setting, only creates and removes its own folders under the temp dir.)
+    expect([...testOnly].sort()).toEqual([join(BACKEND, "fuzz_support.rs"), join(BACKEND, "test_scratch.rs")].sort());
   });
 
   it("finds no Windows mutation outside the boundary or a reasoned exception", () => {

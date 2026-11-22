@@ -219,7 +219,7 @@ mod hwchange_tests {
 
     #[test]
     fn write_then_load_round_trips_and_rebaseline_clears_the_change() {
-        let dir = std::env::temp_dir().join("compy_hwchange_test_rebaseline");
+        let dir = crate::test_scratch::scratch_child("hwchange", "compy_hwchange_test_rebaseline");
         let _ = std::fs::remove_dir_all(&dir);
         let path = dir.join("hardware-fingerprint.json");
 

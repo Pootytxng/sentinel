@@ -1552,7 +1552,7 @@ mod session_tests {
     /// finite, so it neither fails to load sessions.json nor sets it aside as corrupt.
     #[test]
     fn an_older_compy_loads_a_zero_sample_row() {
-        let path = std::env::temp_dir().join(format!("compy-sessions-zero-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("sessions-zero", format!("compy-sessions-zero-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let mut played = SessionAccumulator::new("2026-10-24T00:00:00Z".into(), Some(0));
         played.record_tick("game.exe", 120.0, 8.3, 90.0, 0, Some(true));
@@ -1595,7 +1595,7 @@ mod session_tests {
     /// the one just saved stays. A run of alt-tabbed sessions can't push out a baseline.
     #[test]
     fn rows_that_measured_nothing_never_push_out_measured_sessions() {
-        let path = std::env::temp_dir().join(format!("compy-sessions-zcap-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("sessions-zcap", format!("compy-sessions-zcap-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let measured = |i: usize| {
             let mut acc = SessionAccumulator::new(format!("m{i}"), Some(0));
@@ -1625,7 +1625,7 @@ mod session_tests {
     /// sessions only, so a run of alt-tabbed sessions can't strip the last measured one's detail.
     #[test]
     fn rows_that_measured_nothing_never_strip_measured_detail() {
-        let path = std::env::temp_dir().join(format!("compy-sessions-zdetail-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("sessions-zdetail", format!("compy-sessions-zdetail-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         for i in 0..FPS_SERIES_KEEP + 1 {
             let mut acc = SessionAccumulator::new(format!("m{i:02}"), Some(0));
@@ -1835,7 +1835,7 @@ mod session_tests {
 
     #[test]
     fn save_load_roundtrips_and_caps_at_max() {
-        let path = std::env::temp_dir().join(format!("compy-sessions-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("sessions", format!("compy-sessions-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         for i in 0..(MAX_SESSIONS + 5) {
             let mut acc = SessionAccumulator::new(format!("t{i}"), Some(0));
@@ -2071,7 +2071,7 @@ mod session_tests {
             #[serde(alias = "sentinel_changes_active")]
             compy_changes_active: usize,
         }
-        let path = std::env::temp_dir().join(format!("compy-sessions-unrecorded-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("sessions-unrecorded", format!("compy-sessions-unrecorded-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let session = |count: Option<usize>| {
             let mut acc = SessionAccumulator::new("t".into(), count);
@@ -2128,7 +2128,7 @@ mod session_tests {
     // the active count as unknown — on disk the downgrade-safe 0 + unrecorded mark — never as 0.
     #[test]
     fn a_session_records_cant_confirm_apart_and_nothing_confirmed_as_unknown() {
-        let path = std::env::temp_dir().join(format!("compy-sessions-cant-confirm-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("sessions-cant-confirm", format!("compy-sessions-cant-confirm-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let session = |active, cant| {
             let counts = crate::history::SessionChangeCounts { active, cant_confirm: cant, legacy_active: 7 };
@@ -2177,7 +2177,7 @@ mod session_tests {
             #[serde(alias = "sentinel_changes_active")]
             compy_changes_active: usize,
         }
-        let path = std::env::temp_dir().join(format!("compy-sessions-downgrade-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("sessions-downgrade", format!("compy-sessions-downgrade-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let counts = crate::history::SessionChangeCounts { active: Some(1), cant_confirm: 1, legacy_active: 2 };
         let mut acc = SessionAccumulator::with_counts("t".into(), crate::history::SessionStartCounts { whole: Some(counts), since_set_aside: None });
@@ -2200,7 +2200,7 @@ mod session_tests {
 
     #[test]
     fn fps_series_persists_and_strips_past_keep_window() {
-        let path = std::env::temp_dir().join(format!("compy-sessions-series-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("sessions-series", format!("compy-sessions-series-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let total = FPS_SERIES_KEEP + 5;
         for i in 0..total {
@@ -2223,7 +2223,7 @@ mod session_tests {
     fn a_shed_series_keeps_the_frame_cap_state_read_while_it_was_kept() {
         // P4-noise-sf: a session past the keep window sheds its series; the cap state read from that
         // series while it was kept stays on the row, so a Trial or a noise band still reads it.
-        let path = std::env::temp_dir().join(format!("compy-sessions-capkeep-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("sessions-capkeep", format!("compy-sessions-capkeep-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let total = FPS_SERIES_KEEP + 3;
         for i in 0..total {
@@ -2256,7 +2256,7 @@ mod session_tests {
         let _ = std::fs::remove_file(&missing);
         assert!(load_sessions_from(&missing).is_empty());
 
-        let corrupt = std::env::temp_dir().join(format!("compy-sessions-bad-{}.json", std::process::id()));
+        let corrupt = crate::test_scratch::scratch_child("sessions-bad", format!("compy-sessions-bad-{}.json", std::process::id()));
         std::fs::write(&corrupt, b"}}not json[[").unwrap();
         assert!(load_sessions_from(&corrupt).is_empty(), "corrupt file fails safe to empty");
         std::fs::remove_file(&corrupt).ok();
@@ -2266,7 +2266,7 @@ mod session_tests {
     // empty, and the save that followed rewrote it with one session, dropping every baseline before it.
     #[test]
     fn a_save_never_rewrites_a_history_it_could_not_read() {
-        let dir = std::env::temp_dir().join(format!("compy-sessions-unreadable-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("sessions-unreadable", format!("compy-sessions-unreadable-{}", std::process::id()));
         let path = dir.join("sessions.json");
         std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
         let mut acc = SessionAccumulator::new("2026-11-02T20:00:00Z".into(), Some(0));
@@ -2344,9 +2344,12 @@ mod d6_clear_tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    fn scratch(tag: &str) -> PathBuf {
+    /// D1d: inside a fresh scratch root that goes when the test ends (the name alone could repeat across runs).
+    fn scratch(tag: &str) -> crate::test_scratch::Scratch {
         static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        fresh(std::env::temp_dir().join(format!("compy-d6-sessions-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed))))
+        let s = crate::test_scratch::scratch_child("d6-sessions", format!("compy-d6-sessions-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+        fresh(s.path_buf());
+        s
     }
 
     /// An EMPTY folder at `dir`. The name repeats across test processes whenever Windows reuses a process id,
@@ -2360,10 +2363,11 @@ mod d6_clear_tests {
 
     #[test]
     fn a_scratch_folder_left_by_an_earlier_process_with_the_same_id_starts_empty() {
-        let dir = std::env::temp_dir().join(format!("compy-d6-sessions-reused-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("d6-sessions-reused", format!("compy-d6-sessions-reused-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         save_session_to(&dir.join("sessions.json"), one("2026-01-01T10:00:00Z")).unwrap();
-        let dir = fresh(dir);
+        let _root = &dir; // the scratch root lives to the end of the test
+        let dir = fresh(dir.path_buf());
         assert!(std::fs::read_dir(&dir).unwrap().next().is_none(), "an earlier run's files are gone");
         assert_eq!(rows(&dir.join("sessions.json")), 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -2574,7 +2578,8 @@ mod d6_clear_tests {
     #[test]
     fn a_clear_of_another_store_does_not_drop_a_save_but_a_clear_of_sessions_does() {
         let epochs = crate::atomic_write::ClearEpochs::new();
-        let path = scratch("perstore").join("sessions.json");
+        let dir = scratch("perstore");
+        let path = dir.join("sessions.json");
         let started = epochs.now(CLEAR_STORE);
         epochs.bump("drift");
         epochs.bump("incident-observer");

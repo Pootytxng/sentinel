@@ -1044,14 +1044,11 @@ pub(crate) fn reset_for_clear(s: &mut BenchmarkState) {
 mod benchmark_store_persistence_tests {
     use super::*;
 
-    fn scratch(tag: &str) -> std::path::PathBuf {
+    /// D1d: inside a fresh scratch root that is removed when the test ends (crate::test_scratch).
+    fn scratch(tag: &str) -> crate::test_scratch::Scratch {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static N: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "compy-bench-{tag}-{}-{}",
-            std::process::id(),
-            N.fetch_add(1, Ordering::Relaxed)
-        ));
+        let dir = crate::test_scratch::scratch_child("bench", format!("compy-bench-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -1067,14 +1064,16 @@ mod benchmark_store_persistence_tests {
     fn a_truncated_store_is_the_default_not_an_error() {
         // Exactly the shape an interrupted `fs::write` used to leave behind, and the reason that
         // was destructive: the loader cannot tell "half a file" from "no file".
-        let p = scratch("truncated").join("benchmark.json");
+        let p_scratch = scratch("truncated");
+        let p = p_scratch.join("benchmark.json");
         std::fs::write(&p, "{\n  \"baseline\": {\n    \"runs\"").unwrap();
         assert!(load_store_from(&p).baseline.is_none());
     }
 
     #[test]
     fn a_saved_store_round_trips_and_replaces_the_previous_one_whole() {
-        let p = scratch("round").join("benchmark.json");
+        let p_scratch = scratch("round");
+        let p = p_scratch.join("benchmark.json");
         std::fs::write(&p, "{\"baseline\":null,\"baseline_at\":\"OLD-AND-LONGER\"}").unwrap();
         let store = BenchmarkStore {
             baseline: None,
@@ -1094,7 +1093,8 @@ mod benchmark_store_persistence_tests {
 
     #[test]
     fn a_failed_save_leaves_the_previous_baseline_readable() {
-        let p = scratch("failed").join("benchmark.json");
+        let p_scratch = scratch("failed");
+        let p = p_scratch.join("benchmark.json");
         let good = BenchmarkStore {
             baseline: None,
             baseline_at: Some("keep-me".into()),
@@ -1138,7 +1138,8 @@ mod benchmark_store_persistence_tests {
     #[cfg(windows)]
     #[test]
     fn a_windows_share_lock_surfaces_the_benchmark_error_and_preserves_the_old_store() {
-        let p = scratch("locked").join("benchmark.json");
+        let p_scratch = scratch("locked");
+        let p = p_scratch.join("benchmark.json");
         let good = BenchmarkStore {
             baseline: None,
             baseline_at: Some("keep-me".into()),
@@ -1421,7 +1422,7 @@ mod benchmark_tests {
     fn disk_runner_measures_and_cleans_up() {
         let cancel = AtomicBool::new(false);
         // isolated dir so the cleanup assertion is immune to parallel tests
-        let dir = std::env::temp_dir().join(format!("compy_disktest_{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("disktest", format!("compy_disktest_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         if let Some(d) = bench_disk(&RunConfig::tiny(), &cancel, &dir) {
             assert!(d.seq_write_mb_s > 0.0 && d.seq_read_mb_s > 0.0);

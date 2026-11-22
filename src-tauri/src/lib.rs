@@ -65,6 +65,8 @@ mod remote_rules;
 mod services; // A4 read-only service inventory — categorised, informational, mutates nothing.
 mod sessions;
 mod session_boundary; // Where a session ends and the next begins (one process identity per session) + the read-only mixed-session flag.
+#[cfg(test)]
+mod test_scratch; // Test-only %TEMP% scratch folders: a name no other run can reuse, created empty, removed when the test ends. Never compiled into the shipped binary.
 mod support_evidence; // Local support evidence — bounded, redacted, on-disk-only record of the moments support actually asks about. No outbound path; export is user-initiated and preview-gated.
 mod trial_candidates; // P4-candidates: READ-ONLY "worth testing on this PC" filter for the Trial picker (OPTIMIZATION_ENGINE §3.1–3.3) — applies / already set / Compy can do it safely, with one reason per change. Mutates nothing.
 mod tray; // Opt-in "minimize to tray" (default OFF — §1 clean-exit unless the user opts in).
@@ -939,7 +941,7 @@ mod migration_tests {
     // its copy primitive directly.)
     #[test]
     fn copy_dir_recursive_copies_nested_tree_and_preserves_source() {
-        let base = std::env::temp_dir().join(format!("compy_migtest_{}", std::process::id()));
+        let base = crate::test_scratch::scratch_child("migtest", format!("compy_migtest_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         let src = base.join("Sentinel");
         let dst = base.join("Compy");
@@ -1005,7 +1007,7 @@ mod update_refusal_tests {
     #[test]
     fn a_leftover_temp_file_still_refuses_and_the_refusal_names_it_and_its_folder() {
         // Review SHOULD-FIX: the check's own words, wired to what it found (no support log written).
-        let dir = std::env::temp_dir().join(format!("compy-update-refusal-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("update-refusal", format!("compy-update-refusal-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);

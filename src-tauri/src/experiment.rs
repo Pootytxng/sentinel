@@ -6267,7 +6267,7 @@ mod experiment_tests {
 
     #[test]
     fn store_round_trips_through_disk() {
-        let dir = std::env::temp_dir().join(format!("compy-exp-test-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        let dir = crate::test_scratch::scratch_child("exp-test", format!("compy-exp-test-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
         let path = dir.join("experiments.json");
         let mut store = ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![] };
         store.experiments.push(rec(90.0, 2));
@@ -6281,7 +6281,7 @@ mod experiment_tests {
 
     #[test]
     fn corrupt_store_fails_safe_to_empty_and_sets_aside() {
-        let dir = std::env::temp_dir().join(format!("compy-exp-corrupt-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        let dir = crate::test_scratch::scratch_child("exp-corrupt", format!("compy-exp-corrupt-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("experiments.json");
         std::fs::write(&path, b"{ not valid json").unwrap();
@@ -6297,7 +6297,7 @@ mod experiment_tests {
     // dated names) is a refused read, never an empty store the next save would write over.
     #[test]
     fn a_second_damaged_store_keeps_the_first_set_aside_and_an_unmovable_one_refuses_the_read() {
-        let dir = std::env::temp_dir().join(format!("compy-exp-corrupt-twice-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        let dir = crate::test_scratch::scratch_child("exp-corrupt-twice", format!("compy-exp-corrupt-twice-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("experiments.json");
         std::fs::write(&path, b"{ first damage").unwrap();
@@ -6345,7 +6345,7 @@ mod experiment_tests {
     // record over every Trial on disk. A directory at the store's path fails the read on any platform.
     #[test]
     fn a_store_that_cant_be_read_right_now_is_an_error_for_a_write_never_an_empty_store() {
-        let dir = std::env::temp_dir().join(format!("compy-exp-unreadable-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        let dir = crate::test_scratch::scratch_child("exp-unreadable", format!("compy-exp-unreadable-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
         let path = dir.join("experiments.json");
         std::fs::create_dir_all(&path).unwrap();
         let err = load_store_checked_from(&path).expect_err("a write never builds on an unread store");
@@ -7751,7 +7751,7 @@ mod experiment_tests {
         let mut measured = rec(150.0, 5);
         measured.id = "exp:2-0".into();
         measured.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: Some(1.8), measured_noise_stale: None, between_sessions: None });
-        let path = std::env::temp_dir().join(format!("compy-exp-noise-{}.json", std::process::id()));
+        let path = crate::test_scratch::scratch_child("exp-noise", format!("compy-exp-noise-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let store = ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![stale, measured] };
         save_store_to(&path, &store).unwrap();

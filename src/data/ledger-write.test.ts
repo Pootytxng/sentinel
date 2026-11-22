@@ -486,6 +486,20 @@ describe("the ledger-writing command list matches src-tauri", () => {
     }
   });
 
+  // D1d (D1c review r1): the derivation checks each function only against names added since it was last
+  // checked. These need more than one pass, so they go red if that bookkeeping skips a name: a chain whose
+  // callees are defined AFTER their callers, three deep, and a function visited early that calls an alias
+  // which only becomes a writer's name later in the same pass.
+  it("the derivation reaches a chain defined callers-first and an alias that becomes a writer mid-pass", () => {
+    const writers = ledgerWriters([
+      "use crate::m::{chain_c as later_name};\nfn late_alias_cmd() { later_name(); }",
+      "fn chain_a_cmd() { chain_b(); }\nfn chain_b() { chain_c(); }\nfn chain_c() { save_history(&h); }",
+      "fn bystander_cmd() { chain_d(); }",
+    ]);
+    for (const name of ["chain_c", "chain_b", "chain_a_cmd", "late_alias_cmd"]) expect(writers, name).toContain(name);
+    expect(writers).not.toContain("bystander_cmd");
+  });
+
   // Where a literal or a comment holds the other's delimiter, and the plain forms next to them (Codex,
   // #619 round 2). Each case is its own file, so nothing spills from one into the next. `true`: the
   // function really calls save_history. `false`: the only "call" is text inside a literal or a comment.

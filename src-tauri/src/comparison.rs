@@ -841,10 +841,13 @@ pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
 mod comparison_persistence_tests {
     use super::*;
 
-    fn scratch(tag: &str) -> std::path::PathBuf {
+    /// D1d: inside a fresh scratch root that is removed when the test ends (crate::test_scratch).
+    fn scratch(tag: &str) -> crate::test_scratch::Scratch {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static N: AtomicUsize = AtomicUsize::new(0);
-        super::fresh_scratch(format!("compy-cmp-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)))
+        let s = crate::test_scratch::scratch_child("cmp", format!("compy-cmp-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+        std::fs::create_dir_all(&s).unwrap();
+        s
     }
 
     fn armed(at: &str) -> ArmedComparison {
@@ -878,7 +881,8 @@ mod comparison_persistence_tests {
 
     #[test]
     fn an_armed_comparison_round_trips_and_replaces_the_previous_one_whole() {
-        let p = scratch("round").join("compy_comparison.json");
+        let p_scratch = scratch("round");
+        let p = p_scratch.join("compy_comparison.json");
         save_armed_to(&p, &armed("first-and-much-longer-than-the-second")).expect("first");
         save_armed_to(&p, &armed("second")).expect("second");
         let got = load_armed_from(&p).expect("armed");
@@ -892,7 +896,8 @@ mod comparison_persistence_tests {
     fn a_failed_save_leaves_the_previous_arm_armed() {
         // The dangerous outcome this lane removes: a half-written arm that loads as `None` looks
         // exactly like "nothing was ever armed", so the baseline is silently lost.
-        let p = scratch("failed").join("compy_comparison.json");
+        let p_scratch = scratch("failed");
+        let p = p_scratch.join("compy_comparison.json");
         save_armed_to(&p, &armed("keep-me")).expect("first");
         crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::BeforeRename);
         assert!(
@@ -962,7 +967,8 @@ mod comparison_persistence_tests {
 
     #[test]
     fn a_result_round_trips_and_a_corrupt_one_surfaces_nothing() {
-        let p = scratch("result").join("compy_comparison_result.json");
+        let p_scratch = scratch("result");
+        let p = p_scratch.join("compy_comparison_result.json");
         save_result_to(&p, &result("improved")).expect("save");
         assert_eq!(latest_result_from(&p).expect("result").verdict, "improved");
         assert_eq!(latest_result_from(&p).unwrap().noise_floor_pct, 3.0);
@@ -978,7 +984,8 @@ mod comparison_persistence_tests {
     fn a_failed_result_save_leaves_the_previous_verdict_readable() {
         // The armed store and the result store are two separate call sites; this pins the second,
         // so converting only one of them back to `std::fs::write` still turns a test red.
-        let p = scratch("result-failed").join("compy_comparison_result.json");
+        let p_scratch = scratch("result-failed");
+        let p = p_scratch.join("compy_comparison_result.json");
         save_result_to(&p, &result("improved")).expect("first");
         crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::BeforeRename);
         assert!(
@@ -1039,7 +1046,8 @@ mod comparison_persistence_tests {
         // Clearing deletes; it does not write. Pinned so a later "consistency" sweep cannot convert
         // it into a write of empty bytes, which would leave a file that parses as nothing but still
         // exists — and `latest_result` would go on being asked to parse it forever.
-        let p = scratch("clear").join("compy_comparison_result.json");
+        let p_scratch = scratch("clear");
+        let p = p_scratch.join("compy_comparison_result.json");
         save_result_to(&p, &result("no-change")).expect("save");
         clear_result_at(&p);
         assert!(!p.exists(), "the result file survived clearing");
@@ -1468,10 +1476,13 @@ mod comparison_race_tests {
     use super::*;
     use std::sync::atomic::Ordering;
 
-    fn scratch(tag: &str) -> std::path::PathBuf {
+    /// D1d: inside a fresh scratch root that is removed when the test ends (crate::test_scratch).
+    fn scratch(tag: &str) -> crate::test_scratch::Scratch {
         use std::sync::atomic::AtomicUsize;
         static N: AtomicUsize = AtomicUsize::new(0);
-        super::fresh_scratch(format!("compy-cmp-race-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)))
+        let s = crate::test_scratch::scratch_child("cmp-race", format!("compy-cmp-race-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+        std::fs::create_dir_all(&s).unwrap();
+        s
     }
 
     /// Item 4: the two "flaky" race tests read an EARLIER run's files. A scratch folder named by
@@ -1738,7 +1749,8 @@ mod comparison_race_tests {
     /// fails with "comparison lock poisoned".
     #[test]
     fn a_panic_under_the_lock_does_not_permanently_break_arming() {
-        let armed = scratch("poison").join("compy_comparison.json");
+        let armed_scratch = scratch("poison");
+        let armed = armed_scratch.join("compy_comparison.json");
 
         // The other poisoning test must not be inside its own recovery window while this one reads
         // the flag, and vice versa. They are the only two things in the crate that panic under this

@@ -992,8 +992,8 @@ pub(crate) mod tests {
         }
     }
 
-    fn temp(name: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("compy-noise-{name}-{}.json", std::process::id()));
+    fn temp(name: &str) -> crate::test_scratch::Scratch {
+        let p = crate::test_scratch::scratch_child("noise", format!("compy-noise-{name}-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&p);
         let _ = std::fs::remove_file(p.with_extension("json.corrupt"));
         p

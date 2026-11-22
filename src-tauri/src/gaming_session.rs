@@ -354,8 +354,8 @@ mod tests {
 
     // A private per-test session dir so the REAL save/quarantine path runs without touching a live
     // session on the rig. Each test runs on its own thread → the thread-local override is isolated.
-    fn temp_dir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("compy-gs-{tag}-{}", std::process::id()));
+    fn temp_dir(tag: &str) -> crate::test_scratch::Scratch {
+        let d = crate::test_scratch::scratch_child("gs", format!("compy-gs-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).expect("temp dir");
         d

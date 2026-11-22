@@ -1254,14 +1254,11 @@ pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
 mod readiness_dismissal_persistence_tests {
     use super::*;
 
-    fn scratch(tag: &str) -> std::path::PathBuf {
+    /// D1d: inside a fresh scratch root that is removed when the test ends (crate::test_scratch).
+    fn scratch(tag: &str) -> crate::test_scratch::Scratch {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static N: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "compy-dismiss-{tag}-{}-{}",
-            std::process::id(),
-            N.fetch_add(1, Ordering::Relaxed)
-        ));
+        let dir = crate::test_scratch::scratch_child("dismiss", format!("compy-dismiss-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -1281,7 +1278,8 @@ mod readiness_dismissal_persistence_tests {
 
     #[test]
     fn dismissals_round_trip_and_a_shorter_list_replaces_the_longer_one_whole() {
-        let p = scratch("round").join("readiness_dismissals.json");
+        let p_scratch = scratch("round");
+        let p = p_scratch.join("readiness_dismissals.json");
         save_dismissals_to(&p, &["a".to_string(), "b".to_string(), "c".to_string()]).expect("first");
         save_dismissals_to(&p, &["z".to_string()]).expect("second");
         assert_eq!(load_dismissals_from(&p), vec!["z".to_string()]);
@@ -1291,7 +1289,8 @@ mod readiness_dismissal_persistence_tests {
     fn a_failed_save_keeps_the_previous_dismissals_and_says_so_in_the_users_words() {
         // The regression this lane removes: a half-written list parses as nothing, so every check
         // the user had silenced comes back — and they are told nothing went wrong.
-        let p = scratch("failed").join("readiness_dismissals.json");
+        let p_scratch = scratch("failed");
+        let p = p_scratch.join("readiness_dismissals.json");
         save_dismissals_to(&p, &["keep-me".to_string()]).expect("first");
 
         crate::atomic_write::force_next_failure(crate::atomic_write::FailPoint::BeforeRename);
@@ -1330,7 +1329,8 @@ mod readiness_dismissal_persistence_tests {
     #[cfg(windows)]
     #[test]
     fn a_windows_share_lock_keeps_the_existing_wording_and_old_dismissals() {
-        let p = scratch("locked").join("readiness_dismissals.json");
+        let p_scratch = scratch("locked");
+        let p = p_scratch.join("readiness_dismissals.json");
         save_dismissals_to(&p, &["keep-me".to_string()]).expect("first");
         let held = crate::atomic_write::hold_without_share(&p);
         let err = save_dismissals_to(&p, &["clobber".to_string()])
@@ -1347,7 +1347,8 @@ mod readiness_dismissal_persistence_tests {
     fn a_missing_data_folder_is_reported_in_the_outer_wording_not_the_inner_one() {
         // `save_dismissals` owns the folder-creation message; `save_dismissals_to` owns the write
         // message. Pinned so the split introduced here cannot swap which string the user sees.
-        let p = scratch("nodir").join("missing").join("readiness_dismissals.json");
+        let p_scratch = scratch("nodir");
+        let p = p_scratch.join("missing").join("readiness_dismissals.json");
         let err = save_dismissals_to(&p, &["a".to_string()]).expect_err("write into a missing dir");
         assert!(
             err.starts_with("could not save your dismissed-checks setting: "),
@@ -1622,7 +1623,7 @@ mod readiness_tests {
     // dismiss saved it over every earlier dismissal.
     #[test]
     fn a_dismiss_never_rewrites_a_list_it_could_not_read() {
-        let dir = std::env::temp_dir().join(format!("compy-dismissals-unreadable-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("dismissals-unreadable", format!("compy-dismissals-unreadable-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("readiness_dismissals.json");
         save_dismissals_to(&path, &["earlier".to_string()]).unwrap();
@@ -2400,14 +2401,11 @@ mod readiness_tests {
 mod readiness_dismissal_race_tests {
     use super::*;
 
-    fn scratch(tag: &str) -> std::path::PathBuf {
+    /// D1d: inside a fresh scratch root that is removed when the test ends (crate::test_scratch).
+    fn scratch(tag: &str) -> crate::test_scratch::Scratch {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static N: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "compy-dismiss-race-{tag}-{}-{}",
-            std::process::id(),
-            N.fetch_add(1, Ordering::Relaxed)
-        ));
+        let dir = crate::test_scratch::scratch_child("dismiss-race", format!("compy-dismiss-race-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -2485,7 +2483,8 @@ mod readiness_dismissal_race_tests {
     /// makes acting on a stale read destructive rather than merely wasteful.
     #[test]
     fn a_restore_cannot_erase_a_dismissal_that_landed_after_it_read() {
-        let path = scratch("mid-window").join("readiness_dismissals.json");
+        let path_scratch = scratch("mid-window");
+        let path = path_scratch.join("readiness_dismissals.json");
 
         let _seam = crate::race_seam::Widened::arm();
         std::thread::scope(|scope| {
@@ -2517,7 +2516,8 @@ mod readiness_dismissal_race_tests {
     /// and this fails.
     #[test]
     fn a_panic_under_the_lock_does_not_permanently_break_dismissing() {
-        let path = scratch("poison").join("readiness_dismissals.json");
+        let path_scratch = scratch("poison");
+        let path = path_scratch.join("readiness_dismissals.json");
 
         let died = std::thread::spawn(|| {
             let _held = lock_dismissals();

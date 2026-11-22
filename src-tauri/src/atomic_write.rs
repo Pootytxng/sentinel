@@ -397,14 +397,15 @@ mod tests {
 
     /// Every test writes into its own directory under the OS temp dir. Nothing here reads or
     /// writes the real `%APPDATA%\Compy` data root.
-    fn scratch(tag: &str) -> PathBuf {
+    /// D1d: inside a fresh scratch root that is removed when the test ends (crate::test_scratch).
+    fn scratch(tag: &str) -> crate::test_scratch::Scratch {
         static N: AtomicUsize = AtomicUsize::new(0);
-        scratch_at(std::env::temp_dir().join(format!(
-            "compy-atomic-{}-{}-{}",
-            tag,
-            std::process::id(),
-            N.fetch_add(1, Ordering::Relaxed)
-        )))
+        let s = crate::test_scratch::scratch_child(
+            "atomic",
+            format!("compy-atomic-{}-{}-{}", tag, std::process::id(), N.fetch_add(1, Ordering::Relaxed)),
+        );
+        scratch_at(s.path_buf());
+        s
     }
 
     /// A scratch directory that STARTS empty rather than one that is assumed to be.
@@ -432,9 +433,9 @@ mod tests {
         std::fs::create_dir(dir.join("store.json")).expect("stale target");
         std::fs::write(dir.join("store.json.stale.tmp"), b"x").expect("stale temp");
 
-        let again = scratch_at(dir.clone());
+        let again = scratch_at(dir.path_buf());
 
-        assert_eq!(again, dir);
+        assert_eq!(again, dir.path_buf());
         assert!(
             std::fs::read_dir(&dir).expect("read scratch").next().is_none(),
             "an inherited scratch dir was reused with its previous run's leftovers still in it"
@@ -669,7 +670,7 @@ mod tests {
     // Codebase review 2026-11-03: a second damaged store must not erase the first's recoverable bytes.
     #[test]
     fn a_second_set_aside_keeps_the_first_beside_it() {
-        let dir = std::env::temp_dir().join(format!("compy-set-aside-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("set-aside", format!("compy-set-aside-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("store.json");

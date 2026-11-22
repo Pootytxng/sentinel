@@ -1537,7 +1537,7 @@ mod spans_trial_tests {
     // own words once, whole, after one reason, not nested in parentheses inside its own sentence.
     #[test]
     fn a_start_refused_for_an_unreadable_trial_store_says_it_once() {
-        let dir = std::env::temp_dir().join(format!("compy-gm-store-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("gm-store", format!("compy-gm-store-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let path = dir.join("experiments.json");
         std::fs::create_dir_all(&path).unwrap(); // a directory at the store's path: unreadable
@@ -1642,7 +1642,7 @@ mod spans_trial_tests {
         assert_eq!(recorded.len(), 7, "recorded-plan writers changed: hold the new one with the plan\n{recorded:#?}");
 
         // End to end: a readable session holding the plan refuses the restore before anything runs.
-        let dir = std::env::temp_dir().join(format!("compy-gm-coreparking-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("gm-coreparking", format!("compy-gm-coreparking-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
@@ -1706,7 +1706,7 @@ mod spans_trial_tests {
     fn a_change_is_refused_while_a_stop_is_putting_changes_back() {
         // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
         let _files = crate::data_root::shared_root_files();
-        let dir = std::env::temp_dir().join(format!("compy-gm-inflight-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("gm-inflight", format!("compy-gm-inflight-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
@@ -1743,7 +1743,7 @@ mod spans_trial_tests {
     #[test]
     fn the_session_check_reads_the_contract_on_disk_and_refuses_one_it_cant_read() {
         // Review r1 (opus SHOULD-FIX 3): the fail-closed arms, on a scratch session folder.
-        let dir = std::env::temp_dir().join(format!("compy-gm-spans-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("gm-spans", format!("compy-gm-spans-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
@@ -1777,7 +1777,7 @@ mod spans_trial_tests {
     fn a_set_aside_record_alone_refuses_naming_the_file_its_folder_and_a_way_out() {
         // CR-gm-spans-followups (a): a quarantined orphan used to say "Recover or end Gaming Mode
         // first", which the user can't do (recovery reads only a readable gaming-session.json).
-        let dir = std::env::temp_dir().join(format!("compy-gm-orphan-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("gm-orphan", format!("compy-gm-orphan-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
@@ -1994,8 +1994,8 @@ mod elevation_batch_tests {
 
     /// A private per-test session dir (the SessionDirOverride target) — the REAL save/load path
     /// runs against it, so no test can ever touch a live session on the rig.
-    fn temp_session_dir(tag: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("compy-t6-{tag}-{}", std::process::id()));
+    fn temp_session_dir(tag: &str) -> crate::test_scratch::Scratch {
+        let d = crate::test_scratch::scratch_child("t6", format!("compy-t6-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).expect("temp session dir");
         d

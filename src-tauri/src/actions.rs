@@ -1813,7 +1813,7 @@ mod batch_elevation_tests {
     /// elevation changes the token, not the semantics.
     #[test]
     fn real_powershell_batch_isolates_a_failing_item() {
-        let dir = std::env::temp_dir().join(format!("compy-batch-test-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("batch-test", format!("compy-batch-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         let rf = dir.join("receipts.txt");
         let _ = std::fs::remove_file(&rf);
@@ -6499,7 +6499,7 @@ mod rollback_tests {
                 }
             }
         }
-        let dir = std::env::temp_dir().join(format!("compy-s41-restore-exit-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("s41-restore-exit", format!("compy-s41-restore-exit-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         // g4: every PowerShell child is waited on for at most PS_LIMIT, then killed by its own handle
         // (output_within), so a stalled child fails this test with a message instead of hanging it.
@@ -7571,7 +7571,7 @@ mod all_or_nothing_tests {
         // Active plan unreadable at run time (a REAL native exiting 1: a powercfg.cmd first on PATH
         // that logs its calls and fails /getactivescheme, so `$?` is the one the script reads): the
         // apply fails and the index write is put back, never a silent skip of the setactive.
-        let dir = std::env::temp_dir().join(format!("compy-plan-guid-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("plan-guid", format!("compy-plan-guid-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         let log = dir.join("log.txt");
         let _ = std::fs::remove_file(&log);
@@ -7602,10 +7602,10 @@ mod all_or_nothing_tests {
             .success()
     }
 
-    fn temp_file(tag: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("compy-617-{}-{tag}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("temp dir");
-        let f = dir.join("v.txt");
+    /// D1d: the file sits in a fresh scratch root that is removed when the caller's test ends.
+    fn temp_file(tag: &str) -> crate::test_scratch::Scratch {
+        let f = crate::test_scratch::scratch_child("617", std::path::Path::new(&format!("compy-617-{}-{tag}", std::process::id())).join("v.txt"));
+        std::fs::create_dir_all(f.parent().expect("a folder")).expect("temp dir");
         std::fs::write(&f, "old").expect("seed");
         f
     }

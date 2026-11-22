@@ -2550,8 +2550,8 @@ mod tests {
 
     // ---- probing -------------------------------------------------------------------------------
 
-    fn temp_root(tag: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("compy_m2_{tag}_{}", std::process::id()));
+    fn temp_root(tag: &str) -> crate::test_scratch::Scratch {
+        let p = crate::test_scratch::scratch_child("m2", format!("compy_m2_{tag}_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
         p
@@ -2618,8 +2618,8 @@ mod tests {
     fn a_path_over_260_characters_is_opened_through_the_extended_form() {
         let a = "a".repeat(120);
         let b = "b".repeat(120);
-        let root = std::env::temp_dir().join(format!("compy_m2_long_{}", std::process::id())).join(&a).join(&b);
-        let top = std::env::temp_dir().join(format!("compy_m2_long_{}", std::process::id()));
+        let top = crate::test_scratch::scratch_child("m2-long", format!("compy_m2_long_{}", std::process::id()));
+        let root = top.join(&a).join(&b);
         let _ = std::fs::remove_dir_all(&top);
         std::fs::create_dir_all(&root).unwrap();
         put(&root, "dxgi.dll", &build_pe(&opti_block(), false).bytes);
@@ -2888,7 +2888,7 @@ mod tests {
 
     #[test]
     fn a_missing_folder_and_a_zero_budget_are_unreadable_never_no_mods() {
-        let gone = std::env::temp_dir().join(format!("compy_m2_gone_{}", std::process::id()));
+        let gone = crate::test_scratch::scratch_child("m2-gone", format!("compy_m2_gone_{}", std::process::id()));
         assert_eq!(scan_game_folder(&gone, Duration::from_secs(1)).status, ScanStatus::Unreadable(ModUnreadable::FolderMissing));
         let root = temp_root("zero");
         put(&root, "ReShade.ini", b"x");
@@ -2949,7 +2949,8 @@ mod tests {
     #[test]
     fn a_junction_is_not_followed_and_the_scan_says_so() {
         let root = temp_root("junction");
-        let target = temp_root("junction_target");
+        let target_root = temp_root("junction_target");
+        let target = target_root.path_buf();
         put(&target, "ReShade.ini", b"x");
         put(&root, "Game.exe", b"MZ");
         let status = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
@@ -3310,7 +3311,7 @@ mod tests {
     }
 
     /// A UE-shaped install: the exe at depth 3, and a Content tree far deeper than the search goes.
-    fn ue_tree(tag: &str, with_exe: bool) -> PathBuf {
+    fn ue_tree(tag: &str, with_exe: bool) -> crate::test_scratch::Scratch {
         let root = temp_root(tag);
         if with_exe {
             put(&root, "Game/Binaries/Win64/Game-Win64-Shipping.exe", b"MZ");
@@ -3385,7 +3386,8 @@ mod tests {
     #[test]
     fn a_link_or_offline_folder_in_the_exe_search_is_a_recorded_limit() {
         let root = temp_root("search_link");
-        let target = temp_root("search_link_target");
+        let target_root = temp_root("search_link_target");
+        let target = target_root.path_buf();
         put(&target, "x.exe", b"MZ");
         let made = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
             .args(["/c", "mklink", "/J"])

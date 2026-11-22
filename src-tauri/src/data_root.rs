@@ -1578,8 +1578,8 @@ mod tests {
 mod ledger_backup_receipts_tests {
     use super::ledger_receipts;
 
-    fn dir_for(tag: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("compy-root-bak-{tag}-{}", std::process::id()));
+    fn dir_for(tag: &str) -> crate::test_scratch::Scratch {
+        let dir = crate::test_scratch::scratch_child("root-bak", format!("compy-root-bak-{tag}-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).unwrap();
         dir

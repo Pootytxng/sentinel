@@ -3720,7 +3720,7 @@ mod tests {
 
     #[test]
     fn corrupt_store_fails_safe_and_preserves_the_bytes() {
-        let dir = std::env::temp_dir().join(format!("compy-intel-test-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("intel-test", format!("compy-intel-test-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("intelligence.json");
         std::fs::write(&path, "{ this is not json").unwrap();
@@ -3734,7 +3734,7 @@ mod tests {
 
     #[test]
     fn store_roundtrip_and_append_only_on_change() {
-        let dir = std::env::temp_dir().join(format!("compy-intel-rt-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("intel-rt", format!("compy-intel-rt-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("intelligence.json");
         let mut store = IntelligenceStore::default();

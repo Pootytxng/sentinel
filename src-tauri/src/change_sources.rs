@@ -2803,8 +2803,8 @@ mod tests {
         assert!(!folder_may_hold("", "anything"));
     }
 
-    fn fake_library(tag: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("compy_f4b_{tag}_{}", std::process::id()));
+    fn fake_library(tag: &str) -> crate::test_scratch::Scratch {
+        let root = crate::test_scratch::scratch_child("f4b", format!("compy_f4b_{tag}_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("steamapps").join("common").join("Lane Split").join("Bin").join("Win64")).unwrap();
         std::fs::create_dir_all(root.join("steamapps").join("common").join("Other Game")).unwrap();
@@ -3256,9 +3256,9 @@ mod tests {
 
     // ---- review r1: Steam libraries --------------------------------------------------------------
 
-    fn temp_root(tag: &str) -> PathBuf {
+    fn temp_root(tag: &str) -> crate::test_scratch::Scratch {
         let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let p = std::env::temp_dir().join(format!("compy-f4-{tag}-{}-{n}", std::process::id()));
+        let p = crate::test_scratch::scratch_child("f4", format!("compy-f4-{tag}-{}-{n}", std::process::id()));
         std::fs::create_dir_all(p.join("steamapps")).unwrap();
         p
     }
@@ -3285,7 +3285,7 @@ mod tests {
             other => panic!("{other:?}"),
         }
         // The same libraries with everything readable: now it is a plain not-found.
-        let both = steam_roots_for(&[&ok_lib]);
+        let both = steam_roots_for(&[&ok_lib.path_buf()]);
         assert_eq!(
             find_in_libraries(&both, false, &game, Duration::from_secs(5)),
             SourceRead::Unreadable(UnreadableReason::SteamGameNotFound)
@@ -3303,7 +3303,7 @@ mod tests {
         let lib = temp_root("b");
         std::fs::write(lib.join("steamapps").join("appmanifest_5.acf"), "\"AppState\"\n{\n\"appid\"\t\"5").unwrap();
         let game = GameRef { steam_app_id: Some(5), ..GameRef::default() };
-        let roots = steam_roots_for(&[&lib]);
+        let roots = steam_roots_for(&[&lib.path_buf()]);
         assert_eq!(
             find_in_libraries(&roots, false, &game, Duration::from_secs(5)),
             SourceRead::Unreadable(UnreadableReason::SteamPartiallyUnreadable { libraries: 0, records: 1 })
@@ -3319,7 +3319,7 @@ mod tests {
         std::fs::write(d_lib.join("steamapps").join("appmanifest_7.acf"), acf_for(7, "Foo", 2)).unwrap();
         let install = format!("{}\\steamapps\\common\\Foo", d_lib.to_string_lossy());
         let game = GameRef { install_dir: Some(install.clone()), ..GameRef::default() };
-        let roots = steam_roots_for(&[&c_lib, &d_lib]);
+        let roots = steam_roots_for(&[&c_lib.path_buf(), &d_lib.path_buf()]);
         match find_in_libraries(&roots, false, &game, Duration::from_secs(5)) {
             SourceRead::Read(ok) => assert_eq!(ok.events[0].what.build_id.as_deref(), Some("2"), "the D library's manifest, not C's stale one"),
             other => panic!("{other:?}"),
@@ -3349,7 +3349,7 @@ mod tests {
         let lib = temp_root("e");
         std::fs::write(lib.join("steamapps").join("appmanifest_1217060.acf"), ACF).unwrap();
         let game = GameRef { steam_app_id: Some(1217060), ..GameRef::default() };
-        match find_in_libraries(&steam_roots_for(&[&lib]), false, &game, Duration::from_secs(5)) {
+        match find_in_libraries(&steam_roots_for(&[&lib.path_buf()]), false, &game, Duration::from_secs(5)) {
             SourceRead::Read(ok) => assert!(ok.notes.contains(&Note::SteamUpdateTimeIsFileChange)),
             other => panic!("{other:?}"),
         }
@@ -3633,15 +3633,14 @@ mod tests {
 #[cfg(test)]
 mod steam_listing_tests {
     use super::*;
-    use std::path::PathBuf;
 
     fn acf(id: u32, name: &str, dir: &str, updated: Option<i64>) -> String {
         let lu = updated.map(|u| format!("\t\"LastUpdated\"\t\t\"{u}\"\n")).unwrap_or_default();
         format!("\"AppState\"\n{{\n\t\"appid\"\t\t\"{id}\"\n\t\"name\"\t\t\"{name}\"\n\t\"installdir\"\t\t\"{dir}\"\n{lu}}}\n")
     }
 
-    fn library(tag: &str, manifests: &[(u32, String)]) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("compy_d6_{tag}_{}", std::process::id()));
+    fn library(tag: &str, manifests: &[(u32, String)]) -> crate::test_scratch::Scratch {
+        let root = crate::test_scratch::scratch_child("d6", format!("compy_d6_{tag}_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("steamapps")).unwrap();
         for (id, body) in manifests {

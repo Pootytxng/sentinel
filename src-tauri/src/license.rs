@@ -265,13 +265,10 @@ mod license_storage_tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A private directory per test — deliberately NOT `compy_data_dir()`.
-    fn scratch(tag: &str) -> std::path::PathBuf {
+    /// D1d: inside a fresh scratch root that is removed when the test ends (crate::test_scratch).
+    fn scratch(tag: &str) -> crate::test_scratch::Scratch {
         static N: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "compy-license-{tag}-{}-{}",
-            std::process::id(),
-            N.fetch_add(1, Ordering::Relaxed)
-        ));
+        let dir = crate::test_scratch::scratch_child("license", format!("compy-license-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -285,7 +282,8 @@ mod license_storage_tests {
 
     #[test]
     fn the_exact_trimmed_bytes_round_trip_and_are_never_wrapped_in_json() {
-        let path = scratch("roundtrip").join("license.key");
+        let path_scratch = scratch("roundtrip");
+        let path = path_scratch.join("license.key");
         let key = token("a1");
 
         let status = set_license_key_at(&path, &format!("  \n{key}\t ")).unwrap();
@@ -365,7 +363,8 @@ mod license_storage_tests {
     fn clearing_says_so_when_the_stored_license_cannot_be_deleted() {
         // #292: a delete that fails for any reason but "nothing there" left the license on disk
         // while the user was told it was cleared.
-        let path = scratch("clear-locked").join("license.key");
+        let path_scratch = scratch("clear-locked");
+        let path = path_scratch.join("license.key");
         let kept = token("a1");
         set_license_key_at(&path, &kept).unwrap();
 
@@ -379,7 +378,8 @@ mod license_storage_tests {
 
     #[test]
     fn blank_input_still_clears_by_deleting_and_stays_harmless_when_nothing_is_stored() {
-        let path = scratch("clear").join("license.key");
+        let path_scratch = scratch("clear");
+        let path = path_scratch.join("license.key");
         set_license_key_at(&path, &token("a1")).unwrap();
 
         let cleared = set_license_key_at(&path, "   \n\t  ").unwrap();
@@ -393,7 +393,8 @@ mod license_storage_tests {
 
     #[test]
     fn an_oversize_key_is_refused_before_anything_is_written() {
-        let path = scratch("oversize").join("license.key");
+        let path_scratch = scratch("oversize");
+        let path = path_scratch.join("license.key");
         let good = token("a1");
         set_license_key_at(&path, &good).unwrap();
 

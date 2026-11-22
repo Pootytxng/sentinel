@@ -5972,7 +5972,7 @@ mod history_tests {
     // and stays exactly where it is (no `.corrupt` rename outside the lock); absent is empty.
     #[test]
     fn the_unlocked_rec_id_read_never_sets_a_damaged_ledger_aside() {
-        let dir = std::env::temp_dir().join(format!("compy-hist-unlocked-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("hist-unlocked", format!("compy-hist-unlocked-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
@@ -5995,7 +5995,7 @@ mod history_tests {
         // #618: the Trial's one-change checks bound a set-aside ledger by this time, so it must be
         // the lost file's own last write (every row it held is at or before it), read from disk and
         // never from the clock. With no marker it is None. If the marker can't be read it is unknown.
-        let dir = std::env::temp_dir().join(format!("compy-hist-set-aside-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("hist-set-aside", format!("compy-hist-set-aside-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         assert_eq!(set_aside_through_at(&path), Ok(None), "nothing set aside reads as None");
@@ -6026,7 +6026,7 @@ mod history_tests {
 
         // A marker that isn't a plain file has no trustworthy time: unknown, never "nothing set
         // aside" (#618 review: a dangling link read through `metadata` was NotFound, i.e. Whole).
-        let odd = std::env::temp_dir().join(format!("compy-hist-set-aside-dir-{}", std::process::id()));
+        let odd = crate::test_scratch::scratch_child("hist-set-aside-dir", format!("compy-hist-set-aside-dir-{}", std::process::id()));
         std::fs::create_dir_all(odd.join("history.json.corrupt")).unwrap();
         let why = set_aside_through_at(&odd.join("history.json")).unwrap_err();
         assert!(why.contains("isn't a plain file"), "{why}");
@@ -6177,7 +6177,7 @@ mod history_tests {
     #[test]
     fn save_then_load_roundtrips_through_disk() {
         let dir =
-            std::env::temp_dir().join(format!("compy-hist-roundtrip-{}", std::process::id()));
+            crate::test_scratch::scratch_child("hist-roundtrip", format!("compy-hist-roundtrip-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         let records = vec![
@@ -6206,7 +6206,7 @@ mod history_tests {
         // recoverable file and permanently erase every rollback contract). It errors loudly
         // and the original bytes are set aside untouched.
         let dir =
-            std::env::temp_dir().join(format!("compy-hist-corrupt-{}", std::process::id()));
+            crate::test_scratch::scratch_child("hist-corrupt", format!("compy-hist-corrupt-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         let garbage: &[u8] = b"{ this is not valid json ]]]";
@@ -6231,7 +6231,7 @@ mod history_tests {
     // path is a read that fails on every platform.
     #[test]
     fn a_ledger_that_cant_be_read_right_now_is_never_set_aside() {
-        let dir = std::env::temp_dir().join(format!("compy-hist-unreadable-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("hist-unreadable", format!("compy-hist-unreadable-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         let path = dir.join("history.json");
         std::fs::create_dir_all(&path).unwrap();
@@ -6246,7 +6246,7 @@ mod history_tests {
     // `ledger_was_quarantined` and #618 read; the earlier one is kept beside it.
     #[test]
     fn a_second_set_aside_keeps_the_first_ones_bytes() {
-        let dir = std::env::temp_dir().join(format!("compy-hist-second-aside-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("hist-second-aside", format!("compy-hist-second-aside-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
@@ -6273,7 +6273,7 @@ mod history_tests {
         // tell a caller that entries were lost, which is why a caller that turns ledger silence
         // into a CLAIM has to consult the marker on disk instead of the load result.
         let dir =
-            std::env::temp_dir().join(format!("compy-hist-quarantine-{}", std::process::id()));
+            crate::test_scratch::scratch_child("hist-quarantine", format!("compy-hist-quarantine-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         std::fs::write(&path, b"{ not json ]]]").unwrap();
@@ -6300,7 +6300,7 @@ mod history_tests {
 
     #[test]
     fn ledger_health_reads_complete_for_a_ledger_that_loads() {
-        let dir = std::env::temp_dir().join(format!("compy-hist-health-ok-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("hist-health-ok", format!("compy-hist-health-ok-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         save_history_to(&path, &[record("game-mode", "applied")]).unwrap();
@@ -6319,7 +6319,7 @@ mod history_tests {
         // disclosure that fired on every fresh install would be its own honesty defect — it would
         // train the user to dismiss the one banner that matters.
         let dir =
-            std::env::temp_dir().join(format!("compy-hist-health-firstrun-{}", std::process::id()));
+            crate::test_scratch::scratch_child("hist-health-firstrun", format!("compy-hist-health-firstrun-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
 
         let h = ledger_health_at(&dir.join("history.json"));
@@ -6334,7 +6334,7 @@ mod history_tests {
         // The transient half. The error is the one `load_history_from` already wrote in
         // plain English — the surface shows it rather than inventing its own account of the damage.
         let dir =
-            std::env::temp_dir().join(format!("compy-hist-health-damaged-{}", std::process::id()));
+            crate::test_scratch::scratch_child("hist-health-damaged", format!("compy-hist-health-damaged-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         std::fs::write(&path, b"{ not json ]]]").unwrap();
@@ -6359,7 +6359,7 @@ mod history_tests {
         // result, the disclosure would vanish on the second read and the Trust Ledger would go
         // back to claiming "nothing is active on this PC" forever — over lost rollback contracts.
         let dir =
-            std::env::temp_dir().join(format!("compy-hist-health-durable-{}", std::process::id()));
+            crate::test_scratch::scratch_child("hist-health-durable", format!("compy-hist-health-durable-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         std::fs::write(&path, b"{ not json ]]]").unwrap();
@@ -6386,7 +6386,7 @@ mod history_tests {
         // Explorer opens Documents instead, which reads as Compy losing the file it just promised
         // it kept. So the flag is earned by the marker, never assumed from the failure.
         let dir =
-            std::env::temp_dir().join(format!("compy-hist-reveal-{}", std::process::id()));
+            crate::test_scratch::scratch_child("hist-reveal", format!("compy-hist-reveal-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
 
@@ -6417,7 +6417,7 @@ mod history_tests {
         // The H1 scenario end to end: a valid ledger, then a torn/truncated overwrite (what a
         // crash mid-write left under the OLD in-place fs::write) → the load refuses and
         // preserves; it never returns empty for a later save to overwrite.
-        let dir = std::env::temp_dir().join(format!("compy-hist-torn-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("hist-torn", format!("compy-hist-torn-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         save_history_to(&path, &[record("game-mode", "applied")]).unwrap();
@@ -6443,7 +6443,7 @@ mod history_tests {
         // The other half of H1: saves go to a temp file then rename over the live ledger, so
         // a crash mid-write can only leave stale-but-valid data — and a successful save
         // leaves no .tmp residue.
-        let dir = std::env::temp_dir().join(format!("compy-hist-atomic-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("hist-atomic", format!("compy-hist-atomic-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         save_history_to(&path, &[record("game-mode", "applied")]).unwrap();
@@ -6478,7 +6478,7 @@ mod history_tests {
             "status": "applied"
         }]);
         let path =
-            std::env::temp_dir().join(format!("compy-hist-legacy-{}.json", std::process::id()));
+            crate::test_scratch::scratch_child("hist-legacy", format!("compy-hist-legacy-{}.json", std::process::id()));
         std::fs::write(&path, serde_json::to_string(&legacy).unwrap()).unwrap();
         let loaded = load_history_from(&path).expect("legacy ledger loads");
         assert_eq!(loaded.len(), 1);
@@ -6506,9 +6506,9 @@ mod ledger_fuzz_tests {
     use crate::fuzz_support::{hostile_string, Rng, SEEDS};
     use serde_json::json;
 
-    fn fuzz_dir(tag: &str) -> std::path::PathBuf {
+    fn fuzz_dir(tag: &str) -> crate::test_scratch::Scratch {
         let dir =
-            std::env::temp_dir().join(format!("compy-ledger-fuzz-{tag}-{}", std::process::id()));
+            crate::test_scratch::scratch_child("ledger-fuzz", format!("compy-ledger-fuzz-{tag}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         dir
     }
@@ -6703,8 +6703,8 @@ mod ledger_fuzz_tests {
 mod ledger_backup_tests {
     use super::*;
 
-    fn dir_for(tag: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("compy-ledger-bak-{tag}-{}", std::process::id()));
+    fn dir_for(tag: &str) -> crate::test_scratch::Scratch {
+        let dir = crate::test_scratch::scratch_child("ledger-bak", format!("compy-ledger-bak-{tag}-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).expect("temp dir");
         dir
@@ -6732,7 +6732,7 @@ mod ledger_backup_tests {
         h.iter().map(|c| c.id.clone()).collect()
     }
 
-    fn saved(tag: &str, n: usize) -> (std::path::PathBuf, std::path::PathBuf) {
+    fn saved(tag: &str, n: usize) -> (crate::test_scratch::Scratch, std::path::PathBuf) {
         let dir = dir_for(tag);
         let path = dir.join("history.json");
         save_history_to(&path, &rows(n)).expect("save");
@@ -6962,7 +6962,7 @@ mod ledger_backup_tests {
     }
 
     /// A clean ledger as an older build left it: main only, no backup.
-    fn main_only(tag: &str, n: usize) -> (std::path::PathBuf, std::path::PathBuf) {
+    fn main_only(tag: &str, n: usize) -> (crate::test_scratch::Scratch, std::path::PathBuf) {
         let (dir, path) = saved(tag, n);
         std::fs::remove_file(backup_path(&path)).unwrap();
         (dir, path)
@@ -7058,7 +7058,7 @@ mod ledger_backup_tests {
         let sandbox = dir_for("start-sandbox");
         save_history_to(&sandbox.join("history.json"), &rows(2)).unwrap();
         std::fs::remove_file(backup_path(&sandbox.join("history.json"))).unwrap();
-        let halted = mutation_root_from(&DataRootDecision::Sandbox { root: sandbox.clone() });
+        let halted = mutation_root_from(&DataRootDecision::Sandbox { root: sandbox.path_buf() });
         assert!(halted.is_err());
         assert_eq!(ensure_backup_at_start_for(halted), StartupBackup::Skipped);
         assert!(!backup_path(&sandbox.join("history.json")).exists(), "a sandbox ledger is never written");
@@ -7225,13 +7225,13 @@ mod ledger_backup_tests {
     #[test]
     fn a_data_root_that_could_not_be_settled_is_an_unreadable_ledger_never_an_empty_one() {
         use crate::data_root::DataRootDecision;
-        let dir = std::env::temp_dir().join(format!("compy-ledger-root-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("ledger-root", format!("compy-ledger-root-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let before: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
         let err = read_ledger_stamps_for(&DataRootDecision::Unavailable { reason: "no appdata".into() });
         assert!(err.is_err(), "{err:?}");
         // A root with no ledger yet is an empty ledger (nothing was ever applied), as before.
-        let ok = read_ledger_stamps_for(&DataRootDecision::Canonical { root: dir.clone() });
+        let ok = read_ledger_stamps_for(&DataRootDecision::Canonical { root: dir.path_buf() });
         assert_eq!(ok.map(|v| v.len()), Ok(0));
         let after: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
         assert_eq!(before, after, "the read wrote something");
@@ -7770,11 +7770,14 @@ mod changed_outside_tests {
         plan(SYNEZ, "Synez Power Plan", crate::PowerPlanClass::Other)
     }
 
-    fn scratch(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("compy-hist-outside-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir.join("history.json")
+    /// D1d: the ledger file sits in a fresh scratch root that is removed when the caller's test ends.
+    fn scratch(tag: &str) -> crate::test_scratch::Scratch {
+        let path = crate::test_scratch::scratch_child(
+            "hist-outside",
+            std::path::Path::new(&format!("compy-hist-outside-{tag}-{}", std::process::id())).join("history.json"),
+        );
+        std::fs::create_dir_all(path.parent().expect("a folder")).unwrap();
+        path
     }
 
     #[test]
@@ -8045,7 +8048,7 @@ mod changed_outside_tests {
 
     #[test]
     fn nothing_is_offered_or_recorded_while_a_gaming_mode_contract_is_on_disk() {
-        let dir = std::env::temp_dir().join(format!("compy-hist-outside-gm-{}", std::process::id()));
+        let dir = crate::test_scratch::scratch_child("hist-outside-gm", format!("compy-hist-outside-gm-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
