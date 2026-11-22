@@ -49,11 +49,16 @@ the report is written, Compy changes these things in the copy it exports:
   is shorter than three letters, is one of 28 common words (for example Admin, User, Owner, Max, Gamer), or
   is a single ordinary word that Compy's own report text uses (a computer named Ethernet or Hardware, say)
   is replaced only in Windows file and network paths (next to a backslash, or next to a forward slash inside
-  a path, including `\\NAME\share` and `//NAME/share`; a path starts at a drive, a network-path start or
-  `file:` and ends at `; , " < > |`, a line break, or a full stop, colon, `!` or `?` followed by a space, so a
-  forward slash in the prose after a path is not a separator) and in the name fields (hostname, computer
-  name, machine name, domain, user name), and is
-  left as it is in running text; the last lines of the report say how many other places it was left in.
+  a path, including `\\NAME\share` and `//NAME/share`) and in the name fields (hostname, computer name,
+  machine name, domain, user name), and is left as it is in running text; the last lines of the report say
+  how many other places it was left in. The path rule in one sentence: a path starts at a drive, a
+  network-path start or `file:`, always ends at `" < > |` or a line break, and ends at a comma, a semicolon,
+  or a full stop, colon, `!` or `?` followed by a space unless the next word contains the kind of slash the
+  path has been using, so `C:/Games/Hello, World/Max/save.dat` is one path while in
+  `C:\a.txt; Power/Performance` the path ends at the semicolon. Where this errs it errs toward the path: prose
+  right after a forward-slash path whose next word has a `/` can lose a word to `<user>` or `<host>`.
+  A name that is also an everyday word of Compy's report text (Max, Will, May or Major, for example) stays
+  in running text.
   "Compy's own report text" means the fixed words of Compy's report, readiness, hardware, diagnostics,
   recommendation, ledger, drift and session text; a name that only Windows supplies is not in it.
 
@@ -89,7 +94,8 @@ the report is written, Compy changes these things in the copy it exports:
 
 - A power plan name stays only when its id is one of the four plans Windows ships, or when the name is
   exactly Balanced, High performance, Power saver or Ultimate performance (a row that carries no id is
-  judged by the plan Windows reports as active). Any other name, including a custom one that contains "Ultimate" or "High
+  judged by the plan Windows reports as active). A plan Windows ships keeps whatever name it has on your
+  PC, so a Windows plan you renamed keeps the name you gave it. Any other name, including a custom one that contains "Ultimate" or "High
   performance", is shown as "a custom power plan" in the places a plan name sits: the power rows of Game
   Readiness and Diagnostics, the Drift Watch values, a name beside a plan id, and a Trust Ledger row that
   carries a custom plan id. The ids of custom power plans and network interfaces are replaced by numbered
@@ -107,16 +113,18 @@ the report is written, Compy changes these things in the copy it exports:
 The game's program name, the hardware and network adapter names in the hardware list (an adapter is named
 there by its model, and by its Windows name only when no model can be read), the stock Windows power plan names, the
 hardware fingerprint (a short code made from the hardware names that are already in the report), and
-anything you type into the note box, exactly as you wrote it.
+anything you type into the note box, exactly as you wrote it: if you type your name there, it stays.
 
 ## What is not reached
 
 Free text is searched only for your own Windows user, profile, domain and computer names and for the names
 and ids named above, so a name of yours typed elsewhere is not found; a name of yours that is an ordinary
-word stays in running text; a text value is rewritten but an object key in the JSON is not (no field of
-an exported record is a map keyed by text, the game-state keys are cut to a fixed list, and
+word stays in running text; a text value is rewritten but an object key in the JSON is not (the keys
+are the field names Compy writes: no field of an exported record is a map keyed by text, the game-state
+keys are cut to a fixed list, and a Trust Ledger change's undo record has the field names of Compy's own
+record types, or for a change recorded by an older Compy that build's fixed setting names;
 `every_field_of_the_exported_records_is_classified_here_and_a_new_one_fails_this_test` fails if a record
-gains a map keyed by text); and another
+gains a map keyed by text or another free-form JSON field); and another
 account's name is found only in a `\Users\` path. The last lines of the Markdown, and a `redaction` section
 in the JSON, say how many names, ids and paths were changed. Nothing changes in what Compy records on your
 PC or shows you in the app; only the exported copy is altered. Read a report before you post it in public:

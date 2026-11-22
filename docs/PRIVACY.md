@@ -200,11 +200,12 @@ Compy replaces these in the copy it exports:
   of the plan Compy makes included);
 - the Windows names of network adapters in the Trust Ledger (names you can change).
 
-What stays: the game's program name, the hardware and adapter names in the hardware list, stock Windows
-power plan names, the hardware fingerprint, and your own note text. The limits:
+What stays: the game's program name, the hardware and adapter names in the hardware list, the names of
+the plans Windows ships (a Windows plan you renamed keeps the name you gave it), the hardware fingerprint,
+and your own note text (a name you type there stays). The limits:
 
-- A name of yours that is also an ordinary word, or shorter than three letters, is only replaced in file
-  paths and name fields.
+- A name of yours that is also an everyday word of Compy's report text (Max or Will, for example), or
+  shorter than three letters, is only replaced in file paths and name fields.
 - Text is searched only for the names listed above, so any other name in it (yours or someone else's)
   stays.
 - Another account's name that contains spaces may be only partly replaced: in the middle of a sentence only

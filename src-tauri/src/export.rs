@@ -151,8 +151,18 @@ fn export_text_words() -> &'static HashSet<String> {
 /// A name that is a single ordinary word: all letters, and a word of Compy's own static export text
 /// ([`export_text_words`]).
 fn is_ordinary_word(name: &str) -> bool {
-    !name.is_empty() && name.chars().all(char::is_alphabetic) && export_text_words().contains(&name.to_lowercase())
+    !name.is_empty() && name.chars().all(char::is_alphabetic) && {
+        let w = name.to_lowercase();
+        !NOT_ORDINARY_WORDS.contains(&w.as_str()) && export_text_words().contains(&w)
+    }
 }
+
+/// Words in the generated list that are NOT words of Compy's report prose, so a name spelled that way is
+/// replaced everywhere: "sam" is there only as the monitor maker code "SAM" (hardware.rs, mapped to
+/// "Samsung"), which never reaches report text on its own (D2 review r1 N5). "max", "will", "may" and
+/// "major" are real words of Compy's text ("Max refresh rate"), so they stay ordinary words; the guard
+/// `common_first_names_are_not_ordinary_words_so_a_pc_named_after_one_is_replaced_everywhere` pins them.
+const NOT_ORDINARY_WORDS: [&str; 1] = ["sam"];
 
 /// THE RULE for how this PC's own user or computer name is applied. A name is SCOPED when it is shorter than
 /// three characters ([`long_enough`]), is on the [`COMMON_NAMES`] list, or is a single ordinary word
@@ -168,30 +178,62 @@ fn is_scoped_name(name: &str) -> bool {
 /// For each character of `sc`, whether it is inside a Windows or file-URL path, so that a `/` beside a scoped
 /// name there counts as a path separator. A path starts at a drive (`C:\`, `C:/`; standing alone, so the "s:/"
 /// of "https://" is not one), a UNC start (`\\` anywhere, or `//` that does not follow a letter, digit or
-/// colon), or `file:`; it ends at a break that a path does not contain: `; , " < > |`, a line break, or
-/// `.` `:` `!` `?` followed by a space. So in "x C:\a.txt; Power/Performance" the `/` is not a separator (the
-/// `;` ended the path), in "reach //RIG/share" it is (a UNC start in the middle of a sentence), and in
-/// "C:/Program Files (x86)/Max/x" it still is (a space or a bracket alone does not end a path: brackets are
-/// in real folder names, and erring there damages a word of prose, never leaks a name). Decided per
-/// position, not per string: one path in a string no longer makes every `/` in it a separator. One forward
-/// pass (linear).
+/// colon), or `file:`. It always ends at `" < > |` or a line break. At `,` `;` (or `.` `:` `!` `?` followed
+/// by a space) it ends UNLESS the next word (the run up to the following space) contains the separator
+/// the path has been using: a path written with `/` goes on through a word that has a `/`, one written with
+/// `\` through a word that has a `\`. So "C:/Games/Hello, World/Max/save.dat" is one path (D2 review r1 N1: a
+/// folder name may hold a comma or a full stop), while in "x C:\a.txt; Power/Performance" the `;` ends the
+/// path, because "Power/Performance" has no `\`. In "reach //RIG/share" the `/` is a separator (a UNC start in
+/// the middle of a sentence), and in "C:/Program Files (x86)/Max/x" it still is (a space or a bracket alone
+/// does not end a path). Where the rule errs, it errs toward the path: a forward-slash path followed by prose
+/// with a `/` in its next word ("C:/x/a.txt, and/or ...") keeps going, which can replace a word of that
+/// prose, never leave a name. Decided per position, not per string. Linear: the word facts are worked out
+/// once, in two passes, before the forward pass.
 fn path_mask(sc: &[char]) -> Vec<bool> {
+    let n = sc.len();
     let alnum = |j: usize| sc[j].is_ascii_alphanumeric();
-    let mut inside = false;
-    let mut mask = Vec::with_capacity(sc.len());
-    for j in 0..sc.len() {
+    // For each position: the first non-space position at or after it, and which separators the word (the run
+    // of non-space characters) holding it contains.
+    let mut next_word = vec![n; n + 1];
+    for k in (0..n).rev() {
+        next_word[k] = if sc[k].is_whitespace() { next_word[k + 1] } else { k };
+    }
+    let (mut word_fwd, mut word_back) = (vec![false; n], vec![false; n]);
+    let mut start = 0;
+    while start < n {
+        if sc[start].is_whitespace() {
+            start += 1;
+            continue;
+        }
+        let end = (start..n).find(|&k| sc[k].is_whitespace()).unwrap_or(n);
+        word_fwd[start..end].fill(sc[start..end].contains(&'/'));
+        word_back[start..end].fill(sc[start..end].contains(&'\\'));
+        start = end;
+    }
+    let (mut inside, mut uses_fwd, mut uses_back) = (false, false, false);
+    let mut mask = Vec::with_capacity(n);
+    for j in 0..n {
         let c = sc[j];
         let next = |k: usize| sc.get(j + k).copied();
-        let brk = matches!(c, ';' | ',' | '"' | '<' | '>' | '|' | '\n' | '\r')
-            || (matches!(c, '.' | ':' | '!' | '?') && next(1).is_some_and(char::is_whitespace));
+        let hard = matches!(c, '"' | '<' | '>' | '|' | '\n' | '\r');
+        let soft = matches!(c, ';' | ',') || (matches!(c, '.' | ':' | '!' | '?') && next(1).is_some_and(char::is_whitespace));
         let drive = c.is_ascii_alphabetic() && next(1) == Some(':') && matches!(next(2), Some('\\' | '/')) && (j == 0 || !alnum(j - 1));
         let unc_back = c == '\\' && next(1) == Some('\\');
         let unc_fwd = c == '/' && next(1) == Some('/') && (j == 0 || !(alnum(j - 1) || sc[j - 1] == ':'));
-        let file = j + 5 <= sc.len() && sc[j..j + 5].iter().zip("file:".chars()).all(|(a, b)| a.to_ascii_lowercase() == b);
-        if brk {
-            inside = false;
+        let file = j + 5 <= n && sc[j..j + 5].iter().zip("file:".chars()).all(|(a, b)| a.to_ascii_lowercase() == b);
+        let goes_on = || {
+            let w = next_word[j + 1];
+            w < n && ((uses_fwd && word_fwd[w]) || (uses_back && word_back[w]))
+        };
+        if hard || (soft && inside && !goes_on()) {
+            (inside, uses_fwd, uses_back) = (false, false, false);
         } else if drive || unc_back || unc_fwd || file {
             inside = true;
+            uses_fwd |= unc_fwd || file || (drive && next(2) == Some('/'));
+            uses_back |= unc_back || (drive && next(2) == Some('\\'));
+        } else if inside {
+            uses_fwd |= c == '/';
+            uses_back |= c == '\\';
         }
         mask.push(inside);
     }
@@ -627,7 +669,9 @@ fn collect_ids(v: &Value, out: &mut Vec<(&'static str, String)>) {
         Value::Object(o) => {
             for (k, x) in o {
                 if let Some(s) = x.as_str() {
-                    let plan_key = matches!(k.as_str(), "power_plan_guid" | "prior_guid" | "plan_guid" | "guid");
+                    // `prior_plan_guid`: the key of a power-plan undo record written before typed snapshots
+                    // (actions::synthesize_legacy_rollback); D2 review r1, found while checking N2.
+                    let plan_key = matches!(k.as_str(), "power_plan_guid" | "prior_guid" | "prior_plan_guid" | "plan_guid" | "guid");
                     if plan_key && guid_like(s) && !is_stock_plan(s) {
                         out.push(("custom-plan", s.to_string()));
                     } else if k == "interface" && s.trim().starts_with('{') && guid_like(s) {
@@ -2370,10 +2414,14 @@ mod export_tests {
     const C_PLAN_GUID: &str = "11111111-2222-3333-4444-555555555555";
     const C_IFACE: &str = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
     const C_FUTURE: &str = "FutureCanaryField";
-    const ALL_CANARIES: [&str; 12] = [
+    // D2 review r1: a user-renamed adapter in the EEE undo record, and a custom plan GUID in a pre-typed
+    // power-plan undo record (`prior_plan_guid`).
+    const C_ADAPTER: &str = "CanaryRenamedNic";
+    const C_LEGACY_GUID: &str = "22222222-3333-4444-5555-666666666666";
+    const ALL_CANARIES: [&str; 14] = [
         "taxprep2026canary", "signalcanary", "startupcanaryapp", "qoscanarypolicy", "canaryzorvakname", "canaryprofiledir",
         "canaryhostpc", "canaryspaced", "canaryplanname", "11111111-2222-3333-4444-555555555555",
-        "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "futurecanaryfield",
+        "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "futurecanaryfield", "canaryrenamednic", "22222222-3333-4444-5555-666666666666",
     ];
 
     fn ev(at: u64, label: &str) -> Value {
@@ -2403,7 +2451,6 @@ mod export_tests {
         ExportEnv {
             literals: vec![(C_USER.into(), "<user>"), (C_PROFILE.into(), "<user>"), (C_HOST.into(), "<host>")],
             active_plan: Some(ActivePlan { name: C_PLAN.into(), guid: C_PLAN_GUID.into() }),
-
         }
     }
 
@@ -2424,7 +2471,11 @@ mod export_tests {
                   "restores_label": format!("Switches back to {C_PLAN}") },
                 { "id": "h3", "rec_id": "nagle", "rec_title": "Lower network latency",
                   "snapshot": { "kind": "nagle", "interfaces": [{ "interface": format!("{{{C_IFACE}}}"), "value": 1 }] } },
-                { "id": "h4", "rec_id": "q", "rec_title": "Q", "restores_label": format!("run \"C:\\Users\\{C_SPACED}\\x.exe\" then (C:\\Users\\OtherAcct), done") }
+                { "id": "h4", "rec_id": "q", "rec_title": "Q", "restores_label": format!("run \"C:\\Users\\{C_SPACED}\\x.exe\" then (C:\\Users\\OtherAcct), done") },
+                { "id": "h5", "rec_id": "eee-disable", "rec_title": "Turn off Energy Efficient Ethernet",
+                  "snapshot": serde_json::to_value(crate::actions::Snapshot::EeeNicProperty { adapters: vec![crate::actions::EeeNicSnapshot {
+                      adapter_name: C_ADAPTER.into(), property_display_name: "Energy Efficient Ethernet".into(), prior_value: "Enabled".into() }] }).unwrap() },
+                { "id": "h6", "rec_id": "power-ultimate", "rec_title": "Ultimate Performance plan", "snapshot": { "prior_plan_guid": C_LEGACY_GUID } }
             ]),
             json!({ "checks": [
                 { "id": "power-profile", "title": "Power profile", "value": C_PLAN, "detail": format!("Active plan \"{C_PLAN}\". A performance plan can reduce latency.") },
@@ -2486,15 +2537,15 @@ mod export_tests {
         assert_eq!(n("other_programs"), 4, "tax, signal, OneDrive, startup entry");
         assert_eq!(n("qos_policy_names_replaced"), 2);
         assert_eq!(n("power_plan_names_replaced"), 5, "diagnostics, readiness value + detail, applied_plan, restores_label");
-        assert_eq!(n("custom_ids_replaced"), 2, "one custom plan guid (3 places), one interface");
-        assert_eq!(n("change_ids_replaced"), 4, "the four Trust Ledger rows");
+        assert_eq!(n("custom_ids_replaced"), 3, "one custom plan guid (3 places), one interface, one pre-typed prior_plan_guid");
+        assert_eq!(n("change_ids_replaced"), 6, "the six Trust Ledger rows");
         assert_eq!(n("game_state_fields_dropped"), 1, "future_field");
         assert_eq!(n("identity_names_replaced"), 7, "user x4 (path, UNC, escaped, note), profile x1, host x2 (hostname field, note)");
         assert_eq!(n("user_name_segments_replaced"), 2, "a quoted spaced name and a parenthesised one");
         assert_eq!(j["running_at_start_omitted"], true);
         let note = j["summary"].as_str().unwrap();
         assert!(note.starts_with("6 program names in game sessions and 5 startup-entry names not on Compy's known-programs list (4 programs in all) replaced"), "{note}");
-        for part in ["2 QoS policy names replaced.", "A custom power plan name was replaced in 5 places.", "2 custom power-plan or network-interface IDs replaced", "4 Trust Ledger change IDs replaced with \"change 1\", \"change 2\" and so on.", "1 unrecognised game-state field left out.", "replaced in 7 places, file paths included.", "Another account's name was removed from 2 places in file paths.", "Kept as they are: game program names, your typed note, and the hardware and network adapter names in the hardware list."] {
+        for part in ["2 QoS policy names replaced.", "A custom power plan name was replaced in 5 places.", "3 custom power-plan or network-interface IDs replaced", "1 network adapter name in the Trust Ledger (a name Windows lets you change) replaced", "6 Trust Ledger change IDs replaced with \"change 1\", \"change 2\" and so on.", "1 unrecognised game-state field left out.", "replaced in 7 places, file paths included.", "Another account's name was removed from 2 places in file paths.", "Kept as they are: game program names, your typed note, and the hardware and network adapter names in the hardware list."] {
             assert!(note.contains(part), "{part} missing from {note}");
         }
     }
@@ -3247,15 +3298,50 @@ mod export_tests {
         assert_eq!(run("https://site/Power/x and/or Power/Performance"), ("https://site/Power/x and/or Power/Performance".to_string(), 0, 2));
         // A file URL is.
         assert_eq!(run("file:///D:/Power/x").0, "file:///D:/<host>/x");
-        // A path ends at a sentence end: the next sentence's `/` is prose again.
-        assert_eq!(run("Saved to C:/x/Power. Power/Performance next").0, "Saved to C:/x/<host>. Power/Performance next");
+        // A backslash path ends at a sentence end: the next sentence's `/` is prose again.
+        assert_eq!(run(r"Saved to C:\x\Power. Power/Performance next").0, r"Saved to C:\x\<host>. Power/Performance next");
+        // D2 review r1 N1: a folder name may hold a comma, a semicolon or a full stop. A forward-slash path goes
+        // on past one when the next word has a `/` (this was replaced before F4a and must stay replaced).
+        let max = |s: &str| {
+            let (mut n, mut left) = (0, 0);
+            let out = replace_name_scoped(s, "Max", "<user>", &mut n, Some(&mut left));
+            (out, n, left)
+        };
+        assert_eq!(max("C:/Games/Hello, World/Max/save.dat"), ("C:/Games/Hello, World/<user>/save.dat".to_string(), 1, 0));
+        assert_eq!(max("D:/St. Louis/Max/x").0, "D:/St. Louis/<user>/x");
+        assert_eq!(max("C:/Users/x/OneDrive - Contoso; Inc/Max/x").0, "C:/Users/x/OneDrive - Contoso; Inc/<user>/x");
+        assert_eq!(max(r"C:\Games\Hello, World\Max\save.dat").0, r"C:\Games\Hello, World\<user>\save.dat");
+        // A profile path with spaces is one path.
+        assert_eq!(max("C:/Users/Mary Ann/Documents/Max/x").0, "C:/Users/Mary Ann/Documents/<user>/x");
+        // The prose F4a was for: after a backslash path, and with no path at all, "and/or", "I/O", "N/A" and a
+        // date are prose, and the name beside a `/` there stays.
+        assert_eq!(
+            max(r"Saved to C:\Games\a.txt; Max/Min and/or I/O, N/A on 11/21/2026"),
+            (r"Saved to C:\Games\a.txt; Max/Min and/or I/O, N/A on 11/21/2026".to_string(), 0, 1)
+        );
+        assert_eq!(max("and/or I/O N/A 11/21/2026 Max/Min").2, 1);
+        // A web address is not a path.
+        assert_eq!(max("see https://example.com/Max/page, then Max/Min").2, 2);
+        // The stated cost of erring toward the path: a forward-slash path followed by prose whose next word has
+        // a `/` keeps going, so a word of that prose is replaced (never a name left).
+        assert_eq!(run("Saved to C:/x/Power. Power/Performance next").0, "Saved to C:/x/<host>. <host>/Performance next");
     }
 
     #[test]
     fn a_network_adapter_name_in_a_ledger_snapshot_is_numbered_and_the_word_stays_in_text() {
         // D2 (review e2-r2 F6): the EEE undo record keeps each adapter's Windows name, which the user can change.
+        // Built through serde from the real types (review r1 N4), so a rename of the variant or the field cannot
+        // leave the name in the export with this test green.
         let snap = |names: &[&str]| {
-            json!({ "kind": "eee-nic-property", "adapters": names.iter().map(|n| json!({ "adapter_name": n, "property_display_name": "Energy Efficient Ethernet", "prior_value": "Enabled" })).collect::<Vec<_>>() })
+            let adapters = names
+                .iter()
+                .map(|n| crate::actions::EeeNicSnapshot {
+                    adapter_name: (*n).to_string(),
+                    property_display_name: "Energy Efficient Ethernet".into(),
+                    prior_value: "Enabled".into(),
+                })
+                .collect();
+            serde_json::to_value(crate::actions::Snapshot::EeeNicProperty { adapters }).expect("serializes")
         };
         let src = [
             json!({ "network_adapters": [{ "name": "Intel(R) Ethernet Controller I225-V" }] }),
@@ -3285,8 +3371,7 @@ mod export_tests {
         // D2 (review e2-r2 item 3): the ordinary-word set follows the words of Compy's own report text, so a new
         // message word can silently make a common first name one that stays in running text. These stay OUT. If
         // one goes in, choose it on purpose (reword the message, or say so in PRIVACY.md and EXPORT_REDACTION.md).
-        // "Sam" was already in the set when this guard was written (2026-11-21): it is pinned as the one known
-        // exception, so a change in either direction is seen.
+        // "Sam" is in the generated list only as the monitor maker code "SAM" and is denied (NOT_ORDINARY_WORDS).
         let inside: Vec<&str> = [
             "Mark", "Grace", "Hunter", "Jordan", "Taylor", "John", "James", "Sam", "Tom", "Alex", "Frank", "Rose", "Bill", "Jack", "Dawn", "Grant",
             "Emma", "Olivia", "Liam", "Noah", "Sophia", "Lucas", "Mia", "Ethan", "Chloe", "Daniel", "Sarah", "David", "Maria", "Kevin",
@@ -3294,7 +3379,14 @@ mod export_tests {
         .into_iter()
         .filter(|n| is_ordinary_word(n))
         .collect();
-        assert_eq!(inside, ["Sam"], "the common first names that are words of Compy's report text (so a PC or account with that name stays in running text) changed");
+        assert!(inside.is_empty(), "now words of Compy's report text, so a PC or account with one of these names stays in running text: {inside:?}");
+        // The stated exceptions (review r1 N5): names that ARE everyday words of Compy's report text ("Max refresh
+        // rate", "may", "will", "major"), so a PC or account with that name stays in running text. Pinned, so one
+        // that stops being a word, or a deny-list entry that hides one, is seen.
+        for name in ["Max", "Will", "May", "Major"] {
+            assert!(is_ordinary_word(name), "{name} is no longer an ordinary word of Compy's text: update this pin and the docs");
+        }
+        assert!(NOT_ORDINARY_WORDS.iter().all(|w| export_text_words().contains(*w)), "a deny-list entry is no longer in the list: remove it");
     }
 
     #[test]
@@ -3688,16 +3780,27 @@ mod export_tests {
     ];
 
     /// Object keys are never rewritten by the redaction (`map_strings` rewrites values only), so a record
-    /// field that is a map keyed by text would carry its keys out of the export unredacted. None exists among
-    /// the exported records except those named here, each with why its keys hold no typed name.
-    const TEXT_KEYED_MAPS: [(&str, &str, &str); 0] = [];
+    /// field that is a map keyed by text, or free JSON (`serde_json::Value`, whose objects can have any keys),
+    /// would carry its keys out of the export unredacted. None exists among the exported records except those
+    /// named here, each with why its keys hold no typed name. (A type alias for a map is not seen: none of the
+    /// exported records uses one.)
+    const TEXT_KEYED_MAPS: [(&str, &str, &str); 1] = [(
+        "AppliedChangeView",
+        "snapshot",
+        "the undo record of a Trust Ledger change: for a change recorded by this or any typed build, a serialized \
+         Snapshot, whose keys are its serde field names (every variant field is classed in ENUM_FIELDS); for a change \
+         recorded before typed snapshots, the older build's fixed setting keys for that kind of change (prior, \
+         prior_state, interfaces, prior_plan_guid and the rest that actions::synthesize_legacy_rollback reads). Its \
+         keys pass through as written; every value goes through every pass of redact_export_sources.",
+    )];
 
     fn assert_no_text_keyed_map(record: &str, field: &str, ty: &str) {
         let compact: String = ty.chars().filter(|c| !c.is_whitespace()).collect();
-        let text_keyed = ["HashMap<String", "BTreeMap<String", "Map<String", "HashMap<&str", "BTreeMap<&str"].iter().any(|m| compact.contains(m));
+        let free_json = ty.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|ident| ident == "Value");
+        let text_keyed = free_json || ["HashMap<String", "BTreeMap<String", "Map<String", "HashMap<&str", "BTreeMap<&str"].iter().any(|m| compact.contains(m));
         assert!(
             !text_keyed || TEXT_KEYED_MAPS.iter().any(|(r, f, _)| *r == record && *f == field),
-            "{record}.{field} is a map keyed by text ({ty}): its keys reach the export unredacted. Make it a list of records, or add it to TEXT_KEYED_MAPS with why its keys hold no typed name"
+            "{record}.{field} is a map keyed by text or free JSON ({ty}): its keys reach the export unredacted. Make it a list of records, or add it to TEXT_KEYED_MAPS with why its keys hold no typed name"
         );
     }
 
