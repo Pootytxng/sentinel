@@ -1568,13 +1568,13 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
 /** B4: the answer's state as a short label for "The answer went from … to …". */
 function stateLabel(d: ParamedicDiagnosis, t: T): string {
   const s = d.state;
-  if (s.kind === "found") return t("paramedic.since.stateLabel.rough");
-  if (s.kind === "recovered") return t("paramedic.since.stateLabel.recovered");
-  if (s.kind === "nothing-wrong") return t("paramedic.since.stateLabel.nothingWrong");
-  if (s.kind === "needs-more-play") return t("paramedic.since.stateLabel.needsMore");
-  if (s.why.kind === "recovery-unclear" && s.why.one_clear) return t("paramedic.since.stateLabel.once");
-  if (s.why.kind === "nothing-changed") return t("paramedic.since.stateLabel.rough");
-  return t("paramedic.since.stateLabel.cantTell");
+  if (s.kind === "found") return t("paramedic.sinceLast.stateLabel.rough");
+  if (s.kind === "recovered") return t("paramedic.sinceLast.stateLabel.recovered");
+  if (s.kind === "nothing-wrong") return t("paramedic.sinceLast.stateLabel.nothingWrong");
+  if (s.kind === "needs-more-play") return t("paramedic.sinceLast.stateLabel.needsMore");
+  if (s.why.kind === "recovery-unclear" && s.why.one_clear) return t("paramedic.sinceLast.stateLabel.once");
+  if (s.why.kind === "nothing-changed") return t("paramedic.sinceLast.stateLabel.rough");
+  return t("paramedic.sinceLast.stateLabel.cantTell");
 }
 
 /** B4: a row's chip as one string (the certainty word first when the timing chip sits beside it). */
@@ -1591,7 +1591,7 @@ function SinceLast({ prev, d, ctx }: { prev: ParamedicDiagnosis; d: ParamedicDia
   if (prev.game !== d.game) {
     return (
       <p className="gl-para-note" data-testid="paramedic-since">
-        {t("paramedic.since.otherGame", { game, prev: prev.game_name ?? prev.game ?? "" })}
+        {t("paramedic.sinceLast.otherGame", { game, prev: prev.game_name ?? prev.game ?? "" })}
       </p>
     );
   }
@@ -1602,9 +1602,9 @@ function SinceLast({ prev, d, ctx }: { prev: ParamedicDiagnosis; d: ParamedicDia
   if (a && b) {
     // The newest start first: at the store's session cap a new session can leave the count equal (or lower).
     const newer = Date.parse(b.newest_at) > Date.parse(a.newest_at);
-    if (newer && b.sessions > a.sessions) counts.push(t("paramedic.since.newSessions", { count: b.sessions - a.sessions, game, date: dates.day(b.newest_at) }));
-    else if (newer) counts.push(t("paramedic.since.newSessionsCapped", { game, date: dates.day(b.newest_at) }));
-    else if (b.sessions < a.sessions) counts.push(t("paramedic.since.fewer", { game }));
+    if (newer && b.sessions > a.sessions) counts.push(t("paramedic.sinceLast.newSessions", { count: b.sessions - a.sessions, game, date: dates.day(b.newest_at) }));
+    else if (newer) counts.push(t("paramedic.sinceLast.newSessionsCapped", { game, date: dates.day(b.newest_at) }));
+    else if (b.sessions < a.sessions) counts.push(t("paramedic.sinceLast.fewer", { game }));
     else if (b.newest_at === a.newest_at && b.sessions === a.sessions) noNew = true;
   }
   // Review r1 F1: something read last time and not this time (an unknown or a limit that is new) means a row can
@@ -1615,27 +1615,27 @@ function SinceLast({ prev, d, ctx }: { prev: ParamedicDiagnosis; d: ParamedicDia
   const changes: string[] = [];
   const was = stateLabel(prev, t);
   const now = stateLabel(d, t);
-  if (was !== now) changes.push(t("paramedic.since.state", { from: was, to: now }));
+  if (was !== now) changes.push(t("paramedic.sinceLast.state", { from: was, to: now }));
   for (const f of d.findings) {
     const name = findingTitle(f, ctx) ?? f.id;
     const before = prev.findings.find((x) => x.id === f.id);
-    if (!before) changes.push(t("paramedic.since.rowNew", { name }));
-    else if (chipText(before, prev, t) !== chipText(f, d, t)) changes.push(t("paramedic.since.row", { name, from: chipText(before, prev, t), to: chipText(f, d, t) }));
+    if (!before) changes.push(t("paramedic.sinceLast.rowNew", { name }));
+    else if (chipText(before, prev, t) !== chipText(f, d, t)) changes.push(t("paramedic.sinceLast.row", { name, from: chipText(before, prev, t), to: chipText(f, d, t) }));
   }
   for (const f of prev.findings) {
-    if (!d.findings.some((x) => x.id === f.id)) changes.push(t("paramedic.since.rowGone", { name: findingTitle(f, ctx) ?? f.id }));
+    if (!d.findings.some((x) => x.id === f.id)) changes.push(t("paramedic.sinceLast.rowGone", { name: findingTitle(f, ctx) ?? f.id }));
   }
-  const sessions = noNew ? [t("paramedic.since.noNew", { game })] : counts;
+  const sessions = noNew ? [t("paramedic.sinceLast.noNew", { game })] : counts;
   const lines = lessRead
-    ? [t("paramedic.since.lessRead"), ...sessions, ...changes]
+    ? [t("paramedic.sinceLast.lessRead"), ...sessions, ...changes]
     : changes.length === 0
       ? noNew
-        ? [t("paramedic.since.unchangedNoNew", { game })]
-        : [...counts, t("paramedic.since.unchanged")]
+        ? [t("paramedic.sinceLast.unchangedNoNew", { game })]
+        : [...counts, t("paramedic.sinceLast.unchanged")]
       : [...sessions, ...changes];
   return (
     <div data-testid="paramedic-since">
-      <p className="gl-row-title">{t("paramedic.since.title")}</p>
+      <p className="gl-row-title">{t("paramedic.sinceLast.title")}</p>
       <ul className="gl-para-lines">
         {lines.map((l, i) => (
           <li key={i}>{l}</li>

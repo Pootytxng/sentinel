@@ -817,7 +817,7 @@
     "gapGameFiles": "{{game}} 的文件有变化",
     "gapProgram": "安装了一个程序"
   },
-  "since": {
+  "sinceLast": {
     "title": "自上次检查以来",
     "newSessions_one": "记录到 {{count}} 次新的 {{game}} 游戏（{{date}}）。",
     "newSessions_other": "记录到 {{count}} 次新的 {{game}} 游戏，最近一次在 {{date}}。",

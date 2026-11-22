@@ -817,7 +817,7 @@
     "gapGameFiles": "{{game}}'s files changed",
     "gapProgram": "A program was installed"
   },
-  "since": {
+  "sinceLast": {
     "title": "Since the last check",
     "newSessions_one": "{{count}} new {{game}} session was recorded (on {{date}}).",
     "newSessions_other": "{{count}} new {{game}} sessions were recorded, the latest on {{date}}.",
