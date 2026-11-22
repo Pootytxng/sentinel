@@ -196,10 +196,12 @@ Compy replaces these in the copy it exports:
   (unless they are on Compy's reviewed list of known programs);
 - your Windows user, profile, domain and computer names;
 - other accounts' names in `\Users\` file paths, and company names in OneDrive folder paths;
-- Trust Ledger ids, QoS policy names, and custom power plan names and ids.
+- Trust Ledger ids, QoS policy names, and custom power plan names and ids (a renamed or translated copy
+  of the plan Compy makes included);
+- the Windows names of network adapters in the Trust Ledger (names you can change).
 
-What stays: the game's program name, hardware and adapter names, stock Windows power plan names, the
-hardware fingerprint, and your own note text. The limits:
+What stays: the game's program name, the hardware and adapter names in the hardware list, stock Windows
+power plan names, the hardware fingerprint, and your own note text. The limits:
 
 - A name of yours that is also an ordinary word, or shorter than three letters, is only replaced in file
   paths and name fields.

@@ -101,13 +101,11 @@ pub(crate) struct ExportEnv {
     /// (value, mask) pairs: this PC's user/profile name (`<user>`) and computer/domain name (`<host>`).
     pub(crate) literals: Vec<(String, &'static str)>,
     pub(crate) active_plan: Option<ActivePlan>,
-    /// GUIDs of the Ultimate copies Compy recorded activating (ledger `applied_plan`): such a plan keeps its name.
-    pub(crate) compy_plan_guids: Vec<String>,
 }
 
 impl ExportEnv {
     /// This machine: the support-evidence literals (USERNAME, USERDOMAIN, COMPUTERNAME), the profile folder's
-    /// own name; the active power plan; and the plan copies Compy recorded.
+    /// own name; and the active power plan.
     pub(crate) fn this_machine() -> Self {
         // data-root-allow: reads only the profile folder's NAME, to scrub it from the exported text;
         // no path is composed from it and nothing is read, written or opened.
@@ -120,7 +118,7 @@ impl ExportEnv {
             .collect();
         let literals = usable_literals(raw, leaf);
         let active_plan = crate::current_power_scheme().map(|p| ActivePlan { name: p.name, guid: p.guid });
-        Self { literals, active_plan, compy_plan_guids: crate::history::recorded_plan_guids() }
+        Self { literals, active_plan }
     }
 }
 
@@ -159,23 +157,45 @@ fn is_ordinary_word(name: &str) -> bool {
 /// THE RULE for how this PC's own user or computer name is applied. A name is SCOPED when it is shorter than
 /// three characters ([`long_enough`]), is on the [`COMMON_NAMES`] list, or is a single ordinary word
 /// ([`is_ordinary_word`]): replacing it everywhere would corrupt the sentences around it ("Power saving",
-/// "Ethernet adapter"), so it is replaced only in Windows file and network paths (next to a `\`, or a `/` in a
-/// string that is a path) and in the name fields ([`IDENTITY_KEYS`]), and left as it is elsewhere (counted).
+/// "Ethernet adapter"), so it is replaced only in Windows file and network paths (next to a `\`, or a `/`
+/// inside a path, see [`path_mask`]) and in the name fields ([`IDENTITY_KEYS`]), and left as it is elsewhere (counted).
 /// Every other name (a digit, a hyphen, a dot, a space, or letters no Compy text uses: `DESKTOP-4F2K9Q`,
 /// `john.smith`, `Zed Canary`) is replaced everywhere, at word boundaries.
 fn is_scoped_name(name: &str) -> bool {
     !long_enough(name) || COMMON_NAMES.contains(&name.trim().to_lowercase().as_str()) || is_ordinary_word(name)
 }
 
-/// Whether `s` reads as a Windows or file-URL path: a drive (`C:\`, `C:/`), a UNC start (`\\` or `//`), or
-/// `file:`. Decides whether a `/` beside a scoped name counts as a path separator.
-fn looks_like_path(s: &str) -> bool {
-    let t = s.trim_start();
-    let b = t.as_bytes();
-    // A drive letter stands alone ("C:\"), so the "s:/" of "https://" is not one.
-    let drive = (0..b.len().saturating_sub(2))
-        .any(|i| b[i].is_ascii_alphabetic() && b[i + 1] == b':' && (b[i + 2] == b'\\' || b[i + 2] == b'/') && (i == 0 || !b[i - 1].is_ascii_alphanumeric()));
-    drive || t.starts_with("//") || t.starts_with("\\\\") || t.contains("\\\\") || t.to_ascii_lowercase().contains("file:")
+/// For each character of `sc`, whether it is inside a Windows or file-URL path, so that a `/` beside a scoped
+/// name there counts as a path separator. A path starts at a drive (`C:\`, `C:/`; standing alone, so the "s:/"
+/// of "https://" is not one), a UNC start (`\\` anywhere, or `//` that does not follow a letter, digit or
+/// colon), or `file:`; it ends at a break that a path does not contain: `; , " < > |`, a line break, or
+/// `.` `:` `!` `?` followed by a space. So in "x C:\a.txt; Power/Performance" the `/` is not a separator (the
+/// `;` ended the path), in "reach //RIG/share" it is (a UNC start in the middle of a sentence), and in
+/// "C:/Program Files (x86)/Max/x" it still is (a space or a bracket alone does not end a path: brackets are
+/// in real folder names, and erring there damages a word of prose, never leaks a name). Decided per
+/// position, not per string: one path in a string no longer makes every `/` in it a separator. One forward
+/// pass (linear).
+fn path_mask(sc: &[char]) -> Vec<bool> {
+    let alnum = |j: usize| sc[j].is_ascii_alphanumeric();
+    let mut inside = false;
+    let mut mask = Vec::with_capacity(sc.len());
+    for j in 0..sc.len() {
+        let c = sc[j];
+        let next = |k: usize| sc.get(j + k).copied();
+        let brk = matches!(c, ';' | ',' | '"' | '<' | '>' | '|' | '\n' | '\r')
+            || (matches!(c, '.' | ':' | '!' | '?') && next(1).is_some_and(char::is_whitespace));
+        let drive = c.is_ascii_alphabetic() && next(1) == Some(':') && matches!(next(2), Some('\\' | '/')) && (j == 0 || !alnum(j - 1));
+        let unc_back = c == '\\' && next(1) == Some('\\');
+        let unc_fwd = c == '/' && next(1) == Some('/') && (j == 0 || !(alnum(j - 1) || sc[j - 1] == ':'));
+        let file = j + 5 <= sc.len() && sc[j..j + 5].iter().zip("file:".chars()).all(|(a, b)| a.to_ascii_lowercase() == b);
+        if brk {
+            inside = false;
+        } else if drive || unc_back || unc_fwd || file {
+            inside = true;
+        }
+        mask.push(inside);
+    }
+    mask
 }
 
 /// Object keys that hold this PC's own computer, domain or account name as the whole value.
@@ -222,8 +242,8 @@ fn replace_name(s: &str, name: &str, to: &str, count: &mut u32) -> String {
 }
 
 /// [`replace_name`], or, with `left` given, the paths-only form for a [`is_scoped_name`] name (any length): a
-/// match is replaced only when a path separator touches it (`\\HOST\share`, `C:\Games\Name\x`, or a `/` in a
-/// string that [`looks_like_path`]); every other word-boundary match is kept and counted in `left`.
+/// match is replaced only when a path separator touches it (`\\HOST\share`, `C:\Games\Name\x`, or a `/` that
+/// [`path_mask`] places inside a path); every other word-boundary match is kept and counted in `left`.
 fn replace_name_scoped(s: &str, name: &str, to: &str, count: &mut u32, mut left: Option<&mut u32>) -> String {
     if left.is_none() && !long_enough(name) {
         if s.eq_ignore_ascii_case(name) {
@@ -237,8 +257,9 @@ fn replace_name_scoped(s: &str, name: &str, to: &str, count: &mut u32, mut left:
     if nc.is_empty() {
         return s.to_string();
     }
-    let slash_is_sep = left.is_some() && looks_like_path(s);
-    let sep = |c: char| c == '\\' || (slash_is_sep && c == '/');
+    // A `/` is a separator only inside a path (per position, see path_mask); `\` always is.
+    let mask = if left.is_some() && sc.contains(&'/') { path_mask(&sc) } else { Vec::new() };
+    let sep = |k: usize| sc[k] == '\\' || (sc[k] == '/' && mask.get(k).copied().unwrap_or(false));
     let (head, tail) = (nc[0].is_ascii_alphanumeric(), nc[nc.len() - 1].is_ascii_alphanumeric());
     let (mut out, mut i) = (String::with_capacity(s.len()), 0usize);
     while i < sc.len() {
@@ -247,7 +268,7 @@ fn replace_name_scoped(s: &str, name: &str, to: &str, count: &mut u32, mut left:
             let before = !(head && i > 0 && sc[i - 1].is_ascii_alphanumeric());
             let after = !(tail && end < sc.len() && sc[end].is_ascii_alphanumeric());
             if before && after {
-                let in_path = left.is_none() || (i > 0 && sep(sc[i - 1])) || (end < sc.len() && sep(sc[end]));
+                let in_path = left.is_none() || (i > 0 && sep(i - 1)) || (end < sc.len() && sep(end));
                 if in_path {
                     out.push_str(to);
                     *count += 1;
@@ -334,7 +355,8 @@ impl ExportRedaction {
             "other_text_withheld": self.other_text_withheld,
             "qos_policy_names_replaced": self.qos_policy_names,
             "power_plan_names_replaced": self.power_plan_names,
-            "custom_ids_replaced": self.ids.len(),
+            "custom_ids_replaced": self.ids.iter().filter(|k| !k.starts_with("adapter:")).count(),
+            "adapter_names_replaced": self.ids.iter().filter(|k| k.starts_with("adapter:")).count(),
             "change_ids_replaced": self.change_ids,
             "game_state_fields_dropped": self.game_state_fields_dropped,
             "identity_names_replaced": self.identity_names,
@@ -370,9 +392,13 @@ impl ExportRedaction {
         if self.power_plan_names > 0 {
             push(format!("A custom power plan name was replaced in {} place{}.", self.power_plan_names, s(self.power_plan_names)));
         }
-        if !self.ids.is_empty() {
-            let n = self.ids.len() as u32;
-            push(format!("{n} custom power-plan or network-interface ID{} replaced with numbered labels.", s(n)));
+        let adapters = self.ids.iter().filter(|k| k.starts_with("adapter:")).count() as u32;
+        let ids = self.ids.len() as u32 - adapters;
+        if ids > 0 {
+            push(format!("{ids} custom power-plan or network-interface ID{} replaced with numbered labels.", s(ids)));
+        }
+        if adapters > 0 {
+            push(format!("{adapters} network adapter name{} in the Trust Ledger (a name Windows lets you change) replaced with \"adapter-1\", \"adapter-2\" and so on.", s(adapters)));
         }
         if self.change_ids > 0 {
             push(format!("{} Trust Ledger change ID{} replaced with \"change 1\", \"change 2\" and so on.", self.change_ids, s(self.change_ids)));
@@ -400,7 +426,7 @@ impl ExportRedaction {
         } else {
             format!("Another account's name was removed from {} place{} in file paths.", self.user_name_segments, s(self.user_name_segments))
         });
-        push("Kept as they are: game program names, your typed note, hardware and network adapter names.".to_string());
+        push("Kept as they are: game program names, your typed note, and the hardware and network adapter names in the hardware list.".to_string());
         out
     }
 }
@@ -617,14 +643,31 @@ fn collect_ids(v: &Value, out: &mut Vec<(&'static str, String)>) {
     }
 }
 
+/// In place: every `adapter_name` string value becomes its numbered label ([`ExportRedaction::id_label`],
+/// kind "adapter"); keys and every other value stay.
+fn number_adapter_names(v: &mut Value, r: &mut ExportRedaction) {
+    match v {
+        Value::Object(o) => {
+            for (k, x) in o.iter_mut() {
+                match x {
+                    Value::String(s) if k == "adapter_name" && !s.trim().is_empty() => *s = r.id_label("adapter", s),
+                    other => number_adapter_names(other, r),
+                }
+            }
+        }
+        Value::Array(a) => a.iter_mut().for_each(|x| number_adapter_names(x, r)),
+        _ => {}
+    }
+}
+
 /// The fields of a plan row (readiness check, Drift Watch row, diagnostics entry) that hold a plan's name.
 const PLAN_VALUE_KEYS: [&str; 3] = ["value", "value_now", "last_ready_value"];
 
 /// Names of power plans that are not stock, from the places a plan name sits next to its identity: the
 /// diagnostics "Active power plan" row, the readiness power-profile row and any object that holds both a
 /// plan GUID and a name. A name is kept only by [`keeps_plan_name`]; the active plan keeps its name when its
-/// GUID is stock or one Compy recorded (`compy`).
-fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>, compy: &[String]) -> Vec<String> {
+/// GUID is stock or its name is a stock name.
+fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>) -> Vec<String> {
     fn walk(v: &Value, keyed: &mut Vec<String>, guided: &mut Vec<(String, String)>) {
         match v {
             Value::Object(o) => {
@@ -651,11 +694,11 @@ fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>, compy: &[S
     }
     let (mut keyed, mut guided) = (Vec::new(), Vec::new());
     sources.iter().for_each(|v| walk(v, &mut keyed, &mut guided));
-    // The active plan's name is kept when its GUID is one Windows ships or one Compy recorded.
-    let active_kept = active.filter(|a| keeps_plan_name(Some(&a.guid), &a.name, compy)).map(|a| a.name.to_lowercase());
-    let mut out: Vec<String> = keyed.into_iter().filter(|n| Some(n.to_lowercase()) != active_kept && !keeps_plan_name(None, n, compy)).collect();
-    out.extend(guided.into_iter().filter(|(n, g)| !keeps_plan_name(Some(g), n, compy)).map(|(n, _)| n));
-    if let Some(a) = active.filter(|a| !keeps_plan_name(Some(&a.guid), &a.name, compy)) {
+    // The active plan's name is kept when its GUID is one Windows ships (or its name is a stock name).
+    let active_kept = active.filter(|a| keeps_plan_name(Some(&a.guid), &a.name)).map(|a| a.name.to_lowercase());
+    let mut out: Vec<String> = keyed.into_iter().filter(|n| Some(n.to_lowercase()) != active_kept && !keeps_plan_name(None, n)).collect();
+    out.extend(guided.into_iter().filter(|(n, g)| !keeps_plan_name(Some(g), n)).map(|(n, _)| n));
+    if let Some(a) = active.filter(|a| !keeps_plan_name(Some(&a.guid), &a.name)) {
         out.push(a.name.clone());
     }
     out.retain(|n| !n.trim().is_empty() && !n.eq_ignore_ascii_case("unknown"));
@@ -666,17 +709,19 @@ fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>, compy: &[S
 
 /// THE STRICT RULE for a power-plan name that stays in the export. Exactly one of:
 /// (a) its GUID is one of the four Windows ships ([`is_stock_plan`]);
-/// (b) its GUID is an Ultimate copy Compy recorded activating (`compy`, from the ledger's `applied_plan`);
-/// (c) the name equals, whole and ignoring case, one of the four stock names.
+/// (b) the name equals, whole and ignoring case, one of the four stock names.
 /// Nothing else: a name that merely contains "Ultimate" or "High performance" ("Canary Ultimate Rig") is a
 /// name the user typed and is replaced. This is not `power_plan_of`, which classes by substring for another
 /// purpose and is left as it is.
-fn keeps_plan_name(guid: Option<&str>, name: &str, compy: &[String]) -> bool {
+/// D2 (review e2-r2 F1): there used to be a third rule, "the GUID is an Ultimate copy Compy recorded
+/// activating", which kept ANY name of that copy, so a copy the user had since renamed ("<name>'s rig") was
+/// exported with its typed name. The ledger records the copy's GUID, not its name, so the export cannot tell a
+/// renamed copy from a localized one. It errs toward hiding: Compy's copy keeps its name when the name is the
+/// English stock name (b), and a localized or renamed copy reads "a custom power plan".
+fn keeps_plan_name(guid: Option<&str>, name: &str) -> bool {
     const STOCK_NAMES: [&str; 4] = ["balanced", "high performance", "power saver", "ultimate performance"];
-    if let Some(g) = guid.map(|g| g.trim().trim_matches(['{', '}'])) {
-        if is_stock_plan(g) || compy.iter().any(|c| c.trim().trim_matches(['{', '}']).eq_ignore_ascii_case(g)) {
-            return true;
-        }
+    if guid.map(|g| g.trim().trim_matches(['{', '}'])).is_some_and(is_stock_plan) {
+        return true;
     }
     STOCK_NAMES.contains(&name.trim().to_lowercase().as_str())
 }
@@ -818,7 +863,7 @@ pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -
         r.startup_entry_names += n;
     }
     // Custom plan names, before the ids go: a ledger row is recognised by the custom GUID it carries.
-    let plans = custom_plan_names(&all.iter().map(|v| &**v).collect::<Vec<_>>(), env.active_plan.as_ref(), &env.compy_plan_guids);
+    let plans = custom_plan_names(&all.iter().map(|v| &**v).collect::<Vec<_>>(), env.active_plan.as_ref());
     if !plans.is_empty() {
         let mut n = 0;
         for (i, v) in all.iter_mut().enumerate() {
@@ -841,6 +886,14 @@ pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -
         let inner = value.trim().trim_matches(['{', '}']).to_string();
         all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, &inner, &label, &mut 0)));
     }
+    // D2 (review e2-r2 F6): a network adapter's Windows name ("Ethernet", or whatever the user renamed it to)
+    // sits in a Trust Ledger snapshot as `adapter_name` (the Energy-Efficient Ethernet undo record). The
+    // hardware list names an adapter by its model (hardware.rs detect_network_adapters: the interface
+    // description, and the Windows name only when no description can be read), so the ledger is where this name
+    // reliably reaches the export: the whole value becomes "adapter-1", "adapter-2" (the same name the same
+    // number), and the name is not searched for in free text, where a default name like "Ethernet" is an
+    // ordinary word.
+    all.iter_mut().for_each(|v| number_adapter_names(v, &mut r));
     // Longest first, so a name that contains another ("Mary Ann" and "Mary") is not half-replaced.
     let mut literals: Vec<&(String, &'static str)> = env.literals.iter().filter(|(v, _)| !v.trim().is_empty()).collect();
     literals.sort_by_key(|(v, _)| (std::cmp::Reverse(v.chars().count()), v.to_lowercase()));
@@ -2350,7 +2403,7 @@ mod export_tests {
         ExportEnv {
             literals: vec![(C_USER.into(), "<user>"), (C_PROFILE.into(), "<user>"), (C_HOST.into(), "<host>")],
             active_plan: Some(ActivePlan { name: C_PLAN.into(), guid: C_PLAN_GUID.into() }),
-            ..Default::default()
+
         }
     }
 
@@ -2441,7 +2494,7 @@ mod export_tests {
         assert_eq!(j["running_at_start_omitted"], true);
         let note = j["summary"].as_str().unwrap();
         assert!(note.starts_with("6 program names in game sessions and 5 startup-entry names not on Compy's known-programs list (4 programs in all) replaced"), "{note}");
-        for part in ["2 QoS policy names replaced.", "A custom power plan name was replaced in 5 places.", "2 custom power-plan or network-interface IDs replaced", "4 Trust Ledger change IDs replaced with \"change 1\", \"change 2\" and so on.", "1 unrecognised game-state field left out.", "replaced in 7 places, file paths included.", "Another account's name was removed from 2 places in file paths.", "Kept as they are: game program names, your typed note, hardware and network adapter names."] {
+        for part in ["2 QoS policy names replaced.", "A custom power plan name was replaced in 5 places.", "2 custom power-plan or network-interface IDs replaced", "4 Trust Ledger change IDs replaced with \"change 1\", \"change 2\" and so on.", "1 unrecognised game-state field left out.", "replaced in 7 places, file paths included.", "Another account's name was removed from 2 places in file paths.", "Kept as they are: game program names, your typed note, and the hardware and network adapter names in the hardware list."] {
             assert!(note.contains(part), "{part} missing from {note}");
         }
     }
@@ -2450,7 +2503,7 @@ mod export_tests {
     fn the_note_reads_right_at_zero_and_at_one() {
         assert_eq!(
             ExportRedaction::default().note(),
-            "No program names needed replacing. No other account's name was found in a file path. Kept as they are: game program names, your typed note, hardware and network adapter names."
+            "No program names needed replacing. No other account's name was found in a file path. Kept as they are: game program names, your typed note, and the hardware and network adapter names in the hardware list."
         );
         let mut one = ExportRedaction::default();
         one.start_label("x-canary.exe starting");
@@ -2468,7 +2521,7 @@ mod export_tests {
         assert!(note.contains("replaced in 7 places, file paths included."), "{note}");
         assert!(!note.contains("No file path in this export held a Windows user name"), "{note}");
         // Only the current user's name, in a path: it is counted as an identity replacement, not as another account.
-        let env = ExportEnv { literals: vec![("Zorvakname".into(), "<user>")], active_plan: None, ..Default::default() };
+        let env = ExportEnv { literals: vec![("Zorvakname".into(), "<user>")], active_plan: None };
         let mut hw = json!({ "p": r"C:\Users\Zorvakname\AppData" });
         let (mut a, mut l, mut rd, mut s, mut d) = (json!([]), json!([]), json!({}), json!([]), json!([]));
         let r = redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &env);
@@ -2548,7 +2601,7 @@ mod export_tests {
         assert_eq!(replace_name("see Abc here", "abc", "X", &mut n), "see X here");
         assert_eq!(n, 2);
         // A 2-character literal (user name) is never applied in free text: only in paths and name fields.
-        let env = ExportEnv { literals: vec![("ab".into(), "<user>")], active_plan: None, ..Default::default() };
+        let env = ExportEnv { literals: vec![("ab".into(), "<user>")], active_plan: None };
         let mut hw = json!({ "cpu_brand": "fabric lab and ab", "hostname": "AB", "p": r"C:\Games\ab\x" });
         let r = redact_export_sources([&mut hw, &mut a, &mut ledger, &mut rd, &mut s, &mut d], &env);
         assert_eq!(hw["cpu_brand"], "fabric lab and ab", "free text is untouched");
@@ -2581,11 +2634,11 @@ mod export_tests {
             [json!({}), json!([]), json!([]), json!({ "checks": [{ "id": "power-profile", "value": name, "detail": format!("Active plan \"{name}\".") }] }), json!([]),
              json!([{ "name": "Power", "entries": [{ "label": "Active power plan", "value": name }] }])]
         };
-        let stock = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Balanced".into(), guid: "381B4222-F694-41F0-9685-FF5BB260DF2E".into() }), ..Default::default() };
+        let stock = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Balanced".into(), guid: "381B4222-F694-41F0-9685-FF5BB260DF2E".into() }) };
         let mut s = mk("Balanced");
         let r = redact_export_sources(s.each_mut(), &stock);
         assert!(all_text(&s).contains("balanced") && r.power_plan_names == 0);
-        let custom = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: C_PLAN.into(), guid: C_PLAN_GUID.into() }), ..Default::default() };
+        let custom = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: C_PLAN.into(), guid: C_PLAN_GUID.into() }) };
         let mut c = mk(C_PLAN);
         let r = redact_export_sources(c.each_mut(), &custom);
         assert!(!all_text(&c).contains("canaryplanname") && all_text(&c).contains("a custom power plan") && r.power_plan_names == 3);
@@ -2775,7 +2828,7 @@ mod export_tests {
         assert!(is_ordinary_word("Hardware") && is_ordinary_word("SESSIONS"));
         assert!(!is_ordinary_word("Zorbakplex") && !is_ordinary_word("Hardware2") && !is_ordinary_word("Hard ware") && !is_ordinary_word(""));
         // A computer named "Hardware" (a heading of the report), not on the skip list.
-        let env = ExportEnv { literals: vec![("Hardware".into(), "<host>")], active_plan: None, ..Default::default() };
+        let env = ExportEnv { literals: vec![("Hardware".into(), "<host>")], active_plan: None };
         let (s, r) = lone(
             [
                 json!({ "hostname": "HARDWARE", "cpu_brand": "Hardware and software", "unc": r"\\HARDWARE\share\x", "p": r"C:\Games\Hardware\x" }),
@@ -2796,7 +2849,7 @@ mod export_tests {
         assert!(note.contains("replaced in 3 places, file paths included."), "{note}");
         assert!(note.contains("can also be an ordinary word, so it was replaced only in Windows file and network paths and in name fields, and left as it is in 1 other place."), "{note}");
         // A name that is not an ordinary word is still replaced everywhere, and says nothing about words.
-        let env = ExportEnv { literals: vec![("Zorbakplex".into(), "<host>")], active_plan: None, ..Default::default() };
+        let env = ExportEnv { literals: vec![("Zorbakplex".into(), "<host>")], active_plan: None };
         let (s, r) = lone([json!({ "x": "Zorbakplex rig" }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
         assert_eq!(s[0]["x"], "<host> rig");
         assert!(!r.note().contains("ordinary word"));
@@ -2857,7 +2910,7 @@ mod export_tests {
     fn a_computer_or_user_named_with_a_skip_list_word_never_corrupts_the_text() {
         let text = "Gaming Mode: Power saving on a Desktop PC, Guest account, Windows System";
         for name in ["GAMING", "Desktop", "Power", "Guest"] {
-            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<host>")], None), active_plan: None, ..Default::default() };
+            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<host>")], None), active_plan: None };
             assert_eq!(env.literals.len(), 1, "{name} is on the skip list: kept, and applied by the paths-and-name-fields rule");
             let (s, r) = lone([json!({ "hostname": name, "note": text, "unc": format!(r"\\{name}\share") }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
             assert_eq!(s[0]["note"], text, "{name}");
@@ -2868,7 +2921,7 @@ mod export_tests {
         }
         // A user named with one of them: the sentence is intact and the profile path is still scrubbed by shape.
         for name in ["GAMING", "Desktop", "Power", "Guest"] {
-            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<user>")], Some(name.into())), active_plan: None, ..Default::default() };
+            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<user>")], Some(name.into())), active_plan: None };
             let (s, _) = lone([json!({ "note": text, "p": format!(r"C:\Users\{name}\x") }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
             assert_eq!(s[0]["note"], text, "{name}");
             assert_eq!(s[0]["p"], r"C:\Users\<user>\x", "{name}: a path is still scrubbed");
@@ -2887,7 +2940,7 @@ mod export_tests {
         let drift_changes = json!({ "id": "applied-changes", "label": "Applied changes", "detail": format!("2 changes are off: {title}, {short}"),
             "noticed_at": "t", "unreadable_now": false, "value_now": null, "last_ready_at": null, "last_ready_value": null,
             "titles": [title, short], "applied_at": ["t", "t"] });
-        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming Rig".into(), guid: "dddddddd-1111-2222-3333-444444444444".into() }), ..Default::default() };
+        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming Rig".into(), guid: "dddddddd-1111-2222-3333-444444444444".into() }) };
         let (s, r) = lone(
             [
                 json!({}),
@@ -2975,7 +3028,7 @@ mod export_tests {
 
     #[test]
     fn this_pcs_own_spaced_name_at_the_end_of_a_string_is_caught_by_the_literal_pass() {
-        let env = ExportEnv { literals: vec![(C_SPACED.into(), "<user>")], active_plan: None, ..Default::default() };
+        let env = ExportEnv { literals: vec![(C_SPACED.into(), "<user>")], active_plan: None };
         let mut hw = json!({ "a": format!(r"C:\Users\{C_SPACED}"), "b": format!("owner {C_SPACED}") });
         let (mut a, mut l, mut rd, mut s, mut d) = (json!([]), json!([]), json!({}), json!([]), json!([]));
         redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &env);
@@ -3027,7 +3080,7 @@ mod export_tests {
         assert_eq!(usable_literals(vec![("Max".into(), "<user>")], None).len(), 1);
         assert!(is_scoped_name("Max"));
         let mut hw = json!({ "display": "Max refresh rate", "gpu": "NVIDIA Corporation", "share": r"CORP\zorvak", "pc": "张伟的电脑" });
-        let env = ExportEnv { literals: vec![("CORP".into(), "<host>"), ("张伟".into(), "<user>")], active_plan: None, ..Default::default() };
+        let env = ExportEnv { literals: vec![("CORP".into(), "<host>"), ("张伟".into(), "<user>")], active_plan: None };
         let (mut a, mut l, mut rd, mut s, mut d) = (json!([]), json!([]), json!({}), json!([]), json!([]));
         redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &env);
         assert_eq!(hw["display"], "Max refresh rate");
@@ -3066,9 +3119,9 @@ mod export_tests {
     }
 
     #[test]
-    fn a_plan_name_windows_or_compy_gave_keeps_its_name_even_with_a_guid_windows_does_not_ship() {
+    fn a_stock_plan_name_keeps_its_name_even_with_a_guid_windows_does_not_ship() {
         let guid = "aaaaaaaa-1111-2222-3333-444444444444";
-        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Ultimate Performance".into(), guid: guid.into() }), ..Default::default() };
+        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Ultimate Performance".into(), guid: guid.into() }) };
         let mut s = plan_sources("Ultimate Performance", guid);
         let r = redact_export_sources(s.each_mut(), &env);
         let text = all_text(&s);
@@ -3076,25 +3129,19 @@ mod export_tests {
         assert!(!text.contains(guid) && text.contains("custom-plan-1"), "the guid is still labelled: {text}");
         assert!(!text.contains("a custom power plan") && r.power_plan_names == 0);
         // A name that merely CONTAINS a stock class word is a name the user typed: replaced (the strict rule).
-        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "My Ultimate Rig".into(), guid: guid.into() }), ..Default::default() };
+        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "My Ultimate Rig".into(), guid: guid.into() }) };
         let mut k = plan_sources("My Ultimate Rig", guid);
         let r = redact_export_sources(k.each_mut(), &env);
         assert!(!all_text(&k).contains("my ultimate rig") && r.power_plan_names == 5, "{}", all_text(&k));
-        // Compy's own Ultimate copy on a localized Windows: a GUID Windows does not ship and a name that is not
-        // one of the four, but a GUID the ledger recorded: the name stays. The same name with a GUID Compy never
-        // recorded is replaced.
-        let env = ExportEnv {
-            active_plan: Some(ActivePlan { name: "Höchstleistung Canary".into(), guid: guid.into() }),
-            compy_plan_guids: vec![guid.to_uppercase()],
-            ..Default::default()
-        };
-        let mut own = plan_sources("Höchstleistung Canary", guid);
-        let r = redact_export_sources(own.each_mut(), &env);
-        assert!(all_text(&own).matches("höchstleistung canary").count() >= 5 && r.power_plan_names == 0, "{}", all_text(&own));
-        let other = ExportEnv { active_plan: env.active_plan.clone(), compy_plan_guids: vec!["99999999-1111-2222-3333-444444444444".into()], ..Default::default() };
-        let mut not_own = plan_sources("Höchstleistung Canary", guid);
-        let r = redact_export_sources(not_own.each_mut(), &other);
-        assert!(!all_text(&not_own).contains("höchstleistung canary") && r.power_plan_names == 5, "{}", all_text(&not_own));
+        // D2 (F1): a copy of Compy's Ultimate plan that is localized or that the user renamed has a GUID Windows
+        // does not ship and a name that is not one of the four. The ledger records the copy's GUID but not its
+        // name, so a renamed copy cannot be told from a localized one: both are replaced, in all five places.
+        for typed in ["Höchstleistung Canary", "Zed Canary's rig"] {
+            let env = ExportEnv { active_plan: Some(ActivePlan { name: typed.into(), guid: guid.into() }), ..Default::default() };
+            let mut copy = plan_sources(typed, guid);
+            let r = redact_export_sources(copy.each_mut(), &env);
+            assert!(!all_text(&copy).contains(&typed.to_lowercase()) && r.power_plan_names == 5, "{typed}: {}", all_text(&copy));
+        }
         // No plan read: a name that is stock is kept.
         let mut b = plan_sources("Balanced", "381b4222-f694-41f0-9685-ff5bb260df2e");
         let r = redact_export_sources(b.each_mut(), &ExportEnv::default());
@@ -3104,7 +3151,7 @@ mod export_tests {
     #[test]
     fn a_custom_plan_name_is_replaced_in_plan_fields_only() {
         let guid = "bbbbbbbb-1111-2222-3333-444444444444";
-        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming".into(), guid: guid.into() }), ..Default::default() };
+        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming".into(), guid: guid.into() }) };
         let mut s = plan_sources("Gaming", guid);
         let r = redact_export_sources(s.each_mut(), &env);
         assert_eq!(s[1][0]["title"], "Gaming Mode");
@@ -3173,12 +3220,81 @@ mod export_tests {
             assert_eq!(s[2][0]["applied_plan"]["name"], CUSTOM_PLAN, "{name}: ledger plan");
             assert_eq!(r.power_plan_names, 8, "{name}: 5 in the base fixture + the drift row's value_now, last_ready_value and quoted detail");
         }
-        // The three ways a name stays: a stock GUID (whatever Windows calls it), an exact stock name, a GUID Compy recorded.
-        assert!(keeps_plan_name(Some("381B4222-F694-41F0-9685-FF5BB260DF2E"), "Ausgeglichen", &[]));
-        assert!(keeps_plan_name(None, "  ULTIMATE performance ", &[]));
-        assert!(keeps_plan_name(Some("{aaaaaaaa-1111-2222-3333-444444444444}"), "Höchstleistung", &["AAAAAAAA-1111-2222-3333-444444444444".to_string()]));
-        assert!(!keeps_plan_name(Some("aaaaaaaa-1111-2222-3333-444444444444"), "Höchstleistung", &[]));
-        assert!(!keeps_plan_name(None, "Ultimate Performance 2", &[]) && !keeps_plan_name(None, "Canary Ultimate Rig", &[]));
+        // The two ways a name stays: a stock GUID (whatever Windows calls it), an exact stock name. A GUID Windows
+        // does not ship keeps no other name, Compy's own copy included (D2, F1).
+        assert!(keeps_plan_name(Some("381B4222-F694-41F0-9685-FF5BB260DF2E"), "Ausgeglichen"));
+        assert!(keeps_plan_name(None, "  ULTIMATE performance "));
+        assert!(keeps_plan_name(Some("{aaaaaaaa-1111-2222-3333-444444444444}"), "Ultimate Performance"));
+        assert!(!keeps_plan_name(Some("{aaaaaaaa-1111-2222-3333-444444444444}"), "Höchstleistung"));
+        assert!(!keeps_plan_name(None, "Ultimate Performance 2") && !keeps_plan_name(None, "Canary Ultimate Rig"));
+    }
+
+    #[test]
+    fn a_slash_is_a_path_separator_only_inside_a_path_not_anywhere_in_a_string_that_holds_one() {
+        let run = |s: &str| {
+            let (mut n, mut left) = (0, 0);
+            let out = replace_name_scoped(s, "Power", "<host>", &mut n, Some(&mut left));
+            (out, n, left)
+        };
+        // D2 (review e2-r2 F4a): a path earlier in the string no longer turns a later `/` in prose into a separator.
+        assert_eq!(run(r"see C:\a.txt; Power/Performance mode"), (r"see C:\a.txt; Power/Performance mode".to_string(), 0, 1));
+        // A path still covers its own `/`, past a space or a bracket in a folder name.
+        assert_eq!(run("C:/Program Files (x86)/Power/x").0, "C:/Program Files (x86)/<host>/x");
+        assert_eq!(run(r"C:\x\Power and more").0, r"C:\x\<host> and more");
+        // F4b: a forward-slash UNC path inside a sentence is a path.
+        assert_eq!(run("reach //Power/share now"), ("reach //<host>/share now".to_string(), 1, 0));
+        // A web address is not a path, and neither is prose.
+        assert_eq!(run("https://site/Power/x and/or Power/Performance"), ("https://site/Power/x and/or Power/Performance".to_string(), 0, 2));
+        // A file URL is.
+        assert_eq!(run("file:///D:/Power/x").0, "file:///D:/<host>/x");
+        // A path ends at a sentence end: the next sentence's `/` is prose again.
+        assert_eq!(run("Saved to C:/x/Power. Power/Performance next").0, "Saved to C:/x/<host>. Power/Performance next");
+    }
+
+    #[test]
+    fn a_network_adapter_name_in_a_ledger_snapshot_is_numbered_and_the_word_stays_in_text() {
+        // D2 (review e2-r2 F6): the EEE undo record keeps each adapter's Windows name, which the user can change.
+        let snap = |names: &[&str]| {
+            json!({ "kind": "eee-nic-property", "adapters": names.iter().map(|n| json!({ "adapter_name": n, "property_display_name": "Energy Efficient Ethernet", "prior_value": "Enabled" })).collect::<Vec<_>>() })
+        };
+        let src = [
+            json!({ "network_adapters": [{ "name": "Intel(R) Ethernet Controller I225-V" }] }),
+            json!([]),
+            json!([{ "id": "eee-1", "rec_id": "disable-eee", "snapshot": snap(&["Zed Canary Wired", "Ethernet"]) }, { "id": "eee-2", "rec_id": "disable-eee", "snapshot": snap(&["ethernet"]) }]),
+            json!({ "checks": [{ "id": "eee", "detail": "Ethernet adapter power saving is on." }] }),
+            json!([]),
+            json!([]),
+        ];
+        let (s, r) = lone(src, &ExportEnv::default());
+        let a = &s[2][0]["snapshot"]["adapters"];
+        assert_eq!(a[0]["adapter_name"], "adapter-1");
+        assert_eq!(a[1]["adapter_name"], "adapter-2");
+        assert_eq!(s[2][1]["snapshot"]["adapters"][0]["adapter_name"], "adapter-2", "the same name (any case), the same number");
+        assert_eq!(a[0]["property_display_name"], "Energy Efficient Ethernet", "the driver's text stays");
+        assert_eq!(s[3]["checks"][0]["detail"], "Ethernet adapter power saving is on.", "the name is not searched for in free text");
+        assert_eq!(s[0]["network_adapters"][0]["name"], "Intel(R) Ethernet Controller I225-V", "the hardware list keeps the model");
+        assert!(!all_text(&s).contains("zed canary wired"));
+        assert_eq!(r.to_json()["adapter_names_replaced"], 2);
+        assert_eq!(r.to_json()["custom_ids_replaced"], 0);
+        assert!(r.note().contains("2 network adapter names in the Trust Ledger (a name Windows lets you change) replaced"), "{}", r.note());
+        assert!(!r.note().contains("network-interface ID"), "{}", r.note());
+    }
+
+    #[test]
+    fn common_first_names_are_not_ordinary_words_so_a_pc_named_after_one_is_replaced_everywhere() {
+        // D2 (review e2-r2 item 3): the ordinary-word set follows the words of Compy's own report text, so a new
+        // message word can silently make a common first name one that stays in running text. These stay OUT. If
+        // one goes in, choose it on purpose (reword the message, or say so in PRIVACY.md and EXPORT_REDACTION.md).
+        // "Sam" was already in the set when this guard was written (2026-11-21): it is pinned as the one known
+        // exception, so a change in either direction is seen.
+        let inside: Vec<&str> = [
+            "Mark", "Grace", "Hunter", "Jordan", "Taylor", "John", "James", "Sam", "Tom", "Alex", "Frank", "Rose", "Bill", "Jack", "Dawn", "Grant",
+            "Emma", "Olivia", "Liam", "Noah", "Sophia", "Lucas", "Mia", "Ethan", "Chloe", "Daniel", "Sarah", "David", "Maria", "Kevin",
+        ]
+        .into_iter()
+        .filter(|n| is_ordinary_word(n))
+        .collect();
+        assert_eq!(inside, ["Sam"], "the common first names that are words of Compy's report text (so a PC or account with that name stays in running text) changed");
     }
 
     #[test]
@@ -3365,12 +3481,12 @@ mod export_tests {
 
     #[test]
     fn the_export_reads_the_ledger_once_for_support_evidence() {
-        // An unreadable ledger is one support event per export: the plan-GUID read is quiet, the view read records.
-        let src = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("history.rs")).expect("history.rs");
-        let at = src.find("pub(crate) fn recorded_plan_guids()").expect("recorded_plan_guids");
-        let body = &src[at..at + src[at..].find("\n}\n").expect("end")];
-        assert!(body.contains("load_history_from(") && !body.contains("load_history()") && !body.contains("load_history_for("), "{body}");
+        // An unreadable ledger is one support event per export: the view read is the only ledger read (D2: the
+        // plan-GUID read that kept the name of a recorded Ultimate copy is gone, see keeps_plan_name).
         let this = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("export.rs")).expect("export.rs");
+        let prod = &this[..this.find("mod export_tests {").expect("test module")];
+        let reads: Vec<&str> = prod.match_indices("crate::history::").map(|(i, _)| &prod[i + 16..]).filter(|rest| !rest.starts_with("APPLIABLE_REC_IDS")).collect();
+        assert!(reads.len() == 1 && reads[0].starts_with("get_applied_changes()"), "the export reads the ledger only through get_applied_changes: {reads:?}");
         let at = this.find("pub(crate) fn export_report(").expect("export_report");
         let report = &this[at..at + this[at..].find("pub(crate) fn open_export_folder").expect("end")];
         assert_eq!(report.matches("get_applied_changes()").count(), 1, "the view read is the one that records");
@@ -3383,9 +3499,14 @@ mod export_tests {
     /// redacted text = text that can carry a typed name, which the passes in `redact_export_sources` cover.
     /// `every_field_of_the_exported_records_is_classified_here_and_a_new_one_fails_this_test` reads the struct
     /// definitions from the source, so a field added to any of them (or to one nested in them) fails until it is
-    /// listed here with a class. Not covered: the enum-typed fields (a snapshot or action holds typed names, which
-    /// the startup-entry and plan passes handle), and `game_state` (its own key list, EXPORTED_GAME_STATE_KEYS).
-    const RECORD_FIELDS: [(&str, &str, &str, &str); 36] = [
+    /// listed here with a class. The enum-typed fields are classed variant by variant in ENUM_FIELDS (D2); not
+    /// covered: `game_state` (its own key list, EXPORTED_GAME_STATE_KEYS).
+    const RECORD_FIELDS: [(&str, &str, &str, &str); 38] = [
+        // D2: the two records nested in Snapshot variants (see ENUM_FIELDS). `interface` is a GUID ("interface-N",
+        // collect_ids); `adapter_name` is the adapter's Windows name, which the user can change ("adapter-N",
+        // number_adapter_names); the property name and value are the driver's own text.
+        ("NagleInterfaceSnapshot", "prior_ack prior_nodelay", "", "interface"),
+        ("EeeNicSnapshot", "", "property_display_name prior_value", "adapter_name"),
         ("AppliedChangeView",
          "applied_at status is_still_active active_check app_version_at_apply ruleset_version_at_apply elevation_used hw_fingerprint on_this_rig changed_outside_holds rolled_back_at justified_by_experiment rollback_justified_by_experiment undo_contract",
          "",
@@ -3515,22 +3636,201 @@ mod export_tests {
     fn every_field_of_the_exported_records_is_classified_here_and_a_new_one_fails_this_test() {
         let defined: HashSet<String> = RECORD_SOURCES.iter().flat_map(|src| structs_defined_in(src)).collect();
         let listed: HashSet<&str> = RECORD_FIELDS.iter().map(|(n, ..)| *n).collect();
+        let enums: HashSet<String> = RECORD_SOURCES.iter().flat_map(|src| enums_defined_in(src)).collect();
+        let enum_listed: HashSet<&str> = ENUM_FIELDS.iter().map(|(n, ..)| *n).collect();
         for (name, safe, hardware, redacted) in RECORD_FIELDS {
             let fields = record_struct(name).unwrap_or_else(|| panic!("struct {name} is not found in the record sources: renamed or moved? update RECORD_FIELDS and RECORD_SOURCES"));
             let all: Vec<&str> = [safe, hardware, redacted].iter().flat_map(|c| c.split_whitespace()).collect();
             for (field, ty) in &fields {
                 let classes = all.iter().filter(|f| **f == field).count();
                 assert!(classes == 1, "{name}.{field} is {}: classify it exactly once in RECORD_FIELDS (safe, hardware text or redacted text)", if classes == 0 { "NEW and unclassified" } else { "classified twice" });
-                // A nested record must have its own row.
+                // A nested record must have its own row; a nested enum its own ENUM_FIELDS row (D2).
                 for ident in ty.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|i| i.chars().next().is_some_and(char::is_uppercase)) {
                     assert!(!defined.contains(ident) || listed.contains(ident), "{name}.{field} holds the record {ident}, which has no row in RECORD_FIELDS");
+                    assert!(!enums.contains(ident) || enum_listed.contains(ident), "{name}.{field} holds the enum {ident}, which has no row in ENUM_FIELDS");
                 }
+                assert_no_text_keyed_map(name, field, ty);
             }
             for f in all {
                 assert!(fields.iter().any(|(n, _)| n == f), "{name}.{f} is classified but the struct no longer has it: remove it from RECORD_FIELDS");
             }
         }
         assert!(listed.len() == RECORD_FIELDS.len(), "a record is listed twice");
+    }
+
+    /// D2 (review e2-r2 item 4): the enum-typed fields of the exported records, VARIANT BY VARIANT, classed the
+    /// same three ways as RECORD_FIELDS (`Variant.field`, or `Variant.0` for a tuple variant). Before this, a
+    /// snapshot or action variant that gained a text field reached the export unclassified. How each class is
+    /// handled: StartupApproval.name / SetStartupEntryEnabled.name by the startup-entry pass; the plan GUIDs by
+    /// the id pass ("custom-plan-N"); ObservedState::PowerPlan by the plan pass; NagleNics interfaces by the id
+    /// pass ("interface-N"); EEE adapter names by number_adapter_names ("adapter-N"). A unit-only enum has an
+    /// empty row: it can hold no text.
+    const ENUM_FIELDS: [(&str, &str, &str, &str); 13] = [
+        ("Snapshot",
+         "Service.prior_state Service.prior_start_mode StartupApproval.prior_bytes StartupApproval.prior_vtype GameMode.prior_enabled GameMode.prior_allow MouseAccel.prior_speed MouseAccel.prior_threshold1 MouseAccel.prior_threshold2 GameBar.prior_capture GameBar.prior_enabled VisualEffects.vfx_setting_prior VisualEffects.user_prefs_mask_prior HwSchMode.prior NagleNics.interfaces FastStartup.prior_hiberboot ReservedStorage.prior_enabled PowerPlanSetting.subgroup_guid PowerPlanSetting.setting_guid PowerPlanSetting.prior_ac_value PowerPlanSetting.prior_dc_value EeeNicProperty.adapters MemoryCompression.prior_enabled Mmcss.prior_system_responsiveness Mmcss.prior_network_throttling PrioritySeparation.prior_value Mpo.prior_overlay_test_mode CoreParking.prior_ac_pct CoreParking.prior_dc_pct TcpAutotuning.prior_disabled PagefileManual.prior_drive_letter PagefileManual.prior_initial_mb PagefileManual.prior_maximum_mb ScheduledTask.prior_state",
+         "PreloadApp.prior_full_name PreloadApp.prior_family_name PreloadApp.prior_version",
+         "StartupApproval.name PowerPlan.prior_guid PowerPlanSetting.plan_guid CoreParking.plan_guid"),
+        ("AppliedAction",
+         "DisableKnownService.service SetStartupEntryEnabled.enabled SuspendKnownService.service DisableScheduledTask.task RemovePreloadApp.app",
+         "",
+         "SetStartupEntryEnabled.name"),
+        ("RollbackAction", "RestoreServiceFromSnapshot.service ResumeServiceFromSnapshot.service EnableScheduledTask.task ReinstallPreloadApp.app", "", ""),
+        ("ObservedState", "", "", "PowerPlan.guid PowerPlan.name"),
+        ("ActiveCheck", "", "", ""),
+        ("Provenance", "", "", ""),
+        ("KnownService", "", "", ""),
+        ("KnownBloatTask", "", "", ""),
+        ("KnownPreloadApp", "", "", ""),
+        ("ReadinessStatus", "", "", ""),
+        ("DimensionRisk", "", "", ""),
+        ("VbsState", "", "", ""),
+        ("GamingModePlan", "", "", ""),
+    ];
+
+    /// Object keys are never rewritten by the redaction (`map_strings` rewrites values only), so a record
+    /// field that is a map keyed by text would carry its keys out of the export unredacted. None exists among
+    /// the exported records except those named here, each with why its keys hold no typed name.
+    const TEXT_KEYED_MAPS: [(&str, &str, &str); 0] = [];
+
+    fn assert_no_text_keyed_map(record: &str, field: &str, ty: &str) {
+        let compact: String = ty.chars().filter(|c| !c.is_whitespace()).collect();
+        let text_keyed = ["HashMap<String", "BTreeMap<String", "Map<String", "HashMap<&str", "BTreeMap<&str"].iter().any(|m| compact.contains(m));
+        assert!(
+            !text_keyed || TEXT_KEYED_MAPS.iter().any(|(r, f, _)| *r == record && *f == field),
+            "{record}.{field} is a map keyed by text ({ty}): its keys reach the export unredacted. Make it a list of records, or add it to TEXT_KEYED_MAPS with why its keys hold no typed name"
+        );
+    }
+
+    /// The `enum <name> {` body's fields as (`Variant.field` or `Variant.N`, type text); None if not found.
+    /// PANICS on a body it cannot read, so a variant field can never go unclassified because the parser
+    /// could not see it.
+    fn enum_fields_in(src: &str, name: &str) -> Option<Vec<(String, String)>> {
+        let head = format!("enum {name} {{");
+        let lines: Vec<&str> = src.lines().collect();
+        let at = lines.iter().position(|l| {
+            let t = l.trim_start();
+            let t = t.strip_prefix("pub(crate) ").or_else(|| t.strip_prefix("pub(super) ")).or_else(|| t.strip_prefix("pub ")).unwrap_or(t);
+            t.starts_with(&head)
+        })?;
+        // The body without comments and attribute lines, as one string.
+        let mut body = String::new();
+        for l in &lines[at + 1..] {
+            if l.starts_with('}') {
+                break;
+            }
+            let code = l.split("//").next().unwrap_or("").trim();
+            if code.is_empty() || code.starts_with("#[") {
+                continue;
+            }
+            assert!(!code.contains("#["), "enum {name}: an attribute inside a line (`{code}`): put it on its own line, or extend enum_fields_in");
+            body.push_str(code);
+            body.push(' ');
+        }
+        // Split at top-level commas, tracking {} () <> depth.
+        fn split_top(s: &str) -> Vec<String> {
+            let (mut out, mut cur, mut depth) = (Vec::new(), String::new(), 0i32);
+            for c in s.chars() {
+                match c {
+                    '{' | '(' | '<' => depth += 1,
+                    '}' | ')' | '>' => depth -= 1,
+                    ',' if depth == 0 => {
+                        out.push(std::mem::take(&mut cur));
+                        continue;
+                    }
+                    _ => {}
+                }
+                cur.push(c);
+            }
+            out.push(cur);
+            out.into_iter().map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect()
+        }
+        let ident_ok = |s: &str, upper: bool| {
+            !s.is_empty()
+                && s.chars().next().is_some_and(|c| if upper { c.is_ascii_uppercase() } else { c.is_ascii_lowercase() })
+                && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        };
+        let mut out = Vec::new();
+        for variant in split_top(&body) {
+            let cut = variant.find(['{', '(']).unwrap_or(variant.len());
+            let vname = variant[..cut].trim();
+            assert!(ident_ok(vname, true), "enum {name}: cannot read the variant `{variant}`, or extend enum_fields_in");
+            let rest = variant[cut..].trim();
+            if rest.is_empty() {
+                continue;
+            }
+            let inner = &rest[1..rest.len() - 1];
+            if rest.starts_with('{') {
+                for f in split_top(inner) {
+                    let f = f.strip_prefix("pub(crate) ").or_else(|| f.strip_prefix("pub ")).unwrap_or(&f).to_string();
+                    let (field, ty) = f.split_once(':').unwrap_or_else(|| panic!("enum {name}: cannot read the field `{f}` of {vname}"));
+                    assert!(ident_ok(field.trim(), false), "enum {name}: cannot read the field name `{field}` of {vname} (no r#name), or extend enum_fields_in");
+                    out.push((format!("{vname}.{}", field.trim()), ty.trim().to_string()));
+                }
+            } else {
+                for (i, ty) in split_top(inner).into_iter().enumerate() {
+                    out.push((format!("{vname}.{i}"), ty));
+                }
+            }
+        }
+        Some(out)
+    }
+
+    /// The names of the `enum Name {` types a source defines.
+    fn enums_defined_in(src: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        for l in src.lines() {
+            let t = l.trim_start();
+            let t = t.strip_prefix("pub(crate) ").or_else(|| t.strip_prefix("pub(super) ")).or_else(|| t.strip_prefix("pub ")).unwrap_or(t);
+            if let Some(rest) = t.strip_prefix("enum ").filter(|r| r.trim_end().ends_with('{')) {
+                names.push(rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect());
+            }
+        }
+        names
+    }
+
+    #[test]
+    fn the_enum_parser_reads_struct_tuple_and_unit_variants_and_fails_on_what_it_cannot_read() {
+        let ok = "pub(crate) enum E {\n    /// doc\n    A { name: String, n: u32 },\n    #[serde(other)]\n    B,\n    C {\n        prior: Option<Vec<u8>>,\n        #[serde(default)]\n        map: HashMap<String, u32>,\n    },\n    D(String, u8), // note\n}\n";
+        let got = enum_fields_in(ok, "E").expect("found");
+        let names: Vec<&str> = got.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["A.name", "A.n", "C.prior", "C.map", "D.0", "D.1"]);
+        assert_eq!(got[3].1, "HashMap<String, u32>");
+        assert!(enum_fields_in(ok, "Missing").is_none());
+        assert_eq!(enums_defined_in("pub(crate) enum A {\nenum B {\nenum C;\n"), ["A", "B"]);
+        for (bad, why) in [("enum E {\n    A { r#type: String },\n}\n", "a raw identifier"), ("enum E {\n    a,\n}\n", "a lower-case variant"), ("enum E {\n    A { #[serde(default)] x: u8 },\n}\n", "an attribute inside a line")] {
+            assert!(std::panic::catch_unwind(|| enum_fields_in(bad, "E")).is_err(), "{why} must fail, not be skipped");
+        }
+        let map_field = std::panic::catch_unwind(|| assert_no_text_keyed_map("R", "f", "BTreeMap<String, Vec<u8>>"));
+        assert!(map_field.is_err(), "a text-keyed map must fail");
+        assert_no_text_keyed_map("R", "f", "Vec<(String, u32)>");
+    }
+
+    #[test]
+    fn every_field_of_the_exported_enums_is_classified_and_a_new_variant_field_fails_this_test() {
+        let structs: HashSet<String> = RECORD_SOURCES.iter().flat_map(|src| structs_defined_in(src)).collect();
+        let listed: HashSet<&str> = RECORD_FIELDS.iter().map(|(n, ..)| *n).collect();
+        let enums: HashSet<String> = RECORD_SOURCES.iter().flat_map(|src| enums_defined_in(src)).collect();
+        let enum_listed: HashSet<&str> = ENUM_FIELDS.iter().map(|(n, ..)| *n).collect();
+        for (name, safe, hardware, redacted) in ENUM_FIELDS {
+            let fields = RECORD_SOURCES
+                .iter()
+                .find_map(|src| enum_fields_in(src, name))
+                .unwrap_or_else(|| panic!("enum {name} is not found in the record sources: renamed or moved? update ENUM_FIELDS and RECORD_SOURCES"));
+            let all: Vec<&str> = [safe, hardware, redacted].iter().flat_map(|c| c.split_whitespace()).collect();
+            for (field, ty) in &fields {
+                let classes = all.iter().filter(|f| **f == field).count();
+                assert!(classes == 1, "{name}::{field} is {}: classify it exactly once in ENUM_FIELDS (safe, hardware text or redacted text)", if classes == 0 { "NEW and unclassified" } else { "classified twice" });
+                for ident in ty.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|i| i.chars().next().is_some_and(char::is_uppercase)) {
+                    assert!(!structs.contains(ident) || listed.contains(ident), "{name}::{field} holds the record {ident}, which has no row in RECORD_FIELDS");
+                    assert!(!enums.contains(ident) || enum_listed.contains(ident), "{name}::{field} holds the enum {ident}, which has no row in ENUM_FIELDS");
+                }
+                assert_no_text_keyed_map(name, field, ty);
+            }
+            for f in all {
+                assert!(fields.iter().any(|(n, _)| n == f), "{name}::{f} is classified but the enum no longer has it: remove it from ENUM_FIELDS");
+            }
+        }
+        assert!(enum_listed.len() == ENUM_FIELDS.len(), "an enum is listed twice");
     }
 
     #[test]

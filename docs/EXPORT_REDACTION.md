@@ -3,7 +3,11 @@
 Backed by these tests in `src-tauri/src/export.rs`: `no_canary_survives_in_any_shape_of_either_tier`,
 `counts_are_given_by_class_and_are_right`, `qos_policy_names_in_the_readiness_row_are_numbered_like_the_hardware_list_and_appear_nowhere`,
 `a_custom_plan_whose_name_contains_ultimate_or_high_performance_is_replaced_wherever_a_plan_name_sits`,
-`a_plan_name_windows_or_compy_gave_keeps_its_name_even_with_a_guid_windows_does_not_ship`,
+`a_stock_plan_name_keeps_its_name_even_with_a_guid_windows_does_not_ship`,
+`a_slash_is_a_path_separator_only_inside_a_path_not_anywhere_in_a_string_that_holds_one`,
+`a_network_adapter_name_in_a_ledger_snapshot_is_numbered_and_the_word_stays_in_text`,
+`common_first_names_are_not_ordinary_words_so_a_pc_named_after_one_is_replaced_everywhere`,
+`every_field_of_the_exported_enums_is_classified_and_a_new_variant_field_fails_this_test`,
 `a_spaced_name_is_taken_whole_at_the_end_of_a_value_and_before_a_period_colon_comma_or_curly_quote`,
 `path_scrub_edge_cases_apostrophe_spaces_short_8_3_unc_slashes_escapes_drives_and_shared_profiles`,
 `a_onedrive_company_name_becomes_organization_and_personal_stays`,
@@ -44,9 +48,11 @@ the report is written, Compy changes these things in the copy it exports:
   Compy's own report text uses (for example DESKTOP-4F2K9Q), is replaced everywhere it appears. A name that
   is shorter than three letters, is one of 28 common words (for example Admin, User, Owner, Max, Gamer), or
   is a single ordinary word that Compy's own report text uses (a computer named Ethernet or Hardware, say)
-  is replaced only in Windows file and network paths (next to a backslash, or next to a forward slash in a
-  string that is a path, including `\\NAME\share`) and in the name fields (hostname, computer name,
-  machine name, domain, user name), and is
+  is replaced only in Windows file and network paths (next to a backslash, or next to a forward slash inside
+  a path, including `\\NAME\share` and `//NAME/share`; a path starts at a drive, a network-path start or
+  `file:` and ends at `; , " < > |`, a line break, or a full stop, colon, `!` or `?` followed by a space, so a
+  forward slash in the prose after a path is not a separator) and in the name fields (hostname, computer
+  name, machine name, domain, user name), and is
   left as it is in running text; the last lines of the report say how many other places it was left in.
   "Compy's own report text" means the fixed words of Compy's report, readiness, hardware, diagnostics,
   recommendation, ledger, drift and session text; a name that only Windows supplies is not in it.
@@ -74,18 +80,22 @@ the report is written, Compy changes these things in the copy it exports:
   row of Game Readiness); a policy name of one or two letters is replaced in the list and inside that row's
   parenthesised list of names (the row then reads "(QoS policy 1, QoS policy 2)", like the hardware list),
   not in other text.
+- A network adapter's Windows name (which you can change, for example to name a VPN or a room) is saved in
+  the Trust Ledger's record of an Energy-Efficient Ethernet change. In the export it is replaced there by
+  "adapter-1", "adapter-2" and so on, the same name keeping its number within one report; it is not
+  searched for in other text.
 
 ## Power plans
 
-- A power plan name stays only when its id is one of the four plans Windows ships, or is a copy of the
-  Ultimate Performance plan that Compy recorded creating, or when the name is exactly Balanced, High
-  performance, Power saver or Ultimate performance (a row that carries no id is judged by the plan Windows
-  reports as active). Any other name, including a custom one that contains "Ultimate" or "High
+- A power plan name stays only when its id is one of the four plans Windows ships, or when the name is
+  exactly Balanced, High performance, Power saver or Ultimate performance (a row that carries no id is
+  judged by the plan Windows reports as active). Any other name, including a custom one that contains "Ultimate" or "High
   performance", is shown as "a custom power plan" in the places a plan name sits: the power rows of Game
   Readiness and Diagnostics, the Drift Watch values, a name beside a plan id, and a Trust Ledger row that
   carries a custom plan id. The ids of custom power plans and network interfaces are replaced by numbered
-  labels. If the Trust Ledger cannot be read, Compy cannot tell which Ultimate Performance copy is its own,
-  so that copy is shown as "a custom power plan" too.
+  labels. The copy of Ultimate Performance that Compy makes keeps its name only when the name is exactly
+  Ultimate performance: Compy records the copy's id but not its name, so it cannot tell a copy Windows
+  named in another language from one you renamed, and both are shown as "a custom power plan".
 
 ## Left out
 
@@ -94,7 +104,8 @@ the report is written, Compy changes these things in the copy it exports:
 
 ## What stays
 
-The game's program name, hardware and network adapter names, the stock Windows power plan names, the
+The game's program name, the hardware and network adapter names in the hardware list (an adapter is named
+there by its model, and by its Windows name only when no model can be read), the stock Windows power plan names, the
 hardware fingerprint (a short code made from the hardware names that are already in the report), and
 anything you type into the note box, exactly as you wrote it.
 
@@ -102,7 +113,10 @@ anything you type into the note box, exactly as you wrote it.
 
 Free text is searched only for your own Windows user, profile, domain and computer names and for the names
 and ids named above, so a name of yours typed elsewhere is not found; a name of yours that is an ordinary
-word stays in running text; a text value is rewritten but an object key in the JSON is not; and another
+word stays in running text; a text value is rewritten but an object key in the JSON is not (no field of
+an exported record is a map keyed by text, the game-state keys are cut to a fixed list, and
+`every_field_of_the_exported_records_is_classified_here_and_a_new_one_fails_this_test` fails if a record
+gains a map keyed by text); and another
 account's name is found only in a `\Users\` path. The last lines of the Markdown, and a `redaction` section
 in the JSON, say how many names, ids and paths were changed. Nothing changes in what Compy records on your
 PC or shows you in the app; only the exported copy is altered. Read a report before you post it in public:
