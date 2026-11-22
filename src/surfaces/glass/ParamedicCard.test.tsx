@@ -3334,6 +3334,14 @@ describe("ParamedicCard: the driver read as the earlier version again (B4)", () 
     expect(text).toMatch(/On 1\.0 again, Game A's session on .+ ran in its usual range\. One session so far; Compy says a game is back in its usual range after two\./);
   });
 
+  it("two clear sessions on the earlier driver, then one Compy couldn't judge: said, with why not yet", async () => {
+    const both = { kind: "measured" as const, code: "driver-back-clear-unjudged", args: { from: "1.0", back: BACK, at: "2026-11-21T20:00:00Z", count: "2", later: "1" }, against: false, source: "sessions" };
+    const text = await open(driverRow([changed, back, both]));
+    expect(text).toMatch(
+      /On 1\.0 again, Game A ran in its usual range in 2 sessions, the latest on .+\. The sessions after that were too short or only partly measured, so Compy can't say it is back in its usual range yet\./,
+    );
+  });
+
   it("the earlier-driver line is dated and never says 'still on the old driver'", async () => {
     const old = { kind: "measured" as const, code: "rough-on-old-driver", args: { count: "1", from: "1.0", date: "2026-11-21T20:00:00Z" }, against: true, source: "sessions" };
     const text = await open(driverRow([changed, old], { from: "1.0", to: "2.0" }));

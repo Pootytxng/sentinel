@@ -1,0 +1,537 @@
+{
+  "back": {
+    "diagnosis": {
+      "baseline": {
+        "avg_fps": 100.0,
+        "duration_secs": 600,
+        "game": "g",
+        "gaming_mode_active": null,
+        "hw_hash": null,
+        "low1_fps": 50.0,
+        "samples": 600,
+        "started_at": "2026-10-04T10:00:00Z"
+      },
+      "complaint": "slow",
+      "earlier_episode": null,
+      "findings": [
+        {
+          "confidence": "possible",
+          "evidence": [
+            {
+              "against": false,
+              "args": {
+                "check": "applied-changes",
+                "noticed": "2026-10-06T12:00:00Z",
+                "ready": "2026-10-05T12:00:00Z",
+                "restored": "2026-10-12T18:00:00Z",
+                "seen": "2026-10-06T12:00:00Z",
+                "titles": "Trim Windows visual effects"
+              },
+              "code": "drift-noticed",
+              "kind": "known",
+              "source": "drift"
+            },
+            {
+              "against": false,
+              "args": {},
+              "code": "which-not-recorded",
+              "kind": "unknown",
+              "source": "drift"
+            }
+          ],
+          "fix": {
+            "args": {},
+            "code": "setting-drift",
+            "kind": "steps"
+          },
+          "id": "setting-drift",
+          "in_play": true,
+          "now": "points-to",
+          "now_evidence": [
+            {
+              "against": false,
+              "args": {
+                "restored": "2026-10-12T18:00:00Z"
+              },
+              "code": "recovered-drift-back",
+              "kind": "supported-inference",
+              "source": "sessions"
+            }
+          ],
+          "since_when": {
+            "from": "2026-10-05T12:00:00Z",
+            "kind": "observed-between",
+            "to": "2026-10-06T12:00:00Z"
+          }
+        },
+        {
+          "confidence": "possible",
+          "evidence": [
+            {
+              "against": false,
+              "args": {
+                "from": "1.0",
+                "to": "2.0"
+              },
+              "code": "driver-changed",
+              "kind": "known",
+              "source": "sessions"
+            },
+            {
+              "against": false,
+              "args": {
+                "baselineAt": "2026-10-04T10:00:00Z",
+                "count": "1"
+              },
+              "code": "sessions-split",
+              "kind": "measured",
+              "source": "sessions"
+            },
+            {
+              "against": false,
+              "args": {
+                "seenAt": "2026-10-09T10:00:00Z"
+              },
+              "code": "install-not-recorded",
+              "kind": "unknown",
+              "source": "windows"
+            }
+          ],
+          "fix": {
+            "args": {
+              "from": "1.0",
+              "to": "2.0"
+            },
+            "code": "gpu-driver-change",
+            "kind": "steps"
+          },
+          "id": "gpu-driver-change",
+          "in_play": false,
+          "now": "points-away",
+          "now_evidence": [
+            {
+              "against": true,
+              "args": {
+                "version": "2.0"
+              },
+              "code": "recovered-same-driver",
+              "kind": "measured",
+              "source": "sessions"
+            }
+          ],
+          "since_when": {
+            "from": "2026-10-04T10:10:00Z",
+            "kind": "observed-between",
+            "to": "2026-10-09T10:00:00Z"
+          }
+        }
+      ],
+      "first_bad": {
+        "avg_fps": 100.0,
+        "duration_secs": 600,
+        "game": "g",
+        "gaming_mode_active": null,
+        "hw_hash": null,
+        "low1_fps": 30.0,
+        "samples": 600,
+        "started_at": "2026-10-09T10:00:00Z"
+      },
+      "game": "g",
+      "game_name": "g",
+      "limits": [
+        {
+          "args": {},
+          "code": "classes",
+          "kind": "driver"
+        },
+        {
+          "args": {
+            "n": "0"
+          },
+          "code": "no-install-date",
+          "kind": "programs"
+        }
+      ],
+      "method": "paramedic-rules-v1",
+      "mixed_sessions": [],
+      "not_it": [
+        {
+          "args": {
+            "count": "2"
+          },
+          "id": "compy-change"
+        },
+        {
+          "args": {
+            "build": "100"
+          },
+          "id": "windows-build-change"
+        },
+        {
+          "args": {},
+          "id": "windows-update"
+        }
+      ],
+      "problem": {
+        "avg_lower": false,
+        "before": {
+          "avg_fps": 100.0,
+          "p99_ms": null,
+          "ratio": 0.5
+        },
+        "last_full_normal_at": "2026-10-04T10:00:00Z",
+        "last_normal_at": "2026-10-04T10:00:00Z",
+        "later_unjudged": 0,
+        "now": {
+          "avg_fps": 100.0,
+          "p99_ms": null,
+          "ratio": 0.3
+        },
+        "other_games_affected": [],
+        "partial_sessions": [],
+        "rule": "stutter-collapse",
+        "sessions_affected": [
+          {
+            "avg_fps": 100.0,
+            "duration_secs": 600,
+            "game": "g",
+            "gaming_mode_active": null,
+            "hw_hash": null,
+            "low1_fps": 30.0,
+            "samples": 600,
+            "started_at": "2026-10-09T10:00:00Z"
+          }
+        ],
+        "spikes": false
+      },
+      "recorded": {
+        "newest_at": "2026-10-14T10:00:00Z",
+        "sessions": 7
+      },
+      "recovery": {
+        "also_changed": [],
+        "before": {
+          "avg_fps": 100.0,
+          "p99_ms": null,
+          "ratio": 0.5
+        },
+        "now": {
+          "avg_fps": 100.0,
+          "p99_ms": null,
+          "ratio": 0.5
+        },
+        "recovered_sessions": [
+          {
+            "avg_fps": 100.0,
+            "duration_secs": 600,
+            "game": "g",
+            "gaming_mode_active": null,
+            "hw_hash": null,
+            "low1_fps": 50.0,
+            "samples": 600,
+            "started_at": "2026-10-13T10:00:00Z"
+          },
+          {
+            "avg_fps": 100.0,
+            "duration_secs": 600,
+            "game": "g",
+            "gaming_mode_active": null,
+            "hw_hash": null,
+            "low1_fps": 50.0,
+            "samples": 600,
+            "started_at": "2026-10-14T10:00:00Z"
+          }
+        ],
+        "rough": {
+          "avg_fps": 100.0,
+          "p99_ms": null,
+          "ratio": 0.3
+        },
+        "rough_sessions": [
+          {
+            "avg_fps": 100.0,
+            "duration_secs": 600,
+            "game": "g",
+            "gaming_mode_active": null,
+            "hw_hash": null,
+            "low1_fps": 30.0,
+            "samples": 600,
+            "started_at": "2026-10-09T10:00:00Z"
+          }
+        ],
+        "sessions_since": 2,
+        "summary": {
+          "id": "setting-drift",
+          "kind": "points-to"
+        }
+      },
+      "seen": [
+        {
+          "args": {},
+          "id": "programs-none"
+        }
+      ],
+      "start_record": {
+        "normal": 4,
+        "normal_recorded": 0,
+        "open": [],
+        "recorded": 0,
+        "rough": 1
+      },
+      "state": {
+        "kind": "recovered"
+      },
+      "unknowns": [
+        "hardware",
+        "other-load",
+        "memory",
+        "power-plan",
+        "display",
+        "gpu-temp",
+        "startup-programs",
+        "overlays",
+        "running-at-start"
+      ],
+      "why_first": null
+    },
+    "drifts": []
+  },
+  "off": {
+    "diagnosis": {
+      "baseline": {
+        "avg_fps": 100.0,
+        "duration_secs": 600,
+        "game": "g",
+        "gaming_mode_active": null,
+        "hw_hash": null,
+        "low1_fps": 50.0,
+        "samples": 600,
+        "started_at": "2026-10-04T10:00:00Z"
+      },
+      "complaint": "slow",
+      "earlier_episode": null,
+      "findings": [
+        {
+          "confidence": "possible",
+          "evidence": [
+            {
+              "against": false,
+              "args": {
+                "from": "1.0",
+                "to": "2.0"
+              },
+              "code": "driver-changed",
+              "kind": "known",
+              "source": "sessions"
+            },
+            {
+              "against": false,
+              "args": {
+                "baselineAt": "2026-10-04T10:00:00Z",
+                "count": "1"
+              },
+              "code": "sessions-split",
+              "kind": "measured",
+              "source": "sessions"
+            },
+            {
+              "against": false,
+              "args": {
+                "seenAt": "2026-10-09T10:00:00Z"
+              },
+              "code": "install-not-recorded",
+              "kind": "unknown",
+              "source": "windows"
+            }
+          ],
+          "fix": {
+            "args": {
+              "from": "1.0",
+              "to": "2.0"
+            },
+            "code": "gpu-driver-change",
+            "kind": "steps"
+          },
+          "id": "gpu-driver-change",
+          "in_play": true,
+          "now": null,
+          "now_evidence": [],
+          "since_when": {
+            "from": "2026-10-04T10:10:00Z",
+            "kind": "observed-between",
+            "to": "2026-10-09T10:00:00Z"
+          }
+        },
+        {
+          "confidence": "possible",
+          "evidence": [
+            {
+              "against": false,
+              "args": {
+                "check": "applied-changes",
+                "noticed": "2026-10-06T12:00:00Z",
+                "ready": "2026-10-05T12:00:00Z"
+              },
+              "code": "drift-noticed",
+              "kind": "known",
+              "source": "drift"
+            },
+            {
+              "against": false,
+              "args": {},
+              "code": "which-not-recorded",
+              "kind": "unknown",
+              "source": "drift"
+            }
+          ],
+          "fix": {
+            "args": {},
+            "code": "setting-drift",
+            "kind": "steps"
+          },
+          "id": "setting-drift",
+          "in_play": true,
+          "now": null,
+          "now_evidence": [],
+          "since_when": {
+            "from": "2026-10-05T12:00:00Z",
+            "kind": "observed-between",
+            "to": "2026-10-06T12:00:00Z"
+          }
+        }
+      ],
+      "first_bad": {
+        "avg_fps": 100.0,
+        "duration_secs": 600,
+        "game": "g",
+        "gaming_mode_active": null,
+        "hw_hash": null,
+        "low1_fps": 30.0,
+        "samples": 600,
+        "started_at": "2026-10-09T10:00:00Z"
+      },
+      "game": "g",
+      "game_name": "g",
+      "limits": [
+        {
+          "args": {},
+          "code": "classes",
+          "kind": "driver"
+        },
+        {
+          "args": {
+            "n": "0"
+          },
+          "code": "no-install-date",
+          "kind": "programs"
+        }
+      ],
+      "method": "paramedic-rules-v1",
+      "mixed_sessions": [],
+      "not_it": [
+        {
+          "args": {
+            "count": "2"
+          },
+          "id": "compy-change"
+        },
+        {
+          "args": {
+            "build": "100"
+          },
+          "id": "windows-build-change"
+        },
+        {
+          "args": {},
+          "id": "windows-update"
+        }
+      ],
+      "problem": {
+        "avg_lower": false,
+        "before": {
+          "avg_fps": 100.0,
+          "p99_ms": null,
+          "ratio": 0.5
+        },
+        "last_full_normal_at": "2026-10-04T10:00:00Z",
+        "last_normal_at": "2026-10-04T10:00:00Z",
+        "later_unjudged": 0,
+        "now": {
+          "avg_fps": 100.0,
+          "p99_ms": null,
+          "ratio": 0.3
+        },
+        "other_games_affected": [],
+        "partial_sessions": [],
+        "rule": "stutter-collapse",
+        "sessions_affected": [
+          {
+            "avg_fps": 100.0,
+            "duration_secs": 600,
+            "game": "g",
+            "gaming_mode_active": null,
+            "hw_hash": null,
+            "low1_fps": 30.0,
+            "samples": 600,
+            "started_at": "2026-10-09T10:00:00Z"
+          }
+        ],
+        "spikes": false
+      },
+      "recorded": {
+        "newest_at": "2026-10-09T10:00:00Z",
+        "sessions": 5
+      },
+      "recovery": null,
+      "seen": [
+        {
+          "args": {},
+          "id": "programs-none"
+        }
+      ],
+      "start_record": {
+        "normal": 4,
+        "normal_recorded": 0,
+        "open": [],
+        "recorded": 0,
+        "rough": 1
+      },
+      "state": {
+        "kind": "found"
+      },
+      "unknowns": [
+        "hardware",
+        "other-load",
+        "memory",
+        "power-plan",
+        "display",
+        "gpu-temp",
+        "startup-programs",
+        "overlays",
+        "running-at-start"
+      ],
+      "why_first": "not-separable"
+    },
+    "drifts": [
+      {
+        "applied_at": [
+          "2026-09-30T10:00:00Z"
+        ],
+        "detail": "",
+        "id": "applied-changes",
+        "label": "Applied changes",
+        "last_ready_at": "2026-10-05T12:00:00Z",
+        "last_ready_value": "1 active",
+        "noticed_at": "2026-10-06T12:00:00Z",
+        "recs": [
+          "visual-effects"
+        ],
+        "titles": [
+          "Trim Windows visual effects"
+        ],
+        "unreadable_now": false,
+        "value_now": "0 on / 1 drifted"
+      }
+    ]
+  }
+}

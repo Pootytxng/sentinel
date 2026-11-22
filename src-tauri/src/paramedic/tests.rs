@@ -2985,6 +2985,9 @@ mod recovery_f3 {
         // A third version is not "back".
         let d = with_sightings(episode(), vec![sighting("2026-10-10T08:00:00Z", "3.0")]);
         assert!(!driver_codes(&d).contains(&"driver-back"));
+        // Read as the earlier version once, then a third version is the newest: not "back" any more.
+        let d = with_sightings(episode(), vec![sighting("2026-10-10T08:00:00Z", "1.0"), sighting("2026-10-11T08:00:00Z", "3.0")]);
+        assert!(!driver_codes(&d).contains(&"driver-back"), "{:?}", driver_codes(&d));
     }
 
     #[test]
