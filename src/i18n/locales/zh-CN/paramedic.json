@@ -829,6 +829,7 @@
     "row": "{{name}}：之前是“{{from}}”，现在是“{{to}}”。",
     "rowNew": "新列出：{{name}}。",
     "rowGone": "不再列出：{{name}}。",
+    "rowNotShown": "这次未显示：{{name}}。",
     "unchanged": "结论没有变化。",
     "unchangedNoNew": "没有记录到新的 {{game}} 游戏，结论也没有变化。玩一次 {{game}}，再按“再查一次”。",
     "otherGame": "这次的结论是关于 {{game}} 的；上一次是关于 {{prev}} 的。",

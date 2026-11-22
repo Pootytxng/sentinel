@@ -1623,7 +1623,11 @@ function SinceLast({ prev, d, ctx }: { prev: ParamedicDiagnosis; d: ParamedicDia
     else if (chipText(before, prev, t) !== chipText(f, d, t)) changes.push(t("paramedic.sinceLast.row", { name, from: chipText(before, prev, t), to: chipText(f, d, t) }));
   }
   for (const f of prev.findings) {
-    if (!d.findings.some((x) => x.id === f.id)) changes.push(t("paramedic.sinceLast.rowGone", { name: findingTitle(f, ctx) ?? f.id }));
+    // With less read this time, a row that is gone may only be unread: "not shown", never "no longer listed".
+    if (!d.findings.some((x) => x.id === f.id)) {
+      const name = findingTitle(f, ctx) ?? f.id;
+      changes.push(lessRead ? t("paramedic.sinceLast.rowNotShown", { name }) : t("paramedic.sinceLast.rowGone", { name }));
+    }
   }
   const sessions = noNew ? [t("paramedic.sinceLast.noNew", { game })] : counts;
   const lines = lessRead

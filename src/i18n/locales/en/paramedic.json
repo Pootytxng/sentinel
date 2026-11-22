@@ -829,6 +829,7 @@
     "row": "{{name}}: was “{{from}}”, now “{{to}}”.",
     "rowNew": "Now listed: {{name}}.",
     "rowGone": "No longer listed: {{name}}.",
+    "rowNotShown": "Not shown this time: {{name}}.",
     "unchanged": "Nothing in the answer changed.",
     "unchangedNoNew": "No new {{game}} session was recorded and nothing in the answer changed. Play {{game}} once, then press Check again.",
     "otherGame": "This answer is about {{game}}; the last one was about {{prev}}.",

@@ -3429,6 +3429,9 @@ describe("ParamedicCard: what changed since the last check (B4)", () => {
     expect(text.startsWith("Since the last check" + "This time Compy couldn't read everything it read last time, so a change may not show here.")).toBe(true);
     expect(text).not.toContain("Nothing in the answer changed");
     expect(text).not.toContain("nothing in the answer changed");
+    // The row that dropped out may only be unread: "not shown this time", never "no longer listed" (confirm r2).
+    expect(text).not.toContain("No longer listed");
+    expect(text).toMatch(/Not shown this time: [^.]+\./);
     cleanup();
     // Same rows, one more limit: still never "unchanged".
     await opened();
