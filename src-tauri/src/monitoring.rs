@@ -1087,6 +1087,20 @@ fn superseded_start_answer(capture_on: bool) -> Result<(), String> {
     }
 }
 
+/// PURE: the capture status after the elevated helper's launch ended. A clean exit is "stopped";
+/// `elevate_and_wait`'s own refusal (a target that is not Compy's exe: InvalidInput with no OS error
+/// code) never showed a prompt, so it is a failed launch, never "declined" (a1b review); anything
+/// else keeps today's coarse "declined".
+fn elevated_helper_status(res: &std::io::Result<std::process::ExitStatus>) -> String {
+    match res {
+        Ok(s) if s.success() => "stopped".to_string(),
+        Err(e) if e.kind() == std::io::ErrorKind::InvalidInput && e.raw_os_error().is_none() => {
+            format!("failed to launch helper: {e}")
+        }
+        _ => "declined".to_string(),
+    }
+}
+
 fn start_fps_capture_locked() -> Result<(), String> {
     use std::sync::atomic::Ordering;
     if fps_active().load(Ordering::Acquire) {
@@ -1221,12 +1235,9 @@ fn start_fps_capture_locked() -> Result<(), String> {
             // returned Ok on Windows, so a cancel arrived as Ok(!0) and the Err arm was dead).
             // Now a real UAC decline is Err(os error 1223); a helper that ran and died also
             // maps to "declined" — same coarse UI state as before, no false "stopped".
-            let msg = match res {
-                Ok(s) if s.success() => "stopped",
-                _ => "declined",
-            };
+            let msg = elevated_helper_status(&res);
             if current {
-                *lock_status() = msg.into();
+                *lock_status() = msg;
             }
             // Support evidence (spec §12): "I pressed start and nothing happened" is the most
             // common monitoring report, and the three causes below are indistinguishable in the
@@ -2333,5 +2344,25 @@ mod unreadable_tests {
         again.observe_unreadable_counter(24); // 24 ticks = 12 s
         let summary = serde_json::to_value(again.finalize(100)).unwrap();
         assert_eq!(summary["unreadable_seconds"], fixture["session_unreadable_seconds"]);
+    }
+}
+
+#[cfg(test)]
+mod elevated_helper_status_tests {
+    use super::elevated_helper_status;
+    use std::os::windows::process::ExitStatusExt;
+
+    /// a1b review: elevate_and_wait's own refusal showed no prompt, so the capture status must not say
+    /// the user declined one. A real decline (os error 1223) and a helper that ran and died keep
+    /// today's "declined"; a clean exit is "stopped".
+    #[test]
+    fn a_refused_launch_target_is_a_failed_launch_not_a_decline() {
+        let refused = std::io::Error::new(std::io::ErrorKind::InvalidInput, "refused: not a Compy target");
+        let s = elevated_helper_status(&Err(refused));
+        assert!(s.starts_with("failed to launch helper: "), "{s}");
+        assert_ne!(s, "declined");
+        assert_eq!(elevated_helper_status(&Err(std::io::Error::from_raw_os_error(1223))), "declined");
+        assert_eq!(elevated_helper_status(&Ok(std::process::ExitStatus::from_raw(1))), "declined");
+        assert_eq!(elevated_helper_status(&Ok(std::process::ExitStatus::from_raw(0))), "stopped");
     }
 }

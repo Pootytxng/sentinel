@@ -1084,10 +1084,11 @@ pub(crate) const ELEVATION_DECLINED_MSG: &str =
 /// PowerShell and the system tools return (an elevated command may not contain `exit`).
 pub(crate) const HELPER_POWERSHELL_NOT_STARTED: i32 = 0x4350_5334;
 
-/// What the parent says for [`HELPER_POWERSHELL_NOT_STARTED`]. It starts with the launch-error prefix
-/// on purpose, so `elevation_error_nothing_ran` treats it as "nothing ran".
+/// What the parent says for [`HELPER_POWERSHELL_NOT_STARTED`]. The helper itself DID launch, so this is
+/// not worded as a launch error; `elevation_error_nothing_ran` matches it exactly. It does not say
+/// "nothing was changed" because history.rs's item wrapper already says that around it.
 pub(crate) const HELPER_POWERSHELL_NOT_STARTED_MSG: &str =
-    "could not launch elevated process: Windows PowerShell did not start in the administrator helper, so nothing was changed.";
+    "Windows PowerShell did not start in the administrator helper, so no command ran.";
 
 /// Quote one argument per the MSVC CommandLineToArgvW rules: bare if it has no space/tab/quote,
 /// else wrapped in quotes with `"` escaped as `\"` and backslashes doubled ONLY where they precede
@@ -1135,16 +1136,33 @@ fn shell_launch_error_to_io(e: windows::core::Error) -> std::io::Error {
 }
 
 /// Hardening 1b: ShellExecuteExW looks a bare or relative name up through App Paths, the current
-/// directory and PATH. `elevate_and_wait` launches only an absolute path; anything else is refused
-/// here, BEFORE the shell is called, as a launch error (nothing ran, no prompt shown). Pure, so the
-/// refusal is tested without ever calling the elevation API.
+/// directory and PATH, and an absolute path alone is not a trusted target. `elevate_and_wait` launches
+/// only Compy's own running exe or the system PowerShell; anything else is refused here, BEFORE the
+/// shell is called, as a launch error (nothing ran, no prompt shown).
 fn elevation_target_refused(file: &std::ffi::OsStr) -> Option<std::io::Error> {
-    if std::path::Path::new(file).is_absolute() {
+    let own = std::env::current_exe().ok();
+    let powershell = crate::sys_exe::sys_tool_path(SysTool::PowerShell);
+    elevation_target_refused_among(file, &[own.as_deref(), Some(powershell.as_path())])
+}
+
+/// PURE core of [`elevation_target_refused`]: `file` must equal one of `allowed` exactly, be a plain
+/// drive-absolute path (`C:\...`), and contain no `.`/`..` step; UNC (`\\host\...`), verbatim (`\\?\...`)
+/// and device (`\\.\...`) forms are refused even if they would name an allowed file.
+fn elevation_target_refused_among(
+    file: &std::ffi::OsStr,
+    allowed: &[Option<&std::path::Path>],
+) -> Option<std::io::Error> {
+    use std::path::{Component, Path, Prefix};
+    let p = Path::new(file);
+    let plain_drive = matches!(p.components().next(), Some(Component::Prefix(pre)) if matches!(pre.kind(), Prefix::Disk(_)));
+    let no_steps = !p.components().any(|c| matches!(c, Component::ParentDir | Component::CurDir));
+    let listed = allowed.iter().flatten().any(|a| *a == p);
+    if p.is_absolute() && plain_drive && no_steps && listed {
         None
     } else {
         Some(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "refused: the program to elevate must be an absolute path",
+            "refused: Compy elevates only its own program or the system PowerShell, by its plain full path",
         ))
     }
 }
@@ -1169,6 +1187,16 @@ pub(crate) fn elevate_and_wait(
     if let Some(refused) = elevation_target_refused(file) {
         return Err(refused);
     }
+    shell_runas_and_wait(file, args)
+}
+
+/// The UAC "runas" launch itself (ShellExecuteExW) and the wait for the real exit code. Only
+/// [`elevate_and_wait`] calls it in shipped code, after its target check; the end-to-end FFI test
+/// calls it directly with a path that does not exist.
+fn shell_runas_and_wait(
+    file: &std::ffi::OsStr,
+    args: &[&std::ffi::OsStr],
+) -> std::io::Result<std::process::ExitStatus> {
     use std::os::windows::ffi::OsStrExt;
     use std::os::windows::process::ExitStatusExt;
     use windows::core::PCWSTR;
@@ -1279,6 +1307,7 @@ pub(crate) fn elevation_outcome(
 /// through `elevation_outcome` itself, so they cannot silently drift apart.
 pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
     err == ELEVATION_DECLINED_MSG
+        || err == HELPER_POWERSHELL_NOT_STARTED_MSG
         || err.starts_with("could not launch elevated process")
         || err.starts_with("cannot find own exe")
         || err.starts_with("elevated command is too long to dispatch")
@@ -1915,7 +1944,9 @@ mod elevation_attribution_tests {
         // varies by environment (2 file-not-found; 1223 when a sandbox forbids the elevation
         // broker) — the pinned property is the one runas broke: a launch failure is a REAL
         // io::Error that downstream classifies as launch-level, never Ok(-1)/approved-but-failed.
-        let err = super::elevate_and_wait(
+        // The FFI layer directly: elevate_and_wait itself now refuses this path before the shell
+        // (see elevate_and_wait_refuses_anything_but_its_own_targets).
+        let err = super::shell_runas_and_wait(
             std::ffi::OsStr::new(r"C:\__compy_qa_missing__\definitely-not-here.exe"),
             &[],
         )
@@ -1935,17 +1966,47 @@ mod elevation_attribution_tests {
     /// pure check only: calling elevate_and_wait with a bare name on code without the check would
     /// start a real elevated process, which a test must never do.
     #[test]
-    fn elevate_and_wait_refuses_anything_but_an_absolute_path() {
-        for name in ["powershell.exe", "powershell", r"sub\compy.exe", r".\compy.exe", r"\Windows\System32\cmd.exe", "C:cmd.exe"] {
-            let err = super::elevation_target_refused(std::ffi::OsStr::new(name)).unwrap_or_else(|| panic!("{name} must be refused"));
+    fn elevate_and_wait_refuses_anything_but_its_own_targets() {
+        use std::path::Path;
+        // a1b review r1: only Compy's own exe or the system PowerShell, by plain full path.
+        let own = Path::new(r"C:\Program Files\Compy\compy.exe");
+        let ps = Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
+        let allowed = [Some(own), Some(ps)];
+        for name in [
+            "powershell.exe",
+            "powershell",
+            r"sub\compy.exe",
+            r".\compy.exe",
+            r"\Windows\System32\cmd.exe",
+            "C:cmd.exe",
+            r"C:\Windows\System32\cmd.exe",                     // absolute, but not a Compy target
+            r"C:\Users\x\AppData\Local\Compy\other.exe",       // absolute, in a user folder
+            r"\\?\C:\Program Files\Compy\compy.exe",           // verbatim form of an allowed file
+            r"\\host\share\compy.exe",                         // UNC
+            r"\\.\C:\Program Files\Compy\compy.exe",           // device form
+            r"C:\Program Files\Compy\..\Compy\compy.exe",      // a `..` step to an allowed file
+        ] {
+            let err = super::elevation_target_refused_among(std::ffi::OsStr::new(name), &allowed)
+                .unwrap_or_else(|| panic!("{name} must be refused"));
             assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput, "{name}: {err}");
             assert_eq!(err.raw_os_error(), None, "{name}: refused before any shell call, got {err}");
             let msg = elevation_outcome(Err(err)).unwrap_err();
             assert!(super::elevation_error_nothing_ran(&msg), "{name}: {msg}");
         }
-        for ok in [r"C:\Windows\System32\cmd.exe", r"\\?\C:\Program Files\Compy\compy.exe"] {
-            assert!(super::elevation_target_refused(std::ffi::OsStr::new(ok)).is_none(), "{ok}");
+        for ok in [own, ps] {
+            assert!(super::elevation_target_refused_among(ok.as_os_str(), &allowed).is_none(), "{ok:?}");
         }
+        // The real list: this process's own exe and the resolved system PowerShell pass; others fail.
+        let me = std::env::current_exe().unwrap();
+        assert!(super::elevation_target_refused(me.as_os_str()).is_none(), "own exe {me:?}");
+        let real_ps = crate::sys_exe::sys_tool_path(crate::sys_exe::SysTool::PowerShell);
+        assert!(super::elevation_target_refused(real_ps.as_os_str()).is_none(), "{real_ps:?}");
+        let cmd = crate::sys_exe::system_dir().join("cmd.exe");
+        assert!(super::elevation_target_refused(cmd.as_os_str()).is_some(), "{cmd:?}");
+        // shell_runas_and_wait (the FFI launch) is reached only through elevate_and_wait in shipped
+        // code: its definition, that one call, and the FFI test.
+        let whole = include_str!("actions.rs").replace("\r\n", "\n");
+        assert_eq!(whole.matches(concat!("shell_runas_", "and_wait(")).count(), 3);
         // The check is the FIRST statement of elevate_and_wait, before any COM or shell call.
         let src = include_str!("actions.rs").replace("\r\n", "\n");
         let start = src.find("pub(crate) fn elevate_and_wait(").expect("elevate_and_wait");

@@ -107,16 +107,28 @@ pub fn run_elevated_helper(hex: &str, ticket_path: &str) -> i32 {
     let Ok(command) = String::from_utf8(bytes) else {
         return 2;
     };
-    helper_exit_code(elevated_powershell_command(&command).status())
+    match elevated_powershell_command(&command).spawn() {
+        Ok(mut child) => helper_exit_code(Started::Ran(child.wait())),
+        Err(_) => helper_exit_code(Started::NeverStarted),
+    }
 }
 
-/// The helper's exit code for PowerShell's run: its own code once it ran (1 when it has none), and
-/// `HELPER_POWERSHELL_NOT_STARTED` when it could not be STARTED at all, so the parent can say that
-/// nothing ran instead of "approved, but the operation failed" (hardening 1b).
-fn helper_exit_code(status: std::io::Result<std::process::ExitStatus>) -> i32 {
-    match status {
-        Ok(s) => s.code().unwrap_or(1),
-        Err(_) => actions::HELPER_POWERSHELL_NOT_STARTED,
+/// What happened to the helper's PowerShell child: it never started, or it started and this is its wait.
+enum Started {
+    NeverStarted,
+    Ran(std::io::Result<std::process::ExitStatus>),
+}
+
+/// The helper's exit code for PowerShell's run (hardening 1b). `HELPER_POWERSHELL_NOT_STARTED` ONLY
+/// when the spawn itself failed, so the parent can say that nothing ran. Once the child started, its
+/// own code (1 when it has none), and 1 when its wait failed: it may have changed something, so that
+/// must read as "ran and failed", never "nothing ran" (a1b review B1: `status()` = spawn + wait, and
+/// mapping every error to "not started" would drop an undo the script may need).
+fn helper_exit_code(started: Started) -> i32 {
+    match started {
+        Started::NeverStarted => actions::HELPER_POWERSHELL_NOT_STARTED,
+        Started::Ran(Ok(s)) => s.code().unwrap_or(1),
+        Started::Ran(Err(_)) => 1,
     }
 }
 
@@ -2668,18 +2680,41 @@ mod elevated_helper_tests {
     /// "approved, but the operation failed".
     #[test]
     fn powershell_that_never_started_reads_as_nothing_ran() {
+        use super::Started;
         use std::os::windows::process::ExitStatusExt;
-        let code = helper_exit_code(Err(std::io::Error::from(std::io::ErrorKind::NotFound)));
+        let code = helper_exit_code(Started::NeverStarted);
         assert_eq!(code, HELPER_POWERSHELL_NOT_STARTED);
         let err = elevation_outcome(Ok(std::process::ExitStatus::from_raw(code as u32))).unwrap_err();
         assert_eq!(err, HELPER_POWERSHELL_NOT_STARTED_MSG);
-        assert!(err.contains("nothing was changed"), "{err}");
+        assert!(!err.starts_with("could not launch elevated process"), "the helper DID launch: {err}");
+        assert!(!err.contains("nothing was changed"), "history's item wrapper says that already: {err}");
         assert!(elevation_error_nothing_ran(&err), "a helper whose PowerShell never started ran nothing");
+        // A near miss is NOT recognized: the match is exact.
+        assert!(!elevation_error_nothing_ran(&format!("{err} (extra)")));
         // Controls: PowerShell's own codes keep their meaning.
-        assert_eq!(helper_exit_code(Ok(std::process::ExitStatus::from_raw(0))), 0);
-        assert_eq!(helper_exit_code(Ok(std::process::ExitStatus::from_raw(1))), 1);
+        assert_eq!(helper_exit_code(Started::Ran(Ok(std::process::ExitStatus::from_raw(0)))), 0);
+        assert_eq!(helper_exit_code(Started::Ran(Ok(std::process::ExitStatus::from_raw(1)))), 1);
         let ran_failed = elevation_outcome(Ok(std::process::ExitStatus::from_raw(1))).unwrap_err();
         assert!(!elevation_error_nothing_ran(&ran_failed), "{ran_failed}");
+    }
+
+    /// a1b review B1: PowerShell STARTED and then its wait failed. The script may have changed
+    /// something, so this must read as "ran and failed" (keep the undo, abort and restore), never
+    /// "nothing ran".
+    #[test]
+    fn powershell_that_started_but_whose_wait_failed_is_not_nothing_ran() {
+        use super::Started;
+        use std::os::windows::process::ExitStatusExt;
+        let code = helper_exit_code(Started::Ran(Err(std::io::Error::other("wait failed"))));
+        assert_ne!(code, HELPER_POWERSHELL_NOT_STARTED);
+        let err = elevation_outcome(Ok(std::process::ExitStatus::from_raw(code as u32))).unwrap_err();
+        assert!(!elevation_error_nothing_ran(&err), "{err}");
+        // And the helper only reports "not started" from the spawn's own failure, never from a wait.
+        let src = include_str!("lib.rs").replace("\r\n", "\n");
+        let f = src.find("pub fn run_elevated_helper(").unwrap();
+        let body = &src[f..f + src[f..].find("\n}\n").unwrap()];
+        assert!(body.contains(".spawn() {\n        Ok(mut child) => helper_exit_code(Started::Ran(child.wait())),"));
+        assert!(!body.contains(".status()"), "status() is spawn + wait: a wait error would read as 'not started'");
     }
     use crate::sys_exe::{sys_tool_path, system_dir, SysTool, ELEVATED_ENV_ALLOWLIST};
     use std::path::Path;

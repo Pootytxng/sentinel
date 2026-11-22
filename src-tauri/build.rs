@@ -147,7 +147,7 @@ const APP_COMMANDS: &[&str] = &[
 // the shipped binary never invokes git (zero runtime process spawn, zero network). A build
 // without git (or outside a repo) degrades to "nogit" rather than failing.
 fn git_stamp() -> (String, bool) {
-    let hash = Command::new("git")
+    let hash = Command::new("git") // spawn-allow: build time only (developer machine), never shipped; git is not a Windows system tool
         .args(["rev-parse", "--short", "HEAD"])
         .output()
         .ok()
@@ -168,7 +168,7 @@ fn git_stamp() -> (String, bool) {
     // of CWD, which is the whole point. (Regressing to the bare form re-introduces the exact
     // 2026-07-17 false-positive that stamped a code-identical arming build "+dirty"; the guard
     // `build_dirty_check_is_root_anchored` in lib.rs pins this.)
-    let dirty = Command::new("git")
+    let dirty = Command::new("git") // spawn-allow: build time only (developer machine), never shipped; git is not a Windows system tool
         .args(["status", "--porcelain", "--", ":(exclude,top)docs"])
         .output()
         .ok()
