@@ -133,7 +133,7 @@ pub(crate) struct HardwareChangeReport {
 /// Read-only: compare current hardware against the persisted fingerprint. First run records the
 /// baseline (and reports no change). Never auto-updates on a detected change — the change persists
 /// until the user re-baselines (`acknowledge_hardware_changes`), so it can't silently vanish.
-#[tauri::command]
+/// Served off the main thread by `off_main::get_hardware_changes` (CR-slow-async).
 pub(crate) fn get_hardware_changes() -> HardwareChangeReport {
     let hw = crate::hardware::collect_hardware();
     let current = fingerprint(&hw);

@@ -69,7 +69,7 @@ mod trial_candidates; // P4-candidates: READ-ONLY "worth testing on this PC" fil
 mod tray; // Opt-in "minimize to tray" (default OFF — §1 clean-exit unless the user opts in).
 use actions::*;
 use export::*;
-use hardware::*;
+#[cfg(test)]
 use history::*;
 use monitoring::*;
 use priorities::*;
@@ -1192,10 +1192,7 @@ fn get_startup_entries() -> Vec<StartupEntry> {
 // Surfaces latency.rs's passive diagnostics. `get_latency_diagnostics` is the
 // instant snapshot (MSI/timer/CPU-topology/USB); the two `measure_*` commands run
 // short on-demand timing windows (the UI shows a "measuring…" state while they run).
-#[tauri::command]
-fn get_latency_diagnostics() -> latency::LatencyReport {
-    latency::gather_latency_report()
-}
+// `get_latency_diagnostics` is served from `off_main` (CR-slow-async).
 
 #[tauri::command]
 async fn latency_measure_wake() -> Option<latency::WakeMeasurement> {
@@ -1353,6 +1350,45 @@ mod off_main {
         .await
     }
 
+    // CR-slow-async, second batch: the reads the first screens fire. Hardware and recommendations
+    // pay the WMI sweep on a cold cache (warmed at startup, `hardware::warm_hardware_snapshot`);
+    // the NIC driver list enumerates PnPSignedDriver; latency opens WMI; the change history's
+    // view and health read the ledger file and spawn PowerShell for live row checks.
+    #[tauri::command]
+    pub(crate) async fn get_hardware_info() -> crate::hardware::HardwareInfo {
+        blocking(crate::hardware::get_hardware_info).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_recommendations() -> Vec<crate::recommendations::Recommendation> {
+        blocking(crate::recommendations::get_recommendations).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_hardware_changes() -> crate::hwchange::HardwareChangeReport {
+        blocking(crate::hwchange::get_hardware_changes).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_nic_driver_info() -> Vec<crate::hardware::NicDriverInfo> {
+        blocking(crate::hardware::get_nic_driver_info).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_latency_diagnostics() -> crate::latency::LatencyReport {
+        blocking(crate::latency::gather_latency_report).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_applied_changes() -> Vec<crate::history::AppliedChangeView> {
+        blocking(crate::history::get_applied_changes).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_ledger_health() -> crate::history::LedgerHealthView {
+        blocking(crate::history::get_ledger_health).await
+    }
+
     /// The commands served here, by the name the window invokes. The tests hold the handler list
     /// and `build.rs` to it.
     #[cfg(test)]
@@ -1370,6 +1406,13 @@ mod off_main {
         "stop_fps_capture",
         "plan_clear_play_history",
         "clear_play_history",
+        "get_hardware_info",
+        "get_recommendations",
+        "get_hardware_changes",
+        "get_nic_driver_info",
+        "get_latency_diagnostics",
+        "get_applied_changes",
+        "get_ledger_health",
     ];
 
     #[cfg(test)]
@@ -1395,6 +1438,13 @@ mod off_main {
             answers1(crate::support_evidence::export_support_evidence, export_support_evidence);
             answers1(crate::trial_candidates::get_trial_candidates, get_trial_candidates);
             answers2(crate::export::export_report, export_report);
+            answers(crate::hardware::get_hardware_info, get_hardware_info);
+            answers(crate::recommendations::get_recommendations, get_recommendations);
+            answers(crate::hwchange::get_hardware_changes, get_hardware_changes);
+            answers(crate::hardware::get_nic_driver_info, get_nic_driver_info);
+            answers(crate::latency::gather_latency_report, get_latency_diagnostics);
+            answers(crate::history::get_applied_changes, get_applied_changes);
+            answers(crate::history::get_ledger_health, get_ledger_health);
             // The capture commands are checked by item type, never as fn pointers: a pointer links
             // their bodies (helper launch, tray) into this test binary, which has no Windows app
             // manifest, and it then fails to load (STATUS_ENTRYPOINT_NOT_FOUND).
@@ -1945,10 +1995,10 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
-            get_hardware_info,
-            get_recommendations,
+            off_main::get_hardware_info,
+            off_main::get_recommendations,
             off_main::get_diagnostics,
-            hwchange::get_hardware_changes,
+            off_main::get_hardware_changes,
             machine_model::get_machine_model,
             hwchange::acknowledge_hardware_changes,
             off_main::get_crash_blackbox,
@@ -1958,7 +2008,7 @@ pub fn run() {
             license::get_license_status,
             license::set_license_key,
             off_main::get_leftovers,
-            get_nic_driver_info,
+            off_main::get_nic_driver_info,
             get_gpu_sensors,
             get_cpu_sensors,
             monitoring::get_memory_pressure,
@@ -1979,8 +2029,8 @@ pub fn run() {
             experiment::rollback_change,
             history::changed_outside_offers,
             history::record_changed_outside,
-            get_applied_changes,
-            history::get_ledger_health,
+            off_main::get_applied_changes,
+            off_main::get_ledger_health,
             history::reveal_ledger_folder,
             get_startup_entries,
             history::set_startup_entry_enabled,
@@ -2008,7 +2058,7 @@ pub fn run() {
             support_evidence::clear_support_evidence,
             off_main::plan_clear_play_history,
             off_main::clear_play_history,
-            get_latency_diagnostics,
+            off_main::get_latency_diagnostics,
             latency_measure_wake,
             latency_measure_mouse,
             start_benchmark,
@@ -2148,6 +2198,10 @@ pub fn run() {
             // I/O with an fsync must never delay the first window); it takes the history lock itself.
             // A spawn that fails is ignored: no backup is the safe state.
             let _ = std::thread::Builder::new().name("ledger-backup".into()).spawn(history::ensure_backup_at_start);
+            // Warm the hardware snapshot (one WMI sweep) off the setup thread, so the first screen's
+            // hardware, recommendations and hardware-change reads don't each wait for it. Best-effort:
+            // a spawn that fails just leaves the first command to fill it, as before.
+            let _ = std::thread::Builder::new().name("hw-warm".into()).spawn(hardware::warm_hardware_snapshot);
             // Capture the handle so the session recorder thread can fire the debrief toast.
             let _ = APP_HANDLE.set(app.handle().clone());
             // Care trigger 1 of 3 (Tier 1 task 9): the launch scan. This is the one that catches a

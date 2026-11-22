@@ -2668,7 +2668,8 @@ fn rollback_unrecorded_message(why: &str, read: ActiveCheck) -> String {
     )
 }
 
-#[tauri::command]
+/// Served off the main thread by `off_main::get_applied_changes` (CR-slow-async): each pass's
+/// [`LiveReads`] spawn PowerShell and WMI, which froze the window while they ran.
 pub(crate) fn get_applied_changes() -> Vec<AppliedChangeView> {
     // Read-only VIEW. The signature stays infallible (export + the benchmark trial runner
     // consume it), so a corrupt ledger degrades to an empty view here — but never to data
@@ -2873,7 +2874,7 @@ fn ledger_health_at(path: &Path) -> LedgerHealthView {
     LedgerHealthView { complete: error.is_none() && !quarantined, error, quarantined, restored: restored_note_at(path) }
 }
 
-#[tauri::command]
+/// Served off the main thread by `off_main::get_ledger_health` (CR-slow-async).
 pub(crate) fn get_ledger_health() -> LedgerHealthView {
     // The path-parameterized core deliberately, NOT the `load_history` wrapper: the wrapper records
     // a support-evidence event on every failure, and support evidence is a 400-slot ring that drops
