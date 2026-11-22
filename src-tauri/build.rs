@@ -102,6 +102,7 @@ const APP_COMMANDS: &[&str] = &[
     "overlay_visible",
     "paramedic_diagnose",
     "paramedic_first_look",
+    "paramedic_home_status",
     "paramedic_list_games",
     "plan_clear_play_history",
     "preview_receipt_payload",

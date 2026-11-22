@@ -7,6 +7,7 @@ import type { TFunction } from "i18next";
 import type { GameReadiness, Priorities, SessionSummary } from "../types";
 import type { InEffectCounts } from "../data/machine-model";
 import { deriveSystemPosture } from "./system-posture";
+import { homePriorities, roughHeadline, roughLine, type RoughRead } from "./home-facts";
 import { latestSession } from "./dashboard-data";
 import { prettyGameName } from "./game-name";
 import { knownFps, allBackground, mostlyUnread } from "../lib/session-metrics";
@@ -35,49 +36,63 @@ export type PostureLine = {
 // ledger list: that list reads as EMPTY when the ledger can't be read, so a bare number here could
 // not tell "nothing is active" from "Compy can't read its record". Only `activeNow` is in effect;
 // rows whose live check failed (`unknown`) are never added to it.
+//
+// `rough` (B1 Home truth): the Paramedic's own judgement of which games are running rougher than usual
+// (home-facts.ts). A rough game is off-normal: it is named in the dek, takes the dialed-in headline, and
+// "measured clean" is said only when that read came back and named none. Omitted = not read yet.
 export function postureLine(
   readiness: GameReadiness | null,
   priorities: Priorities | null,
   inEffect: InEffectCounts,
   t: TFunction,
+  rough: RoughRead = { kind: "pending" },
 ): PostureLine {
   const activeChanges = inEffect.kind === "counted" ? inEffect.activeNow : 0;
   const p = deriveSystemPosture({ readiness, activeChanges, monitoringAvailable: true }, t);
+  const roughSentence = roughLine(rough, t);
+  const withRough = (s: string) => [s, roughSentence].filter(Boolean).join(" ");
 
   if (p.state === "attention") {
+    // A drifted setting (or another flagged check) names itself in the headline; a rough game is said too.
     return {
       headline: p.headline,
-      sentence: p.sub,
+      sentence: withRough(p.sub),
       reassurance: t("home.posture.noChangeWithoutSayso"),
       tone: "attention",
     };
   }
   if (p.state === "scanning" || p.state === "unknown") {
-    return { headline: p.headline, sentence: p.sub, reassurance: "", tone: "scanning" };
+    return { headline: p.headline, sentence: withRough(p.sub), reassurance: "", tone: "scanning" };
   }
 
   // dialed-in = no non-dismissed attention check. That is NOT "everything passed": checks Compy
   // couldn't read (`unknown`) and attention checks the owner dismissed also land here, so the
   // dek says only what is true: the checks Compy COULD read came back right, and it names how many
-  // couldn't be read / were set aside. The "worth a look" count is the priorities limiter count.
-  const limiterCount = priorities?.limiters.length ?? 0;
+  // couldn't be read / were set aside. The "worth a look" count is the Home limiter count: an
+  // optional tweak not applied is never one of them (homePriorities, Constitution §38).
+  const limiterCount = homePriorities(priorities)?.limiters.length ?? 0;
+  const anyRough = roughSentence !== "";
   const unread = Math.max(0, readiness?.unknown_count ?? 0);
   const dismissedIds = new Set(readiness?.dismissed_ids ?? []);
   const dismissedAttention = (readiness?.checks ?? []).filter(
     (c) => c.status === "attention" && dismissedIds.has(c.id),
   ).length;
   const parts: string[] = [];
+  // The rough game leads: it is the one off-normal thing here, and it owns the headline below.
+  if (anyRough) parts.push(roughSentence);
   if (dismissedAttention > 0) {
     // One of the read checks came back wrong and was set aside: never "came back right".
     if (limiterCount > 0) parts.push(t("home.posture.listedWorthLook", { count: limiterCount }));
   } else if (limiterCount > 0) {
     parts.push(t("home.posture.readyWorthFixing", { count: limiterCount }));
   } else {
-    parts.push(
-      unread > 0 ? t("home.posture.readyAllRead") : t("home.posture.readyMeasuredClean"),
-    );
+    // "Measured clean" needs every input to have come back and found nothing: every check read, and the
+    // sessions read with no game in a rough run. Not read yet, or unreadable, is "came back right" only.
+    const clean = unread === 0 && rough.kind === "read" && !anyRough;
+    parts.push(clean ? t("home.posture.readyMeasuredClean") : t("home.posture.readyAllRead"));
   }
   if (unread > 0) parts.push(t("home.posture.unreadCount", { count: unread }));
+  if (rough.kind === "unreadable") parts.push(t("home.posture.rough.unread"));
   if (dismissedAttention > 0) {
     parts.push(t("home.posture.dismissedCount", { count: dismissedAttention }));
   }
@@ -91,10 +106,11 @@ export function postureLine(
         ? t("home.posture.changeNoteReversible", { count: activeChanges })
         : "";
   return {
-    headline: p.headline,
+    // Never "You're ready to play" over a game the Paramedic measured running rougher than usual.
+    headline: anyRough ? roughHeadline(rough, t) : p.headline,
     sentence,
     reassurance: `${changeNote}${t("home.posture.noChangeWithoutSayso")}`,
-    tone: "ready",
+    tone: anyRough ? "attention" : "ready",
   };
 }
 

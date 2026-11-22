@@ -100,6 +100,7 @@
     "allow-overlay-visible",
     "allow-paramedic-diagnose",
     "allow-paramedic-first-look",
+    "allow-paramedic-home-status",
     "allow-paramedic-list-games",
     "allow-plan-clear-play-history",
     "allow-preview-receipt-payload",

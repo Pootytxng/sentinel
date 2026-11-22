@@ -459,7 +459,14 @@
     "changeNoteReversible_other": "{{count}} 项更改生效中。",
     "changeNoteUnknown": "Compy 暂时无法读取它的更改记录。",
     "noChangeWithoutSayso": "未经你同意,绝不更改任何东西。",
-    "lastSessionFallback": "上次会话"
+    "lastSessionFallback": "上次会话",
+    "rough": {
+      "headline": "{{game}} 最近运行得比平时更不流畅",
+      "sentence_other": "{{game}} 最近 {{count}} 次测得的会话比它平时的范围更不流畅。",
+      "others": "同样比平时更不流畅的还有:{{games}}。",
+      "unread": "Compy 无法读取你的游戏运行情况。",
+      "aGame": "一款游戏"
+    }
   },
   "trustMoment": {
     "sectionAria": "看 Compy 演示",

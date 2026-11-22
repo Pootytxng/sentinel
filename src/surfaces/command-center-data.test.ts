@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { postureLine as postureLineRaw, liveStrip as liveStripRaw } from "./command-center-data";
 import type { GameReadiness, Priorities, ReadinessCheck, SessionSummary } from "../types";
 import type { InEffectCounts } from "../data/machine-model";
+import type { RoughRead } from "./home-facts";
 // i18n update (2026-07-23): postureLine/liveStrip's strings now come from t(...) (Simplified
 // Chinese translation pass) instead of literal English, so both take a TFunction as their last
 // param. These test-local wrappers resolve them through the real i18next instance (English is the
@@ -20,13 +21,17 @@ const postureLine = (
   readiness: GameReadiness | null,
   priorities: Priorities | null,
   inEffect: number | InEffectCounts,
+  rough?: RoughRead,
 ) =>
   postureLineRaw(
     readiness,
     priorities,
     typeof inEffect === "number" ? counted(inEffect) : inEffect,
     i18n.t,
+    rough,
   );
+// B1 Home truth: the sessions were read and no game is in a rough run.
+const noRough: RoughRead = { kind: "read", games: [] };
 const liveStrip = (sessions: SessionSummary[]) => liveStripRaw(sessions, i18n.t);
 
 const check = (status: ReadinessCheck["status"], label: string): ReadinessCheck =>
@@ -110,9 +115,13 @@ describe("postureLine (real headline + priorities-driven sentence)", () => {
     expect(postureLine(r, priorities(0), 0).sentence).toBe("1 check you set aside isn't counted.");
   });
 
-  it("ready with zero limiters → the measured-clean win sentence", () => {
-    const p = postureLine(readiness([check("ready", "SSD")]), priorities(0), 0);
+  it("ready with zero limiters and the sessions read with no rough game → the measured-clean win sentence", () => {
+    const p = postureLine(readiness([check("ready", "SSD")]), priorities(0), 0, noRough);
     expect(p.sentence).toBe("Ready to play — this rig measured clean today.");
+    // B1: before the sessions are read, "measured clean" would speak for them: it says only what the checks said.
+    expect(postureLine(readiness([check("ready", "SSD")]), priorities(0), 0).sentence).toBe(
+      "Every check Compy could read came back right.",
+    );
   });
 
   // CODEX FINDING 4 (2026-08-23, HIGH) — this test used to assert p.tone alone. A tone is a
@@ -224,5 +233,94 @@ describe("liveStrip (real last session or honest empty)", () => {
     const behind = { ...session("2026-06-05T10:00:00Z", 1), samples: 0, avg_fps: 0, low1_fps_est: 0, background_secs_excluded: 900 };
     const s = liveStrip([session("2026-06-01T10:00:00Z", 120), behind]);
     expect(s.kind === "data" && [s.avgFps, s.low1Est, s.peakTempC]).toEqual([null, null, null]);
+  });
+});
+
+// B1 Home truth (owner decision 2026-11-21): Home's headline, dek and count come from what is off-normal
+// (a drifted setting, a game the Paramedic measured running rougher than usual, a failed read), never from
+// an optional tweak the owner has not applied (Constitution §38).
+describe("postureLine: B1 Home truth", () => {
+  const tweakRow = {
+    id: "pending-safe-recs",
+    title: "1 tweak not applied",
+    reason: "Compy has reversible tweaks you haven't applied: Trim Windows visual effects.",
+    linked: null,
+    confidence: "medium" as const,
+    status: "attention" as const,
+  };
+  const withTweak = (n: number): Priorities => {
+    const p = priorities(n);
+    return { ...p, limiters: [...p.limiters, tweakRow] };
+  };
+  const robRun = (n: number) => ({
+    game: "robrun.exe",
+    game_name: "ROB RUN",
+    rough_sessions: n,
+    newest_rough_at: "2026-11-20T03:51:22Z",
+  });
+  const rough = (...games: ReturnType<typeof robRun>[]): RoughRead => ({ kind: "read", games });
+  const drift: ReadinessCheck = {
+    id: "applied-changes",
+    label: "Compy changes were turned back off",
+    status: "attention",
+    detail: 'Trim Windows visual effects, a setting Compy applied, is no longer on.',
+    value: null,
+  };
+
+  it("an unapplied optional tweak alone is never 'worth a look' and does not block 'measured clean'", () => {
+    const p = postureLine(readiness([check("ready", "SSD")]), withTweak(0), 0, noRough);
+    expect(p.sentence).toBe("Ready to play — this rig measured clean today.");
+    expect(p.sentence).not.toMatch(/worth a look|tweak/i);
+    // With one real limiter beside it, only the real one is counted.
+    expect(postureLine(readiness([check("ready", "SSD")]), withTweak(1), 0, noRough).sentence).toBe(
+      "Every check Compy could read came back right. 1 thing is listed below as worth a look.",
+    );
+  });
+
+  it("the owner's PC today: a drift standing and a game in a rough run name both, never 'measured clean'", () => {
+    const p = postureLine(readiness([check("ready", "SSD"), drift]), withTweak(0), 0, rough(robRun(2)));
+    expect(p.tone).toBe("attention");
+    expect(p.headline).toBe("Compy changes were turned back off");
+    expect(p.sentence).toBe(
+      "Trim Windows visual effects, a setting Compy applied, is no longer on. ROB RUN's last 2 measured sessions ran rougher than its usual range.",
+    );
+    expect(`${p.headline} ${p.sentence}`).not.toMatch(/measured clean|ready to play|tweak/i);
+  });
+
+  it("a rough game alone takes the headline: never 'You're ready to play' over it", () => {
+    const p = postureLine(readiness([check("ready", "SSD")]), withTweak(0), 0, rough(robRun(1)));
+    expect(p.tone).toBe("attention");
+    expect(p.headline).toBe("ROB RUN has been running rougher than usual");
+    expect(p.sentence).toBe(
+      "ROB RUN's last measured session ran rougher than its usual range. Every check Compy could read came back right.",
+    );
+    expect(p.sentence).not.toMatch(/measured clean/i);
+  });
+
+  it("every rough game Home counts is named", () => {
+    const other = { ...robRun(3), game: "wardogs.exe", game_name: "WAR DOGS" };
+    const p = postureLine(readiness([check("ready", "SSD")]), null, 0, rough(robRun(2), other));
+    expect(p.sentence).toMatch(/^ROB RUN's last 2 measured sessions ran rougher than its usual range\. Also running rougher than usual: WAR DOGS\./);
+  });
+
+  it("a failed session read is said, and is never 'measured clean'", () => {
+    const p = postureLine(readiness([check("ready", "SSD")]), priorities(0), 0, { kind: "unreadable" });
+    expect(p.tone).toBe("ready");
+    expect(p.sentence).toBe("Every check Compy could read came back right. Compy couldn't read how your games ran.");
+  });
+
+  it("unread and dismissed checks keep their own words beside the rough game", () => {
+    const r = readiness([check("ready", "SSD"), check("unknown", "GPU driver"), check("attention", "Refresh")], ["Refresh"]);
+    const p = postureLine(r, withTweak(0), 0, rough(robRun(2)));
+    expect(p.sentence).toBe(
+      "ROB RUN's last 2 measured sessions ran rougher than its usual range. 1 check couldn't be read. 1 check you set aside isn't counted.",
+    );
+  });
+
+  it("zh-CN: the same facts, in Chinese", async () => {
+    const zh = i18n.getFixedT("zh-CN");
+    const p = postureLineRaw(readiness([check("ready", "SSD")]), null, counted(0), zh, rough(robRun(2)));
+    expect(p.headline).toBe("ROB RUN 最近运行得比平时更不流畅");
+    expect(p.sentence).toBe("ROB RUN 最近 2 次测得的会话比它平时的范围更不流畅。 Compy 能读取的检查全部正常。");
   });
 });

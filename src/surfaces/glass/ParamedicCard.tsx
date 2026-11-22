@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { driftShort, stampOf } from "../drift-named";
 import { requestCheckFocus } from "../check-focus";
+import { roughLine, type RoughGame } from "../home-facts";
 import type {
   Drift,
   ParamedicDiagnosis,
@@ -1444,13 +1445,16 @@ function isLayer(n: HTMLElement): boolean {
 /** The answer region counts as "more below" when more than this many px are still hidden under its bottom edge. */
 const MORE_SLACK_PX = 4;
 
-/** `drifts`: null/undefined while the readiness scan has not loaded (no default: "not loaded" is not "no drift"). */
+/** `drifts`: null/undefined while the readiness scan has not loaded (no default: "not loaded" is not "no drift").
+ *  `rough` (B1 Home truth): the games Home's sessions-only read found running rougher than usual. While the card is
+ *  idle its line names them, so Home's count always points at something on the page. */
 export function ParamedicCard({
   noGames = false,
   games = [],
   drifts,
+  rough = [],
   onOpenCheck,
-}: { noGames?: boolean; games?: RecordedGame[]; drifts?: Drift[] | null; onOpenCheck?: () => void } = {}) {
+}: { noGames?: boolean; games?: RecordedGame[]; drifts?: Drift[] | null; rough?: RoughGame[]; onOpenCheck?: () => void } = {}) {
   const { t, i18n } = useTranslation();
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
@@ -1527,6 +1531,8 @@ export function ParamedicCard({
   };
 
   const answer = view.kind === "done" ? view.d : view.kind === "busy" ? view.prev : null;
+  // Idle with a rough game: the line names it (Home counted it). Once the card answers, the answer speaks.
+  const idleRough = view.kind === "idle" && rough.length > 0 ? roughLine({ kind: "read", games: rough }, t) : "";
   const ctx: Ctx | null = answer
     ? {
           t,
@@ -1612,7 +1618,9 @@ export function ParamedicCard({
   return (
     <section ref={sectionRef} tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
       <div className="gl-card-top">
-        <p className="gl-card-sub">{noGames ? t("paramedic.firstLook.door.sub") : t("paramedic.door.sub")}</p>
+        <p className="gl-card-sub" data-testid={idleRough ? "paramedic-rough" : undefined}>
+          {idleRough || (noGames ? t("paramedic.firstLook.door.sub") : t("paramedic.door.sub"))}
+        </p>
         <div className="gl-para-actions">
           {/* Busy: aria-disabled, not disabled, so keyboard focus is not lost; a click while busy is ignored. */}
           {!hideCheck && (

@@ -18,6 +18,8 @@ import { knownFps, mostlyUnread } from "../lib/session-metrics";
 import { useReducedMotion } from "../design/use-motion";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
+import { homePriorities } from "./home-facts";
+import { useHomeRough } from "./use-home-rough";
 import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
@@ -155,7 +157,7 @@ function Module({ label, children }: { label: string; children: React.ReactNode 
 export function HomeHud({
   hw,
   readiness,
-  priorities,
+  priorities: allPriorities,
   sessions,
   changes,
   onRunCheck,
@@ -165,6 +167,9 @@ export function HomeHud({
   onOpenLabStation,
 }: Props) {
   const { t, i18n } = useTranslation();
+  // B1 Home truth: no optional-tweak row on Home (Constitution §38); rough games read once on open.
+  const priorities = useMemo(() => homePriorities(allPriorities), [allPriorities]);
+  const roughRead = useHomeRough();
   const reduced = useReducedMotion();
   // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
   // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
@@ -256,7 +261,7 @@ export function HomeHud({
   // bare ledger list: that list is EMPTY when the ledger can't be read, and it counts a row whose live
   // check failed as in effect. Only `activeNow` is in effect; `unknown` is named, never added to it.
   const inEffect = inEffectCounts(model);
-  const posture = postureLine(readiness, priorities, inEffect, t);
+  const posture = postureLine(readiness, priorities, inEffect, t, roughRead);
   const strip = liveStrip(sessions, t);
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   // M6-unread: a mostly-unmeasured last session shows its numbers ungraded (neutral ink).

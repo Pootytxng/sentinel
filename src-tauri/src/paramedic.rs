@@ -32,6 +32,7 @@ mod changes;
 mod extras;
 mod facts;
 pub(crate) mod first_look;
+pub(crate) mod home_status;
 mod mods;
 mod recovery;
 use changes::{ChangeRead, Limit};

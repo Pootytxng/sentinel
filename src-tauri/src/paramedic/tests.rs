@@ -5887,3 +5887,79 @@ fn a_mostly_unread_session_is_never_normal_never_rough_never_a_baseline_never_ab
     assert_eq!(judged.iter().filter(|j| j.verdict == Verdict::Unjudged).count(), 1);
     assert_eq!(judged[3].verdict, Verdict::NeedsMore(2), "the third graded day sees two normal sessions before it, not three");
 }
+
+// ---- B1 Home truth: the rough-run fact Home reads (home_status.rs) ------------------------------
+fn home_rough(inp: &DiagnoseInputs) -> Vec<(String, u32)> {
+    home_status::home_status(inp).rough.into_iter().map(|g| (g.game, g.rough_sessions)).collect()
+}
+
+fn rough_session(at: &str) -> SessionFacts {
+    facts(at, 600, 600, 100.0, 20.0)
+}
+
+#[test]
+fn home_status_names_the_owners_rough_games_newest_first() {
+    let inp = fixture();
+    // The card counts game-i's episode as two rough sittings (the 90-reading session only corroborates), and
+    // game-h, the second game, is rough too (`the_second_game_gets_the_same_top_finding`).
+    assert_eq!(home_rough(&inp), vec![(ROUGH_GAME.to_string(), 2), (SECOND_GAME.to_string(), 2)]);
+}
+
+#[test]
+fn home_status_lists_a_game_exactly_when_the_card_answers_it_from_a_rough_session() {
+    let inp = fixture();
+    let listed: Vec<String> = home_rough(&inp).into_iter().map(|(g, _)| g).collect();
+    for g in games(&inp) {
+        let d = diagnose(&inp, Complaint::Unknown, Some(&g));
+        let card_rough = matches!(d.state, DiagnosisState::Found | DiagnosisState::CantTell { why: CantTellWhy::NothingChanged });
+        // Every game in the fixture was played within the recent window of the newest session, so the two agree.
+        assert_eq!(listed.contains(&g), card_rough, "{g}: Home and the card disagree: {:?}", d.state);
+        // The count Home says is the count the card says ("In your last N sessions").
+        if let Some(n) = home_rough(&inp).into_iter().find(|(x, _)| *x == g).map(|(_, n)| n) {
+            assert_eq!(n as usize, d.problem.as_ref().expect("problem").sessions_affected.len(), "{g}");
+        }
+    }
+}
+
+#[test]
+fn home_status_counts_the_rough_run_and_skips_unjudged_sessions() {
+    let mut s = steady(5);
+    s.push(rough_session("2026-10-20T10:00:00Z"));
+    s.push(unread(rough_session("2026-10-21T10:00:00Z")));
+    s.push(rough_session("2026-10-22T10:00:00Z"));
+    assert_eq!(home_rough(&inputs(s.clone())), vec![("g".to_string(), 2)]);
+    let d = diagnose(&inputs(s.clone()), Complaint::Unknown, Some("g"));
+    assert_eq!(d.problem.as_ref().expect("problem").sessions_affected.len(), 2, "the card counts the same two");
+    // A newer session Compy could not judge never clears the rough run.
+    s.push(unread(facts("2026-10-23T10:00:00Z", 600, 600, 100.0, 50.0)));
+    assert_eq!(home_rough(&inputs(s)), vec![("g".to_string(), 2)]);
+}
+
+#[test]
+fn home_status_says_nothing_for_a_steady_game_a_recovered_game_or_no_sessions() {
+    assert!(home_rough(&inputs(steady(6))).is_empty());
+    let mut back = steady(5);
+    back.push(rough_session("2026-10-20T10:00:00Z"));
+    back.push(facts("2026-10-21T10:00:00Z", 600, 600, 100.0, 50.0));
+    assert!(home_rough(&inputs(back)).is_empty(), "a normal newest judged session is the card's to tell, not Home's headline");
+    assert!(home_rough(&inputs(Vec::new())).is_empty());
+    // Too few sessions to judge: never rough.
+    let mut thin = steady(2);
+    thin.push(rough_session("2026-10-20T10:00:00Z"));
+    assert!(home_rough(&inputs(thin)).is_empty());
+}
+
+#[test]
+fn home_status_leaves_out_a_game_not_played_in_the_recent_window() {
+    let mut s = steady(5);
+    s.push(rough_session("2026-10-06T10:00:00Z"));
+    let mut other: Vec<SessionFacts> = (0..3)
+        .map(|i| {
+            let mut f = facts(&format!("2026-11-{:02}T10:00:00Z", i + 1), 600, 600, 100.0, 50.0);
+            f.game = "other".into();
+            f
+        })
+        .collect();
+    s.append(&mut other);
+    assert!(home_rough(&inputs(s)).is_empty(), "a game last played more than RECENT_GAME_DAYS before the newest session is not named");
+}

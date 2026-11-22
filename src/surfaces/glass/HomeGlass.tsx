@@ -19,6 +19,8 @@ import { ParamedicCard } from "./ParamedicCard";
 import { useDates } from "./GamesRoom";
 import { NavGlyph } from "../../design/NavGlyph";
 import { careHeadline, incidentKindLabel, incidentWhen, readinessWords } from "../../data/backend-words";
+import { homePriorities, roughGames } from "../home-facts";
+import { useHomeRough } from "../use-home-rough";
 import "../glass-rooms.css";
 
 const Arrow = () => (
@@ -73,6 +75,9 @@ export function HomeGlass({
   // Games can be recorded with no frame rate measured (a session Compy saw but couldn't read).
   // Nothing on this page may then speak as if one was measured (round-2 review, 2026-10-31).
   const anyMeasured = sessions.some((s) => knownFps(s.avg_fps) != null);
+  // B1 Home truth: the games the Paramedic judges as running rougher than usual, read once on open.
+  const roughRead = useHomeRough();
+  const rough = roughGames(roughRead);
   const [chartKey, setChartKey] = useState<string | null>(games[0]?.key ?? null);
 
   useEffect(() => {
@@ -103,7 +108,9 @@ export function HomeGlass({
 
   // A crash or freeze Windows recorded is a thing worth a look too, so the answer counts it; with
   // nothing recorded and every readable check fine, the answer is the plain "set up right".
-  const worthCount = attention + (pendingCare ? 1 : 0);
+  // B1 Home truth: so is a game the Paramedic measured running rougher than usual (named in the card
+  // right below). An optional tweak not applied never counts (Constitution §38).
+  const worthCount = attention + (pendingCare ? 1 : 0) + rough.length;
   const answer =
     worthCount > 0
       ? t("home.glass.answer.worth", { count: worthCount })
@@ -135,7 +142,8 @@ export function HomeGlass({
       : t("home.glass.care.detail", { kind: incidentKindLabel(pendingCare.kind, t), when: incidentWhen(pendingCare, i18n.language) })
     : "";
 
-  const topLimiter = priorities?.limiters?.[0] ?? null;
+  // Home's limiter tile never shows "N tweaks not applied": that is the Lab's offer, not a fault here.
+  const topLimiter = homePriorities(priorities)?.limiters?.[0] ?? null;
   // CR-zh-readiness-words: a limiter read from a readiness check carries that check's own label and
   // detail (priorities.rs); its words come from the check's (id, status), only when the card's text
   // is that very check's text, so the sentence translated is the one shown.
@@ -195,9 +203,10 @@ export function HomeGlass({
         </div>
       </header>
 
-      {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; nothing is read on mount. Always
+      {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; the card itself reads nothing on mount
+          (Home's sessions-only read above hands it the games running rougher than usual, to name). Always
           mounted: a new user or a new game gets the first look (what changed on this PC), not a hidden door. */}
-      <ParamedicCard noGames={noGames} games={recorded} drifts={readiness?.drifts} onOpenCheck={onSeeChecks} />
+      <ParamedicCard noGames={noGames} games={recorded} drifts={readiness?.drifts} rough={rough} onOpenCheck={onSeeChecks} />
 
       {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
           never the accent fill, which on this page means "your most recent game". */}

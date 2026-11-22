@@ -22,6 +22,8 @@ import { useReducedMotion } from "../design/use-motion";
 import { useIntelligenceFlag, useHomeInterviewFlag } from "../design/use-hud";
 import { readHologramV2, readHomeInterview } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
+import { homePriorities } from "./home-facts";
+import { useHomeRough } from "./use-home-rough";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { isMeasuredRow } from "../data/confidence-word";
@@ -377,7 +379,7 @@ function InEffectLine({ inEffect, t }: { inEffect: InEffectCounts; t: TFunction 
 export function HomeConsole({
   hw,
   readiness,
-  priorities,
+  priorities: allPriorities,
   sessions,
   changes,
   onRunCheck,
@@ -397,6 +399,10 @@ export function HomeConsole({
   latestChange,
 }: Props) {
   const { t, i18n } = useTranslation();
+  // B1 Home truth: every limiter count, list and stand-down on this Home reads the priorities without the
+  // optional-tweak rows (Constitution §38); the games running rougher than usual are read once on open.
+  const priorities = useMemo(() => homePriorities(allPriorities), [allPriorities]);
+  const roughRead = useHomeRough();
   const reduced = useReducedMotion();
   // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
   // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
@@ -685,7 +691,7 @@ export function HomeConsole({
   // ── measured derivations (all real, all honestly empty when absent — HomeHud's exact logic) ──
   // The Machine Model's in-effect answer (#452) — see HomeHud for why never the bare ledger list.
   const inEffect = inEffectCounts(model);
-  const posture = postureLine(readiness, priorities, inEffect, t);
+  const posture = postureLine(readiness, priorities, inEffect, t, roughRead);
   // This is the Home a default-flag user actually lands on (compy_home_console DEFAULT ON), so it
   // is where the ledger-completeness disclosure matters most. postureLine already declines to print
   // a count it doesn't have — at zero changes the change-note is omitted rather than rendered as
