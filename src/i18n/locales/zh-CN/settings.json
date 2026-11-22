@@ -191,6 +191,7 @@
     "undoAfter": "按「重新检查」查看哪些仍然生效。",
     "everythingNotFinished": "清除没有完成。在你再次确认之前，不会再删除任何内容。",
     "ackFailed": "Compy 无法移除「清除正在完成」的记录。下次启动时它会再试一次。",
+    "trialsWentDuringApply": "试验结果已被删除，而差不多在同一时刻有一项更改被应用。该更改仍在你的更改历史中，仍然可以撤销。",
     "recordNotAdvanced": "清单中的文件都已删除，但 Compy 无法更新关于这次清除的记录。下次启动时它会再次读取该记录，不会删除这次清除开始之后保存的任何内容。",
     "reopenNotice": "已完成。请关闭 Compy 再重新打开以完成：此窗口仍显示之前加载的内容，Compy 将像刚安装一样重新开始。",
     "statusDismiss": "知道了",

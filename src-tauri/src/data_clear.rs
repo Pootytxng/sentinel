@@ -872,6 +872,10 @@ pub(crate) struct ClearReport {
     /// Start-up roll-forward only (C2e review r1): every file left was saved after the clear began, so the clear
     /// is finished and those files were kept. Reported as `Completed`, with its own status sentence.
     pub(crate) kept_saved_after_clear: bool,
+    /// C4: the Trial store was deleted and, read again right after inside its gate, the change history had an
+    /// applied row: a plain apply landed around the same moment. The change is still recorded and undoable.
+    /// It cannot see an apply that holds the ledger lock and has not saved yet.
+    pub(crate) trials_went_during_apply: bool,
 }
 
 impl ClearReport {
@@ -1006,6 +1010,9 @@ pub(crate) trait ClearGates {
     /// `delete_rows` INSIDE the gate, immediately before each delete, so a Trial that started after the plan
     /// was checked is seen. No default: an implementation that forgets it would silently skip the check.
     fn live_state(&self) -> LiveState;
+    /// Runs inside the Trial store's gate right after the Trial store (or one of its working files) was
+    /// deleted, before the ledger is read again (C4). Production does nothing here; a test lands an apply.
+    fn after_trial_delete(&self) {}
 }
 
 // ---- deleting one file --------------------------------------------------------------------------
@@ -1184,6 +1191,7 @@ fn new_report(now: &ClearPlan) -> ClearReport {
         record_not_updated: false,
         record_not_advanced: false,
         kept_saved_after_clear: false,
+        trials_went_during_apply: false,
     }
 }
 
@@ -1217,21 +1225,39 @@ fn delete_rows(
         // (the closure runs with the lock held) and immediately before the delete: a Trial, a capture or an
         // unsaved session that started since is seen, and nothing more is deleted (D7).
         let tripped: std::cell::RefCell<Vec<Refusal>> = std::cell::RefCell::new(Vec::new());
+        let applied_meanwhile = std::cell::Cell::new(false);
         let mut run = || {
             let mut why = live_state_refusals(&gates.live_state());
             if gate == Gate::Experiment {
                 // Inside the Trial store's own lock (C1 review B4): `start_experiment` holds the same lock for
                 // its record and its apply, so a Trial started since the plan is seen here, and so is any change
                 // applied BEFORE this read. A plain apply (Optimize) takes only the ledger lock, not this one, so
-                // it can still land just after this read; the Trial results then go while that change is on.
-                // Undo of it is unaffected (it resolves from history.json, which play history never touches).
+                // it can still land just after this read; the Trial results then go while that change is on, and
+                // the C4 read after the delete (below) reports it. Undo of it is unaffected (it resolves from history.json, which play history never touches).
                 why.extend(trial_gate_refusals(root));
             }
             if !why.is_empty() {
                 *tripped.borrow_mut() = why.into_iter().map(|(code, detail)| Refusal { code, detail: detail.to_string(), files: Vec::new() }).collect();
                 return Err("the live state changed".to_string());
             }
-            delete_one(root, &d.rel)
+            let out = delete_one(root, &d.rel);
+            if gate == Gate::Experiment && matches!(out, Ok(Removed::Deleted)) {
+                // C4: the read above cannot hold off a plain apply (it takes only the ledger lock, and play
+                // history must not take that lock: design 3.3 and the lock-order guard). So read the change
+                // history AGAIN, still inside the Trial gate, now that the file is gone. A row that is applied
+                // now was applied around the same moment: the report says so (it cannot be undone; the file is
+                // gone). Only an applied row counts: an unreadable history claims nothing.
+                // What this CANNOT see: an apply that holds the ledger lock and has changed Windows but has not
+                // saved history.json yet when this read runs. That apply is still recorded and undoable; only
+                // the report's note is missing.
+                // Under "clear everything" the ledger lock is already held here, so nothing can land and this
+                // stays false.
+                gates.after_trial_delete();
+                if matches!(check_ledger(root), LedgerCheck::Applied(_)) {
+                    applied_meanwhile.set(true);
+                }
+            }
+            out
         };
         let result = if gate == Gate::Unlocked || held.contains(&gate) {
             run()
@@ -1241,6 +1267,9 @@ fn delete_rows(
             gates.with_gate(gate, d.store, &mut run)
         };
         let stopped = tripped.into_inner();
+        if applied_meanwhile.get() {
+            report.trials_went_during_apply = true;
+        }
         if !stopped.is_empty() {
             // Not a failed delete: nothing was attempted. This file and every one after it stay.
             report.not_attempted.extend(rows[i..].iter().map(|r| r.rel.clone()));
@@ -4297,6 +4326,88 @@ mod tests {
         }
     }
 
+    const APPLIED_LEDGER: &str =
+        r#"[{"id":"c9","rec_id":"r9","rec_title":"Core parking","applied_at":"2026-11-01T00:00:00Z","snapshot":{},"status":"applied"}]"#;
+
+    /// Lands a plain apply (an applied row saved to history.json) right after the Trial store's delete, inside
+    /// its gate: the moment the C4 read cannot prevent, only report.
+    struct ApplyRightAfterTheTrialDelete<'a> {
+        root: &'a Path,
+    }
+
+    impl ClearGates for ApplyRightAfterTheTrialDelete<'_> {
+        fn with_gate(&self, _gate: Gate, _store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            delete()
+        }
+        fn live_state(&self) -> LiveState {
+            LiveState::default()
+        }
+        fn after_trial_delete(&self) {
+            fs::write(self.root.join("history.json"), APPLIED_LEDGER).unwrap();
+        }
+    }
+
+    /// C4 (c4a): an apply that lands around the Trial store's delete is reported; the change is untouched.
+    /// Break check: remove the `check_ledger` read after the delete in `delete_rows` -> fails.
+    #[test]
+    fn c4a_an_apply_that_lands_right_after_the_trial_delete_is_reported() {
+        let t = Tmp::new("c4a");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(rels(&shown).contains(&"experiments.json"));
+        let report = done(clear_play_history_at(&t.root, &shown.fingerprint, &later(), &ApplyRightAfterTheTrialDelete { root: &t.root }));
+        assert!(!t.has("experiments.json") && report.deleted.contains(&"experiments.json".to_string()));
+        assert!(report.trials_went_during_apply, "{report:?}");
+        assert_eq!(t.read("history.json"), APPLIED_LEDGER, "the change history is never touched by play history");
+    }
+
+    /// C4 (c4b): the mirror. No apply, no note.
+    /// Break check: set `applied_meanwhile` unconditionally after the delete -> fails.
+    #[test]
+    fn c4b_without_an_apply_there_is_no_note() {
+        let t = Tmp::new("c4b");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let report = done(clear_play_history_at(&t.root, &shown.fingerprint, &later(), &NoGates));
+        assert!(report.deleted.contains(&"experiments.json".to_string()) && !report.trials_went_during_apply, "{report:?}");
+        // Under "clear everything" the ledger lock is held across the Trial store: the note never appears.
+        let t = Tmp::new("c4b2");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        let report = done(clear_everything_at(&t.root, &shown.fingerprint, &later, &NoGates));
+        assert!(!report.trials_went_during_apply, "{report:?}");
+    }
+
+    /// C4 (c4c): an apply BEFORE the Trial gate's read is still prevented: the Trial store stays and there is
+    /// no note (the pre-read wins; the post-read only reports what it could not prevent).
+    /// Break check: drop the `check_ledger` part of `trial_gate_refusals` -> the Trial store goes and this fails.
+    #[test]
+    fn c4c_an_apply_before_the_read_still_keeps_the_trial_store_and_adds_no_note() {
+        let t = Tmp::new("c4c");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let meanwhile = |r: &Path| fs::write(r.join("history.json"), APPLIED_LEDGER).unwrap();
+        let report = done(clear_play_history_at(&t.root, &shown.fingerprint, &later(), &InterleaveAtTrialGate { root: &t.root, meanwhile: &meanwhile }));
+        assert!(t.has("experiments.json"));
+        assert_eq!(report.stopped.iter().map(|r| r.code).collect::<Vec<_>>(), ["trials_tied_to_changes"]);
+        assert!(!report.trials_went_during_apply, "{report:?}");
+    }
+
+    /// C4 (c4d): the read after the delete sits after the delete, in the Trial branch, and play history still
+    /// takes no ledger lock (exactly one in the file: clear_everything_at; the guard file pins the same).
+    /// Break check: add a ledger-lock call inside the closure -> fails here and in the lock-order guard.
+    #[test]
+    fn c4d_the_after_delete_read_takes_no_lock_and_follows_the_delete() {
+        let core = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+        let body = core.split("fn delete_rows(").nth(1).unwrap().split("\n/// `settle`, for a run").next().unwrap();
+        let delete = body.find("delete_one(root, &d.rel)").expect("the delete");
+        let reread = body.find("check_ledger(root)").expect("the read after the delete");
+        let hook = body.find("gates.after_trial_delete()").expect("the test seam");
+        assert!(delete < hook && hook < reread, "delete, then the seam, then the read");
+        assert!(!body.contains("lock_ledger") && !body.contains("lock_history"), "no ledger lock in delete_rows");
+        assert_eq!(core.matches("history::lock_ledger()").count(), 1);
+    }
+
     /// The JSON the screen reads (`src/surfaces/your-data.ts`). A renamed field would make the screen
     /// show nothing, or show "deleted" from a missing list; this pins the names it relies on.
     #[test]
@@ -4320,7 +4431,7 @@ mod tests {
         }
         let out = serde_json::to_value(clear_play_history_at(&t.root, &plan.fingerprint, &later(), &NoGates)).unwrap();
         assert_eq!(out["status"], "done");
-        for k in ["deleted", "already_gone", "failed", "not_attempted", "stopped", "kept", "unknown", "complete", "nothing_to_do", "restart_required", "restart_reasons", "webview"] {
+        for k in ["deleted", "already_gone", "failed", "not_attempted", "stopped", "kept", "unknown", "complete", "nothing_to_do", "restart_required", "restart_reasons", "webview", "trials_went_during_apply"] {
             assert!(out["detail"].get(k).is_some(), "report.{k}");
         }
         assert_eq!(serde_json::to_value(ClearOutcome::PlanChanged).unwrap()["status"], "plan_changed");

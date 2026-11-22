@@ -51,6 +51,8 @@ export type ClearReport = {
   record_not_updated?: boolean;
   /** "Clear everything": every file is gone but the record could not be advanced (C2b review r2 follow-up). */
   record_not_advanced?: boolean;
+  /** C4: the Trial results went and a change was applied around the same moment. Absent on older answers. */
+  trials_went_during_apply?: boolean;
 };
 
 export type ClearOutcome =

@@ -480,6 +480,7 @@ function Result({
       ) : (
         ack === "failed" && <p className="receipts-hint sev-warn">{t(k("ackFailed"))}</p>
       )}
+      {report.trials_went_during_apply && <p className="receipts-hint sev-warn">{t(k("trialsWentDuringApply"))}</p>}
       {report.deleted.some((f) => f.startsWith("care/")) && <p className="receipts-hint">{t(k("crashNotesReturn"))}</p>}
       {showReload && (
         <div data-testid="your-data-reload">

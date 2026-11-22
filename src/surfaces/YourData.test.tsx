@@ -148,6 +148,26 @@ describe("Your data: clear play history", () => {
     expect(screen.queryByText("Deleted 2 files.")).toBeNull();
   });
 
+  // C4 (c4e). Break check: drop the trials_went_during_apply line in YourData.tsx -> the first half fails.
+  it("says when the Trial results went while a change was applied around the same moment, and only then", async () => {
+    const SENTENCE = "Trial results were deleted, and a change was applied around the same moment.";
+    answer(PLAN, { status: "done", detail: { ...REPORT, deleted: ["experiments.json"], trials_went_during_apply: true } });
+    const first = render(<YourData />);
+    await openPlan();
+    fireEvent.click(screen.getByLabelText("I understand"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete play history" }));
+    const result = await screen.findByTestId("your-data-result");
+    expect(result.textContent).toContain(SENTENCE);
+    expect(result.textContent).toContain("can still be undone");
+    first.unmount();
+    answer(PLAN, { status: "done", detail: { ...REPORT, deleted: ["experiments.json"] } });
+    render(<YourData />);
+    await openPlan();
+    fireEvent.click(screen.getByLabelText("I understand"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete play history" }));
+    expect((await screen.findByTestId("your-data-result")).textContent).not.toContain(SENTENCE);
+  });
+
   it("a stopped run says it stopped, never 'Deleted N files.', names why, and offers no reload (review r2)", async () => {
     window.localStorage.setItem("compy_last_check_v1", "x");
     const stopped: ClearReport = {
