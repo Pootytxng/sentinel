@@ -163,7 +163,7 @@
       "sharing": "Your sharing choice (with no file, sharing is off)",
       "licence": "Your Compy Pro licence",
       "caches": "Downloaded rule and catalog files",
-      "fpsHelper": "The frame-rate helper's leftover files: the last game it measured and its frame rates and frame times",
+      "fpsHelper": "The frame-rate helper's leftover files, which can hold the last game it measured and its frame rates and frame times",
       "other": "Other working files and damaged copies Compy made"
     },
     "everythingTitle": "Clear everything Compy keeps",
