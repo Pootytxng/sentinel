@@ -5576,6 +5576,75 @@ fn b5_open_again_in_the_newest_session_or_a_resident_program_gives_no_follow_up_
 }
 
 #[test]
+fn b5_build_tools_open_at_the_start_of_five_rough_sessions_and_of_no_normal_one_are_named_as_already_running_and_stay_possible() {
+    // Shaped like a night of five rough sessions: the Rust and Node build tools were open when every rough session
+    // started and when none of the five earlier normal ones did. Start snapshots only (no process starts recorded
+    // during the sessions), nothing else differs. None of them is always resident.
+    for id in ["cargo", "rustc", "node"] {
+        let p = crate::running_at_start::PROGRAMS.iter().find(|p| p.id == id).expect("in the table");
+        assert!(!p.always_resident, "{id} is not filtered as always resident");
+    }
+    let mut sess = steady(5);
+    for s in &mut sess {
+        s.running_at_start = Some(snap(&[]));
+    }
+    for day in 20..25 {
+        let mut r = facts(&format!("2026-10-{day}T10:00:00Z"), 600, 600, 100.0, 30.0);
+        r.running_at_start = Some(snap(&["cargo.exe", "rustc.exe", "node.exe"]));
+        sess.push(r);
+    }
+    let d = run_load(sess.clone());
+    let f = bg_finding(&d).unwrap_or_else(|| panic!("open at every rough start and no normal one is timing: {:?}", d.findings.iter().map(|f| f.id).collect::<Vec<_>>()));
+    let named: Vec<(&str, &str, &str)> = f
+        .evidence
+        .iter()
+        .filter(|e| e.code == "already-running")
+        .map(|e| (e.args["name"].as_str(), e.args["n"].as_str(), e.args["of"].as_str()))
+        .collect();
+    assert_eq!(named, [("cargo", "5", "5"), ("rustc", "5", "5"), ("Node.js", "5", "5")], "each is named as already running, 5 of 5");
+    assert!(f.evidence.iter().filter(|e| e.code == "already-running").all(|e| e.kind == EvidenceKind::Measured && !e.against));
+    let counts: Vec<(&str, &str, &str, &str, &str)> = f
+        .evidence
+        .iter()
+        .filter(|e| e.code == "open-counts")
+        .map(|e| (e.args["id"].as_str(), e.args["r"].as_str(), e.args["rm"].as_str(), e.args["n"].as_str(), e.args["nm"].as_str()))
+        .collect();
+    assert_eq!(counts, [("cargo", "5", "5", "0", "5"), ("rustc", "5", "5", "0", "5"), ("node", "5", "5", "0", "5")]);
+    assert_eq!(f.confidence, Certainty::Possible, "presence at the start only: nothing above Possible");
+    // No later session yet: no follow-up line, and the step is the usual one (build tools are not recorders, so the
+    // step names no program: only a recorder/overlay is named there).
+    assert!(program_codes(&f.evidence).is_empty());
+    match &f.fix {
+        Fix::Steps { code, args } => {
+            assert_eq!(*code, "background-load");
+            assert!(!args.contains_key("notOpen"));
+            assert_eq!((args["names"].as_str(), args["programs"].as_str()), ("", ""));
+        }
+        other => panic!("{other:?}"),
+    }
+    // The next session starts with none of them open and still runs rough: each is said, dated, as not open when it
+    // started (wherever the answer puts it), and nothing rises above Possible.
+    let mut r = facts("2026-10-25T10:00:00Z", 600, 600, 100.0, 30.0);
+    r.running_at_start = Some(snap(&[]));
+    sess.push(r);
+    let d = run_load(sess);
+    let mut said: Vec<(String, String)> = d
+        .findings
+        .iter()
+        .flat_map(|f| f.evidence.iter().filter(|e| e.code == "program-not-open-rough").map(|e| (e.args["name"].clone(), e.args["date"].clone())))
+        .chain(d.seen.iter().filter(|s| s.id == "program-not-open-rough").map(|s| (s.args["name"].clone(), s.args["date"].clone())))
+        .collect();
+    said.sort();
+    let at = "2026-10-25T10:00:00Z".to_string();
+    assert_eq!(said, [("Node.js".to_string(), at.clone()), ("cargo".to_string(), at.clone()), ("rustc".to_string(), at)], "{:?} / {:?}", d.findings, d.seen);
+    assert!(d.findings.iter().filter(|f| f.id == "background-load").all(|f| f.confidence == Certainty::Possible));
+    // Where: "was already running" no longer holds (5 of 6 rough starts), so the snapshot is no longer timing and no
+    // "Other programs" row is left; the three dated lines sit under what Compy checked.
+    assert!(bg_finding(&d).is_none(), "{:?}", d.findings.iter().map(|f| f.id).collect::<Vec<_>>());
+    assert_eq!(d.seen.iter().filter(|s| s.id == "program-not-open-rough").count(), 3);
+}
+
+#[test]
 fn a_program_open_at_the_start_of_the_rough_session_and_in_no_normal_one_is_timing_and_stays_possible() {
     let d = run_load(start_episode(quiet_base(3), Some(snap(&["obs64.exe"]))));
     let f = bg_finding(&d).expect("the snapshot is timing");
