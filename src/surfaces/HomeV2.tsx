@@ -19,7 +19,7 @@ import { knownFps, mostlyUnread } from "../lib/session-metrics";
 import { useReducedMotion } from "../design/use-motion";
 import { postureLine, liveStrip } from "./command-center-data";
 import { homePriorities } from "./home-facts";
-import { useHomeRough } from "./use-home-rough";
+import { sessionsKey, useHomeRough } from "./use-home-rough";
 import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
@@ -140,10 +140,11 @@ export function HomeV2({
   fixRoomLabel = "Lab",
   onOpenLabStation,
 }: Props) {
-  const { t } = useTranslation();
-  // B1 Home truth: no optional-tweak row on Home (Constitution §38); rough games read once on open.
+  const { t, i18n } = useTranslation();
+  // B1 Home truth: no optional-tweak row on Home (Constitution §38); rough games read on open and when a session
+  // is recorded.
   const priorities = useMemo(() => homePriorities(allPriorities), [allPriorities]);
-  const roughRead = useHomeRough();
+  const roughRead = useHomeRough(sessionsKey(sessions));
   const reduced = useReducedMotion();
   // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
   // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
@@ -211,7 +212,7 @@ export function HomeV2({
   // ── measured derivations (all real, all honestly empty when absent) ──
   // The Machine Model's in-effect answer (#452) — see HomeHud for why never the bare ledger list.
   const inEffect = inEffectCounts(model);
-  const posture = postureLine(readiness, priorities, inEffect, t, roughRead);
+  const posture = postureLine(readiness, priorities, inEffect, t, roughRead, i18n.language);
   const strip = liveStrip(sessions, t);
   // Session numbers graded against THIS rig (deslop directive #4): fps vs the display's real
   // refresh, 1% low vs the session's own average. Neutral (nothing measured) = uncolored ink.
@@ -391,7 +392,19 @@ export function HomeV2({
           />
         )
       }
-      sub={posture.sentence}
+      sub={
+        // B1 review r1 B2: a rough game beside a flagged check is its own line ("Separately: …").
+        posture.note ? (
+          <>
+            <span style={{ display: "block" }}>{posture.sentence}</span>
+            <span style={{ display: "block" }} data-testid="home-rough-note">
+              {posture.note}
+            </span>
+          </>
+        ) : (
+          posture.sentence
+        )
+      }
       measured={measured}
       primaryAction={
         <button type="button" className="hv2-btn" onClick={onRunCheck}>

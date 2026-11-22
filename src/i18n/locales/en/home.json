@@ -487,10 +487,11 @@
     "noChangeWithoutSayso": "Nothing changes without your say-so.",
     "lastSessionFallback": "Last session",
     "rough": {
-      "headline": "{{game}} has been running rougher than usual",
-      "sentence_one": "{{game}}'s last measured session ran rougher than its usual range.",
-      "sentence_other": "{{game}}'s last {{count}} measured sessions ran rougher than its usual range.",
-      "others": "Also running rougher than usual: {{games}}.",
+      "headline": "{{game}} ran rougher than usual last time",
+      "sentenceOne": "{{game}}'s last measured session, on {{date}}, ran rougher than its usual range.",
+      "sentenceMany": "{{game}}'s last {{count}} measured sessions in a row, up to {{date}}, ran rougher than its usual range.",
+      "others": "Also rougher than usual last time: {{games}}.",
+      "separately": "Separately: {{line}}",
       "unread": "Compy couldn't read how your games ran.",
       "aGame": "A game"
     }

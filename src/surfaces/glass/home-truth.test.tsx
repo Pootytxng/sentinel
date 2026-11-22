@@ -1,7 +1,8 @@
 // B1 Home truth (owner decision 2026-11-21). Home's headline and count come from what is off-normal: a watched
-// setting that drifted, a game the Paramedic measured running rougher than usual (read once from the session
-// store when Home opens), a failed read. An optional tweak the owner has not applied is never counted or shown
-// on Home (Constitution §38 "brake light fluid"); it stays in the Lab.
+// setting that drifted, a game the Paramedic measured rougher than usual (read from the session store when Home
+// opens, and again when a session is recorded), a failed read. An optional tweak the owner has not applied is
+// never counted or shown on Home (Constitution §38 "brake light fluid"); it stays in the Lab. Game titles here
+// are invented.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { act, render, screen, cleanup, within } from "@testing-library/react";
 
@@ -15,15 +16,19 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import "../../i18n";
-import type { GameReadiness, Priorities, ReadinessCheck } from "../../types";
+import type { GameReadiness, Priorities, ReadinessCheck, SessionSummary } from "../../types";
 import { HomeGlass } from "./HomeGlass";
 
 beforeEach(() => {
-  engine.status = { rough: [] };
+  engine.status = { rough: [], games_judged: 1 };
   engine.fail = false;
   engine.calls = [];
 });
 afterEach(cleanup);
+
+// Lets the session read settle (resolve or reject) before the page is read.
+const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+const statusCalls = () => engine.calls.filter((x) => x === "paramedic_home_status").length;
 
 const ready = (i: number): ReadinessCheck => ({ id: `c${i}`, label: `Check ${i}`, status: "ready", detail: "", value: null });
 const drift: ReadinessCheck = {
@@ -48,7 +53,7 @@ function readiness(withDrift: boolean): GameReadiness {
   };
 }
 
-// What priorities.rs hands Home today when the one tweak not applied is "Trim Windows visual effects".
+// What priorities.rs hands Home when the one tweak not applied is "Trim Windows visual effects".
 const tweakOnly: Priorities = {
   limiters: [
     {
@@ -66,14 +71,31 @@ const tweakOnly: Priorities = {
   upgrade_path: null,
 };
 
-const robRun = { game: "robrun.exe", game_name: "ROB RUN", rough_sessions: 2, newest_rough_at: "2026-11-20T03:51:22Z" };
+// Noon UTC: the date reads Nov 20 in every time zone the tests run in.
+const skyline = { game: "skylinedrift.exe", game_name: "Skyline Drift", rough_sessions: 2, newest_rough_at: "2026-11-20T12:00:00Z" };
 
-function home(withDrift: boolean) {
-  return render(
+const session = (at: string) =>
+  ({
+    started_at: at,
+    duration_secs: 1200,
+    process_name: "skylinedrift.exe",
+    samples: 1200,
+    avg_fps: 120,
+    avg_frametime_ms: 8.3,
+    low1_fps_est: 80,
+    peak_gpu_temp_c: null,
+    peak_gpu_usage_pct: null,
+    peak_ram_used_bytes: null,
+    ram_total_bytes: null,
+    compy_changes_active: null,
+  }) as SessionSummary;
+
+function homeEl(withDrift: boolean, sessions: SessionSummary[] = []) {
+  return (
     <HomeGlass
       readiness={readiness(withDrift)}
       priorities={tweakOnly}
-      sessions={[]}
+      sessions={sessions}
       pendingCare={null}
       onOpenCareIncident={vi.fn()}
       onDismissCareIncident={vi.fn()}
@@ -82,56 +104,77 @@ function home(withDrift: boolean) {
       onRunCheck={vi.fn()}
       onSeeChecks={vi.fn()}
       onOpenDetails={vi.fn()}
-    />,
-  ).container;
+    />
+  );
 }
+const home = (withDrift: boolean, sessions: SessionSummary[] = []) => render(homeEl(withDrift, sessions)).container;
 
 describe("Home truth (B1)", () => {
   it("the owner's PC today: the drift and the rough game are counted and both named; the tweak is nowhere", async () => {
-    engine.status = { rough: [robRun] };
+    engine.status = { rough: [skyline], games_judged: 3 };
     const c = home(true);
     expect(await screen.findByRole("heading", { level: 1, name: "2 things are worth a look" })).toBeInTheDocument();
     expect(within(screen.getByTestId("paramedic")).getByTestId("paramedic-rough")).toHaveTextContent(
-      "ROB RUN's last 2 measured sessions ran rougher than its usual range.",
+      "Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range.",
     );
     expect(c).toHaveTextContent("Worth a look: Compy changes were turned back off");
     expect(c.textContent).not.toMatch(/tweak|Trim Windows visual effects/i);
-    expect(engine.calls.filter((x) => x === "paramedic_home_status")).toHaveLength(1);
+    expect(statusCalls()).toBe(1);
   });
 
   it("a clean PC with only an unapplied tweak: 'set up right', and the tweak is not tiled or counted", async () => {
     const c = home(false);
-    await screen.findByText("Nothing in the setup Compy checked stands out.");
+    await settle();
+    expect(statusCalls()).toBe(1);
+    expect(screen.getByText("Nothing in the setup Compy checked stands out.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Your PC looks set up right");
     expect(c.textContent).not.toMatch(/tweak|worth a look:/i);
     expect(screen.queryByTestId("paramedic-rough")).toBeNull();
   });
 
-  it("a rough game alone is counted and named in the card", async () => {
-    engine.status = { rough: [robRun, { ...robRun, game: "wardogs.exe", game_name: "WAR DOGS", rough_sessions: 3 }] };
+  it("two rough games are counted and both named in the card", async () => {
+    engine.status = { rough: [skyline, { ...skyline, game: "harbornine.exe", game_name: "Harbor Nine", rough_sessions: 3 }], games_judged: 2 };
     home(false);
     expect(await screen.findByRole("heading", { level: 1, name: "2 things are worth a look" })).toBeInTheDocument();
     expect(screen.getByTestId("paramedic-rough")).toHaveTextContent(
-      "ROB RUN's last 2 measured sessions ran rougher than its usual range. Also running rougher than usual: WAR DOGS.",
+      "Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range. Also rougher than usual last time: Harbor Nine.",
     );
   });
 
-  it("a failed or malformed session read never adds a game and never invents one", async () => {
-    // Lets the session read settle (resolve or reject) before the page is read.
-    const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  it("a failed session read is said in the card and adds no game; a malformed one is a failed read too", async () => {
     engine.fail = true;
     home(false);
     await settle();
-    expect(engine.calls).toContain("paramedic_home_status");
+    expect(statusCalls()).toBe(1);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Your PC looks set up right");
-    expect(screen.queryByTestId("paramedic-rough")).toBeNull();
+    expect(screen.getByTestId("paramedic-rough")).toHaveTextContent("Compy couldn't read how your games ran.");
     cleanup();
     engine.fail = false;
     // A count that is not a whole number: the whole answer is a failed read, not one rough game.
-    engine.status = { rough: [{ ...robRun, rough_sessions: "2" }] };
+    engine.status = { rough: [{ ...skyline, rough_sessions: "2" }], games_judged: 1 };
     home(true);
     await settle();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("1 thing is worth a look");
+    expect(screen.getByTestId("paramedic-rough")).toHaveTextContent("Compy couldn't read how your games ran.");
+    expect(screen.getByTestId("paramedic-rough")).not.toHaveTextContent(/Skyline Drift/);
+  });
+
+  it("a session recorded while Home stays open reads again, and the old answer does not stay up", async () => {
+    engine.status = { rough: [skyline], games_judged: 1 };
+    const first = [session("2026-11-20T12:00:00Z")];
+    const { rerender } = render(homeEl(false, first));
+    await settle();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("1 thing is worth a look");
+    // The next session ran in its usual range: the engine no longer lists the game.
+    engine.status = { rough: [], games_judged: 1 };
+    rerender(homeEl(false, [session("2026-11-21T12:00:00Z"), ...first]));
+    await settle();
+    expect(statusCalls()).toBe(2);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Your PC looks set up right");
     expect(screen.queryByTestId("paramedic-rough")).toBeNull();
+    // The same list again does not read again.
+    rerender(homeEl(false, [session("2026-11-21T12:00:00Z"), ...first]));
+    await settle();
+    expect(statusCalls()).toBe(2);
   });
 });

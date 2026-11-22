@@ -26,8 +26,13 @@ export type RoughGame = {
   newest_rough_at: string;
 };
 
-/** pending: not read yet (says nothing either way). unreadable: the read failed, which is never "none". */
-export type RoughRead = { kind: "pending" } | { kind: "read"; games: RoughGame[] } | { kind: "unreadable" };
+/** pending: not read yet (says nothing either way). unreadable: the read failed, which is never "none".
+ *  `judged`: recent games whose newest judged session was compared with a usual range. With 0, "no rough game"
+ *  only means nothing was measured, and Home says nothing about how the games ran. */
+export type RoughRead =
+  | { kind: "pending" }
+  | { kind: "read"; games: RoughGame[]; judged: number }
+  | { kind: "unreadable" };
 
 function isRoughGame(v: unknown): v is RoughGame {
   if (!v || typeof v !== "object") return false;
@@ -45,9 +50,21 @@ function isRoughGame(v: unknown): v is RoughGame {
 /** The command's answer, checked. Anything not in the expected shape is a failed read, never "no rough game". */
 export function parseHomeStatus(v: unknown): RoughRead {
   if (!v || typeof v !== "object") return { kind: "unreadable" };
-  const rough = (v as { rough?: unknown }).rough;
+  const { rough, games_judged: judged } = v as { rough?: unknown; games_judged?: unknown };
   if (!Array.isArray(rough) || !rough.every(isRoughGame)) return { kind: "unreadable" };
-  return { kind: "read", games: rough };
+  if (typeof judged !== "number" || !Number.isInteger(judged) || judged < rough.length) return { kind: "unreadable" };
+  return { kind: "read", games: rough, judged };
+}
+
+/** True only when the sessions were read and at least one game was compared with its usual range. */
+export function gamesMeasured(r: RoughRead): boolean {
+  return r.kind === "read" && r.judged > 0;
+}
+
+/** The day of a session start, in the app's language (the same format the Games room uses). */
+function day(iso: string, lang: string): string {
+  const d = new Date(iso);
+  return Number.isFinite(d.getTime()) ? new Intl.DateTimeFormat(lang || "en", { month: "short", day: "numeric" }).format(d) : "—";
 }
 
 export function roughGames(r: RoughRead): RoughGame[] {
@@ -58,17 +75,30 @@ function gameName(g: RoughGame, t: TFunction): string {
   return g.game_name.trim() || g.game.trim() || t("home.posture.rough.aGame");
 }
 
-/** Home's sentence about the rough run(s): the most recently played rough game with its count, then every
- *  other rough game by name (each one Home counts is named on the page). Empty when there is none (or when
- *  the read failed: that has its own sentence). */
-export function roughLine(r: RoughRead, t: TFunction): string {
+/** Home's sentence about the rough run(s): the game whose newest rough session is the most recent (the one the
+ *  card answers for), with its count and the date of that session, then every other rough game by name (each
+ *  one Home counts is named on the page). Empty when there is none (or when the read failed: that has its own
+ *  sentence). The count is the judged sessions in a row; the date makes it true however long ago it was. */
+export function roughLine(r: RoughRead, t: TFunction, lang = "en"): string {
   const games = roughGames(r);
   if (games.length === 0) return "";
   const first = games[0];
-  const main = t("home.posture.rough.sentence", { game: gameName(first, t), count: first.rough_sessions });
+  const name = gameName(first, t);
+  const when = day(first.newest_rough_at, lang);
+  const main =
+    first.rough_sessions === 1
+      ? t("home.posture.rough.sentenceOne", { game: name, date: when })
+      : t("home.posture.rough.sentenceMany", { game: name, count: first.rough_sessions, date: when });
   if (games.length === 1) return main;
   const rest = games.slice(1).map((g) => gameName(g, t)).join(", ");
   return `${main} ${t("home.posture.rough.others", { games: rest })}`;
+}
+
+/** The rough line as a note of its own beside another finding (a drifted setting): "Separately: …", so the two
+ *  never read as one cause and its effect. */
+export function roughNote(r: RoughRead, t: TFunction, lang = "en"): string {
+  const line = roughLine(r, t, lang);
+  return line ? t("home.posture.rough.separately", { line }) : "";
 }
 
 export function roughHeadline(r: RoughRead, t: TFunction): string {

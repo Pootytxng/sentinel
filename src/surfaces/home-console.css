@@ -116,6 +116,12 @@
 :root[data-v2="on"] .hc-verdict-dek {
   color: inherit;
 }
+/* B1 Home truth: a game measured rougher than usual, beside a flagged check. Its own line, so it never
+   reads as the same sentence (the check's effect) continuing. */
+.hc-verdict-rough {
+  display: block;
+  margin-top: 4px;
+}
 /* The attention state's one-line route (owner ruling 2026-08-26). It sits INSIDE the dek and
    inherits its size on purpose: this is the same sentence continuing, not a new element competing
    with the primary button below it. Accent + underline is the app's existing quiet-link idiom, so

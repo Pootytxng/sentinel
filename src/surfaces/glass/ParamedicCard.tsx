@@ -1447,14 +1447,23 @@ const MORE_SLACK_PX = 4;
 
 /** `drifts`: null/undefined while the readiness scan has not loaded (no default: "not loaded" is not "no drift").
  *  `rough` (B1 Home truth): the games Home's sessions-only read found running rougher than usual. While the card is
- *  idle its line names them, so Home's count always points at something on the page. */
+ *  idle its line names them, so Home's count always points at something on the page. `roughUnread`: that read
+ *  failed; idle, the line says so instead of staying silent. */
 export function ParamedicCard({
   noGames = false,
   games = [],
   drifts,
   rough = [],
+  roughUnread = false,
   onOpenCheck,
-}: { noGames?: boolean; games?: RecordedGame[]; drifts?: Drift[] | null; rough?: RoughGame[]; onOpenCheck?: () => void } = {}) {
+}: {
+  noGames?: boolean;
+  games?: RecordedGame[];
+  drifts?: Drift[] | null;
+  rough?: RoughGame[];
+  roughUnread?: boolean;
+  onOpenCheck?: () => void;
+} = {}) {
   const { t, i18n } = useTranslation();
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
@@ -1532,7 +1541,14 @@ export function ParamedicCard({
 
   const answer = view.kind === "done" ? view.d : view.kind === "busy" ? view.prev : null;
   // Idle with a rough game: the line names it (Home counted it). Once the card answers, the answer speaks.
-  const idleRough = view.kind === "idle" && rough.length > 0 ? roughLine({ kind: "read", games: rough }, t) : "";
+  const idleRough =
+    view.kind !== "idle"
+      ? ""
+      : rough.length > 0
+        ? roughLine({ kind: "read", games: rough, judged: rough.length }, t, i18n.language)
+        : roughUnread
+          ? t("home.posture.rough.unread")
+          : "";
   const ctx: Ctx | null = answer
     ? {
           t,

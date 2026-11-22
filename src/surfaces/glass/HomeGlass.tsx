@@ -20,7 +20,7 @@ import { useDates } from "./GamesRoom";
 import { NavGlyph } from "../../design/NavGlyph";
 import { careHeadline, incidentKindLabel, incidentWhen, readinessWords } from "../../data/backend-words";
 import { homePriorities, roughGames } from "../home-facts";
-import { useHomeRough } from "../use-home-rough";
+import { sessionsKey, useHomeRough } from "../use-home-rough";
 import "../glass-rooms.css";
 
 const Arrow = () => (
@@ -75,8 +75,9 @@ export function HomeGlass({
   // Games can be recorded with no frame rate measured (a session Compy saw but couldn't read).
   // Nothing on this page may then speak as if one was measured (round-2 review, 2026-10-31).
   const anyMeasured = sessions.some((s) => knownFps(s.avg_fps) != null);
-  // B1 Home truth: the games the Paramedic judges as running rougher than usual, read once on open.
-  const roughRead = useHomeRough();
+  // B1 Home truth: the games the Paramedic judged rougher than usual, read on open and again when a session is
+  // recorded while Home stays open.
+  const roughRead = useHomeRough(sessionsKey(sessions));
   const rough = roughGames(roughRead);
   const [chartKey, setChartKey] = useState<string | null>(games[0]?.key ?? null);
 
@@ -206,7 +207,7 @@ export function HomeGlass({
       {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; the card itself reads nothing on mount
           (Home's sessions-only read above hands it the games running rougher than usual, to name). Always
           mounted: a new user or a new game gets the first look (what changed on this PC), not a hidden door. */}
-      <ParamedicCard noGames={noGames} games={recorded} drifts={readiness?.drifts} rough={rough} onOpenCheck={onSeeChecks} />
+      <ParamedicCard noGames={noGames} games={recorded} drifts={readiness?.drifts} rough={rough} roughUnread={roughRead.kind === "unreadable"} onOpenCheck={onSeeChecks} />
 
       {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
           never the accent fill, which on this page means "your most recent game". */}

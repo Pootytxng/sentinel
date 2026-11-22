@@ -23,7 +23,7 @@ import { useIntelligenceFlag, useHomeInterviewFlag } from "../design/use-hud";
 import { readHologramV2, readHomeInterview } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { homePriorities } from "./home-facts";
-import { useHomeRough } from "./use-home-rough";
+import { sessionsKey, useHomeRough } from "./use-home-rough";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { isMeasuredRow } from "../data/confidence-word";
@@ -402,7 +402,7 @@ export function HomeConsole({
   // B1 Home truth: every limiter count, list and stand-down on this Home reads the priorities without the
   // optional-tweak rows (Constitution §38); the games running rougher than usual are read once on open.
   const priorities = useMemo(() => homePriorities(allPriorities), [allPriorities]);
-  const roughRead = useHomeRough();
+  const roughRead = useHomeRough(sessionsKey(sessions));
   const reduced = useReducedMotion();
   // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
   // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
@@ -691,7 +691,7 @@ export function HomeConsole({
   // ── measured derivations (all real, all honestly empty when absent — HomeHud's exact logic) ──
   // The Machine Model's in-effect answer (#452) — see HomeHud for why never the bare ledger list.
   const inEffect = inEffectCounts(model);
-  const posture = postureLine(readiness, priorities, inEffect, t, roughRead);
+  const posture = postureLine(readiness, priorities, inEffect, t, roughRead, i18n.language);
   // This is the Home a default-flag user actually lands on (compy_home_console DEFAULT ON), so it
   // is where the ledger-completeness disclosure matters most. postureLine already declines to print
   // a count it doesn't have — at zero changes the change-note is omitted rather than rendered as
@@ -768,7 +768,8 @@ export function HomeConsole({
 
   // The status LED next to the eyebrow — real state only: scanning while checks run, warn
   // when measured checks flagged attention, ok otherwise.
-  const ledState = checking ? "scan" : (readiness?.attention_count ?? 0) > 0 ? "warn" : "ok";
+  // B1 review r1: a game measured rougher than usual is off-normal too, so the light is never "ok" under it.
+  const ledState = checking ? "scan" : (readiness?.attention_count ?? 0) > 0 || posture.tone === "attention" ? "warn" : "ok";
 
   // The masthead dateline — the date this diagnostic is being read (today), never fabricated.
   // In the app's language, not the OS's (CR-view-1111d-wording).
@@ -1006,8 +1007,12 @@ export function HomeConsole({
          readiness ring is derived from, so nothing new is measured or claimed, and it
          self-nulls the moment the checks are not known. */
       sub={
-        posture.tone === "attention" ? (
+        // B1 review r1 B1: the count + Lab route below belong to a FLAGGED CHECK. A rough game alone (tone
+        // "attention", not fromCheck) takes the ordinary dek path, which prints its measured sentence; the Lab
+        // has nothing about a game, so it is never offered as the place to go.
+        posture.tone === "attention" && posture.fromCheck ? (
           readinessKnown ? (
+            <>
             <span className="hc-verdict-dek">
               {t("home.homeConsole.verdict.attentionSub", {
                 count: checksGood,
@@ -1034,6 +1039,14 @@ export function HomeConsole({
                 {t("home.homeConsole.verdict.attentionNext", { room: fixRoomLabel })}
               </button>
             </span>
+            {/* B1 review r1 B2: a game measured rougher than usual, beside the flagged check: its own line,
+                "Separately: …", so it is shown and never read as the check's effect. */}
+            {posture.note && (
+              <span className="hc-verdict-dek hc-verdict-rough" data-testid="home-rough-note">
+                {posture.note}
+              </span>
+            )}
+            </>
           ) : undefined
         ) : dekRedundant ? undefined : (
           <span className="hc-verdict-dek">{dek}</span>

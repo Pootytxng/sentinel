@@ -5898,11 +5898,57 @@ fn rough_session(at: &str) -> SessionFacts {
 }
 
 #[test]
-fn home_status_names_the_owners_rough_games_newest_first() {
+fn home_status_names_the_owners_rough_games_newest_rough_first() {
     let inp = fixture();
     // The card counts game-i's episode as two rough sittings (the 90-reading session only corroborates), and
     // game-h, the second game, is rough too (`the_second_game_gets_the_same_top_finding`).
-    assert_eq!(home_rough(&inp), vec![(ROUGH_GAME.to_string(), 2), (SECOND_GAME.to_string(), 2)]);
+    let mut got = home_rough(&inp);
+    got.sort();
+    assert_eq!(got, vec![(SECOND_GAME.to_string(), 2), (ROUGH_GAME.to_string(), 2)]);
+    // The first game Home names is the game the card answers for when no game is named.
+    let st = home_status::home_status(&inp);
+    assert_eq!(Some(st.rough[0].game.clone()), diagnose(&inp, Complaint::Unknown, None).game);
+    let at: Vec<&str> = st.rough.iter().map(|g| g.newest_rough_at.as_str()).collect();
+    assert!(at.windows(2).all(|w| w[0] >= w[1]), "newest rough session first: {at:?}");
+    assert!(st.games_judged >= 2);
+}
+
+#[test]
+fn home_status_orders_by_newest_rough_session_not_by_last_played() {
+    // Game "a" went rough on Oct 20 and was played again (unjudged, too short) on Oct 30; game "b" went rough on
+    // Oct 25. The card answers for "b" (newest rough session); Home names "b" first.
+    let mut s = steady(5);
+    for f in &mut s {
+        f.game = "a".into();
+    }
+    s.push(rough_session("2026-10-20T10:00:00Z"));
+    s.last_mut().expect("row").game = "a".into();
+    let mut short = facts("2026-10-30T10:00:00Z", 60, 60, 100.0, 50.0);
+    short.game = "a".into();
+    s.push(short);
+    for i in 0..5 {
+        let mut f = facts(&format!("2026-10-{:02}T12:00:00Z", i + 10), 600, 600, 100.0, 50.0);
+        f.game = "b".into();
+        s.push(f);
+    }
+    let mut br = rough_session("2026-10-25T10:00:00Z");
+    br.game = "b".into();
+    s.push(br);
+    let inp = inputs(s);
+    let order: Vec<String> = home_rough(&inp).into_iter().map(|(g, _)| g).collect();
+    assert_eq!(order, vec!["b".to_string(), "a".to_string()]);
+    assert_eq!(diagnose(&inp, Complaint::Unknown, None).game.as_deref(), Some("b"));
+}
+
+#[test]
+fn home_status_counts_only_games_compared_with_a_usual_range() {
+    assert_eq!(home_status::home_status(&inputs(steady(6))).games_judged, 1);
+    assert_eq!(home_status::home_status(&inputs(Vec::new())).games_judged, 0);
+    // Too few sessions for a usual range: judged for length, never compared, so nothing was measured.
+    assert_eq!(home_status::home_status(&inputs(steady(2))).games_judged, 0);
+    // Only short or partly measured sessions: nothing judged.
+    let thin: Vec<SessionFacts> = (0..4).map(|i| facts(&format!("2026-10-{:02}T10:00:00Z", i + 1), 60, 60, 100.0, 50.0)).collect();
+    assert_eq!(home_status::home_status(&inputs(thin)).games_judged, 0);
 }
 
 #[test]

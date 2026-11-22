@@ -19,7 +19,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { homePriorities } from "./home-facts";
-import { useHomeRough } from "./use-home-rough";
+import { sessionsKey, useHomeRough } from "./use-home-rough";
 import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
@@ -169,7 +169,7 @@ export function HomeHud({
   const { t, i18n } = useTranslation();
   // B1 Home truth: no optional-tweak row on Home (Constitution §38); rough games read once on open.
   const priorities = useMemo(() => homePriorities(allPriorities), [allPriorities]);
-  const roughRead = useHomeRough();
+  const roughRead = useHomeRough(sessionsKey(sessions));
   const reduced = useReducedMotion();
   // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
   // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
@@ -261,7 +261,7 @@ export function HomeHud({
   // bare ledger list: that list is EMPTY when the ledger can't be read, and it counts a row whose live
   // check failed as in effect. Only `activeNow` is in effect; `unknown` is named, never added to it.
   const inEffect = inEffectCounts(model);
-  const posture = postureLine(readiness, priorities, inEffect, t, roughRead);
+  const posture = postureLine(readiness, priorities, inEffect, t, roughRead, i18n.language);
   const strip = liveStrip(sessions, t);
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   // M6-unread: a mostly-unmeasured last session shows its numbers ungraded (neutral ink).
@@ -303,7 +303,7 @@ export function HomeHud({
 
   // The status LED next to the eyebrow — real state only: scanning while checks run, warn
   // when measured checks flagged attention, ok otherwise.
-  const ledState = checking ? "scan" : (readiness?.attention_count ?? 0) > 0 ? "warn" : "ok";
+  const ledState = checking ? "scan" : (readiness?.attention_count ?? 0) > 0 || posture.tone === "attention" ? "warn" : "ok";
 
   // The masthead dateline — the date this diagnostic is being read (today), never fabricated.
   // In the app's language, not the OS's (CR-view-1111d-wording).
@@ -477,7 +477,20 @@ export function HomeHud({
           {posture.headline}
         </span>
       }
-      sub={dekRedundant ? undefined : dek}
+      sub={
+        // B1 review r1 B2: a rough game beside a flagged check is its own line ("Separately: …"), never one
+        // string with the check's detail.
+        posture.note ? (
+          <>
+            {dekRedundant ? null : <span style={{ display: "block" }}>{dek}</span>}
+            <span style={{ display: "block" }} data-testid="home-rough-note">
+              {posture.note}
+            </span>
+          </>
+        ) : dekRedundant ? undefined : (
+          dek
+        )
+      }
       measured={
         checking ? (
           <span className="hud-readout-seg">{t("home.homeHud.readout.running")}</span>

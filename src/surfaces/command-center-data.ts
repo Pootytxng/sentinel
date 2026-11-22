@@ -7,7 +7,7 @@ import type { TFunction } from "i18next";
 import type { GameReadiness, Priorities, SessionSummary } from "../types";
 import type { InEffectCounts } from "../data/machine-model";
 import { deriveSystemPosture } from "./system-posture";
-import { homePriorities, roughHeadline, roughLine, type RoughRead } from "./home-facts";
+import { gamesMeasured, homePriorities, roughHeadline, roughLine, roughNote, type RoughRead } from "./home-facts";
 import { latestSession } from "./dashboard-data";
 import { prettyGameName } from "./game-name";
 import { knownFps, allBackground, mostlyUnread } from "../lib/session-metrics";
@@ -26,6 +26,13 @@ export type PostureLine = {
   sentence: string;
   reassurance: string;
   tone: PostureTone;
+  /** True when the headline is a flagged readiness check (a drifted setting, a wrong reading). False for a
+   *  rough game alone: the Console's "N of N checks look good. What to do about it is in Lab." route belongs
+   *  to a flagged check only. */
+  fromCheck: boolean;
+  /** B1 review r1 B2: the rough-game line beside a flagged check, as its own element ("Separately: …"), never
+   *  glued onto the check's detail. Empty when there is no rough game or when the rough line is the dek. */
+  note: string;
 };
 
 // i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
@@ -37,32 +44,36 @@ export type PostureLine = {
 // not tell "nothing is active" from "Compy can't read its record". Only `activeNow` is in effect;
 // rows whose live check failed (`unknown`) are never added to it.
 //
-// `rough` (B1 Home truth): the Paramedic's own judgement of which games are running rougher than usual
-// (home-facts.ts). A rough game is off-normal: it is named in the dek, takes the dialed-in headline, and
-// "measured clean" is said only when that read came back and named none. Omitted = not read yet.
+// `rough` (B1 Home truth): the Paramedic's own judgement of which games ran rougher than usual
+// (home-facts.ts). A rough game is off-normal: alone it takes the dialed-in headline and leads the dek; beside
+// a flagged check it is a separate note. "Measured clean" is said only when that read came back, at least one
+// game was compared with its usual range, and none was rough. Omitted = not read yet. `lang` formats the date.
 export function postureLine(
   readiness: GameReadiness | null,
   priorities: Priorities | null,
   inEffect: InEffectCounts,
   t: TFunction,
   rough: RoughRead = { kind: "pending" },
+  lang = "en",
 ): PostureLine {
   const activeChanges = inEffect.kind === "counted" ? inEffect.activeNow : 0;
   const p = deriveSystemPosture({ readiness, activeChanges, monitoringAvailable: true }, t);
-  const roughSentence = roughLine(rough, t);
-  const withRough = (s: string) => [s, roughSentence].filter(Boolean).join(" ");
+  const roughSentence = roughLine(rough, t, lang);
+  const note = roughNote(rough, t, lang);
 
   if (p.state === "attention") {
-    // A drifted setting (or another flagged check) names itself in the headline; a rough game is said too.
+    // A drifted setting (or another flagged check) names itself in the headline; a rough game is its own note.
     return {
       headline: p.headline,
-      sentence: withRough(p.sub),
+      sentence: p.sub,
       reassurance: t("home.posture.noChangeWithoutSayso"),
       tone: "attention",
+      fromCheck: true,
+      note,
     };
   }
   if (p.state === "scanning" || p.state === "unknown") {
-    return { headline: p.headline, sentence: withRough(p.sub), reassurance: "", tone: "scanning" };
+    return { headline: p.headline, sentence: p.sub, reassurance: "", tone: "scanning", fromCheck: false, note };
   }
 
   // dialed-in = no non-dismissed attention check. That is NOT "everything passed": checks Compy
@@ -87,8 +98,9 @@ export function postureLine(
     parts.push(t("home.posture.readyWorthFixing", { count: limiterCount }));
   } else {
     // "Measured clean" needs every input to have come back and found nothing: every check read, and the
-    // sessions read with no game in a rough run. Not read yet, or unreadable, is "came back right" only.
-    const clean = unread === 0 && rough.kind === "read" && !anyRough;
+    // sessions read with at least one game compared with its usual range and none rough. Not read yet,
+    // unreadable, or nothing measured (no game has a usual range yet) is "came back right" only.
+    const clean = unread === 0 && gamesMeasured(rough) && !anyRough;
     parts.push(clean ? t("home.posture.readyMeasuredClean") : t("home.posture.readyAllRead"));
   }
   if (unread > 0) parts.push(t("home.posture.unreadCount", { count: unread }));
@@ -111,6 +123,8 @@ export function postureLine(
     sentence,
     reassurance: `${changeNote}${t("home.posture.noChangeWithoutSayso")}`,
     tone: anyRough ? "attention" : "ready",
+    fromCheck: false,
+    note: "",
   };
 }
 

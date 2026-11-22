@@ -23,8 +23,12 @@ pub(crate) struct RoughGame {
 
 #[derive(Serialize, Clone, Debug, PartialEq, Default)]
 pub(crate) struct HomeStatus {
-    /// Most recently played first.
+    /// Newest rough session first (the order the card picks in when no game is named), ties by last played.
     pub rough: Vec<RoughGame>,
+    /// Recent games whose newest judged session was compared with a usual range (it ran normally or rough).
+    /// Zero means nothing was measured against a usual range: "no rough game" then says nothing about how the
+    /// games ran, and Home never calls the rig measured clean on it.
+    pub games_judged: u32,
 }
 
 /// The pure core: the same recent games `diagnose` considers, each judged walk-forward.
@@ -45,11 +49,15 @@ pub(crate) fn home_status(inp: &DiagnoseInputs) -> HomeStatus {
     }
     let mut played: Vec<(DateTime<Utc>, String)> = recent.into_values().collect();
     played.sort_by_key(|p| std::cmp::Reverse(p.0));
-    let mut rough = Vec::new();
-    for (_, game) in played {
+    let mut rough: Vec<(DateTime<Utc>, DateTime<Utc>, RoughGame)> = Vec::new();
+    let mut games_judged = 0u32;
+    for (last_played, game) in played {
         let sess = game_sessions(inp, &game);
         let judged = judge_game(&sess);
         let Some(top) = (0..sess.len()).rev().find(|&i| judged[i].verdict != Verdict::Unjudged) else { continue };
+        if matches!(judged[top].verdict, Verdict::Normal | Verdict::Fired) {
+            games_judged = games_judged.saturating_add(1);
+        }
         if judged[top].verdict != Verdict::Fired {
             continue;
         }
@@ -58,14 +66,22 @@ pub(crate) fn home_status(inp: &DiagnoseInputs) -> HomeStatus {
             .filter(|&i| judged[i].verdict != Verdict::Unjudged)
             .take_while(|&i| judged[i].verdict == Verdict::Fired)
             .count();
-        rough.push(RoughGame {
-            game: game.clone(),
-            game_name: intelligence::pretty_game_name(&game),
-            rough_sessions: u32::try_from(run).unwrap_or(u32::MAX),
-            newest_rough_at: sess[top].started_at.clone(),
-        });
+        let Some(rough_at) = sess[top].start() else { continue };
+        rough.push((
+            rough_at,
+            last_played,
+            RoughGame {
+                game: game.clone(),
+                game_name: intelligence::pretty_game_name(&game),
+                rough_sessions: u32::try_from(run).unwrap_or(u32::MAX),
+                newest_rough_at: sess[top].started_at.clone(),
+            },
+        ));
     }
-    HomeStatus { rough }
+    // The card, asked with no game named, answers for the game whose newest rough session is the most recent:
+    // Home names that game first, so the line and the answer behind the button agree.
+    rough.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+    HomeStatus { rough: rough.into_iter().map(|(_, _, g)| g).collect(), games_judged }
 }
 
 /// The Tauri edge: reads `sessions.json` read-only and nothing else. A store that is there and cannot be

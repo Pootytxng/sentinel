@@ -30,8 +30,8 @@ const postureLine = (
     i18n.t,
     rough,
   );
-// B1 Home truth: the sessions were read and no game is in a rough run.
-const noRough: RoughRead = { kind: "read", games: [] };
+// B1 Home truth: the sessions were read, one game was compared with its usual range, and none ran rough.
+const noRough: RoughRead = { kind: "read", games: [], judged: 1 };
 const liveStrip = (sessions: SessionSummary[]) => liveStripRaw(sessions, i18n.t);
 
 const check = (status: ReadinessCheck["status"], label: string): ReadinessCheck =>
@@ -235,10 +235,9 @@ describe("liveStrip (real last session or honest empty)", () => {
     expect(s.kind === "data" && [s.avgFps, s.low1Est, s.peakTempC]).toEqual([null, null, null]);
   });
 });
-
 // B1 Home truth (owner decision 2026-11-21): Home's headline, dek and count come from what is off-normal
-// (a drifted setting, a game the Paramedic measured running rougher than usual, a failed read), never from
-// an optional tweak the owner has not applied (Constitution §38).
+// (a drifted setting, a game the Paramedic measured rougher than usual, a failed read), never from an optional
+// tweak the owner has not applied (Constitution §38). Game titles here are invented.
 describe("postureLine: B1 Home truth", () => {
   const tweakRow = {
     id: "pending-safe-recs",
@@ -252,18 +251,19 @@ describe("postureLine: B1 Home truth", () => {
     const p = priorities(n);
     return { ...p, limiters: [...p.limiters, tweakRow] };
   };
-  const robRun = (n: number) => ({
-    game: "robrun.exe",
-    game_name: "ROB RUN",
+  // Noon UTC, so the date reads Nov 20 in every time zone the tests run in.
+  const skyline = (n: number) => ({
+    game: "skylinedrift.exe",
+    game_name: "Skyline Drift",
     rough_sessions: n,
-    newest_rough_at: "2026-11-20T03:51:22Z",
+    newest_rough_at: "2026-11-20T12:00:00Z",
   });
-  const rough = (...games: ReturnType<typeof robRun>[]): RoughRead => ({ kind: "read", games });
+  const rough = (...games: ReturnType<typeof skyline>[]): RoughRead => ({ kind: "read", games, judged: games.length + 1 });
   const drift: ReadinessCheck = {
     id: "applied-changes",
     label: "Compy changes were turned back off",
     status: "attention",
-    detail: 'Trim Windows visual effects, a setting Compy applied, is no longer on.',
+    detail: "Trim Windows visual effects, a setting Compy applied, is no longer on.",
     value: null,
   };
 
@@ -277,30 +277,42 @@ describe("postureLine: B1 Home truth", () => {
     );
   });
 
-  it("the owner's PC today: a drift standing and a game in a rough run name both, never 'measured clean'", () => {
-    const p = postureLine(readiness([check("ready", "SSD"), drift]), withTweak(0), 0, rough(robRun(2)));
-    expect(p.tone).toBe("attention");
-    expect(p.headline).toBe("Compy changes were turned back off");
-    expect(p.sentence).toBe(
-      "Trim Windows visual effects, a setting Compy applied, is no longer on. ROB RUN's last 2 measured sessions ran rougher than its usual range.",
-    );
-    expect(`${p.headline} ${p.sentence}`).not.toMatch(/measured clean|ready to play|tweak/i);
+  it("nothing measured (no game compared with a usual range) is never 'measured clean' and says nothing about games", () => {
+    const p = postureLine(readiness([check("ready", "SSD")]), withTweak(0), 0, { kind: "read", games: [], judged: 0 });
+    expect(p.sentence).toBe("Every check Compy could read came back right.");
   });
 
-  it("a rough game alone takes the headline: never 'You're ready to play' over it", () => {
-    const p = postureLine(readiness([check("ready", "SSD")]), withTweak(0), 0, rough(robRun(1)));
+  it("the owner's PC today: the drift owns the headline and the rough game is a separate note, never glued to it", () => {
+    const p = postureLine(readiness([check("ready", "SSD"), drift]), withTweak(0), 0, rough(skyline(2)));
     expect(p.tone).toBe("attention");
-    expect(p.headline).toBe("ROB RUN has been running rougher than usual");
-    expect(p.sentence).toBe(
-      "ROB RUN's last measured session ran rougher than its usual range. Every check Compy could read came back right.",
+    expect(p.fromCheck).toBe(true);
+    expect(p.headline).toBe("Compy changes were turned back off");
+    // The check's own detail alone: the rough line never joins it into one sentence.
+    expect(p.sentence).toBe("Trim Windows visual effects, a setting Compy applied, is no longer on.");
+    expect(p.note).toBe(
+      "Separately: Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range.",
     );
-    expect(p.sentence).not.toMatch(/measured clean/i);
+    expect(`${p.headline} ${p.sentence} ${p.note}`).not.toMatch(/measured clean|ready to play|tweak/i);
+  });
+
+  it("a rough game alone takes the headline, dated, not from a check: never 'You're ready to play' over it", () => {
+    const p = postureLine(readiness([check("ready", "SSD")]), withTweak(0), 0, rough(skyline(1)));
+    expect(p.tone).toBe("attention");
+    expect(p.fromCheck).toBe(false);
+    expect(p.note).toBe("");
+    expect(p.headline).toBe("Skyline Drift ran rougher than usual last time");
+    expect(p.sentence).toBe(
+      "Skyline Drift's last measured session, on Nov 20, ran rougher than its usual range. Every check Compy could read came back right.",
+    );
+    expect(p.sentence).not.toMatch(/measured clean|has been/i);
   });
 
   it("every rough game Home counts is named", () => {
-    const other = { ...robRun(3), game: "wardogs.exe", game_name: "WAR DOGS" };
-    const p = postureLine(readiness([check("ready", "SSD")]), null, 0, rough(robRun(2), other));
-    expect(p.sentence).toMatch(/^ROB RUN's last 2 measured sessions ran rougher than its usual range\. Also running rougher than usual: WAR DOGS\./);
+    const other = { ...skyline(3), game: "harbornine.exe", game_name: "Harbor Nine" };
+    const p = postureLine(readiness([check("ready", "SSD")]), null, 0, rough(skyline(2), other));
+    expect(p.sentence).toMatch(
+      /^Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range\. Also rougher than usual last time: Harbor Nine\./,
+    );
   });
 
   it("a failed session read is said, and is never 'measured clean'", () => {
@@ -311,16 +323,18 @@ describe("postureLine: B1 Home truth", () => {
 
   it("unread and dismissed checks keep their own words beside the rough game", () => {
     const r = readiness([check("ready", "SSD"), check("unknown", "GPU driver"), check("attention", "Refresh")], ["Refresh"]);
-    const p = postureLine(r, withTweak(0), 0, rough(robRun(2)));
+    const p = postureLine(r, withTweak(0), 0, rough(skyline(2)));
     expect(p.sentence).toBe(
-      "ROB RUN's last 2 measured sessions ran rougher than its usual range. 1 check couldn't be read. 1 check you set aside isn't counted.",
+      "Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range. 1 check couldn't be read. 1 check you set aside isn't counted.",
     );
   });
 
-  it("zh-CN: the same facts, in Chinese", async () => {
+  it("zh-CN: the same facts, in Chinese", () => {
     const zh = i18n.getFixedT("zh-CN");
-    const p = postureLineRaw(readiness([check("ready", "SSD")]), null, counted(0), zh, rough(robRun(2)));
-    expect(p.headline).toBe("ROB RUN 最近运行得比平时更不流畅");
-    expect(p.sentence).toBe("ROB RUN 最近 2 次测得的会话比它平时的范围更不流畅。 Compy 能读取的检查全部正常。");
+    const p = postureLineRaw(readiness([check("ready", "SSD")]), null, counted(0), zh, rough(skyline(2)), "zh-CN");
+    expect(p.headline).toBe("Skyline Drift 上次运行比平时更不流畅");
+    expect(p.sentence).toBe("Skyline Drift 截至 11月20日 连续 2 次测得的会话比它平时的范围更不流畅。 Compy 能读取的检查全部正常。");
+    const one = postureLineRaw(readiness([check("ready", "SSD"), drift]), null, counted(0), zh, rough(skyline(1)), "zh-CN");
+    expect(one.note).toBe("另外:Skyline Drift 在 11月20日 测得的上一次会话比它平时的范围更不流畅。");
   });
 });
