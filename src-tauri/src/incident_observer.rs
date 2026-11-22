@@ -1759,6 +1759,9 @@ mod tests {
             static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
             let dir = std::env::temp_dir()
                 .join(format!("compy-d6-incident-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+            // The name repeats whenever Windows reuses a process id and the folder outlives its process: start
+            // empty (same fix as sessions.rs `d6_clear_tests::fresh`).
+            let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             dir.join("incident-observer.json")
         }

@@ -2346,9 +2346,27 @@ mod d6_clear_tests {
 
     fn scratch(tag: &str) -> PathBuf {
         static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!("compy-d6-sessions-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+        fresh(std::env::temp_dir().join(format!("compy-d6-sessions-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed))))
+    }
+
+    /// An EMPTY folder at `dir`. The name repeats across test processes whenever Windows reuses a process id,
+    /// and the folder outlives its process, so an earlier run's sessions.json was found and appended to (the
+    /// 2026-11-21 push failure: 13 rows for 1, 32 for 16). Whatever is there is removed first.
+    fn fresh(dir: PathBuf) -> PathBuf {
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_scratch_folder_left_by_an_earlier_process_with_the_same_id_starts_empty() {
+        let dir = std::env::temp_dir().join(format!("compy-d6-sessions-reused-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        save_session_to(&dir.join("sessions.json"), one("2026-01-01T10:00:00Z")).unwrap();
+        let dir = fresh(dir);
+        assert!(std::fs::read_dir(&dir).unwrap().next().is_none(), "an earlier run's files are gone");
+        assert_eq!(rows(&dir.join("sessions.json")), 0);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn one(started: &str) -> SessionSummary {
