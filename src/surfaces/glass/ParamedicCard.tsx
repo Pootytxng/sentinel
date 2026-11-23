@@ -793,10 +793,10 @@ function programLine(code: string, a: Record<string, string>, { t, dates, game }
   const many = Number(a.programs ?? 1) > 1;
   const date = dates.day(a.date);
   switch (code) {
-    case "program-not-open-rough": {
-      const args = { name: a.name, game, date, count: Number(a.count ?? 1), r: a.r, rm: a.rm };
-      return many ? t("paramedic.evidence.programsNotOpenRough", args) : t("paramedic.evidence.programNotOpenRough", args);
-    }
+    case "program-not-open-rough":
+      return many
+        ? t("paramedic.evidence.programsNotOpenRough", { name: a.name, game, date, count: Number(a.count ?? 1), r: a.r, rm: a.rm })
+        : t("paramedic.evidence.programNotOpenRough", { name: a.name, game, date, count: Number(a.count ?? 1), r: a.r, rm: a.rm });
     case "program-not-open-clear":
       return many
         ? t("paramedic.evidence.programsNotOpenClear", { name: a.name, game, date })
