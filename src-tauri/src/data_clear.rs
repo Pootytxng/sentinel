@@ -142,6 +142,8 @@ pub(crate) struct ClearPlan {
     pub(crate) refusals: Vec<Refusal>,
     /// Titles of the ledger rows not rolled back, when that is why `Everything` refuses.
     pub(crate) applied_changes: Vec<String>,
+    /// The same rows grouped by setting, newest first (C5a): what the refusal lists.
+    pub(crate) applied_settings: Vec<AppliedSetting>,
     /// True when the way out of a refusal is "undo them first".
     pub(crate) offer_undo_all: bool,
     /// The older `Sentinel` folder exists beside the data root. It is never deleted.
@@ -178,6 +180,7 @@ impl ClearPlan {
             unknown: Vec::new(),
             refusals: Vec::new(),
             applied_changes: Vec::new(),
+            applied_settings: Vec::new(),
             offer_undo_all: false,
             legacy_folder_present: false,
             webview: webview_targets(scope),
@@ -296,8 +299,8 @@ fn trial_gate_refusals(root: &Path) -> Vec<(&'static str, &'static str)> {
 enum LedgerCheck {
     /// Readable, and every row is rolled back (or there is no ledger).
     Clean,
-    /// Titles of the rows that are not rolled back.
-    Applied(Vec<String>),
+    /// The rows that are not rolled back (C5a: with their setting ids, so the screen can group them).
+    Applied(Vec<crate::history::OpenRow>),
     Unreadable(String),
 }
 
@@ -675,11 +678,38 @@ fn read_trial_store(root: &Path) -> TrialRead {
 }
 
 fn check_ledger(root: &Path) -> LedgerCheck {
-    match crate::history::not_rolled_back_titles_at(&root.join(LEDGER_FILE)) {
-        Ok(t) if t.is_empty() => LedgerCheck::Clean,
-        Ok(t) => LedgerCheck::Applied(t),
+    // Same rule as before C5a (any status other than `rolled_back` counts), read with the setting ids.
+    match crate::history::open_rows_at(&root.join(LEDGER_FILE)) {
+        Ok(rows) if rows.is_empty() => LedgerCheck::Clean,
+        Ok(rows) => LedgerCheck::Applied(rows),
         Err(e) => LedgerCheck::Unreadable(e),
     }
+}
+
+/// One setting whose ledger rows are not all rolled back, for the refusal's list (C5a): its id, the title of its
+/// newest open row, and how many of its rows are open. A setting applied 27 times without an undo is one entry
+/// with 27 records, never 27 entries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct AppliedSetting {
+    pub(crate) rec_id: String,
+    pub(crate) title: String,
+    pub(crate) records: usize,
+}
+
+/// Groups open rows by setting, newest apply first (RFC 3339 strings compared as text, as the ledger writes
+/// them; a tie keeps file order). Presentation only: which rows refuse, and the undo order, are unchanged.
+fn group_open_rows(rows: &[crate::history::OpenRow]) -> Vec<AppliedSetting> {
+    let mut order: Vec<usize> = (0..rows.len()).collect();
+    order.sort_by(|&a, &b| rows[b].applied_at.cmp(&rows[a].applied_at));
+    let mut out: Vec<AppliedSetting> = Vec::new();
+    for i in order {
+        let r = &rows[i];
+        match out.iter_mut().find(|s| s.rec_id == r.rec_id) {
+            Some(s) => s.records += 1,
+            None => out.push(AppliedSetting { rec_id: r.rec_id.clone(), title: r.title.clone(), records: 1 }),
+        }
+    }
+    out
 }
 
 /// What a clear of `scope` would do to the data root `root`. Reads the folder listing and the ledger;
@@ -725,13 +755,14 @@ pub(crate) fn plan_clear(root: &Path, scope: Scope, facts: &ClearFacts) -> Clear
         }
         match &ledger {
             LedgerCheck::Clean => {}
-            LedgerCheck::Applied(titles) => {
+            LedgerCheck::Applied(rows) => {
                 plan.refuse(
                     "changes_applied",
                     "Changes Compy made are still in place. Compy can't delete its change history while they are, because it is the only way to undo them.",
                     None,
                 );
-                plan.applied_changes = titles.clone();
+                plan.applied_changes = rows.iter().map(|r| r.title.clone()).collect();
+                plan.applied_settings = group_open_rows(rows);
                 plan.offer_undo_all = true;
             }
             LedgerCheck::Unreadable(_) => {
@@ -2509,6 +2540,36 @@ mod tests {
         assert_eq!(before, t.listing(), "a refused clear deletes nothing");
     }
 
+    /// C5a: the refusal lists one entry per SETTING with its record count, newest apply first, from the same rows
+    /// that refuse (any status but rolled_back, including an older re-apply and a row whose status is not
+    /// "applied"); `applied_changes` (one title per row) is unchanged.
+    /// Break checks: group by title instead of rec_id -> the renamed newest title splits the setting, fails;
+    /// count every row including rolled-back ones -> 4 records, fails.
+    #[test]
+    fn b1b_the_refusal_groups_open_rows_by_setting_with_a_count_newest_first() {
+        let t = Tmp::new("b1b");
+        seed(&t);
+        let row = |id: &str, rec: &str, title: &str, at: &str, status: &str| {
+            format!(r#"{{"id":"{id}","rec_id":"{rec}","rec_title":"{title}","applied_at":"{at}","snapshot":{{}},"status":"{status}"}}"#)
+        };
+        let rows = [
+            row("g1", "game-mode", "Game mode", "2026-11-01T00:00:00Z", "applied"),
+            row("v1", "visual-effects", "Visual effects", "2026-11-02T00:00:00Z", "applied"),
+            row("g2", "game-mode", "Game mode", "2026-11-03T00:00:00Z", "rolled_back"),
+            row("g3", "game-mode", "Game mode", "2026-11-04T00:00:00Z", "rollback_failed"),
+            row("g4", "game-mode", "Enable Windows Game Mode", "2026-11-05T00:00:00Z", "applied"),
+        ];
+        t.put("history.json", &format!("[{}]", rows.join(",")));
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(plan.refusals.iter().any(|r| r.code == "changes_applied"));
+        assert_eq!(plan.applied_changes.len(), 4, "one title per open row, as before");
+        let got: Vec<(&str, &str, usize)> = plan.applied_settings.iter().map(|s| (s.rec_id.as_str(), s.title.as_str(), s.records)).collect();
+        assert_eq!(got, [("game-mode", "Enable Windows Game Mode", 3), ("visual-effects", "Visual effects", 1)]);
+        assert_eq!(plan.applied_settings.iter().map(|s| s.records).sum::<usize>(), plan.applied_changes.len());
+        let v = serde_json::to_value(&plan).unwrap();
+        assert_eq!(v["applied_settings"][0]["records"], 3, "the screen reads these names");
+    }
+
     #[test]
     fn b2_any_row_that_is_not_rolled_back_counts_and_a_backup_alone_counts() {
         let t = Tmp::new("b2");
@@ -2930,7 +2991,7 @@ mod tests {
         let plan = plan_clear(&t.root, Scope::Everything, &later());
         assert!(rels(&plan).contains(&"history.json.bak"));
         assert!(done(exec(&t.root, &plan, &later())).complete);
-        assert_eq!(crate::history::not_rolled_back_titles_at(&t.root.join("history.json")).unwrap(), Vec::<String>::new());
+        assert_eq!(crate::history::open_rows_at(&t.root.join("history.json")).unwrap(), Vec::<crate::history::OpenRow>::new());
         assert!(!t.has("history.json.bak"));
     }
 

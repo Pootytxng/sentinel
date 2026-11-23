@@ -2472,16 +2472,28 @@ pub(crate) fn read_ledger_stamps_at(path: &Path) -> Result<Vec<LedgerStamp>, Str
         .collect())
 }
 
-/// Titles of the ledger's rows that are NOT rolled back (still counted as applied), read from `path`
-/// without moving, writing or reporting anything (`read_history_unlocked`). "Clear my data" asks this
-/// before it may touch the ledger family: any row other than `rolled_back` counts, so a row Windows
-/// already shows as off but that was never undone through Compy still blocks a clear, and a ledger
-/// that can't be read is an `Err`, never "no changes".
-pub(crate) fn not_rolled_back_titles_at(path: &Path) -> Result<Vec<String>, String> {
+/// One ledger row that is not rolled back, as "Clear everything" lists it (C5a): which setting, its title and
+/// when it was applied. Its status is not carried: every status but `rolled_back` is open, and nothing reads
+/// which one. Whether its undo will ask for administrator rights is not stored per row (the undo decides at
+/// dispatch), so it is not here either.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OpenRow {
+    pub(crate) rec_id: String,
+    pub(crate) title: String,
+    pub(crate) applied_at: String,
+}
+
+/// The ledger's rows that are NOT rolled back (still counted as applied), read from `path` without moving,
+/// writing or reporting anything (`read_history_unlocked`), in file order. "Clear my data" asks this before it
+/// may touch the ledger family: any row other than `rolled_back` counts, so a row Windows already shows as off
+/// but that was never undone through Compy still blocks a clear, and a ledger that can't be read is an `Err`,
+/// never "no changes". C5a: replaces `not_rolled_back_titles_at` (same filter, same read) and adds each row's
+/// setting id; READ ONLY. The grouping for the screen lives in `data_clear`.
+pub(crate) fn open_rows_at(path: &Path) -> Result<Vec<OpenRow>, String> {
     Ok(read_history_unlocked(path)?
         .into_iter()
         .filter(|c| c.status != "rolled_back")
-        .map(|c| c.rec_title)
+        .map(|c| OpenRow { rec_id: c.rec_id, title: c.rec_title, applied_at: c.applied_at })
         .collect())
 }
 

@@ -16,7 +16,10 @@ import {
   sizeLabel,
   statusLine,
   undoOrder,
+  undoGroups,
+  appliedSettings,
   SCREEN_MEMORY,
+  type UndoGroup,
   type ClearOutcome,
   type ClearPlan,
   type ClearReport,
@@ -46,7 +49,9 @@ type Phase =
   | { kind: "done"; scope: Scope; report: ClearReport; webview: WebviewResult | null; ack: "ok" | "failed" | null }
   | { kind: "error"; scope: Scope; detail: string; afterDelete: boolean };
 
-type UndoLine = { title: string; ok: boolean };
+/** "Undo them first" progress (C5a): one entry per setting, the title of a setting whose undo failed (the run
+ *  stops there), and whether the list of changes could not be read at all. */
+type UndoState = { running: boolean; groups: UndoGroup[]; failedTitle: string | null; readFailed: boolean };
 
 const k = (key: string) => `settings.yourData.${key}`;
 
@@ -56,7 +61,7 @@ export function YourData() {
   const [understood, setUnderstood] = useState(false);
   const [removeLicence, setRemoveLicence] = useState(false);
   const [status, setStatus] = useState<ClearStatus | null>(null);
-  const [undo, setUndo] = useState<{ running: boolean; lines: UndoLine[] } | null>(null);
+  const [undo, setUndo] = useState<UndoState | null>(null);
 
   async function readStatus() {
     try {
@@ -123,25 +128,30 @@ export function YourData() {
   }
 
   async function undoAllFirst() {
-    setUndo({ running: true, lines: [] });
-    const lines: UndoLine[] = [];
+    setUndo({ running: true, groups: [], failedTitle: null, readFailed: false });
+    let groups: UndoGroup[] = [];
+    let failedTitle: string | null = null;
+    let readFailed = false;
     try {
       const rows = undoOrder(await invoke<AppliedChange[]>("get_applied_changes"));
+      groups = undoGroups(rows);
+      // One rollback per record, newest first, exactly as before C5a; only the progress is grouped by setting.
       for (const row of rows) {
+        const g = groups.find((x) => x.rec_id === row.rec_id);
         try {
           await writeLedger("rollback_change", { changeId: row.id });
-          lines.push({ title: row.rec_title, ok: true });
-          setUndo({ running: true, lines: [...lines] });
+          if (g) g.done += 1;
+          setUndo({ running: true, groups: groups.map((x) => ({ ...x })), failedTitle: null, readFailed: false });
         } catch {
-          // Stop at the first change that could not be undone: the user decides what happens next.
-          lines.push({ title: row.rec_title, ok: false });
+          // Stop at the first record that could not be undone (or whose permission prompt was declined).
+          failedTitle = row.rec_title;
           break;
         }
       }
     } catch {
-      lines.push({ title: "", ok: false });
+      readFailed = true;
     }
-    setUndo({ running: false, lines });
+    setUndo({ running: false, groups, failedTitle, readFailed });
   }
 
   async function dismissStatus() {
@@ -226,28 +236,44 @@ export function YourData() {
                 </li>
               ))}
             </ul>
-            {phase.plan && phase.plan.applied_changes.length > 0 && (
-              <p className="receipts-hint" data-testid="your-data-applied">
-                {t(k("appliedList"), { names: phase.plan.applied_changes.join(", ") })}
-              </p>
-            )}
+            {phase.plan && phase.plan.applied_changes.length > 0 && (() => {
+              // C5a: one line per setting with its record count, and one sentence on settings versus records.
+              const settings = appliedSettings(phase.plan);
+              const records = settings.reduce((n, s) => n + s.records, 0);
+              return (
+                <div data-testid="your-data-applied">
+                  <p className="receipts-hint">{t(k("appliedTitle"))}</p>
+                  <ul className="receipts-hint">
+                    {settings.map((s) => (
+                      <li key={s.rec_id}>{s.records > 1 ? t(k("appliedSettingMany"), { title: s.title, records: s.records }) : s.title}</li>
+                    ))}
+                  </ul>
+                  <p className="receipts-hint">{t(k("appliedSummary"), { settings: settings.length, records })}</p>
+                </div>
+              );
+            })()}
             {phase.plan?.offer_undo_all && (
               <div data-testid="your-data-undo">
-                <p className="receipts-hint">{t(k("undoAllExplain"))}</p>
+                <p className="receipts-hint">
+                  {(() => {
+                    const settings = appliedSettings(phase.plan);
+                    return t(k("undoAllExplain"), { settings: settings.length, records: settings.reduce((n, s) => n + s.records, 0) });
+                  })()}
+                </p>
                 <button className="set-action fb-primary" onClick={undoAllFirst} disabled={undo?.running}>
                   {undo?.running ? t(k("undoing")) : t(k("undoAllAction"))}
                 </button>
                 {undo && (
                   <ul className="receipts-hint" data-testid="your-data-undo-results">
-                    {undo.lines.map((l, i) => (
-                      <li key={i}>
-                        {l.ok
-                          ? t(k("undoDone"), { title: l.title })
-                          : l.title
-                            ? t(k("undoFailed"), { title: l.title })
-                            : t(k("undoReadFailed"))}
-                      </li>
-                    ))}
+                    {undo.groups
+                      .filter((g) => g.done > 0)
+                      .map((g) => (
+                        <li key={g.rec_id}>
+                          {g.count === 1 ? t(k("undoDone"), { title: g.title }) : t(k("undoProgress"), { title: g.title, done: g.done, total: g.count })}
+                        </li>
+                      ))}
+                    {undo.failedTitle !== null && <li>{t(k("undoFailed"), { title: undo.failedTitle })}</li>}
+                    {undo.readFailed && <li>{t(k("undoReadFailed"))}</li>}
                     {!undo.running && <li>{t(k("undoAfter"))}</li>}
                   </ul>
                 )}

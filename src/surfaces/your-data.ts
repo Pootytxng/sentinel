@@ -18,6 +18,36 @@ export type PlannedDelete = { rel: string; row_id: string; store: string; catego
 export type Kept = { rel: string; code: string; detail: string };
 export type WebviewTarget = { key: string; prefix: boolean; session_storage: boolean };
 
+/** One setting whose ledger records are not all undone, and how many are open (C5a). */
+export type AppliedSetting = { rec_id: string; title: string; records: number };
+
+/** The settings a refusal lists: the backend's grouping, or, from an older answer that only has one title per
+ *  record, those titles grouped by title. Records always add up to the open rows. */
+export function appliedSettings(plan: Pick<ClearPlan, "applied_changes" | "applied_settings">): AppliedSetting[] {
+  if (plan.applied_settings && plan.applied_settings.length > 0) return plan.applied_settings;
+  const out: AppliedSetting[] = [];
+  for (const title of plan.applied_changes) {
+    const g = out.find((s) => s.title === title);
+    if (g) g.records += 1;
+    else out.push({ rec_id: title, title, records: 1 });
+  }
+  return out;
+}
+
+/** "Undo them first" progress, one line per setting (C5a). `rows` are in undo order; the undo itself is unchanged:
+ *  one rollback per record, newest first, stopping at the first failure. */
+export type UndoGroup = { rec_id: string; title: string; count: number; done: number };
+
+export function undoGroups(rows: { rec_id: string; rec_title: string }[]): UndoGroup[] {
+  const out: UndoGroup[] = [];
+  for (const r of rows) {
+    const g = out.find((x) => x.rec_id === r.rec_id);
+    if (g) g.count += 1;
+    else out.push({ rec_id: r.rec_id, title: r.rec_title, count: 1, done: 0 });
+  }
+  return out;
+}
+
 export type ClearPlan = {
   scope: "play_history" | "everything";
   delete: PlannedDelete[];
@@ -25,6 +55,8 @@ export type ClearPlan = {
   unknown: string[];
   refusals: Refusal[];
   applied_changes: string[];
+  /** C5a: the same rows grouped by setting, newest first. Absent on older answers. */
+  applied_settings?: AppliedSetting[];
   offer_undo_all: boolean;
   legacy_folder_present: boolean;
   webview: WebviewTarget[];

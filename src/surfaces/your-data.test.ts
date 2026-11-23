@@ -16,6 +16,8 @@ import {
   statusLine,
   storeGroup,
   undoOrder,
+  undoGroups,
+  appliedSettings,
   EVERYTHING_GROUPS,
   type ClearStatus,
   groupDeletes,
@@ -310,6 +312,27 @@ describe("your-data C2b: clear everything", () => {
     });
     // C2b review B1: the only "deferred" the backend passes through is a record that changed while it was read.
     expect(statusLine(s({ roll_forward: { status: "deferred", detail: [{ code: "no_clear_in_progress" }] } }))).toEqual({ key: "deferred", dismiss: false });
+  });
+
+  // C5a: settings, not records. Break check: make `appliedSettings` return one entry per title without counting ->
+  // the fallback case fails; make `undoGroups` key by title -> the renamed-title case fails.
+  it("groups open records by setting: the backend's grouping first, an older answer by title; undo progress by rec_id", () => {
+    expect(appliedSettings({ applied_changes: ["A", "A", "B"], applied_settings: [{ rec_id: "a", title: "A", records: 2 }, { rec_id: "b", title: "B", records: 1 }] }))
+      .toEqual([{ rec_id: "a", title: "A", records: 2 }, { rec_id: "b", title: "B", records: 1 }]);
+    expect(appliedSettings({ applied_changes: ["A", "B", "A"] })).toEqual([
+      { rec_id: "A", title: "A", records: 2 },
+      { rec_id: "B", title: "B", records: 1 },
+    ]);
+    expect(
+      undoGroups([
+        { rec_id: "game-mode", rec_title: "Enable Windows Game Mode" },
+        { rec_id: "game-mode", rec_title: "Game mode" },
+        { rec_id: "fx", rec_title: "Trim Windows visual effects" },
+      ]),
+    ).toEqual([
+      { rec_id: "game-mode", title: "Enable Windows Game Mode", count: 2, done: 0 },
+      { rec_id: "fx", title: "Trim Windows visual effects", count: 1, done: 0 },
+    ]);
   });
 
   // C5b: the choice's own line must not promise to delete Trial results the plan keeps while a change is applied

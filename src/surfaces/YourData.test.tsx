@@ -343,9 +343,9 @@ describe("Your data: clear everything", () => {
       get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
       plan_clear_everything: () => REFUSED,
       get_applied_changes: () => [
-        { id: "old", rec_title: "Game mode", status: "applied", applied_at: "2026-11-01T00:00:00Z" },
-        { id: "new", rec_title: "Core parking", status: "applied", applied_at: "2026-11-02T00:00:00Z" },
-        { id: "done", rec_title: "Power plan", status: "rolled_back", applied_at: "2026-11-03T00:00:00Z" },
+        { id: "old", rec_id: "game-mode", rec_title: "Game mode", status: "applied", applied_at: "2026-11-01T00:00:00Z" },
+        { id: "new", rec_id: "core-parking", rec_title: "Core parking", status: "applied", applied_at: "2026-11-02T00:00:00Z" },
+        { id: "done", rec_id: "power-plan", rec_title: "Power plan", status: "rolled_back", applied_at: "2026-11-03T00:00:00Z" },
       ],
       rollback_change: (args) => {
         undone.push(args?.changeId);
@@ -357,7 +357,9 @@ describe("Your data: clear everything", () => {
     await openEverything();
     const box = await screen.findByTestId("your-data-refused");
     expect(box.textContent).toContain("Changes Compy made are still in place");
-    expect(screen.getByTestId("your-data-applied").textContent).toContain("Core parking, Game mode");
+    // C5a: one line per setting (an older answer without applied_settings is grouped by title).
+    const applied = screen.getByTestId("your-data-applied");
+    expect([...applied.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["Core parking", "Game mode"]);
     expect(screen.queryByRole("button", { name: "Delete everything" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Undo them first" }));
     await waitFor(() => expect(screen.getByTestId("your-data-undo-results").textContent).toContain("Press Check again"));
@@ -365,6 +367,64 @@ describe("Your data: clear everything", () => {
     const results = screen.getByTestId("your-data-undo-results").textContent ?? "";
     expect(results).toContain("Undone: Core parking");
     expect(results).toContain("Couldn't undo: Game mode");
+    expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain("clear_everything");
+  });
+
+  // C5a. Break checks: render one line per record (applied_changes) instead of per setting -> the list has 4 lines
+  // and this fails; show progress per record (no grouping) -> "2 of 3 records undone" is missing, fails.
+  it("lists each setting once with its record count, says the totals, and reports the undo per setting", async () => {
+    const undone: unknown[] = [];
+    const GROUPED: ClearPlan = {
+      ...REFUSED,
+      applied_changes: ["Enable Windows Game Mode", "Enable Windows Game Mode", "Enable Windows Game Mode", "Trim Windows visual effects"],
+      applied_settings: [
+        { rec_id: "game-mode", title: "Enable Windows Game Mode", records: 3 },
+        { rec_id: "visual-effects", title: "Trim Windows visual effects", records: 1 },
+      ],
+    };
+    const row = (id: string, rec: string, title: string, day: number) => ({
+      id,
+      rec_id: rec,
+      rec_title: title,
+      status: "applied",
+      applied_at: `2026-11-0${day}T00:00:00Z`,
+    });
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: () => GROUPED,
+      get_applied_changes: () => [
+        row("v1", "visual-effects", "Trim Windows visual effects", 1),
+        row("g1", "game-mode", "Enable Windows Game Mode", 2),
+        row("g2", "game-mode", "Enable Windows Game Mode", 3),
+        row("g3", "game-mode", "Enable Windows Game Mode", 4),
+      ],
+      rollback_change: (args) => {
+        undone.push(args?.changeId);
+        if (args?.changeId === "g1") throw new Error("declined at the admin prompt");
+        return null;
+      },
+    });
+    render(<YourData />);
+    await openEverything();
+    const applied = await screen.findByTestId("your-data-applied");
+    expect([...applied.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
+      "Enable Windows Game Mode (3 records)",
+      "Trim Windows visual effects",
+    ]);
+    expect(applied.textContent).toContain("Settings: 2. Records: 4.");
+    const explain = screen.getByTestId("your-data-undo").textContent ?? "";
+    expect(explain).toContain("records: 4, across settings: 2");
+    expect(explain).toContain("once per record");
+    expect(explain).toContain("fails or that you decline");
+    expect(explain).toContain("before Compy first changed it");
+    fireEvent.click(screen.getByRole("button", { name: "Undo them first" }));
+    await waitFor(() => expect(screen.getByTestId("your-data-undo-results").textContent).toContain("Press Check again"));
+    // One rollback per record, newest first, stopping at the first failure.
+    expect(undone).toEqual(["g3", "g2", "g1"]);
+    const results = screen.getByTestId("your-data-undo-results").textContent ?? "";
+    expect(results).toContain("Enable Windows Game Mode: 2 of 3 records undone");
+    expect(results).toContain("Couldn't undo: Enable Windows Game Mode");
+    expect(results).not.toContain("Trim Windows visual effects");
     expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain("clear_everything");
   });
 
