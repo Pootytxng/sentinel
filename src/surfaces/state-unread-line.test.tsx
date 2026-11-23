@@ -43,6 +43,15 @@ describe("couldn't check right now", () => {
     expect(couldntCheck.map((r) => r.id)).toEqual(["eee-disable"]);
   });
 
+  it("an ineligible rec with a failed live read stays in Not for this rig, override kept (D2b r2)", () => {
+    // The backend leaves state_unread false for a DETECTED hardware reason even when its live read failed.
+    const held = { id: "eee-disable", title: "EEE", eligible: false, state_unread: false, ineligible_reason: "Needs a wired Ethernet port." };
+    expect(splitNotForThisRig([held], new Set()).notForThisRig.map((r) => r.id)).toEqual(["eee-disable"]);
+    const withOverride = splitNotForThisRig([held], new Set(["eee-disable"]));
+    expect(withOverride.overriddenRecs.map((r) => r.id)).toEqual(["eee-disable"]);
+    expect(withOverride.couldntCheck).toEqual([]);
+  });
+
   it("lists the rec under its own heading with the reason, and offers no override", () => {
     const { container } = render(<CouldntCheckGroup recs={[unread]} />);
     const text = container.textContent ?? "";

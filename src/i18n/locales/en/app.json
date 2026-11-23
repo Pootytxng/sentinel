@@ -58,6 +58,7 @@
     "taskUnreadableUndo": "Compy couldn't check this Windows task right now, so it wasn't turned back on yet. The change stays in your Trust Ledger so you can try again.",
     "taskNotFoundUndo": "Compy couldn't find that telemetry task on this PC any more, so it couldn't turn it back on. The change stays in your Trust Ledger.",
     "taskNameRefused": "Compy found that telemetry task, but its name has characters Compy won't put into a Windows command, so nothing was changed.",
+    "taskNameRefusedUndo": "Compy found that telemetry task, but its name has characters Compy won't put into a Windows command, so it wasn't turned back on. The change stays in your Trust Ledger.",
     "eeeUnreadable": "Compy couldn't read your network adapters right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.",
     "eeeNoAdapter": "No connected wired network adapter on this PC offers an Energy-Efficient Ethernet setting, so there is nothing to change.",
     "eeeNoSwitch": "Your adapter's driver has an Energy-Efficient Ethernet setting, but no value Compy recognizes as off, so Compy left it as it is rather than guess.",

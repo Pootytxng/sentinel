@@ -2859,6 +2859,8 @@ pub(crate) const TASK_UNREADABLE_UNDO: &str = "Compy couldn't check this Windows
 pub(crate) const TASK_NOT_FOUND_UNDO: &str = "Compy couldn't find that telemetry task on this PC any more, so it couldn't turn it back on. The change stays in your Trust Ledger.";
 /// Apply/undo refused because the resolved task name failed the quoting guard (never "not on this PC").
 pub(crate) const TASK_NAME_REFUSED: &str = "Compy found that telemetry task, but its name has characters Compy won't put into a Windows command, so nothing was changed.";
+/// The undo's own form of [`TASK_NAME_REFUSED`] (D2b r2): the task stays off and the row stays open.
+pub(crate) const TASK_NAME_REFUSED_UNDO: &str = "Compy found that telemetry task, but its name has characters Compy won't put into a Windows command, so it wasn't turned back on. The change stays in your Trust Ledger.";
 
 /// Pure name picker (build-drift policy): an EXACT match wins (older Windows); otherwise the first
 /// prefix match (a renamed task carrying a suffix like " Exp"). None if nothing at the path matches.
@@ -3066,7 +3068,7 @@ pub(crate) fn rollback_enable_scheduled_task_typed(
     let (path, name) = match resolved_task_target(task) {
         Ok(TaskTarget::Found(path, name)) => (path, name),
         Ok(TaskTarget::Absent) => return Err(TASK_NOT_FOUND_UNDO.to_string()),
-        Ok(TaskTarget::NameRefused) => return Err(TASK_NAME_REFUSED.to_string()),
+        Ok(TaskTarget::NameRefused) => return Err(TASK_NAME_REFUSED_UNDO.to_string()),
         Err(TaskUnreadable) => return Err(TASK_UNREADABLE_UNDO.to_string()),
     };
     run_elevated_powershell(&format!(
@@ -4529,7 +4531,7 @@ mod unreadable_outcome_tests {
         );
         assert_eq!(
             rollback_enable_scheduled_task_typed(&KnownBloatTask::CompatibilityAppraiser, "Ready"),
-            Err(TASK_NAME_REFUSED.to_string())
+            Err(TASK_NAME_REFUSED_UNDO.to_string())
         );
         assert_eq!(elevation_dispatch_count(), 0);
     }

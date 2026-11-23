@@ -37,6 +37,11 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     key: "app.backendErrors.taskNameRefused",
   },
   {
+    rust: "TASK_NAME_REFUSED_UNDO",
+    text: "Compy found that telemetry task, but its name has characters Compy won't put into a Windows command, so it wasn't turned back on. The change stays in your Trust Ledger.",
+    key: "app.backendErrors.taskNameRefusedUndo",
+  },
+  {
     rust: "EEE_UNREADABLE_APPLY",
     text: "Compy couldn't read your network adapters right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.",
     key: "app.backendErrors.eeeUnreadable",

@@ -442,8 +442,10 @@ pub(crate) fn evaluate_rule_spec(
     );
     // D2b r1 (F2): a rec held back only because its hardware read did not finish is "couldn't check",
     // not "not for this rig": the card leaves that group and shows no override.
+    // D2b r2 (F2b): a rec held back for a DETECTED hardware reason stays "not for this rig" (with its
+    // override) even when its live state read also failed; only an eligible rec carries the live read's flag.
     let gate_unread = ineligible_reason.as_deref() == Some(EEE_UNREAD_REASON);
-    let state_unread = state_read_unread || gate_unread;
+    let state_unread = if eligible { state_read_unread } else { gate_unread };
 
     Some(Recommendation {
         id: spec.id.clone(),
@@ -1306,6 +1308,25 @@ mod rec_tests {
         ] {
             assert!(src.contains(arm), "missing: {arm}");
         }
+    }
+
+    // D2b r2 (F2b): the live state read failing never moves a rec held back for a DETECTED hardware
+    // reason out of "not for this rig" (Fix keeps it there, with its override, because state_unread is
+    // false); an ELIGIBLE rec whose live read failed carries state_unread (its card says couldn't read).
+    #[test]
+    fn an_ineligible_rec_with_a_failed_live_read_stays_in_not_for_this_rig() {
+        // The eee-disable rec's live state read (its state kind) does not finish here.
+        let _eee = crate::actions::ForceEeeRead::begin(None);
+        let portless = HardwareInfo { has_wired_ethernet_port: false, ..Default::default() };
+        let held = build_recommendations(&portless).into_iter().find(|r| r.id == "eee-disable").expect("kept");
+        assert!(!held.eligible, "held back: no wired port");
+        assert_ne!(held.ineligible_reason.as_deref(), Some(EEE_UNREAD_REASON), "a detected reason");
+        assert!(!held.state_unread, "stays in not-for-this-rig with its override, not couldn't-check");
+        let wired = HardwareInfo { has_wired_ethernet_port: true, eee_switch_exposed: true, ..Default::default() };
+        let live = build_recommendations(&wired).into_iter().find(|r| r.id == "eee-disable").expect("present");
+        assert!(live.eligible);
+        assert!(live.state_unread, "an eligible rec whose live read failed says it couldn't read");
+        assert!(!live.currently_applied);
     }
 
     // D2b: an EEE read that did not finish gives the card its own reason, never "no switch".
