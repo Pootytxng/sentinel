@@ -474,10 +474,14 @@
     "gapUnread": "Compy couldn't read all of Windows' records for that stretch, so other changes in it may be missing.",
     "roughOnOldDriver_one": "The rough session on {{date}} ran on the earlier driver ({{from}}).",
     "roughOnOldDriver_other": "{{count}} rough sessions ran on the earlier driver ({{from}}), the first on {{date}}.",
-    "programNotOpenRough_one": "{{name}} was not open when your {{game}} session on {{date}} started, and that session still ran rough. That weakens {{name}} as the reason.",
-    "programNotOpenRough_other": "{{name}} was not open when {{count}} later {{game}} sessions started, the first on {{date}}, and they still ran rough. That weakens {{name}} as the reason.",
+    "programNotOpenRough_one": "{{name}} was open when {{r}} of {{rm}} rough {{game}} sessions started, but not when the one on {{date}} started, and that session still ran rough. That weakens {{name}} as the reason.",
+    "programNotOpenRough_other": "{{name}} was open when {{r}} of {{rm}} rough {{game}} sessions started, but not when {{count}} of them started (the first on {{date}}), and they still ran rough. That weakens {{name}} as the reason.",
     "programNotOpenClear": "{{name}} was not open when your {{game}} session on {{date}} started, and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.",
     "programNotOpen": "{{name}} was not open when your {{game}} session on {{date}} started.",
+    "programsNotOpenRough_one": "{{name}} were open when {{r}} of {{rm}} rough {{game}} sessions started, but not when the one on {{date}} started, and that session still ran rough. That weakens each of them as the reason.",
+    "programsNotOpenRough_other": "{{name}} were open when {{r}} of {{rm}} rough {{game}} sessions started, but not when {{count}} of them started (the first on {{date}}), and they still ran rough. That weakens each of them as the reason.",
+    "programsNotOpenClear": "{{name}} were not open when your {{game}} session on {{date}} started, and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.",
+    "programsNotOpen": "{{name}} were not open when your {{game}} session on {{date}} started.",
     "programStartUnread": "Compy didn't record what was open when your {{game}} session on {{date}} started.",
     "driverBack": "Compy read your graphics driver as {{from}} again by {{back}}, the version {{game}} ran on before it got rough.",
     "driverBackNone": "No {{game}} session has been recorded since.",
@@ -540,7 +544,8 @@
       "step1NoNames": "Close other programs, especially anything building, recording or downloading, while you play.",
       "step2": "Play {{game}} once with them closed, then press Something's wrong again.",
       "stepProgram": "Close {{name}} before you play, then play once and press Something's wrong again.",
-      "stepNotOpen": "{{name}} was not open when your last {{game}} session started. Play {{game}} once more the same way, then press Something's wrong again."
+      "stepNotOpen_one": "{{name}} was not open when your last {{game}} session started. Play {{game}} once more the same way, then press Something's wrong again.",
+      "stepNotOpen_other": "{{name}} were not open when your last {{game}} session started. Play {{game}} once more the same way, then press Something's wrong again."
     },
     "memoryPressure": {
       "step1": "Close browser tabs and launchers before you play. Memory peaked at {{peakGb}} of {{totalGb}} GB usable.",

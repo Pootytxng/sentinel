@@ -5511,7 +5511,7 @@ fn b5_a_rough_session_without_the_program_keeps_a_dated_sentence_when_the_alread
 }
 
 #[test]
-fn b5_on_a_row_that_stands_for_another_reason_the_rough_session_without_it_is_against_and_the_step_changes() {
+fn b5_on_a_row_that_stands_for_another_reason_the_rough_session_without_it_is_against_and_an_unnamed_program_leaves_the_step() {
     let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
     let first = sess.last_mut().unwrap();
     first.busy_starts = 5;
@@ -5522,9 +5522,12 @@ fn b5_on_a_row_that_stands_for_another_reason_the_rough_session_without_it_is_ag
     let line = f.evidence.iter().find(|e| e.code == "program-not-open-rough").unwrap_or_else(|| panic!("{:?}", program_codes(&f.evidence)));
     assert!(line.against && line.kind == EvidenceKind::Measured);
     assert_eq!(line.args["date"], "2026-10-21T10:00:00Z");
+    // The proportion travels with the line: open at 1 of the 2 readable rough starts.
+    assert_eq!((line.args["r"].as_str(), line.args["rm"].as_str(), line.args["count"].as_str()), ("1", "2", "1"));
     assert_eq!(f.confidence, Certainty::Possible, "it weakens that program, never above Possible");
+    // OBS is no longer open at every rough start, so the step never named it: the step does not change (review B2).
     match &f.fix {
-        Fix::Steps { args, .. } => assert_eq!(args.get("notOpen").map(String::as_str), Some("OBS Studio")),
+        Fix::Steps { args, .. } => assert!(!args.contains_key("notOpen") && args["programs"].is_empty(), "{args:?}"),
         other => panic!("{other:?}"),
     }
 }
@@ -5540,6 +5543,14 @@ fn b5_one_clear_session_without_it_is_said_once_and_supports_nothing() {
     assert!(!line.against && line.kind == EvidenceKind::Measured);
     assert_eq!(line.args["date"], "2026-10-21T10:00:00Z");
     assert_eq!((f.confidence, f.now), (Certainty::Possible, None), "one session: said, never support");
+    // The step named OBS, and the newest session has a readable start record without it: the step changes, for OBS.
+    match &f.fix {
+        Fix::Steps { args, .. } => {
+            assert_eq!((args.get("notOpen").map(String::as_str), args.get("count").map(String::as_str)), (Some("OBS Studio"), Some("1")));
+            assert_eq!(args["programs"], "", "OBS is not also told to be closed");
+        }
+        other => panic!("{other:?}"),
+    }
 }
 
 #[test]
@@ -5622,26 +5633,127 @@ fn b5_build_tools_open_at_the_start_of_five_rough_sessions_and_of_no_normal_one_
         }
         other => panic!("{other:?}"),
     }
-    // The next session starts with none of them open and still runs rough: each is said, dated, as not open when it
-    // started (wherever the answer puts it), and nothing rises above Possible.
+    // The next session starts with none of them open and still runs rough: they are said, dated, as not open when it
+    // started, with the proportion (open at 5 of 6 rough starts), in ONE line (same sessions for all three), and
+    // nothing rises above Possible.
     let mut r = facts("2026-10-25T10:00:00Z", 600, 600, 100.0, 30.0);
     r.running_at_start = Some(snap(&[]));
     sess.push(r);
     let d = run_load(sess);
-    let mut said: Vec<(String, String)> = d
-        .findings
-        .iter()
-        .flat_map(|f| f.evidence.iter().filter(|e| e.code == "program-not-open-rough").map(|e| (e.args["name"].clone(), e.args["date"].clone())))
-        .chain(d.seen.iter().filter(|s| s.id == "program-not-open-rough").map(|s| (s.args["name"].clone(), s.args["date"].clone())))
-        .collect();
-    said.sort();
-    let at = "2026-10-25T10:00:00Z".to_string();
-    assert_eq!(said, [("Node.js".to_string(), at.clone()), ("cargo".to_string(), at.clone()), ("rustc".to_string(), at)], "{:?} / {:?}", d.findings, d.seen);
     assert!(d.findings.iter().filter(|f| f.id == "background-load").all(|f| f.confidence == Certainty::Possible));
     // Where: "was already running" no longer holds (5 of 6 rough starts), so the snapshot is no longer timing and no
-    // "Other programs" row is left; the three dated lines sit under what Compy checked.
+    // "Other programs" row is left; the dated line sits under what Compy checked.
     assert!(bg_finding(&d).is_none(), "{:?}", d.findings.iter().map(|f| f.id).collect::<Vec<_>>());
-    assert_eq!(d.seen.iter().filter(|s| s.id == "program-not-open-rough").count(), 3);
+    let said: Vec<_> = d.seen.iter().filter(|s| s.id == "program-not-open-rough").collect();
+    assert_eq!(said.len(), 1, "one line for the three: {:?}", d.seen);
+    let a = &said[0].args;
+    let got: Vec<&str> = ["name", "programs", "date", "count", "r", "rm"].iter().map(|k| a[*k].as_str()).collect();
+    assert_eq!(got, ["cargo, rustc, Node.js", "3", "2026-10-25T10:00:00Z", "1", "5", "6"]);
+}
+
+/// The base of the review-r1 tests: three normal sessions with nothing listed open at the start, then rough
+/// sessions with the given start lists (`None` = an unread start record).
+fn rough_run(starts: &[Option<&[&str]>]) -> Vec<SessionFacts> {
+    let mut sess = steady(3);
+    for s in &mut sess {
+        s.running_at_start = Some(snap(&[]));
+    }
+    for (k, st) in starts.iter().enumerate() {
+        let start = match st {
+            Some(names) => snap(names),
+            None => snapshot(std::iter::empty(), 0, 0, 0),
+        };
+        sess.push(later(&format!("2026-10-{:02}T10:00:00Z", 20 + k), 30.0, Some(start)));
+    }
+    sess
+}
+
+fn fix_args(f: &Finding) -> &BTreeMap<&'static str, String> {
+    match &f.fix {
+        Fix::Steps { args, .. } => args,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn b5r_b1_an_unread_newest_start_record_never_turns_into_not_open_in_the_step() {
+    // OBS open at the rough start; the next session's start record is readable without it; the newest one is unread.
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 50.0, Some(snap(&[]))));
+    sess.push(later("2026-10-22T10:00:00Z", 50.0, Some(snapshot(std::iter::empty(), 0, 0, 0))));
+    let d = run_load(sess);
+    let f = bg_finding(&d).unwrap_or_else(|| panic!("row: {:?} / {:?}", d.state, d.seen));
+    let a = fix_args(f);
+    assert!(!a.contains_key("notOpen"), "the last start was not recorded: {a:?}");
+    assert_eq!(a["programs"], "OBS Studio", "the usual step for OBS stays");
+    assert!(program_codes(&f.evidence).contains(&"program-start-unread"));
+}
+
+#[test]
+fn b5r_b2_a_named_recorder_still_open_keeps_its_step_and_an_unnamed_build_tool_never_changes_it() {
+    // OBS and cargo open at the rough start; the next start has OBS still open and cargo not.
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe", "cargo.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 50.0, Some(snap(&["obs64.exe"]))));
+    let d = run_load(sess);
+    let a = fix_args(bg_finding(&d).expect("row"));
+    assert!(!a.contains_key("notOpen"), "{a:?}");
+    assert_eq!(a["programs"], "OBS Studio");
+    // Only a build tool: the generic step (step1NoNames) survives a later start without it.
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["cargo.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 50.0, Some(snap(&[]))));
+    let d = run_load(sess);
+    let f = bg_finding(&d).expect("row");
+    assert_eq!(program_codes(&f.evidence), ["program-not-open-clear"], "the evidence still says it");
+    let a = fix_args(f);
+    assert!(!a.contains_key("notOpen"), "{a:?}");
+    assert_eq!((a["names"].as_str(), a["programs"].as_str()), ("", ""));
+    // Two named recorders, one still open: one step each way.
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe", "losslessscaling.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 50.0, Some(snap(&["losslessscaling.exe"]))));
+    let d = run_load(sess);
+    let a = fix_args(bg_finding(&d).expect("row"));
+    let got: Vec<Option<&str>> = ["programs", "notOpen", "count"].iter().map(|k| a.get(*k).map(String::as_str)).collect();
+    assert_eq!(got, [Some("Lossless Scaling"), Some("OBS Studio"), Some("1")]);
+}
+
+#[test]
+fn b5r_b3_two_named_recorders_not_open_carry_a_count_for_the_plural() {
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe", "losslessscaling.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 50.0, Some(snap(&[]))));
+    let d = run_load(sess);
+    let a = fix_args(bg_finding(&d).expect("row"));
+    let got: Vec<Option<&str>> = ["programs", "notOpen", "count"].iter().map(|k| a.get(*k).map(String::as_str)).collect();
+    assert_eq!(got, [Some(""), Some("OBS Studio, Lossless Scaling"), Some("2")]);
+}
+
+#[test]
+fn b5r_b4_one_unread_start_record_is_said_once_however_many_programs() {
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["cargo.exe", "rustc.exe", "node.exe"])));
+    sess.push(later("2026-10-21T10:00:00Z", 50.0, Some(snapshot(std::iter::empty(), 0, 0, 0))));
+    let d = run_load(sess);
+    let f = bg_finding(&d).expect("row");
+    assert_eq!(program_codes(&f.evidence), ["program-start-unread"]);
+    assert_eq!(f.evidence.iter().find(|e| e.code == "program-start-unread").unwrap().args["date"], "2026-10-21T10:00:00Z");
+}
+
+#[test]
+fn b5r_b5_a_rough_start_without_it_between_two_with_it_is_never_silent_and_carries_the_proportion() {
+    // OBS open at rough S1, not at rough S2, open again at rough S3 (the newest): no session after the newest one it
+    // was open in, but S2 counts against it all the same.
+    let d = run_load(rough_run(&[Some(&["obs64.exe"][..]), Some(&[][..]), Some(&["obs64.exe"][..])]));
+    let lines: Vec<&BTreeMap<&'static str, String>> = d
+        .findings
+        .iter()
+        .flat_map(|f| f.evidence.iter().filter(|e| e.code == "program-not-open-rough").map(|e| &e.args))
+        .chain(d.seen.iter().filter(|s| s.id == "program-not-open-rough").map(|s| &s.args))
+        .collect();
+    assert_eq!(lines.len(), 1, "{:?} / {:?}", d.findings, d.seen);
+    let got: Vec<&str> = ["name", "date", "count", "r", "rm"].iter().map(|k| lines[0][*k].as_str()).collect();
+    assert_eq!(got, ["OBS Studio", "2026-10-21T10:00:00Z", "1", "2", "3"]);
+    // An unread rough start is neither for nor against it.
+    let d = run_load(rough_run(&[Some(&["obs64.exe"][..]), None, Some(&["obs64.exe"][..])]));
+    assert!(d.seen.iter().all(|s| s.id != "program-not-open-rough"));
+    assert!(d.findings.iter().flat_map(|f| f.evidence.iter()).all(|e| e.code != "program-not-open-rough"));
 }
 
 #[test]

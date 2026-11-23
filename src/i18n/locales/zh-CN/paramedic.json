@@ -474,10 +474,14 @@
     "gapUnread": "Compy 没能读完这段时间内 Windows 的记录，所以可能漏掉了其他变化。",
     "roughOnOldDriver_one": "{{date}} 那次卡顿的游戏用的是之前的驱动（{{from}}）。",
     "roughOnOldDriver_other": "有 {{count}} 次卡顿的游戏用的是之前的驱动（{{from}}），最早的一次在 {{date}}。",
-    "programNotOpenRough_one": "{{date}} 那次 {{game}} 开始时 {{name}} 没有开着，但那次仍然不顺。这削弱了 {{name}} 是原因的可能。",
-    "programNotOpenRough_other": "之后有 {{count}} 次 {{game}} 开始时 {{name}} 没有开着（最早一次在 {{date}}），但仍然不顺。这削弱了 {{name}} 是原因的可能。",
+    "programNotOpenRough_one": "在 {{rm}} 次不顺的 {{game}} 中，有 {{r}} 次开始时 {{name}} 开着；{{date}} 那次开始时它没有开着，但那次仍然不顺。这削弱了 {{name}} 是原因的可能。",
+    "programNotOpenRough_other": "在 {{rm}} 次不顺的 {{game}} 中，有 {{r}} 次开始时 {{name}} 开着；有 {{count}} 次开始时它没有开着（最早一次在 {{date}}），但仍然不顺。这削弱了 {{name}} 是原因的可能。",
     "programNotOpenClear": "{{date}} 那次 {{game}} 开始时 {{name}} 没有开着，那次表现在平时的范围内。目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。",
     "programNotOpen": "{{date}} 那次 {{game}} 开始时 {{name}} 没有开着。",
+    "programsNotOpenRough_one": "在 {{rm}} 次不顺的 {{game}} 中，有 {{r}} 次开始时 {{name}} 都开着；{{date}} 那次开始时它们都没有开着，但那次仍然不顺。这削弱了它们各自是原因的可能。",
+    "programsNotOpenRough_other": "在 {{rm}} 次不顺的 {{game}} 中，有 {{r}} 次开始时 {{name}} 都开着；有 {{count}} 次开始时它们都没有开着（最早一次在 {{date}}），但仍然不顺。这削弱了它们各自是原因的可能。",
+    "programsNotOpenClear": "{{date}} 那次 {{game}} 开始时 {{name}} 都没有开着，那次表现在平时的范围内。目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。",
+    "programsNotOpen": "{{date}} 那次 {{game}} 开始时 {{name}} 都没有开着。",
     "programStartUnread": "Compy 没有记录到 {{date}} 那次 {{game}} 开始时开着哪些程序。",
     "driverBack": "到 {{back}} 时，Compy 读到你的显卡驱动又是 {{from}} 了，也就是 {{game}} 变卡之前用的版本。",
     "driverBackNone": "此后还没有记录到 {{game}} 的游戏。",
@@ -540,7 +544,8 @@
       "step1NoNames": "玩游戏时请关闭其他程序，尤其是正在编译、录制或下载的程序。",
       "step2": "关闭它们后玩一次 {{game}}，再按一次“出问题了”。",
       "stepProgram": "玩游戏前先关闭 {{name}}，然后玩一次，再按一次“出问题了”。",
-      "stepNotOpen": "上一次 {{game}} 开始时 {{name}} 没有开着。照同样的方式再玩一次 {{game}}，然后再按一次“出问题了”。"
+      "stepNotOpen_one": "上一次 {{game}} 开始时 {{name}} 没有开着。照同样的方式再玩一次 {{game}}，然后再按一次“出问题了”。",
+      "stepNotOpen_other": "上一次 {{game}} 开始时 {{name}} 没有开着。照同样的方式再玩一次 {{game}}，然后再按一次“出问题了”。"
     },
     "memoryPressure": {
       "step1": "玩游戏前请关闭浏览器标签页和启动器。内存最高用到 {{peakGb}} GB（可用 {{totalGb}} GB）。",

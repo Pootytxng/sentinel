@@ -385,7 +385,7 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     case "program-not-open-clear":
     case "program-not-open":
     case "program-start-unread":
-      return programLine(e.code, a, ctx) ?? "";
+      return programLine(e.code, a, ctx);
     // Presence only: the one allowed sentence for a program on its own, and counts across rough and normal sessions.
     case "already-running":
       // True of the rough sessions that were recorded: when some were not, the line says how many were.
@@ -589,12 +589,15 @@ function stepLines(fix: ParamedicFix, ctx: Ctx, restored?: string, appliedOnly?:
         t("paramedic.fix.gpuDriver.step5", { game }),
       ];
     case "background-load":
-      // B5: a program the row named was not open when a later session started: no "close it" step for it (Compy
-      // doesn't know who closed it, and closes nothing itself), only another session played the same way.
+      // B5: a recorder the step named was not open when the last session started (its own start record, read): no
+      // "close it" step for it (Compy doesn't know who closed it, and closes nothing itself), only another session
+      // played the same way. A named one still open keeps its "Close" step (`programs`); an unnamed program never
+      // reaches `notOpen`.
       if (a.notOpen) {
         return present([
           a.names ? t("paramedic.fix.backgroundLoad.step1", { names: a.names }) : null,
-          t("paramedic.fix.backgroundLoad.stepNotOpen", { name: a.notOpen, game }),
+          a.programs ? t("paramedic.fix.backgroundLoad.stepProgram", { name: a.programs }) : null,
+          t("paramedic.fix.backgroundLoad.stepNotOpen", { name: a.notOpen, game, count: Number(a.count ?? 1) }),
         ]);
       }
       // A recorder or overlay that was open at the start of the rough sessions and of none of the normal ones is named;
@@ -784,13 +787,22 @@ function unknownLine(code: string, { t, game, startRecord }: Ctx): string | null
 /** B5: a program open when the rough sessions started, and what the later sessions' START records say. Start of a
  *  session only; never who closed it, never that its absence helped. Shared by the row and "What Compy checked". */
 function programLine(code: string, a: Record<string, string>, { t, dates, game }: Ctx): string | null {
+  // Called for every "What Compy checked" line: anything else is not one of these.
+  if (!["program-not-open-rough", "program-not-open-clear", "program-not-open", "program-start-unread"].includes(code)) return null;
+  // Programs with exactly the same start records share one line (`programs` = how many names it carries).
+  const many = Number(a.programs ?? 1) > 1;
+  const date = dates.day(a.date);
   switch (code) {
-    case "program-not-open-rough":
-      return t("paramedic.evidence.programNotOpenRough", { name: a.name, game, date: dates.day(a.date), count: Number(a.count ?? 1) });
+    case "program-not-open-rough": {
+      const args = { name: a.name, game, date, count: Number(a.count ?? 1), r: a.r, rm: a.rm };
+      return many ? t("paramedic.evidence.programsNotOpenRough", args) : t("paramedic.evidence.programNotOpenRough", args);
+    }
     case "program-not-open-clear":
-      return t("paramedic.evidence.programNotOpenClear", { name: a.name, game, date: dates.day(a.date) });
+      return many
+        ? t("paramedic.evidence.programsNotOpenClear", { name: a.name, game, date })
+        : t("paramedic.evidence.programNotOpenClear", { name: a.name, game, date });
     case "program-not-open":
-      return t("paramedic.evidence.programNotOpen", { name: a.name, game, date: dates.day(a.date) });
+      return many ? t("paramedic.evidence.programsNotOpen", { name: a.name, game, date }) : t("paramedic.evidence.programNotOpen", { name: a.name, game, date });
     case "program-start-unread":
       return t("paramedic.evidence.programStartUnread", { game, date: dates.day(a.date) });
     default:
