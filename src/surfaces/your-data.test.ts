@@ -314,15 +314,12 @@ describe("your-data C2b: clear everything", () => {
     expect(statusLine(s({ roll_forward: { status: "deferred", detail: [{ code: "no_clear_in_progress" }] } }))).toEqual({ key: "deferred", dismiss: false });
   });
 
-  // C5a: settings, not records. Break check: make `appliedSettings` return one entry per title without counting ->
-  // the fallback case fails; make `undoGroups` key by title -> the renamed-title case fails.
-  it("groups open records by setting: the backend's grouping first, an older answer by title; undo progress by rec_id", () => {
-    expect(appliedSettings({ applied_changes: ["A", "A", "B"], applied_settings: [{ rec_id: "a", title: "A", records: 2 }, { rec_id: "b", title: "B", records: 1 }] }))
+  // C5a: settings, not records. The list is the backend's grouping by setting id (the title fallback was removed in
+  // the C5 review: the app and its backend ship together). Break check: make `undoGroups` key by title -> the
+  // renamed-title case fails.
+  it("lists the backend's per-setting grouping as is; undo progress groups by rec_id", () => {
+    expect(appliedSettings({ applied_settings: [{ rec_id: "a", title: "A", records: 2 }, { rec_id: "b", title: "B", records: 1 }] }))
       .toEqual([{ rec_id: "a", title: "A", records: 2 }, { rec_id: "b", title: "B", records: 1 }]);
-    expect(appliedSettings({ applied_changes: ["A", "B", "A"] })).toEqual([
-      { rec_id: "A", title: "A", records: 2 },
-      { rec_id: "B", title: "B", records: 1 },
-    ]);
     expect(
       undoGroups([
         { rec_id: "game-mode", rec_title: "Enable Windows Game Mode" },
@@ -335,14 +332,16 @@ describe("your-data C2b: clear everything", () => {
     ]);
   });
 
-  // C5b: the choice's own line must not promise to delete Trial results the plan keeps while a change is applied
-  // (data_clear `trials_tied_to_changes`). Break check: restore the unconditional "Trial results and crash notes".
-  it("the play-history line says Trial results go only while no change is applied, in both languages", () => {
+  // C5b: the choice's own line must not promise to delete Trial results the plan keeps while any record is not undone
+  // (data_clear `trials_tied_to_changes`: a setting changed outside Compy still keeps them). Break checks: restore
+  // the unconditional "Trial results and crash notes", or the review-r1 "while no change ... is still applied".
+  it("the play-history line says Trial results go only once every change is undone, in both languages", () => {
     const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "settings.json"), "utf8")).yourData;
     const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "settings.json"), "utf8")).yourData;
-    expect(en.playHistorySub).toContain("Trial results while no change Compy made is still applied");
-    expect(en.playHistorySub).not.toMatch(/Trial results and crash notes/);
-    expect(zh.playHistorySub).toContain("在 Compy 做过的更改都已不再生效时，也删除试验结果");
+    expect(en.playHistorySub).toContain("Trial results only once every change Compy made has been undone (they are linked to those changes)");
+    expect(en.playHistorySub).not.toMatch(/Trial results and crash notes|still applied/);
+    expect(zh.playHistorySub).toContain("只有在 Compy 做过的每项更改都已撤销后，才会删除试验结果（它们与这些更改相关联）");
+    expect(zh.playHistorySub).not.toContain("不再生效");
   });
 
   it("every status line and every new string has words in both languages", () => {

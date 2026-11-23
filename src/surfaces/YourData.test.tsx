@@ -27,6 +27,7 @@ const PLAN: ClearPlan = {
   unknown: ["notes.txt"],
   refusals: [],
   applied_changes: [],
+  applied_settings: [],
   offer_undo_all: false,
   legacy_folder_present: false,
   webview: [{ key: "compy_last_check_v1", prefix: false, session_storage: false }],
@@ -318,6 +319,10 @@ describe("Your data: clear everything", () => {
     delete: [],
     refusals: [{ code: "changes_applied", detail: "dev text", files: [] }],
     applied_changes: ["Core parking", "Game mode"],
+    applied_settings: [
+      { rec_id: "core-parking", title: "Core parking", records: 1 },
+      { rec_id: "game-mode", title: "Game mode", records: 1 },
+    ],
     offer_undo_all: true,
   };
 
@@ -357,7 +362,7 @@ describe("Your data: clear everything", () => {
     await openEverything();
     const box = await screen.findByTestId("your-data-refused");
     expect(box.textContent).toContain("Changes Compy made are still in place");
-    // C5a: one line per setting (an older answer without applied_settings is grouped by title).
+    // C5a: one line per setting.
     const applied = screen.getByTestId("your-data-applied");
     expect([...applied.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["Core parking", "Game mode"]);
     expect(screen.queryByRole("button", { name: "Delete everything" })).toBeNull();
@@ -394,7 +399,7 @@ describe("Your data: clear everything", () => {
       plan_clear_everything: () => GROUPED,
       get_applied_changes: () => [
         row("v1", "visual-effects", "Trim Windows visual effects", 1),
-        row("g1", "game-mode", "Enable Windows Game Mode", 2),
+        row("g1", "game-mode", "Game mode", 2), // an older title: "Couldn't undo" names the setting's line instead
         row("g2", "game-mode", "Enable Windows Game Mode", 3),
         row("g3", "game-mode", "Enable Windows Game Mode", 4),
       ],
@@ -414,9 +419,13 @@ describe("Your data: clear everything", () => {
     expect(applied.textContent).toContain("Settings: 2. Records: 4.");
     const explain = screen.getByTestId("your-data-undo").textContent ?? "";
     expect(explain).toContain("records: 4, across settings: 2");
-    expect(explain).toContain("once per record");
+    expect(applied.textContent).toContain("Not undone yet:");
+    // C5 review B1: the explanation says what each undo does, never an outcome. Break check: restore "A setting
+    // whose records are all undone is back at the value it had before Compy first changed it" -> fails.
+    expect(explain).toContain("A setting that needs administrator rights asks Windows for permission once for each of its records.");
     expect(explain).toContain("fails or that you decline");
-    expect(explain).toContain("before Compy first changed it");
+    expect(explain).toContain("Each record's undo puts back what Compy saved just before that record's change, newest first, so a setting's oldest record is undone last.");
+    expect(explain).not.toContain("before Compy first changed it");
     fireEvent.click(screen.getByRole("button", { name: "Undo them first" }));
     await waitFor(() => expect(screen.getByTestId("your-data-undo-results").textContent).toContain("Press Check again"));
     // One rollback per record, newest first, stopping at the first failure.

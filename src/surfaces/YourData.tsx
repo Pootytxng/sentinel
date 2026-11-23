@@ -143,8 +143,9 @@ export function YourData() {
           if (g) g.done += 1;
           setUndo({ running: true, groups: groups.map((x) => ({ ...x })), failedTitle: null, readFailed: false });
         } catch {
-          // Stop at the first record that could not be undone (or whose permission prompt was declined).
-          failedTitle = row.rec_title;
+          // Stop at the first record that could not be undone (or whose permission prompt was declined). Named by
+          // its setting's line (the group's title), so it matches the progress line above it.
+          failedTitle = g?.title ?? row.rec_title;
           break;
         }
       }

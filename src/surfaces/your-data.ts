@@ -21,17 +21,10 @@ export type WebviewTarget = { key: string; prefix: boolean; session_storage: boo
 /** One setting whose ledger records are not all undone, and how many are open (C5a). */
 export type AppliedSetting = { rec_id: string; title: string; records: number };
 
-/** The settings a refusal lists: the backend's grouping, or, from an older answer that only has one title per
- *  record, those titles grouped by title. Records always add up to the open rows. */
-export function appliedSettings(plan: Pick<ClearPlan, "applied_changes" | "applied_settings">): AppliedSetting[] {
-  if (plan.applied_settings && plan.applied_settings.length > 0) return plan.applied_settings;
-  const out: AppliedSetting[] = [];
-  for (const title of plan.applied_changes) {
-    const g = out.find((s) => s.title === title);
-    if (g) g.records += 1;
-    else out.push({ rec_id: title, title, records: 1 });
-  }
-  return out;
+/** The settings a refusal lists: the backend's grouping by setting id (data_clear `group_open_rows`). The app and
+ *  its backend ship together, so there is no older answer to fall back on (C5 review: the title fallback was dead). */
+export function appliedSettings(plan: Pick<ClearPlan, "applied_settings">): AppliedSetting[] {
+  return plan.applied_settings;
 }
 
 /** "Undo them first" progress, one line per setting (C5a). `rows` are in undo order; the undo itself is unchanged:
@@ -55,8 +48,8 @@ export type ClearPlan = {
   unknown: string[];
   refusals: Refusal[];
   applied_changes: string[];
-  /** C5a: the same rows grouped by setting, newest first. Absent on older answers. */
-  applied_settings?: AppliedSetting[];
+  /** C5a: the same rows grouped by setting, newest first. */
+  applied_settings: AppliedSetting[];
   offer_undo_all: boolean;
   legacy_folder_present: boolean;
   webview: WebviewTarget[];
