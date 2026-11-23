@@ -5783,11 +5783,17 @@ pub(crate) fn parse_memcompress_restore_result(text: &str, nonce: &str) -> Memco
 /// reported as "nothing happened" once the elevated step may have run: a read prior with no confirmation is
 /// RECORDED (its undo restores that prior; undoing an unchanged setting is a no-op by value). Only a run that
 /// provably never started records nothing and says nothing changed.
-pub(crate) fn memcompress_outcome(run: &Result<(), String>, report: MemcompressReport) -> Result<bool, String> {
+///
+/// The recorded prior comes with its [`ResultReceived`]: `NotReceived` reaches the ledger row
+/// (`result_unconfirmed`), so the restore never reads as a plain "applied".
+pub(crate) fn memcompress_outcome(
+    run: &Result<(), String>,
+    report: MemcompressReport,
+) -> Result<(bool, ResultReceived), String> {
     match (run, report) {
-        (_, MemcompressReport::Confirmed(p)) => Ok(p),
+        (_, MemcompressReport::Confirmed(p)) => Ok((p, ResultReceived::Received)),
         (Err(e), MemcompressReport::NoPrior) if elevation_error_nothing_ran(e) => Err(e.clone()),
-        (_, MemcompressReport::Unconfirmed(p)) => Ok(p),
+        (_, MemcompressReport::Unconfirmed(p)) => Ok((p, ResultReceived::NotReceived)),
         (_, MemcompressReport::NoPrior) => Err(
             "The elevated step may have run, but Compy did not receive the prior state, so there is nothing to record an undo against. Re-run the check to see the current state."
                 .to_string(),
@@ -5796,26 +5802,39 @@ pub(crate) fn memcompress_outcome(run: &Result<(), String>, report: MemcompressR
 }
 
 /// The admin-only-prior arm: ONE elevated invocation that snapshots then mutates (see the script
-/// builder above). Receipt-worthy only on a confirmed prior + confirmed mutation.
-fn restore_memory_compression_elevated_read() -> Result<ApplyResult, String> {
+/// builder above). Recorded on a received prior; the mutation's confirmation decides [`ResultReceived`].
+fn restore_memory_compression_elevated_read() -> Result<(ApplyResult, ResultReceived), String> {
     // A5 Part A: the prior and the confirmation come back over the dispatch's pipe with its nonce.
     let nonce = crate::fps_pipe::random_hex().map_err(|e| format!("{RESULTS_CHANNEL_NOT_CREATED}: {e}"))?;
     let capture = run_elevated_capture(&memcompress_combined_restore_script(&nonce)?);
-    let prior = memcompress_outcome(&capture.run, parse_memcompress_restore_result(&capture.text, &nonce))?;
-    Ok(ApplyResult {
+    let (prior, received) = memcompress_outcome(&capture.run, parse_memcompress_restore_result(&capture.text, &nonce))?;
+    let result = ApplyResult {
         applied_action: AppliedAction::RestoreMemoryCompressionDefault,
         rollback_action: RollbackAction::RestoreMemoryCompressionFromSnapshot,
         snapshot: Snapshot::MemoryCompression { prior_enabled: Some(prior) },
         elevation_used: true,
-    })
+    };
+    Ok((result, received))
 }
 
-pub(crate) fn restore_memory_compression() -> Result<ApplyResult, String> {
+/// Whether Compy received the elevated step's own result for a change it records (A5 Part A).
+/// `NotReceived`: the step may have run but its result did not arrive (it stopped, was killed, or the
+/// results channel broke); the change is recorded so it can be undone, and its ledger row says so
+/// (`history::AppliedChange::result_unconfirmed`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResultReceived {
+    Received,
+    NotReceived,
+}
+
+/// The memory-compression restore, with whether its result was received (only the admin-only-prior arm
+/// can answer `NotReceived`; the plain arm's single elevation reports success or an error).
+pub(crate) fn restore_memory_compression() -> Result<(ApplyResult, ResultReceived), String> {
     // Readable prior (elevated context / future probe): the plain snapshot-then-mutate path.
     // Unreadable (Get-MMAgent is admin-only for a normal user — the field case, ca01347): the
     // prior is taken INSIDE the one elevated context instead of refusing outright.
     match crate::leftovers::read_memory_compression() {
-        Some(prior) => restore_memory_compression_with(Some(prior)),
+        Some(prior) => restore_memory_compression_with(Some(prior)).map(|r| (r, ResultReceived::Received)),
         None => restore_memory_compression_elevated_read(),
     }
 }
@@ -7155,6 +7174,7 @@ mod rollback_tests {
             changed_outside: None,
             applied_plan: None,
             nothing_restored: None,
+            result_unconfirmed: false,
         }
     }
 
@@ -7935,6 +7955,7 @@ mod ipc_input_fuzz_tests {
             changed_outside: None,
             applied_plan: None,
             nothing_restored: None,
+            result_unconfirmed: false,
         }
     }
 

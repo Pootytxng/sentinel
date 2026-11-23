@@ -63,6 +63,8 @@ type Props = {
     applied: number;
     skipped: number;
     skippedItems: { title: string; reason: string }[];
+    /** A5 Part A: titles of the changes recorded without the admin step's own result. Absent = none. */
+    unconfirmedItems?: string[];
   } | null;
 };
 
@@ -232,6 +234,12 @@ export function HomeInterview({
                   <p className="hi-applied">
                     {fastPathAppliedNote(fastPathReceipt.applied, fastPathReceipt.skipped, t)}
                   </p>
+                  {/* A5 Part A: never summarised away either — each one by name, with the warning. */}
+                  {(fastPathReceipt.unconfirmedItems ?? []).map((title) => (
+                    <p className="hi-applied hi-result-unconfirmed" key={title} data-testid="hi-result-unconfirmed">
+                      {t("optimize.fix.resultUnconfirmedItem", { title, note: t("optimize.fix.resultUnconfirmed") })}
+                    </p>
+                  ))}
                   {fastPathReceipt.skippedItems.length > 0 && (
                     <details className="hi-skipped">
                       <summary className="hi-skipped-summary">

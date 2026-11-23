@@ -2687,6 +2687,7 @@ mod safety_tests {
             changed_outside: None,
             applied_plan: None,
             nothing_restored: None,
+            result_unconfirmed: false,
         }
     }
 
@@ -2766,6 +2767,7 @@ mod safety_tests {
             changed_outside: None,
             applied_plan: None,
             nothing_restored: None,
+            result_unconfirmed: false,
         };
         let back: AppliedChange =
             serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();

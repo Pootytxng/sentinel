@@ -114,8 +114,10 @@ the report is written, Compy changes these things in the copy it exports:
 
 The game's program name, the hardware and network adapter names in the hardware list (an adapter is named
 there by its model, and by its Windows name only when no model can be read), the stock Windows power plan names, the
-hardware fingerprint (a short code made from the hardware names that are already in the report), and
-anything you type into the note box, exactly as you wrote it: if you type your name there, it stays.
+hardware fingerprint (a short code made from the hardware names that are already in the report), the
+yes/no mark on a Trust Ledger change that Compy recorded without getting the admin step's result
+(`result_unconfirmed`), and anything you type into the note box, exactly as you wrote it: if you type your
+name there, it stays.
 
 ## What is not reached
 

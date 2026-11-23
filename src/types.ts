@@ -167,6 +167,9 @@ export type AppliedChange = {
   // CR-core-parking-plan-gone: on a row an undo closed with nothing to restore, why ("plan-gone":
   // the power plan the change was made on no longer exists). Absent on every other row.
   nothing_restored?: { reason: string; plan_guid?: string | null } | null;
+  // A5 Part A: recorded although Compy did not get the admin step's own result for it (it may or may not be
+  // on Windows). Every surface that lists the row shows the check-and-undo warning. Absent = confirmed.
+  result_unconfirmed?: boolean;
   // P5-outcomes-f1: the Trial behind an apply or undo made from the Trial bench's outcome switch.
   // Additive, #[serde(default)] on the Rust side; absent/null for every other apply and undo.
   justified_by_experiment?: TrialLink | null;
@@ -566,6 +569,16 @@ export type BatchItemOutcome = {
   rec_title: string;
   status: "applied" | "skipped";
   reason?: string | null;
+  /** A5 Part A: an applied item recorded without the admin step's own result. Absent = confirmed. */
+  unconfirmed?: boolean;
+};
+/** What a batch apply tells the surfaces that list its result. `unconfirmed`: titles of the changes recorded
+ *  without the admin step's own result (each shows the check-and-undo warning). Optional so older callers
+ *  and test doubles that omit it still read as "none". */
+export type BatchApplyResult = {
+  applied: number;
+  skipped: { title: string; reason: string }[];
+  unconfirmed?: string[];
 };
 export type BatchApplyReport = {
   items: BatchItemOutcome[];

@@ -8,6 +8,7 @@ import { usableRam, usedOfUsableRam } from "../data/ram-format";
 import type { TFunction } from "i18next";
 import type {
   AppliedChange,
+  BatchApplyResult,
   GameReadiness,
   IntelligenceHeadline,
   PendingCareIncident,
@@ -122,7 +123,7 @@ type Props = {
    *  The fast path reuses it verbatim — it opens NO new mutation boundary. */
   onApplyBatch?: (
     recIds: string[],
-  ) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
+  ) => Promise<BatchApplyResult>;
   /** #225 finding 1 — the latest-change follow-through (App's <FirstWin>), which used to render
    *  ABOVE the whole room and displaced the verdict and the rig by a measured 142px. It leads
    *  `below` now: real, reachable, and subordinate to the verdict/action/rig composition the
@@ -526,6 +527,8 @@ export function HomeConsole({
     applied: number;
     skipped: number;
     skippedItems: { title: string; reason: string }[];
+    // A5 Part A: titles of the changes recorded without the admin step's own result.
+    unconfirmedItems?: string[];
   } | null>(null);
 
   // Cursor-follow accent spotlight on the stage — a border-masked glow that tracks the pointer
@@ -962,6 +965,7 @@ export function HomeConsole({
         applied: res.applied,
         skipped: res.skipped.length,
         skippedItems: res.skipped,
+        unconfirmedItems: res.unconfirmed ?? [],
       });
     } finally {
       setFastPathBusy(false);

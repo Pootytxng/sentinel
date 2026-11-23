@@ -3609,7 +3609,7 @@ mod export_tests {
         ("NagleInterfaceSnapshot", "prior_ack prior_nodelay", "", "interface"),
         ("EeeNicSnapshot", "", "property_display_name prior_value", "adapter_name"),
         ("AppliedChangeView",
-         "applied_at status is_still_active active_check app_version_at_apply ruleset_version_at_apply elevation_used hw_fingerprint on_this_rig changed_outside_holds rolled_back_at justified_by_experiment rollback_justified_by_experiment undo_contract",
+         "applied_at status is_still_active active_check app_version_at_apply ruleset_version_at_apply elevation_used hw_fingerprint on_this_rig changed_outside_holds rolled_back_at justified_by_experiment rollback_justified_by_experiment undo_contract result_unconfirmed",
          "",
          "id rec_id rec_title snapshot applied_action rollback_action restores_label applied_label payoff_label changed_outside nothing_restored"),
         ("ChangedOutside", "schema recorded_at earlier_recorded_at", "", "observed"),

@@ -36,8 +36,9 @@ import Learn from "./surfaces/Learn";
 import { prewarmScan } from "./surfaces/use-scan";
 import { inEffectCounts, useMachineModel } from "./data/machine-model";
 import { gpuVendor } from "./surfaces/walkthroughs";
-import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
+import type { BatchApplyReport, BatchApplyResult, ExportResult, PendingCareIncident } from "./types";
 import { keptOutsideUndoBody } from "./data/kept-outside-undo";
+import { unconfirmedTitles } from "./data/unconfirmed-change";
 import { hasUndo } from "./data/live-changes";
 import { settingUndo } from "./data/undo-setting";
 import { runSettingWalk, trialInProgress, walkStopMessage, type WalkResult } from "./surfaces/changed-before-restore";
@@ -1012,15 +1013,13 @@ function App() {
   // item, per-item ledger receipts + failure isolation in the backend (same audited apply path per
   // item — rollback granularity unchanged, each individually undoable). A batch-level refusal
   // (validation) applies nothing and is surfaced honestly on every item.
-  const applyBatch = async (
-    recIds: string[],
-  ): Promise<{ applied: number; skipped: { title: string; reason: string }[] }> => {
+  const applyBatch = async (recIds: string[]): Promise<BatchApplyResult> => {
     setError(null);
     const items = recIds
       .map((id) => (recs ?? []).find((r) => r.id === id))
       .filter((r): r is Recommendation => !!r)
       .map((r) => ({ recId: r.id, recTitle: r.title }));
-    if (items.length === 0) return { applied: 0, skipped: [] };
+    if (items.length === 0) return { applied: 0, skipped: [], unconfirmed: [] };
     try {
       // Only a batch that applied anything changed the ledger, so only that one is announced (see
       // apply()'s note). A batch-level refusal rejects (nothing applied) and is handled in catch, so
@@ -1036,9 +1035,15 @@ function App() {
         skipped: report.items
           .filter((i) => i.status === "skipped")
           .map((i) => ({ title: i.rec_title, reason: localizeBackendText(i.reason ?? "", t) })),
+        // A5 Part A: recorded without the admin step's own result; every surface that lists the batch says so.
+        unconfirmed: unconfirmedTitles(report),
       };
     } catch (e) {
-      return { applied: 0, skipped: items.map((i) => ({ title: i.recTitle, reason: localizeBackendText(String(e), t) })) };
+      return {
+        applied: 0,
+        skipped: items.map((i) => ({ title: i.recTitle, reason: localizeBackendText(String(e), t) })),
+        unconfirmed: [],
+      };
     } finally {
       await refresh();
     }

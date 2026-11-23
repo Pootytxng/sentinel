@@ -5,7 +5,8 @@ import { writeLedger } from "../data/ledger-write";
 import { localizeBackendText } from "../data/backend-error";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import type { AppliedChange, StartupEntry, TrialLink } from "../types";
+import type { AppliedChange, BatchApplyResult, StartupEntry, TrialLink } from "../types";
+import { recordedWithoutResult } from "../data/unconfirmed-change";
 import { keptOutsideCompy } from "../types";
 import {
   LedgerHealthNotice,
@@ -188,7 +189,7 @@ type Props = {
   onToggleRec: (recId: string) => void;
   onToggleStartup: (entry: StartupEntry) => void;
   onRollback: (c: AppliedChange) => void;
-  onApplyBatch: (recIds: string[]) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
+  onApplyBatch: (recIds: string[]) => Promise<BatchApplyResult>;
   onOpenLibrary: (focusId: string) => void;
   vendor: GpuVendor;
   // App's refresh, run after a ledger write this surface makes itself (telemetry-task disable,
@@ -940,6 +941,12 @@ function ActiveChangeCard({
         {/* CR-footer-reversible: a row whose stored history resolves to no undo says so; its
             button stays visible but can't run (the footer counts it the same way). */}
         {!hasUndo(change) && <p className="fix-rig-note">{t("optimize.fix.noSavedUndo")}</p>}
+        {/* A5 Part A: recorded without the admin step's own result, so it may or may not be on Windows. */}
+        {recordedWithoutResult(change) && (
+          <p className="fix-rig-note fix-result-unconfirmed" data-testid="fix-active-result-unconfirmed">
+            {t("optimize.fix.resultUnconfirmed")}
+          </p>
+        )}
       </div>
       <button className="fix-ghost-rollback" disabled={busy || !hasUndo(change)} onClick={onRollback}>
         {busy ? t("optimize.fix.rollingBackEllipsis") : t("optimize.fix.rollBack")}
@@ -1025,6 +1032,12 @@ function HistoryRow({ change }: { change: AppliedChange }) {
                 : t("optimize.fix.historyActive")}
         </span>
       </button>
+      {/* A5 Part A: shown without opening the row, as long as the change has not been undone. */}
+      {recordedWithoutResult(change) && (
+        <div className="fix-hist-detail fix-result-unconfirmed" data-testid="fix-hist-result-unconfirmed">
+          {t("optimize.fix.resultUnconfirmed")}
+        </div>
+      )}
       {open && (
         <div className="fix-hist-detail">
           {keptOutside && (
@@ -1199,10 +1212,7 @@ export default function Fix({
   const closeSheet = () => {
     if (!batching) setSheetOpen(false);
   };
-  const [batchSummary, setBatchSummary] = useState<{
-    applied: number;
-    skipped: { title: string; reason: string }[];
-  } | null>(null);
+  const [batchSummary, setBatchSummary] = useState<BatchApplyResult | null>(null);
   const runApplyAll = async () => {
     setBatching(true);
     // Slim (§8c): apply EXACTLY the ticked set. Classic: the whole safe batch, unchanged.
@@ -1378,6 +1388,13 @@ export default function Fix({
           {t("optimize.fix.eachReversibleBelow")}
         </p>
       )}
+      {/* A5 Part A: a change recorded without the admin step's own result says so, by name. */}
+      {batchSummary &&
+        (batchSummary.unconfirmed ?? []).map((title) => (
+          <p className="fix-applyall-summary fix-result-unconfirmed" role="status" key={title} data-testid="fix-batch-result-unconfirmed">
+            {t("optimize.fix.resultUnconfirmedItem", { title, note: t("optimize.fix.resultUnconfirmed") })}
+          </p>
+        ))}
       {readyRows.length === 0 ? (
         // With a drifted group above, "already dialed in" would be false — the group head + intro
         // already said what's up, so the empty line renders only when there's truly nothing.

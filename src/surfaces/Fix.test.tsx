@@ -830,3 +830,78 @@ describe("Fix telemetry-task disable announces the ledger change", () => {
     }
   });
 });
+
+// A5 Part A: a change recorded without the admin step's own result shows the check-and-undo warning on every
+// Fix surface that lists it (the batch result, Applied, History), and only while it has not been undone.
+describe("Fix: a change recorded without its result", () => {
+  beforeEach(() => localStorage.clear());
+  const WARNING = /Compy didn't get a result for this change, so it is recorded as made\. Check the setting in Windows, and undo it here if you don't want it\./;
+  const ch = (id: string, title: string, extra: Partial<AppliedChange> = {}): AppliedChange =>
+    ({
+      id,
+      rec_id: "game-mode",
+      rec_title: title,
+      applied_at: new Date().toISOString(),
+      snapshot: null,
+      status: "applied",
+      is_still_active: true,
+      active_check: "on",
+      ...extra,
+    }) as AppliedChange;
+
+  it("Applied: the unconfirmed card says so, a confirmed one does not", () => {
+    render(
+      <Fix
+        recs={[]}
+        {...baseProps}
+        view="applied"
+        changes={[
+          ch("c1", "Unconfirmed one", { result_unconfirmed: true }),
+          // a different setting, so Layer 1 (one card per setting) lists both
+          ch("c2", "Confirmed one", { rec_id: "sysmain-disable" }),
+        ]}
+      />,
+    );
+    const notes = screen.getAllByTestId("fix-active-result-unconfirmed");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toMatch(WARNING);
+    // Both cards are listed; the note sits on exactly one of them.
+    expect(document.querySelectorAll(".fix-active-card")).toHaveLength(2);
+    expect(notes[0].closest(".fix-active-card")).not.toBeNull();
+  });
+
+  it("History: shown without opening the row, and gone once the change is undone", () => {
+    const { container } = render(
+      <Fix
+        recs={[]}
+        {...baseProps}
+        view="ledger"
+        changes={[
+          ch("c1", "Unconfirmed one", { result_unconfirmed: true }),
+          ch("c2", "Undone one", { result_unconfirmed: true, status: "rolled_back", is_still_active: false }),
+          ch("c3", "Confirmed one"),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByText("History"));
+    const notes = screen.getAllByTestId("fix-hist-result-unconfirmed");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toMatch(WARNING);
+    expect(notes[0].closest(".fix-hist-row")?.querySelector(".fix-hist-title")?.textContent).toBe("Unconfirmed one");
+    expect(container.querySelectorAll(".fix-hist-row")).toHaveLength(3);
+  });
+
+  it("the batch result names each unconfirmed change with the warning", async () => {
+    const onApplyBatch = vi.fn().mockResolvedValue({ applied: 2, skipped: [], unconfirmed: ["Title sysmain-disable"] });
+    const recs = [
+      rec("game-mode", false, "expected-impact", "safe"),
+      rec("sysmain-disable", false, "expected-impact", "safe"),
+    ];
+    render(<Fix recs={recs} {...baseProps} onApplyBatch={onApplyBatch} />);
+    fireEvent.click(screen.getByRole("button", { name: "Apply all starter fixes (2)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply all (2)" }));
+    const note = await screen.findByTestId("fix-batch-result-unconfirmed");
+    expect(note.textContent).toMatch(/^Title sysmain-disable: /);
+    expect(note.textContent).toMatch(WARNING);
+  });
+});

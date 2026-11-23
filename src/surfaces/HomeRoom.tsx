@@ -1,5 +1,6 @@
 import type {
   AppliedChange,
+  BatchApplyResult,
   GameReadiness,
   PendingCareIncident,
   Priorities,
@@ -53,7 +54,7 @@ type Props = {
   /** Console intake band only: the audited one-UAC batch-apply primitive (App's applyBatch). */
   onApplyBatch?: (
     recIds: string[],
-  ) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
+  ) => Promise<BatchApplyResult>;
   /** Console-only (#225): the latest-change follow-through (App's <FirstWin>), rendered BELOW both
    *  columns instead of above the room. See the note at its call site in App.tsx. */
   latestChange?: ReactNode;

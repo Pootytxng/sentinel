@@ -100,7 +100,9 @@ Everything below stays on your PC. The complete list of what the code writes is 
 
 - **Change history / "Trust Ledger":** a local audit log of changes you chose to apply, so
   they can be rolled back. Stored at `%APPDATA%\Compy\history.json`. It records what was
-  changed, the prior value (so it can be restored), and a timestamp. Compy keeps one backup copy beside
+  changed, the prior value (so it can be restored), and a timestamp, and, when a change was made by an
+  admin step whose result Compy did not get, a mark saying so (`result_unconfirmed`), so the app can ask
+  you to check that setting. Compy keeps one backup copy beside
   it (`history.json.bak`), made when Compy starts if none exists and refreshed each time the ledger is
   saved, plus short-lived working files and, if a file cannot be read, a damaged copy — all named
   `history.json...`.

@@ -91,6 +91,9 @@ const PIPE_ACCESS_INBOUND: u32 = 0x1;
 const FILE_FLAG_FIRST_PIPE_INSTANCE: u32 = 0x0008_0000;
 const PIPE_REJECT_REMOTE_CLIENTS: u32 = 0x8;
 const ERROR_PIPE_CONNECTED: i32 = 535;
+/// ConnectNamedPipe's answer when a client connected AND closed its end before the call (A5 Part A item 3).
+/// What it wrote is still in the pipe's buffer and reads to end of file, so this counts as connected.
+const ERROR_NO_DATA: i32 = 232;
 /// `SECURITY_IDENTIFICATION` as CreateFileW's SQOS flag (std sets SECURITY_SQOS_PRESENT with it).
 pub(crate) const SECURITY_IDENTIFICATION: u32 = 0x0001_0000;
 
@@ -196,7 +199,8 @@ impl ServerPipe {
             return Ok(());
         }
         let e = std::io::Error::last_os_error();
-        if e.raw_os_error() == Some(ERROR_PIPE_CONNECTED) {
+        // A client that came and went before this call (a fast helper) still left its bytes in the buffer.
+        if matches!(e.raw_os_error(), Some(ERROR_PIPE_CONNECTED) | Some(ERROR_NO_DATA)) {
             Ok(())
         } else {
             Err(e)
@@ -688,6 +692,27 @@ impl PipeWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A5 Part A item 3: a fast helper can connect, write everything and exit before the app's reader has
+    /// called accept. What it wrote fits in the pipe's 64 KiB in-buffer, so its write completed without a
+    /// reader, and the bytes stay in the pipe until the server handle reads them or is closed. The late
+    /// accept answers ERROR_NO_DATA (connected and already closed), which counts as connected, the client's
+    /// pid is still the pipe's, and the lines read to end of file.
+    #[test]
+    fn output_from_a_client_that_exited_before_the_accept_is_still_read() {
+        let pipe = ServerPipe::create().expect("pipe");
+        let name = pipe.name.clone();
+        std::thread::spawn(move || {
+            let mut f = open_pipe_for_writing(&name).expect("connect");
+            f.write_all(b"n0nce:a:ok\r\nn0nce:end\r\n").expect("write into the buffer, no reader yet");
+            // f drops here: the client end is closed before the server ever calls accept.
+        })
+        .join()
+        .expect("the client finished without a reader");
+        let me = std::process::id();
+        let (lines, end) = pipe.collect_lines(&|| false, &|pid| pid == me, 64 * 1024);
+        assert_eq!(lines, ["n0nce:a:ok", "n0nce:end"], "{end:?}");
+    }
 
     #[test]
     fn only_a_compy_capture_pipe_name_is_accepted() {

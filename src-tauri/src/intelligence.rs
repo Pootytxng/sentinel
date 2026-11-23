@@ -3263,6 +3263,7 @@ mod tests {
             changed_outside: None,
             applied_plan: None,
             nothing_restored: None,
+            result_unconfirmed: false,
         }
     }
 

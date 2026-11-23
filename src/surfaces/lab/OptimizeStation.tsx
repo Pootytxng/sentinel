@@ -11,6 +11,7 @@ import { useExpertView } from "../../design/use-expert-view";
 import { knownIncomplete, useLedgerHealth } from "../../design/LedgerHealthNotice";
 import { useCountTo } from "./use-count-to";
 import type {
+  BatchApplyResult,
   Recommendation,
   StartupEntry,
   AppliedChange,
@@ -47,7 +48,7 @@ export type LabFastPathProps = {
   onRollback: (c: AppliedChange) => void;
   onApplyBatch: (
     recIds: string[],
-  ) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
+  ) => Promise<BatchApplyResult>;
   onOpenLibrary: (focusId?: string) => void;
   onChanged: () => void;
   /** P6-restore: a Care "Put back" holds App's busy flag for its whole run, so every other ledger

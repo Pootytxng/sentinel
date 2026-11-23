@@ -190,7 +190,7 @@ pub(crate) static INVENTORY: &[InventoryRow] = &[
         writers: &["history.rs"],
         category: Undo,
         personal: &[HardwareSpecs],
-        contains: "The Trust Ledger: every change Compy applied to Windows, with the value the setting had before, how to undo it, when, and a short label of this PC's hardware. The only record that can undo a change.",
+        contains: "The Trust Ledger: every change Compy applied to Windows, with the value the setting had before, how to undo it, when, a short label of this PC's hardware, and, for a change made by an admin step whose result Compy did not get, a mark saying so. The only record that can undo a change.",
         created: "when the first change is applied",
         sandbox: CanonicalOnly,
         names_in_code: &[],

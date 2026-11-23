@@ -164,6 +164,23 @@ pub(crate) struct AppliedChange {
     /// older row, and every undo that restored a value, has no key at all.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lenient_nothing_restored")]
     pub(crate) nothing_restored: Option<NothingRestored>,
+    /// A5 Part A: true when the change was recorded although Compy did not receive the elevated step's own
+    /// result for it (the step stopped, was killed, or its results channel broke), so it may or may not be
+    /// on Windows. Recorded so it can be undone; every surface that lists the row shows the warning to
+    /// check it. Additive: every older row, and every confirmed change, has no key at all (false). Not
+    /// part of the rollback contract.
+    #[serde(default, skip_serializing_if = "is_false", deserialize_with = "lenient_flag")]
+    pub(crate) result_unconfirmed: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// A flag this build can't parse loads as false, never as a ledger that fails to load.
+fn lenient_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let raw = Option::<serde_json::Value>::deserialize(d)?;
+    Ok(matches!(raw, Some(serde_json::Value::Bool(true))))
 }
 
 /// A `nothing_restored` this build can't parse loads as None, never as a ledger that fails to load.
@@ -395,6 +412,10 @@ pub(crate) struct AppliedChangeView {
     // CR-core-parking-plan-gone pass-through: why an undo had nothing to restore. Omitted when None.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) nothing_restored: Option<NothingRestored>,
+    // A5 Part A pass-through: recorded without the elevated step's own result. Omitted when false, so every
+    // confirmed row keeps its existing wire shape.
+    #[serde(skip_serializing_if = "is_false")]
+    pub(crate) result_unconfirmed: bool,
     // Pass-through of the persisted rollback stamp. None = still applied, or rolled back
     // before the stamp existed — the UI must render that as "date unknown", never a guess.
     pub(crate) rolled_back_at: Option<String>,
@@ -892,6 +913,7 @@ fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
         changed_outside: c.changed_outside,
         changed_outside_holds: None,
         nothing_restored: c.nothing_restored,
+        result_unconfirmed: c.result_unconfirmed,
         undo_contract,
     }
 }
@@ -976,6 +998,7 @@ pub(crate) fn test_view(
         changed_outside: None,
         changed_outside_holds: None,
         nothing_restored: None,
+        result_unconfirmed: false,
         undo_contract: reversible,
     }
 }
@@ -1704,6 +1727,7 @@ fn build_applied_change_with(
         changed_outside: None,
         applied_plan,
         nothing_restored: None,
+        result_unconfirmed: false,
     })
 }
 
@@ -1717,6 +1741,9 @@ struct Made {
     justified_by: Option<TrialLink>,
     /// CR-ultimate-identity: the schemes listed just before an Ultimate apply (None everywhere else).
     plans_before: Option<Vec<String>>,
+    /// A5 Part A: whether the elevated step's own result for this change arrived (`NotReceived` becomes
+    /// the row's `result_unconfirmed`).
+    received: ResultReceived,
     result: ApplyResult,
 }
 
@@ -1728,6 +1755,7 @@ impl Made {
             provenance: None,
             justified_by: None,
             plans_before: None,
+            received: ResultReceived::Received,
             result,
         }
     }
@@ -1771,6 +1799,7 @@ fn commit_receipts(
         let mut change = build_applied_change(&m.rec_id, &m.rec_title, m.result, m.plans_before.as_deref())?;
         change.provenance = m.provenance.map(str::to_string);
         change.justified_by_experiment = m.justified_by;
+        change.result_unconfirmed = m.received == ResultReceived::NotReceived;
         Ok(change)
     };
     commit_receipts_with(history, made, &build, save, effects)
@@ -1963,21 +1992,24 @@ pub(crate) fn restore_leftover(
     }
     let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
-    let result = match detector_id {
+    // A5 Part A: only the memory-compression restore can come back without its result received.
+    let received = |r: ApplyResult| (r, ResultReceived::Received);
+    let (result, received) = match detector_id {
         "memory-compression-off" => crate::actions::restore_memory_compression(),
-        "mmcss-tampering" => crate::actions::restore_mmcss_defaults(),
-        "win32-priority-separation" => crate::actions::restore_priority_separation(),
+        "mmcss-tampering" => crate::actions::restore_mmcss_defaults().map(received),
+        "win32-priority-separation" => crate::actions::restore_priority_separation().map(received),
         // Wave 2 (2026-06-11; armed 2026-07-16). bcdedit + Defender have NO resolver — permanent
         // by policy (boot-config risk class / security-settings owner territory), not "not yet";
         // tripwire-tested in permanently_excluded_detectors_have_no_resolver_even_armed.
-        "pagefile-fixed" => crate::actions::restore_pagefile_automatic(),
-        "mpo-disabled" => crate::actions::restore_mpo_default(),
-        "core-parking-forced" => crate::actions::restore_core_parking_default(),
-        "tcp-autotuning-off" => crate::actions::restore_tcp_autotuning_default(),
+        "pagefile-fixed" => crate::actions::restore_pagefile_automatic().map(received),
+        "mpo-disabled" => crate::actions::restore_mpo_default().map(received),
+        "core-parking-forced" => crate::actions::restore_core_parking_default().map(received),
+        "tcp-autotuning-off" => crate::actions::restore_tcp_autotuning_default().map(received),
         other => Err(format!("no restore resolver exists for '{other}' yet")),
     }?;
     let made = Made {
         provenance: Some("leftover_adopted"),
+        received,
         ..Made::new(detector_id, display_title, result)
     };
     record_receipt(&root, &mut history, made)
@@ -2180,6 +2212,10 @@ pub(crate) struct BatchItemOutcome {
     rec_title: String,
     status: String, // "applied" | "skipped"
     reason: Option<String>,
+    /// A5 Part A: an "applied" item recorded without the admin step's own result for it (its ledger row
+    /// carries `result_unconfirmed`). Omitted when false, so every other item keeps its wire shape.
+    #[serde(skip_serializing_if = "is_false")]
+    unconfirmed: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -2197,12 +2233,13 @@ fn outcome_applied(rec_id: &str, rec_title: &str) -> BatchItemOutcome {
         rec_title: rec_title.to_string(),
         status: "applied".into(),
         reason: None,
+        unconfirmed: false,
     }
 }
 
 /// A5 Part A: recorded (so it can be undone) although its result did not arrive; `reason` says so.
 fn outcome_applied_unconfirmed(rec_id: &str, rec_title: &str, reason: String) -> BatchItemOutcome {
-    BatchItemOutcome { reason: Some(reason), ..outcome_applied(rec_id, rec_title) }
+    BatchItemOutcome { reason: Some(reason), unconfirmed: true, ..outcome_applied(rec_id, rec_title) }
 }
 
 fn outcome_skipped(rec_id: &str, rec_title: &str, reason: String) -> BatchItemOutcome {
@@ -2211,6 +2248,7 @@ fn outcome_skipped(rec_id: &str, rec_title: &str, reason: String) -> BatchItemOu
         rec_title: rec_title.to_string(),
         status: "skipped".into(),
         reason: Some(reason),
+        unconfirmed: false,
     }
 }
 
@@ -2446,7 +2484,10 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
                     outcomes.push(outcome_applied(&d.rec_id, &d.rec_title));
                 }
                 AdminItem::Unconfirmed(reason) => {
-                    made_elevated.push(Made::new(&d.rec_id, &d.rec_title, d.result));
+                    made_elevated.push(Made {
+                        received: ResultReceived::NotReceived,
+                        ..Made::new(&d.rec_id, &d.rec_title, d.result)
+                    });
                     applied += 1;
                     outcomes.push(outcome_applied_unconfirmed(&d.rec_id, &d.rec_title, reason));
                 }
@@ -3652,6 +3693,18 @@ mod batch_apply_tests {
         }
     }
 
+    // A5 Part A: the batch report marks an item recorded without its result, so the surfaces can say so;
+    // every other item keeps its wire shape.
+    #[test]
+    fn the_batch_report_marks_an_unconfirmed_item() {
+        let ok = serde_json::to_value(outcome_applied("a", "A")).unwrap();
+        let unconf = serde_json::to_value(outcome_applied_unconfirmed("b", "B", "why".into())).unwrap();
+        let skip = serde_json::to_value(outcome_skipped("c", "C", "why".into())).unwrap();
+        assert!(ok.get("unconfirmed").is_none() && skip.get("unconfirmed").is_none());
+        assert_eq!(unconf["status"], "applied");
+        assert_eq!(unconf["unconfirmed"], serde_json::json!(true));
+    }
+
     // A5 Part A: leftover result files from older versions are matched by their fixed shapes only.
     #[test]
     fn only_the_four_leftover_result_file_shapes_are_cleared() {
@@ -3828,6 +3881,35 @@ mod receipt_commit_tests {
 
     fn earlier() -> AppliedChange {
         build_applied_change("game-mode-on", "An earlier change", game_mode(), None).expect("build")
+    }
+
+    /// A5 Part A: a change recorded without the admin step's own result carries `result_unconfirmed` into its
+    /// stored row and its view; a confirmed one has no key at all, so every older row keeps its exact shape,
+    /// and an unreadable value loads as false (never a ledger that fails to load).
+    #[test]
+    fn a_change_recorded_without_its_result_says_so_in_the_stored_row() {
+        let seen = Seen::default();
+        let mut history = Vec::new();
+        let made = vec![
+            Made::new("game-mode-on", "Confirmed", game_mode()),
+            Made { received: ResultReceived::NotReceived, ..Made::new("game-mode-on", "Unconfirmed", game_mode()) },
+        ];
+        let rows = commit(&mut history, made, Ok(()), |_| Ok(()), ActiveCheck::On, &seen).expect("committed");
+        assert!(!rows[0].result_unconfirmed && rows[1].result_unconfirmed);
+        let stored = serde_json::to_value(&history).unwrap();
+        assert!(stored[0].get("result_unconfirmed").is_none(), "a confirmed row is written as before");
+        assert_eq!(stored[1]["result_unconfirmed"], serde_json::json!(true));
+        let back: Vec<AppliedChange> = serde_json::from_value(stored).unwrap();
+        assert!(!back[0].result_unconfirmed && back[1].result_unconfirmed, "it survives a save and load");
+        for odd in [serde_json::json!("yes"), serde_json::json!(1), serde_json::json!(null), serde_json::json!(false)] {
+            let mut row = serde_json::to_value(&history[0]).unwrap();
+            row["result_unconfirmed"] = odd.clone();
+            let c: AppliedChange = serde_json::from_value(row).unwrap_or_else(|e| panic!("{odd}: {e}"));
+            assert!(!c.result_unconfirmed, "{odd}");
+        }
+        let view = serde_json::to_value(applied_change_views(&history)).unwrap();
+        assert!(view[0].get("result_unconfirmed").is_none());
+        assert_eq!(view[1]["result_unconfirmed"], serde_json::json!(true), "the surfaces get it");
     }
 
     #[test]
@@ -5351,10 +5433,11 @@ mod leftover_restore_tests {
         let one = <std::process::ExitStatus as std::os::windows::process::ExitStatusExt>::from_raw(1);
         let stopped: Result<(), String> = Err(elevation_outcome(Ok(one)).expect_err("exit 1"));
         // Ran ok: recorded with its prior.
-        assert_eq!(memcompress_outcome(&ok, Confirmed(false)), Ok(false));
-        // Prior arrived, confirmation did not (stopped, killed, pipe broke): RECORDED, so it can be undone.
+        assert_eq!(memcompress_outcome(&ok, Confirmed(false)), Ok((false, ResultReceived::Received)));
+        // Prior arrived, confirmation did not (stopped, killed, pipe broke): RECORDED, so it can be undone, and
+        // marked as not received, so the row never reads as a plain "applied".
         for run in [&ok, &stopped, &declined] {
-            assert_eq!(memcompress_outcome(run, Unconfirmed(true)), Ok(true), "{run:?}");
+            assert_eq!(memcompress_outcome(run, Unconfirmed(true)), Ok((true, ResultReceived::NotReceived)), "{run:?}");
         }
         // Never started: nothing recorded, and the error is the launch's own (it says nothing ran).
         for run in [&declined, &refused] {
@@ -5719,6 +5802,7 @@ mod history_tests {
             changed_outside: None,
             applied_plan: None,
             nothing_restored: None,
+            result_unconfirmed: false,
         }
     }
 
@@ -6779,6 +6863,7 @@ mod ledger_fuzz_tests {
             changed_outside: None,
             applied_plan: None,
             nothing_restored: None,
+            result_unconfirmed: false,
         }
     }
 
