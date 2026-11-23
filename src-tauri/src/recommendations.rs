@@ -13,8 +13,8 @@ use crate::remote_rules::{load_rules, RulesSource};
 use crate::{
     eee_disabled_on_any_eligible_adapter, fast_startup_state,
     game_bar_disabled, game_mode_enabled, hags_state, memory_integrity_or_vbs_active,
-    mouse_accel_disabled, nagle_disabled_on_any_nic, pcie_aspm_off_on_ac, reserved_storage_enabled,
-    usb_selective_suspend_off_on_ac, visual_effects_for_best_performance,
+    mouse_accel_disabled, nagle_disabled_on_any_nic, pcie_aspm_off_on_ac_checked, reserved_storage_enabled,
+    usb_selective_suspend_off_on_ac_checked, visual_effects_for_best_performance,
 };
 
 // Provenance is the honesty tier for each rec's *impact* claim. The UI surfaces
@@ -111,6 +111,10 @@ pub(crate) struct Recommendation {
     /// only when stated, so the Trial receipt says "not stated" for the rest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     risk_dimensions: Option<RiskDimensions>,
+    /// D2b: the live state read did not finish, so `currently_applied` (false) is "can't tell", not
+    /// "off". The card says Compy couldn't read the setting instead of implying it is off.
+    #[serde(default)]
+    state_unread: bool,
 }
 
 fn default_eligible() -> bool {
@@ -189,14 +193,20 @@ pub(crate) enum Condition {
     DisplayHdrCapable,
 }
 
+/// D2b: the eee-disable card's reason when the adapter read did not finish. Mirrored byte-for-byte in
+/// `src/data/backend-error.ts` (pinned by `backend-error.test.ts`), which shows it in the user's language.
+pub(crate) const EEE_UNREAD_REASON: &str = "Couldn't check Energy-Efficient Ethernet on your wired adapter right now.";
+
 // A FAILED condition either means "this rig's hardware can't use the rec" (→ show it in "Not for this
 // rig" with this reason) or "not relevant right now" (→ omit it, as before). Only genuine hardware-
 // capability gates return a reason; relevance gates return None.
-pub(crate) fn hardware_ineligibility_reason(cond: &Condition, _hw: &HardwareInfo) -> Option<String> {
+pub(crate) fn hardware_ineligibility_reason(cond: &Condition, hw: &HardwareInfo) -> Option<String> {
     match cond {
         Condition::HasActiveWiredEthernet | Condition::HasWiredEthernetPort => Some(
             "Needs a wired Ethernet port — this rig has none (Wi-Fi / other only).".into(),
         ),
+        // D2b: a read that didn't finish says so; it is never "no switch".
+        Condition::EeeSwitchExposed if hw.eee_switch_unread => Some(EEE_UNREAD_REASON.into()),
         Condition::EeeSwitchExposed => Some(
             "No connected wired adapter exposes an Energy-Efficient-Ethernet switch Compy can flip — either the cable isn't plugged in right now, or this adapter's driver doesn't offer the setting.".into(),
         ),
@@ -341,13 +351,17 @@ pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
 // String-keyed state-check dispatcher. Each kind names an existing Rust
 // function; new kinds require a code release. Params allow parameterizing
 // shared shapes (e.g. "service-not-running" takes a service name).
+//
+// D2b: `None` = the read did not finish ("can't tell"), carried to the card as `state_unread`. Only the
+// two powercfg AC reads answer None so far (`recommendations.rs` used their unchecked forms, which
+// turned a failed or timed-out read into "not off"); every other kind keeps its existing answer.
 pub(crate) fn check_state_kind(
     kind: &str,
     params: &Option<serde_json::Value>,
     _hw: &HardwareInfo,
     reads: &crate::history::LiveReads,
-) -> bool {
-    match kind {
+) -> Option<bool> {
+    Some(match kind {
         "game-mode-enabled" => game_mode_enabled(),
         "visual-effects-best-perf" => visual_effects_for_best_performance(),
         // The rule kind keeps its historical name; since 2026-11-04 it reads the service's start type
@@ -365,10 +379,21 @@ pub(crate) fn check_state_kind(
         "game-bar-disabled" => game_bar_disabled(),
         "fast-startup-disabled" => fast_startup_state() == Some(0),
         "reserved-storage-disabled" => !reserved_storage_enabled(),
-        "usb-selective-suspend-off-on-ac" => usb_selective_suspend_off_on_ac(),
-        "pcie-aspm-off-on-ac" => pcie_aspm_off_on_ac(),
+        "usb-selective-suspend-off-on-ac" => return usb_selective_suspend_off_on_ac_checked(),
+        "pcie-aspm-off-on-ac" => return pcie_aspm_off_on_ac_checked(),
         "eee-disabled-on-eligible-adapters" => eee_disabled_on_any_eligible_adapter(),
         _ => false,
+    })
+}
+
+/// PURE (D2b): a state read → `(currently_applied, state_unread)`. A read that did not finish is
+/// "not applied" for every decision that reads `currently_applied` (as before) AND flagged unread, so
+/// no surface shows it as "off".
+pub(crate) fn applied_and_unread(state: Option<Option<bool>>) -> (bool, bool) {
+    match state {
+        None => (false, false), // the rec has no state check
+        Some(Some(on)) => (on, false),
+        Some(None) => (false, true),
     }
 }
 
@@ -410,11 +435,11 @@ pub(crate) fn evaluate_rule_spec(
         .map(|t| template_substitute(t, hw))
         .unwrap_or_default();
 
-    let currently_applied = spec
-        .state_kind
-        .as_ref()
-        .map(|kind| check_state_kind(kind, &spec.state_params, hw, reads))
-        .unwrap_or(false);
+    let (currently_applied, state_unread) = applied_and_unread(
+        spec.state_kind
+            .as_ref()
+            .map(|kind| check_state_kind(kind, &spec.state_params, hw, reads)),
+    );
 
     Some(Recommendation {
         id: spec.id.clone(),
@@ -430,6 +455,7 @@ pub(crate) fn evaluate_rule_spec(
         eligible,
         ineligible_reason,
         risk_dimensions: None,
+        state_unread,
     })
 }
 
@@ -476,6 +502,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         eligible: true,
         ineligible_reason: None,
         risk_dimensions: None,
+        state_unread: false,
     });
 
     // game-mode is now defined in src-tauri/resources/baseline-rules-v1.json
@@ -521,6 +548,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
+            state_unread: false,
         });
     }
 
@@ -543,6 +571,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         eligible: true,
         ineligible_reason: None,
         risk_dimensions: None,
+        state_unread: false,
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
@@ -563,6 +592,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
+            state_unread: false,
         });
 
         recs.push(Recommendation {
@@ -580,6 +610,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
+            state_unread: false,
         });
     }
 
@@ -599,6 +630,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
+            state_unread: false,
         });
     }
 
@@ -621,6 +653,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
+            state_unread: false,
         });
     }
 
@@ -646,6 +679,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 eligible: true,
                 ineligible_reason: None,
                 risk_dimensions: None,
+                state_unread: false,
             });
             break;
         }
@@ -678,6 +712,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
+            state_unread: false,
         });
     }
 
@@ -706,6 +741,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 eligible: true,
                 ineligible_reason: None,
                 risk_dimensions: None,
+                state_unread: false,
             });
         }
     }
@@ -737,6 +773,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 eligible: true,
                 ineligible_reason: None,
                 risk_dimensions: None,
+                state_unread: false,
             });
         }
     }
@@ -762,6 +799,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
+            state_unread: false,
         });
     }
 
@@ -782,6 +820,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
+            state_unread: false,
         });
     }
 
@@ -1245,5 +1284,39 @@ mod rec_tests {
         // all-hdd is a hardware gate (kept), but memory-integrity is relevance — verify the helper.
         assert!(hardware_ineligibility_reason(&Condition::MemoryIntegrityOrVbsActive, &HardwareInfo::default()).is_none());
         assert!(hardware_ineligibility_reason(&Condition::HasWiredEthernetPort, &HardwareInfo::default()).is_some());
+    }
+
+    // D2b: a state read that did not finish is "can't tell", never "off".
+    #[test]
+    fn an_unfinished_state_read_is_flagged_unread_never_shown_as_off() {
+        assert_eq!(applied_and_unread(Some(None)), (false, true));
+        assert_eq!(applied_and_unread(Some(Some(true))), (true, false));
+        assert_eq!(applied_and_unread(Some(Some(false))), (false, false));
+        assert_eq!(applied_and_unread(None), (false, false));
+        // The two powercfg AC kinds read their CHECKED forms (None on a failed or timed-out read).
+        let src = include_str!("recommendations.rs").replace("\r\n", "\n");
+        for arm in [
+            "\"usb-selective-suspend-off-on-ac\" => return usb_selective_suspend_off_on_ac_checked(),",
+            "\"pcie-aspm-off-on-ac\" => return pcie_aspm_off_on_ac_checked(),",
+        ] {
+            assert!(src.contains(arm), "missing: {arm}");
+        }
+    }
+
+    // D2b: an EEE read that did not finish gives the card its own reason, never "no switch".
+    #[test]
+    fn an_unfinished_eee_read_says_couldnt_check_not_no_switch() {
+        let unread = HardwareInfo {
+            has_wired_ethernet_port: true,
+            eee_switch_exposed: false,
+            eee_switch_unread: true,
+            ..Default::default()
+        };
+        let eee = build_recommendations(&unread)
+            .into_iter()
+            .find(|r| r.id == "eee-disable")
+            .expect("kept, not dropped");
+        assert!(!eee.eligible, "no offer on an unread state");
+        assert_eq!(eee.ineligible_reason.as_deref(), Some(EEE_UNREAD_REASON));
     }
 }

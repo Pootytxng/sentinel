@@ -1139,18 +1139,12 @@ fn gaming_session_is_live() -> bool {
 
 
 // State-detection helpers consumed by check_state_kind / check_change_active.
-
-pub(crate) fn usb_selective_suspend_off_on_ac() -> bool {
-    usb_selective_suspend_off_on_ac_checked().unwrap_or(false)
-}
+// D2b: the unchecked `usb_selective_suspend_off_on_ac()` / `pcie_aspm_off_on_ac()` (None → false, so a
+// failed read showed as "not off") are gone; their one caller reads the checked forms below.
 
 /// `None` when `powercfg` returned no readable AC value (#392).
 pub(crate) fn usb_selective_suspend_off_on_ac_checked() -> Option<bool> {
     query_power_setting_ac_dc(PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND).map(|(ac, _)| ac == 0)
-}
-
-pub(crate) fn pcie_aspm_off_on_ac() -> bool {
-    pcie_aspm_off_on_ac_checked().unwrap_or(false)
 }
 
 /// `None` when `powercfg` returned no readable AC value (#392).

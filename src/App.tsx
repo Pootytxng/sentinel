@@ -55,6 +55,7 @@ import { setStartupEntryEnabled } from "./data/startup-toggle";
 import { writeLedger } from "./data/ledger-write";
 import { tuningGuideForVendorForLanguage } from "./data/tuning-guides";
 import { isUnrecordedUndo } from "./data/rollback-error";
+import { backendMessage, localizeBackendText } from "./data/backend-error";
 import type { LabStationKey } from "./surfaces/lab-guided-data";
 import Settings from "./surfaces/Settings";
 import {
@@ -246,6 +247,7 @@ type Recommendation = {
   provenance: Provenance;
   eligible?: boolean;
   ineligible_reason?: string | null;
+  state_unread?: boolean; // D2b: the live state read did not finish ("can't tell", never "off")
 };
 
 type AppliedChange = {
@@ -990,7 +992,9 @@ function App() {
       recorded = true;
       await refresh();
     } catch (e) {
-      fail(t("app.errors.applyFailed"), e);
+      // D2b: a refusal the backend explains (couldn't check / not on this PC) is shown in its own
+      // words; anything else keeps the generic line.
+      fail(backendMessage(e, t) ?? t("app.errors.applyFailed"), e);
     } finally {
       setBusyId(null);
     }
@@ -1025,10 +1029,10 @@ function App() {
         applied: report.applied,
         skipped: report.items
           .filter((i) => i.status === "skipped")
-          .map((i) => ({ title: i.rec_title, reason: i.reason ?? "" })),
+          .map((i) => ({ title: i.rec_title, reason: localizeBackendText(i.reason ?? "", t) })),
       };
     } catch (e) {
-      return { applied: 0, skipped: items.map((i) => ({ title: i.recTitle, reason: String(e) })) };
+      return { applied: 0, skipped: items.map((i) => ({ title: i.recTitle, reason: localizeBackendText(String(e), t) })) };
     } finally {
       await refresh();
     }
@@ -1062,7 +1066,10 @@ function App() {
       recorded = true;
       await refresh();
     } catch (e) {
-      fail(isUnrecordedUndo(e) ? t("common.undoUnrecorded") : t("app.errors.rollbackFailed"), e);
+      // D2b: an undo the backend could not run because it couldn't check the task says so.
+      const known = backendMessage(e, t);
+      if (known) fail(known, e);
+      else fail(isUnrecordedUndo(e) ? t("common.undoUnrecorded") : t("app.errors.rollbackFailed"), e);
     } finally {
       setBusyId(null);
     }

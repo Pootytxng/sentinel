@@ -506,6 +506,8 @@ export type Recommendation = {
    *  out of the completion denominator). Defaults true for older payloads without the field. */
   eligible?: boolean;
   ineligible_reason?: string | null;
+  /** D2b: the live state read did not finish, so `currently_applied: false` means "can't tell". */
+  state_unread?: boolean;
 };
 
 // Cross-session comparison result (mirrors comparison.rs serde).

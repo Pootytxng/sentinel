@@ -1,0 +1,73 @@
+// D2b: backend sentences that must be shown in the user's language. Rust returns these exact English
+// sentences (consts in src-tauri/src/actions.rs and recommendations.rs); this file maps each one to an
+// i18n key. `backend-error.test.ts` pins every entry byte-equal to its Rust const, so a reworded Rust
+// sentence fails the gate instead of silently falling back to English.
+//
+// Matching is "contains the whole sentence", not "starts with": a caller may wrap the error (a batch
+// item, a rollback prefix), and every sentence here is long and specific enough not to occur by chance.
+// An error that carries none of them returns null, and the caller keeps its own message (D3 will add a
+// marked English fallback for the rest).
+import type { TFunction } from "i18next";
+
+/** English sentence (byte-equal to the Rust const named) → i18n key. */
+export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key: string }> = [
+  {
+    rust: "TASK_UNREADABLE_APPLY",
+    text: "Compy couldn't check this Windows task right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.",
+    key: "app.backendErrors.taskUnreadable",
+  },
+  {
+    rust: "TASK_NOT_FOUND_APPLY",
+    text: "That telemetry task isn't on this PC, so there is nothing to turn off.",
+    key: "app.backendErrors.taskNotFound",
+  },
+  {
+    rust: "TASK_UNREADABLE_UNDO",
+    text: "Compy couldn't check this Windows task right now, so it wasn't turned back on yet. The change stays in your Trust Ledger so you can try again.",
+    key: "app.backendErrors.taskUnreadableUndo",
+  },
+  {
+    rust: "TASK_NOT_FOUND_UNDO",
+    text: "That telemetry task is no longer on this PC, so there was nothing to turn back on.",
+    key: "app.backendErrors.taskNotFoundUndo",
+  },
+  {
+    rust: "EEE_UNREADABLE_APPLY",
+    text: "Compy couldn't read your network adapters right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.",
+    key: "app.backendErrors.eeeUnreadable",
+  },
+  {
+    rust: "EEE_NO_ADAPTER_APPLY",
+    text: "No connected wired network adapter on this PC offers an Energy-Efficient Ethernet setting, so there is nothing to change.",
+    key: "app.backendErrors.eeeNoAdapter",
+  },
+  {
+    rust: "EEE_NO_SWITCH_APPLY",
+    text: "Your adapter's driver has an Energy-Efficient Ethernet setting, but no value Compy recognizes as off, so Compy left it as it is rather than guess.",
+    key: "app.backendErrors.eeeNoSwitch",
+  },
+  {
+    rust: "EEE_UNREAD_REASON",
+    text: "Couldn't check Energy-Efficient Ethernet on your wired adapter right now.",
+    key: "app.backendErrors.eeeUnreadReason",
+  },
+];
+
+/** The i18n key for a backend error/reason that carries one of the sentences above, else null. */
+export function backendSentenceKey(err: unknown): string | null {
+  if (err === null || err === undefined) return null;
+  const text = String(err);
+  return BACKEND_SENTENCES.find((s) => text.includes(s.text))?.key ?? null;
+}
+
+/** The sentence in the user's language when `err` carries a known one, else null (caller decides). */
+export function backendMessage(err: unknown, t: TFunction): string | null {
+  const key = backendSentenceKey(err);
+  return key ? t(key) : null;
+}
+
+/** For text shown as-is (a skip reason, an ineligible reason): the translated sentence when known,
+ *  otherwise the text unchanged. */
+export function localizeBackendText(text: string, t: TFunction): string {
+  return backendMessage(text, t) ?? text;
+}

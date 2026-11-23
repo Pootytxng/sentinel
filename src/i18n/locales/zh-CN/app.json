@@ -52,6 +52,17 @@
     "recAppliedExternally": "「{{title}}」目前是开启状态,但并非 Compy 应用的,因此没有可回滚的记录。请前往 Windows 原本的设置位置手动关闭。",
     "openExportsFolderFailed": "无法打开导出文件夹。"
   },
+  "backendErrors": {
+    "taskUnreadable": "Compy 现在无法检查这个 Windows 任务（检查无法运行，或 Windows 没有及时响应），因此没有做任何更改。请稍后再试。",
+    "taskNotFound": "这台电脑上没有这个遥测任务，所以没有需要关闭的内容。",
+    "taskUnreadableUndo": "Compy 现在无法检查这个 Windows 任务，所以还没有把它重新打开。这项更改仍保留在你的「信任台账」中，你可以再试一次。",
+    "taskNotFoundUndo": "这台电脑上已经没有这个遥测任务，所以没有需要重新打开的内容。",
+    "eeeUnreadable": "Compy 现在无法读取你的网络适配器（检查无法运行，或 Windows 没有及时响应），因此没有做任何更改。请稍后再试。",
+    "eeeNoAdapter": "这台电脑上没有已连接的有线网络适配器提供「节能以太网」设置，所以没有需要更改的内容。",
+    "eeeNoSwitch": "你的适配器驱动有「节能以太网」设置，但没有 Compy 能识别为「关闭」的值，所以 Compy 保持原样，不去猜测。",
+    "eeeUnreadReason": "现在无法检查有线网络适配器上的「节能以太网」设置。",
+    "powerSettingUnread": "Compy 无法读取这项电源设置，因此无法判断它是开启还是关闭。"
+  },
   "status": {
     "rulesRemote": "规则:远程(已签名)",
     "rulesCached": "规则:缓存(最近一次可用版本)",

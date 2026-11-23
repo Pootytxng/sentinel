@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
 import { isUnrecordedUndo } from "../data/rollback-error";
+import { backendMessage } from "../data/backend-error";
 import { useTranslation } from "react-i18next";
 import type { AppliedChange, Recommendation } from "../types";
 import { appliedValueLabel, friendlyHeadline } from "../data/backend-words";
@@ -105,7 +106,8 @@ export function FirstWin({
       setErrorMsg(
         isUnrecordedUndo(e)
           ? t("common.undoUnrecorded")
-          : t("home.firstWin.errors.undoFailed", { error: String(e), historyRoom: t("common.rail.learn") }),
+          : backendMessage(e, t) ??
+            t("home.firstWin.errors.undoFailed", { error: String(e), historyRoom: t("common.rail.learn") }),
       );
       setPhase("error");
       return;

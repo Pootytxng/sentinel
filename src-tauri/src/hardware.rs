@@ -232,6 +232,10 @@ pub(crate) struct HardwareInfo {
     /// recognized disabled value). Gates the eee-disable rec so a failing apply is never offered
     /// on rigs whose driver hides or renames the switch (tester-found, 2026-06-10).
     pub(crate) eee_switch_exposed: bool,
+    /// D2b: the EEE read did not finish on a connected wired adapter, so `eee_switch_exposed` is false
+    /// because Compy couldn't check, not because the switch is missing. The eee-disable card says
+    /// "couldn't check" instead of "no switch".
+    pub(crate) eee_switch_unread: bool,
     /// Full classified adapter inventory — drives evidence-naming UI + the Export hardware section.
     pub(crate) network_adapters: Vec<NetAdapterInfo>,
     /// Active Wi-Fi link quality (band/signal/rate) — Some ONLY when the active connection is Wi-Fi
@@ -2197,11 +2201,8 @@ fn collect_hardware_inner() -> HardwareInfo {
     let has_wired_ethernet_port = network_adapters.iter().any(|a| a.physical && a.medium == "wired");
     // Only worth probing when a connected wired adapter exists (the EEE enumeration filters on
     // Status -eq 'Up' anyway — this just skips a PowerShell spawn on Wi-Fi-only rigs).
-    let eee_switch_exposed = has_active_wired_ethernet
-        && matches!(
-            crate::actions::resolve_eee(),
-            crate::actions::EeeResolution::Ready(_)
-        );
+    let (eee_switch_exposed, eee_switch_unread) =
+        eee_flags(has_active_wired_ethernet.then(crate::actions::resolve_eee).as_ref());
 
     // Wi-Fi link quality — only when the ACTIVE connection is Wi-Fi (skips a netsh spawn on wired
     // rigs). Read-only; fails soft to None (localized Windows / older netsh → the generic advisory).
@@ -2243,12 +2244,39 @@ fn collect_hardware_inner() -> HardwareInfo {
         has_active_wired_ethernet,
         has_wired_ethernet_port,
         eee_switch_exposed,
+        eee_switch_unread,
         network_adapters,
         wifi_link,
         qos_policies,
         network_pills,
         game_storage: detect_game_storage(),
         monitors: detect_monitors(),
+    }
+}
+
+/// PURE (D2b): `(eee_switch_exposed, eee_switch_unread)` from the EEE read (None = not probed: no
+/// connected wired adapter). An unfinished read is never "exposed" (no offer on an unread state) and
+/// is flagged unread, so the card can say "couldn't check" rather than "no switch".
+pub(crate) fn eee_flags(read: Option<&crate::actions::EeeResolution>) -> (bool, bool) {
+    use crate::actions::EeeResolution;
+    (
+        matches!(read, Some(EeeResolution::Ready(_))),
+        matches!(read, Some(EeeResolution::Unreadable)),
+    )
+}
+
+#[cfg(test)]
+mod eee_flag_tests {
+    use super::eee_flags;
+    use crate::actions::EeeResolution;
+
+    #[test]
+    fn an_unfinished_eee_read_is_flagged_unread_and_never_exposed() {
+        assert_eq!(eee_flags(Some(&EeeResolution::Unreadable)), (false, true));
+        assert_eq!(eee_flags(Some(&EeeResolution::NoEligibleAdapter)), (false, false));
+        assert_eq!(eee_flags(Some(&EeeResolution::NoDisableSwitch)), (false, false));
+        assert_eq!(eee_flags(Some(&EeeResolution::Ready(vec![]))), (true, false));
+        assert_eq!(eee_flags(None), (false, false));
     }
 }
 

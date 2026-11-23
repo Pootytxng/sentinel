@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { writeLedger } from "../data/ledger-write";
 import { isUnrecordedUndo } from "../data/rollback-error";
+import { backendMessage } from "../data/backend-error";
 import { useTranslation } from "react-i18next";
 import type { Recommendation, AppliedChange } from "../types";
 import { friendlyLabel } from "../data/friendly-labels";
@@ -88,7 +89,8 @@ export function TrustMoment({
           recTitle: demoRec.title,
         });
       } catch (e) {
-        setErrorMsg(t("home.trustMoment.errors.applyFailed", { error: String(e) }));
+        // D2b: a refusal the backend explains is shown in the user's language, on its own.
+        setErrorMsg(backendMessage(e, t) ?? t("home.trustMoment.errors.applyFailed", { error: String(e) }));
         setPhase("error");
         return;
       }
@@ -105,7 +107,7 @@ export function TrustMoment({
         setErrorMsg(
           isUnrecordedUndo(e)
             ? t("common.undoUnrecorded")
-            : t("home.trustMoment.errors.rollbackFailed", { error: String(e) }),
+            : backendMessage(e, t) ?? t("home.trustMoment.errors.rollbackFailed", { error: String(e) }),
         );
         setPhase("error");
         onChanged();

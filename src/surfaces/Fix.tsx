@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
+import { localizeBackendText } from "../data/backend-error";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { AppliedChange, StartupEntry, TrialLink } from "../types";
@@ -117,7 +118,16 @@ type Rec = {
   eligible?: boolean;
   ineligible_reason?: string | null;
   severity?: "safe" | "moderate" | "advanced"; // §4 "Apply all" targets SAFE-tier only
+  // D2b: the live state read did not finish, so "not applied" means "can't tell", never "off".
+  state_unread?: boolean;
 };
+
+// D2b: said on a rec whose live state couldn't be read, so its switch is never read as "off".
+export function StateUnreadLine({ rec }: { rec: Pick<Rec, "state_unread"> }) {
+  const { t } = useTranslation();
+  if (!rec.state_unread) return null;
+  return <p className="fix-row-unread">{t("app.backendErrors.powerSettingUnread")}</p>;
+}
 
 type Props = {
   recs: Rec[];
@@ -297,6 +307,7 @@ function FixRow({
           )}
         </div>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
+        <StateUnreadLine rec={rec} />
         <GameModeNote id={rec.id} vendor={vendor} reverted={gameModeReverted} />
         {applied && (
           <TrustSnapshotLine
@@ -374,6 +385,7 @@ export function SlimFixRow({
         />
       }
     >
+      <StateUnreadLine rec={rec} />
       {why && <SlimDetailRow k={t("optimize.fix.whyItMatters")} v={why} />}
       <SlimDetailRow
         k={t("optimize.fix.evidence")}
@@ -1574,7 +1586,10 @@ export default function Fix({
                   <RecTitle id={r.id} title={r.title} />
                 </div>
                 <p className="fix-row-reason">
-                  {r.ineligible_reason ?? t("optimize.fix.notApplicableFallback")}
+                  {/* D2b: a "couldn't check" reason from the backend shows in the user's language. */}
+                  {r.ineligible_reason
+                    ? localizeBackendText(r.ineligible_reason, t)
+                    : t("optimize.fix.notApplicableFallback")}
                 </p>
                 {/* A5 override — reversible; the rec rejoins the normal list through the SAME
                     audited apply path. The user is asserting the detection, not skipping safety. */}
@@ -1591,7 +1606,9 @@ export default function Fix({
                 </div>
                 <p className="fix-row-reason">
                   {t("optimize.fix.compysReadWasPrefix")}{" "}
-                  {r.ineligible_reason ?? t("optimize.fix.notApplicableFallbackLower")}
+                  {r.ineligible_reason
+                    ? localizeBackendText(r.ineligible_reason, t)
+                    : t("optimize.fix.notApplicableFallbackLower")}
                 </p>
                 <button className="fix-dismiss" onClick={() => clearOverride(r.id)}>
                   {t("optimize.fix.setAsideAgain")}

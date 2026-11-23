@@ -2766,26 +2766,92 @@ pub(crate) fn bloat_removal_gate() -> bool {
 /// across builds (live-QA found "Microsoft Compatibility Appraiser" → "Microsoft Compatibility Appraiser
 /// Exp" on Win11 26200), so an exact hardcoded name can SILENTLY miss the real task. Prefers an exact
 /// match, else the first prefix match. Non-elevated; `path`/`base` are FIXED enum constants (guarded),
-/// and the returned name is re-guarded by the caller before any elevated use. None → nothing matches.
-fn resolve_task_name(path: &str, base: &str) -> Option<String> {
+/// and the returned name is re-guarded by the caller before any elevated use.
+///
+/// D2b: three answers, never two. `Ok(Some)` = found · `Ok(None)` = the read FINISHED and nothing at
+/// the path matches · `Err(TaskUnreadable)` = the read did not finish (PowerShell couldn't start, it
+/// failed, or it didn't answer within [`QUERY_READ_LIMIT`]). A failed read used to come back as None
+/// and be shown as "not found on this system". The query lists every task and filters by path with
+/// `$ErrorActionPreference = 'Stop'`, so a path with no tasks is an empty, SUCCESSFUL read, and any
+/// error at all is a non-zero exit (unreadable), not an empty list.
+fn resolve_task_name(path: &str, base: &str) -> Result<Option<String>, TaskUnreadable> {
     if ps_safe_squoted(path).is_err() || ps_safe_squoted(base).is_err() {
-        return None;
+        return Ok(None);
     }
-    let out = quiet_command(SysTool::PowerShell)
-        .args([
-            "-NoProfile",
-            "-Command",
-            &format!("Get-ScheduledTask -TaskPath '{}' | ForEach-Object {{ $_.TaskName }}", path),
-        ])
-        .output()
-        .ok()?;
+    #[cfg(test)]
+    if let Some(forced) = FORCE_TASK_READ.with(|f| f.borrow().clone()) {
+        return task_name_from_read(forced.as_ref(), base);
+    }
+    let mut cmd = quiet_command(SysTool::PowerShell);
+    cmd.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        &format!(
+            "$ErrorActionPreference = 'Stop'; Get-ScheduledTask | Where-Object {{ $_.TaskPath -eq '{}' }} | \
+             ForEach-Object {{ $_.TaskName }}",
+            path
+        ),
+    ]);
+    task_name_from_read(output_within(cmd, QUERY_READ_LIMIT).as_ref(), base)
+}
+
+/// The task read did not finish: PowerShell couldn't start, failed, or didn't answer in time.
+/// Never "the task isn't there".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TaskUnreadable;
+
+/// PURE: a finished task listing → the resolved name (or `Ok(None)` when nothing matches); no
+/// output (spawn failure / timeout) or a non-zero exit → `Err(TaskUnreadable)`, never `Ok(None)`.
+fn task_name_from_read(read: Option<&std::process::Output>, base: &str) -> Result<Option<String>, TaskUnreadable> {
+    let out = read.ok_or(TaskUnreadable)?;
+    if !out.status.success() {
+        return Err(TaskUnreadable);
+    }
     let names: Vec<String> = String::from_utf8_lossy(&out.stdout)
         .lines()
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
         .collect();
-    pick_task_name(&names, base)
+    Ok(pick_task_name(&names, base))
 }
+
+// Test-only: stands in for the task listing read on this thread. `Some(None)` = the read did not
+// finish (no output); `Some(Some(out))` = it finished with `out`. Never compiled into the shipped binary.
+#[cfg(test)]
+thread_local! {
+    static FORCE_TASK_READ: std::cell::RefCell<Option<Option<std::process::Output>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// RAII guard: the task listing read answers `read` on this thread for the guard's lifetime (test-only).
+#[cfg(test)]
+pub(crate) struct ForceTaskRead;
+
+#[cfg(test)]
+impl ForceTaskRead {
+    pub(crate) fn begin(read: Option<std::process::Output>) -> Self {
+        FORCE_TASK_READ.with(|f| *f.borrow_mut() = Some(read));
+        ForceTaskRead
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForceTaskRead {
+    fn drop(&mut self) {
+        FORCE_TASK_READ.with(|f| *f.borrow_mut() = None);
+    }
+}
+
+/// Apply refused because the task read did not finish. Mirrored byte-for-byte in
+/// `src/data/backend-error.ts` (pinned by `backend-error.test.ts`), which shows it in the user's language.
+pub(crate) const TASK_UNREADABLE_APPLY: &str = "Compy couldn't check this Windows task right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.";
+/// Apply refused because the read finished and the task is not at its path.
+pub(crate) const TASK_NOT_FOUND_APPLY: &str = "That telemetry task isn't on this PC, so there is nothing to turn off.";
+/// Undo not run because the task read did not finish; the ledger row stays active.
+pub(crate) const TASK_UNREADABLE_UNDO: &str = "Compy couldn't check this Windows task right now, so it wasn't turned back on yet. The change stays in your Trust Ledger so you can try again.";
+/// Undo not run because the read finished and the task is no longer at its path.
+pub(crate) const TASK_NOT_FOUND_UNDO: &str = "That telemetry task is no longer on this PC, so there was nothing to turn back on.";
 
 /// Pure name picker (build-drift policy): an EXACT match wins (older Windows); otherwise the first
 /// prefix match (a renamed task carrying a suffix like " Exp"). None if nothing at the path matches.
@@ -2797,22 +2863,25 @@ fn pick_task_name(names: &[String], base: &str) -> Option<String> {
 }
 
 /// `(path, concrete_name)` for a task, resolving build-drift in the name and RE-GUARDING the resolved
-/// name with `ps_safe_squoted` so it stays safe to interpolate into an elevated command. None → the
-/// task is absent on this system (caller fails loud / reports Unknown rather than acting on a guess).
-fn resolved_task_target(task: &KnownBloatTask) -> Option<(&'static str, String)> {
+/// name with `ps_safe_squoted` so it stays safe to interpolate into an elevated command. `Ok(None)` →
+/// the read finished and the task is absent on this system; `Err(TaskUnreadable)` → the read did not
+/// finish (caller refuses / reports Unknown rather than acting on a guess, and never says "not found").
+fn resolved_task_target(task: &KnownBloatTask) -> Result<Option<(&'static str, String)>, TaskUnreadable> {
     let (path, base) = task.path_and_name();
-    let name = resolve_task_name(path, base)?;
+    let Some(name) = resolve_task_name(path, base)? else {
+        return Ok(None);
+    };
     if ps_safe_squoted(path).is_err() || ps_safe_squoted(&name).is_err() {
-        return None;
+        return Ok(None);
     }
-    Some((path, name))
+    Ok(Some((path, name)))
 }
 
 /// Read a scheduled task's current state (non-elevated): "Ready" | "Disabled" | "Running" | "Unknown".
 /// Resolves the real task name first (build-drift safe); identifiers are FIXED enum constants, guarded
-/// by ps_safe_squoted and interpolated only inside '...'.
+/// by ps_safe_squoted and interpolated only inside '...'. Absent or unreadable → "Unknown".
 pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
-    let Some((path, name)) = resolved_task_target(task) else {
+    let Ok(Some((path, name))) = resolved_task_target(task) else {
         return "Unknown".into();
     };
     let mut cmd = quiet_command(SysTool::PowerShell);
@@ -2901,8 +2970,12 @@ fn task_disabled_in_listing(listing: &str, base: &str) -> Option<bool> {
 pub(crate) fn apply_disable_scheduled_task(task: KnownBloatTask) -> Result<ApplyResult, String> {
     // Resolve the concrete task name FIRST so a build-drift rename (e.g. "... Exp") fails loud here —
     // BEFORE any elevation — instead of popping a UAC prompt only to silently no-op on a missing task.
-    let (path, name) = resolved_task_target(&task)
-        .ok_or_else(|| "that telemetry task was not found on this system.".to_string())?;
+    // D2b: a read that did not finish refuses with its own sentence, never "not found".
+    let (path, name) = match resolved_task_target(&task) {
+        Ok(Some(target)) => target,
+        Ok(None) => return Err(TASK_NOT_FOUND_APPLY.to_string()),
+        Err(TaskUnreadable) => return Err(TASK_UNREADABLE_APPLY.to_string()),
+    };
     // Rollback-first: refuse if the prior state can't be confirmed rather than recording an "Unknown"
     // prior and mutating anyway. If the task was ALREADY Disabled and the read transiently failed,
     // rollback (which treats Unknown as "was enabled") would later re-enable a task the user or an
@@ -2955,8 +3028,13 @@ pub(crate) fn rollback_enable_scheduled_task_typed(
         return Ok(());
     }
     // Resolve the real task name (build-drift safe) before the elevated re-enable.
-    let (path, name) = resolved_task_target(task)
-        .ok_or_else(|| "that telemetry task was not found to re-enable.".to_string())?;
+    // D2b: an unfinished read is an Err with its own sentence (the ledger row stays active, so the
+    // user can try again); only a FINISHED read that finds no task says it is gone.
+    let (path, name) = match resolved_task_target(task) {
+        Ok(Some(target)) => target,
+        Ok(None) => return Err(TASK_NOT_FOUND_UNDO.to_string()),
+        Err(TaskUnreadable) => return Err(TASK_UNREADABLE_UNDO.to_string()),
+    };
     run_elevated_powershell(&format!(
         "Enable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
         path, name
@@ -4317,6 +4395,112 @@ mod plan_query_live_tests {
     }
 }
 
+// D2b: "couldn't read" is never "not found" / "no adapter". Every case here is driven by a forced read
+// (no PowerShell, no elevation): the refusals happen before any elevated command, so the would-be-prompt
+// count stays 0 and nothing is recorded.
+#[cfg(test)]
+mod unreadable_outcome_tests {
+    use super::*;
+    use std::os::windows::process::ExitStatusExt;
+
+    fn out(code: u32, stdout: &str) -> std::process::Output {
+        std::process::Output {
+            status: std::process::ExitStatus::from_raw(code),
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_task_read_that_did_not_finish_is_unreadable_never_not_found() {
+        let base = "Microsoft Compatibility Appraiser";
+        // No output (could not start / did not answer in time) and a failed run: unreadable.
+        assert_eq!(task_name_from_read(None, base), Err(TaskUnreadable));
+        assert_eq!(task_name_from_read(Some(&out(1, "")), base), Err(TaskUnreadable));
+        // A failed run that printed a name is still not a finished read.
+        assert_eq!(task_name_from_read(Some(&out(1, base)), base), Err(TaskUnreadable));
+        // A finished read: found, renamed (build drift), or truly absent.
+        assert_eq!(task_name_from_read(Some(&out(0, &format!("{base}\r\n"))), base), Ok(Some(base.to_string())));
+        assert_eq!(
+            task_name_from_read(Some(&out(0, &format!("{base} Exp\r\n"))), base),
+            Ok(Some(format!("{base} Exp")))
+        );
+        assert_eq!(task_name_from_read(Some(&out(0, "")), base), Ok(None));
+    }
+
+    #[test]
+    fn disabling_a_task_whose_read_did_not_finish_refuses_with_its_own_sentence_and_no_prompt() {
+        reset_elevation_dispatch_count();
+        let _read = ForceTaskRead::begin(None);
+        let err = apply_disable_scheduled_task(KnownBloatTask::CompatibilityAppraiser).err().expect("refused");
+        assert_eq!(err, TASK_UNREADABLE_APPLY);
+        assert_eq!(elevation_dispatch_count(), 0, "refused before any elevation");
+        drop(_read);
+        // A FINISHED read with no such task is the not-found sentence, never the unreadable one.
+        let _read = ForceTaskRead::begin(Some(out(0, "")));
+        let err = apply_disable_scheduled_task(KnownBloatTask::CompatibilityAppraiser).err().expect("refused");
+        assert_eq!(err, TASK_NOT_FOUND_APPLY);
+        assert_eq!(elevation_dispatch_count(), 0);
+    }
+
+    #[test]
+    fn re_enabling_a_task_whose_read_did_not_finish_is_an_error_not_a_claim_it_is_gone() {
+        reset_elevation_dispatch_count();
+        let _read = ForceTaskRead::begin(None);
+        assert_eq!(
+            rollback_enable_scheduled_task_typed(&KnownBloatTask::CompatibilityAppraiser, "Ready"),
+            Err(TASK_UNREADABLE_UNDO.to_string())
+        );
+        // An Unknown prior is treated as "was enabled", so it reads too, and refuses the same way.
+        assert_eq!(
+            rollback_enable_scheduled_task_typed(&KnownBloatTask::CompatibilityAppraiser, "Unknown"),
+            Err(TASK_UNREADABLE_UNDO.to_string())
+        );
+        assert_eq!(elevation_dispatch_count(), 0);
+        drop(_read);
+        let _read = ForceTaskRead::begin(Some(out(0, "")));
+        assert_eq!(
+            rollback_enable_scheduled_task_typed(&KnownBloatTask::CompatibilityAppraiser, "Ready"),
+            Err(TASK_NOT_FOUND_UNDO.to_string())
+        );
+        // The task's state reads Unknown when its name can't be read, never a state.
+        drop(_read);
+        let _read = ForceTaskRead::begin(None);
+        assert_eq!(scheduled_task_state(&KnownBloatTask::CompatibilityAppraiser), "Unknown");
+    }
+
+    #[test]
+    fn an_eee_read_that_did_not_finish_is_unreadable_never_no_adapter() {
+        assert_eq!(resolve_eee_from_read(None), EeeResolution::Unreadable);
+        assert_eq!(resolve_eee_from_read(Some(&out(1, ""))), EeeResolution::Unreadable);
+        // One adapter whose properties couldn't be listed makes the whole read unreadable.
+        assert_eq!(
+            resolve_eee_from_read(Some(&out(0, "Ethernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n!UNREAD\r\n"))),
+            EeeResolution::Unreadable
+        );
+        // A finished, empty read is the honest "no adapter offers it".
+        assert_eq!(resolve_eee_from_read(Some(&out(0, ""))), EeeResolution::NoEligibleAdapter);
+        assert!(matches!(
+            resolve_eee_from_read(Some(&out(0, "Ethernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n"))),
+            EeeResolution::Ready(_)
+        ));
+    }
+
+    #[test]
+    fn disabling_eee_on_an_unfinished_read_refuses_with_its_own_sentence_and_no_prompt() {
+        reset_elevation_dispatch_count();
+        let _read = ForceEeeRead::begin(None);
+        assert_eq!(apply_eee_disable().err().expect("refused"), EEE_UNREADABLE_APPLY);
+        drop(_read);
+        let _read = ForceEeeRead::begin(Some(out(0, "")));
+        assert_eq!(apply_eee_disable().err().expect("refused"), EEE_NO_ADAPTER_APPLY);
+        drop(_read);
+        let _read = ForceEeeRead::begin(Some(out(0, "Ethernet|Energy-Efficient Ethernet|On|On~Max\r\n")));
+        assert_eq!(apply_eee_disable().err().expect("refused"), EEE_NO_SWITCH_APPLY);
+        assert_eq!(elevation_dispatch_count(), 0, "refused before any elevation");
+    }
+}
+
 #[cfg(test)]
 mod output_within_tests {
     use super::{output_within, quiet_command};
@@ -4326,9 +4510,9 @@ mod output_within_tests {
     // D1e: the read-only queries are bounded. Each of these functions reads Windows without changing it,
     // so it runs its command through output_within (ended at a limit, "couldn't read" on timeout) and
     // never through an unbounded `.output()`. The apply/rollback commands (apply_remove_preload_app,
-    // rollback_reinstall_preload_app_typed, powercfg_setactive_unelevated) are deliberately NOT here,
-    // and two reads are left unbounded on purpose because their "couldn't read" answer would become a
-    // false claim (resolve_task_name: "not found on this system"; resolve_eee: "no eligible adapter").
+    // rollback_reinstall_preload_app_typed, powercfg_setactive_unelevated) are deliberately NOT here.
+    // D2b: resolve_task_name and resolve_eee joined once a timeout had its own honest answer
+    // (TaskUnreadable / EeeResolution::Unreadable) instead of "not found" / "no eligible adapter".
     #[test]
     fn the_read_only_queries_run_through_output_within_never_an_unbounded_output() {
         let src = include_str!("actions.rs").replace("\r\n", "\n");
@@ -4360,6 +4544,8 @@ mod output_within_tests {
             "list_power_plans_stdout",
             "read_core_parking_priors",
             "read_tcp_autotuning_disabled",
+            "resolve_task_name",
+            "resolve_eee",
         ] {
             let b = body(&src, name);
             assert!(b.contains("output_within("), "{name} reads through output_within");
@@ -4606,6 +4792,62 @@ pub(crate) enum EeeResolution {
     NoDisableSwitch,
     /// Properties Compy can safely flip (every entry has a pickable disabled value).
     Ready(Vec<EeeProperty>),
+    /// D2b: the adapter read did not finish (PowerShell couldn't start, failed, didn't answer within
+    /// [`QUERY_READ_LIMIT`], or an adapter's properties couldn't be listed). Never "no adapter".
+    Unreadable,
+}
+
+/// Apply refused because the adapter read did not finish. Mirrored byte-for-byte in
+/// `src/data/backend-error.ts` (pinned by `backend-error.test.ts`).
+pub(crate) const EEE_UNREADABLE_APPLY: &str = "Compy couldn't read your network adapters right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.";
+/// Apply refused because the read finished and no connected wired adapter offers the setting.
+pub(crate) const EEE_NO_ADAPTER_APPLY: &str = "No connected wired network adapter on this PC offers an Energy-Efficient Ethernet setting, so there is nothing to change.";
+/// Apply refused because the driver offers the setting but no value Compy recognizes as off.
+pub(crate) const EEE_NO_SWITCH_APPLY: &str = "Your adapter's driver has an Energy-Efficient Ethernet setting, but no value Compy recognizes as off, so Compy left it as it is rather than guess.";
+
+/// The marker line the enumeration prints when one adapter's properties could not be listed.
+const EEE_UNREAD_MARKER: &str = "!UNREAD";
+
+/// PURE: a finished enumeration → its classification; no output (spawn failure / timeout), a non-zero
+/// exit, or an adapter whose properties could not be listed → `Unreadable`, never `NoEligibleAdapter`.
+pub(crate) fn resolve_eee_from_read(read: Option<&std::process::Output>) -> EeeResolution {
+    let Some(out) = read else {
+        return EeeResolution::Unreadable;
+    };
+    if !out.status.success() {
+        return EeeResolution::Unreadable;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    if stdout.lines().any(|l| l.trim() == EEE_UNREAD_MARKER) {
+        return EeeResolution::Unreadable;
+    }
+    resolve_eee_from(parse_eee_property_lines(&stdout))
+}
+
+// Test-only: stands in for the EEE enumeration on this thread (`Some(None)` = it did not finish).
+#[cfg(test)]
+thread_local! {
+    static FORCE_EEE_READ: std::cell::RefCell<Option<Option<std::process::Output>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// RAII guard: the EEE enumeration answers `read` on this thread for the guard's lifetime (test-only).
+#[cfg(test)]
+pub(crate) struct ForceEeeRead;
+
+#[cfg(test)]
+impl ForceEeeRead {
+    pub(crate) fn begin(read: Option<std::process::Output>) -> Self {
+        FORCE_EEE_READ.with(|f| *f.borrow_mut() = Some(read));
+        ForceEeeRead
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForceEeeRead {
+    fn drop(&mut self) {
+        FORCE_EEE_READ.with(|f| *f.borrow_mut() = None);
+    }
 }
 
 /// PURE: parse enumeration output lines `adapter|displayName|currentValue|valid~values~list`.
@@ -4686,15 +4928,30 @@ pub(crate) fn resolve_eee_from(props: Vec<EeeProperty>) -> EeeResolution {
 /// Live enumeration + classification. Eligibility filter unchanged from the cross-LLM review
 /// (Status Up · PhysicalMediaType 802.3 · property exists); matching is broadened to display-name
 /// OR registry-keyword, and the driver's ValidDisplayValues ride along for honest value picking.
+///
+/// D2b: a read that does not finish is [`EeeResolution::Unreadable`], never `NoEligibleAdapter`.
+/// `$ErrorActionPreference = 'Stop'` makes a failed adapter listing a non-zero exit (it used to be an
+/// empty list under SilentlyContinue, which read as "no adapter"); one adapter whose properties can't
+/// be listed prints the unread marker; the whole read is bounded by [`QUERY_READ_LIMIT`].
 pub(crate) fn resolve_eee() -> EeeResolution {
+    #[cfg(test)]
+    if let Some(forced) = FORCE_EEE_READ.with(|f| f.borrow().clone()) {
+        return resolve_eee_from_read(forced.as_ref());
+    }
     let ps = format!(
         r#"
-$adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {{
+$ErrorActionPreference = 'Stop'
+$adapters = @(Get-NetAdapter | Where-Object {{
     $_.Status -eq 'Up' -and $_.PhysicalMediaType -eq '802.3'
-}}
+}})
 foreach ($a in $adapters) {{
-    $props = Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue |
-        Where-Object {{ $_.DisplayName -match '{names}' -or ($_.RegistryKeyword -and $_.RegistryKeyword -match '{keywords}') }}
+    try {{
+        $props = @(Get-NetAdapterAdvancedProperty -Name $a.Name |
+            Where-Object {{ $_.DisplayName -match '{names}' -or ($_.RegistryKeyword -and $_.RegistryKeyword -match '{keywords}') }})
+    }} catch {{
+        Write-Output '{unread}'
+        continue
+    }}
     foreach ($p in $props) {{
         $valid = @($p.ValidDisplayValues) -join '~'
         Write-Output ($a.Name + '|' + $p.DisplayName + '|' + $p.DisplayValue + '|' + $valid)
@@ -4703,15 +4960,11 @@ foreach ($a in $adapters) {{
 "#,
         names = EEE_DISPLAY_NAME_PATTERN,
         keywords = EEE_REGISTRY_KEYWORD_PATTERN,
+        unread = EEE_UNREAD_MARKER,
     );
-    let output = quiet_command(SysTool::PowerShell)
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-        .output();
-    let stdout = match output {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
-        Err(_) => return EeeResolution::NoEligibleAdapter,
-    };
-    resolve_eee_from(parse_eee_property_lines(&stdout))
+    let mut cmd = quiet_command(SysTool::PowerShell);
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps]);
+    resolve_eee_from_read(output_within(cmd, QUERY_READ_LIMIT).as_ref())
 }
 
 /// PURE: build the apply script from (property, picked-disabled-value) pairs. The trailing
@@ -4736,19 +4989,11 @@ pub(crate) fn build_eee_apply_script(targets: &[(EeeProperty, String)]) -> Strin
 /// Issue 617 assessment: every per-NIC write is SilentlyContinue and the apply always returns Ok
 /// with the full snapshot, so any partial state is always receipted and rollback-able.
 pub(crate) fn apply_eee_disable() -> Result<ApplyResult, String> {
+    // D2b: each refusal has its own sentence; an unfinished read never reads as "no adapter".
     let props = match resolve_eee() {
-        EeeResolution::NoEligibleAdapter => {
-            return Err(
-                "No active wired Ethernet adapter exposes an Energy-Efficient-Ethernet property — nothing to change on this rig."
-                    .into(),
-            )
-        }
-        EeeResolution::NoDisableSwitch => {
-            return Err(
-                "This adapter's driver exposes EEE, but not a 'Disabled'-style value Compy recognizes — left untouched rather than guessing at the driver's vocabulary."
-                    .into(),
-            )
-        }
+        EeeResolution::Unreadable => return Err(EEE_UNREADABLE_APPLY.into()),
+        EeeResolution::NoEligibleAdapter => return Err(EEE_NO_ADAPTER_APPLY.into()),
+        EeeResolution::NoDisableSwitch => return Err(EEE_NO_SWITCH_APPLY.into()),
         EeeResolution::Ready(props) => props,
     };
 
