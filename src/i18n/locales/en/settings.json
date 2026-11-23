@@ -138,7 +138,7 @@
     "sectionTitle": "Your data",
     "header": "What Compy keeps about your PC stays on this PC: its files are in %APPDATA%\\Compy, and this window keeps a few notes of its own. Compy doesn't send any of it anywhere unless you send a report yourself.",
     "playHistoryTitle": "Clear play history",
-    "playHistorySub": "Deletes the play sessions Compy measured, the hardware and driver history it compares against, Trial results and crash notes. Your change history stays, so every change Compy made can still be undone. You see the full list before anything is deleted.",
+    "playHistorySub": "Deletes the play sessions Compy measured, the hardware and driver history it compares against and crash notes, and Trial results while no change Compy made is still applied (they are linked to it). Your change history stays, so every change Compy made can still be undone. You see the full list before anything is deleted.",
     "playHistoryAction": "Show what would be deleted",
     "reading": "Reading…",
     "confirmTitle": "Delete play history?",

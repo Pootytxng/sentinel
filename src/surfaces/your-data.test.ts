@@ -312,6 +312,16 @@ describe("your-data C2b: clear everything", () => {
     expect(statusLine(s({ roll_forward: { status: "deferred", detail: [{ code: "no_clear_in_progress" }] } }))).toEqual({ key: "deferred", dismiss: false });
   });
 
+  // C5b: the choice's own line must not promise to delete Trial results the plan keeps while a change is applied
+  // (data_clear `trials_tied_to_changes`). Break check: restore the unconditional "Trial results and crash notes".
+  it("the play-history line says Trial results go only while no change is applied, in both languages", () => {
+    const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "settings.json"), "utf8")).yourData;
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "settings.json"), "utf8")).yourData;
+    expect(en.playHistorySub).toContain("Trial results while no change Compy made is still applied");
+    expect(en.playHistorySub).not.toMatch(/Trial results and crash notes/);
+    expect(zh.playHistorySub).toContain("在 Compy 做过的更改都已不再生效时，也删除试验结果");
+  });
+
   it("every status line and every new string has words in both languages", () => {
     const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "settings.json"), "utf8")).yourData;
     const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "settings.json"), "utf8")).yourData;
