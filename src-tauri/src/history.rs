@@ -2200,6 +2200,11 @@ fn outcome_applied(rec_id: &str, rec_title: &str) -> BatchItemOutcome {
     }
 }
 
+/// A5 Part A: recorded (so it can be undone) although its result did not arrive; `reason` says so.
+fn outcome_applied_unconfirmed(rec_id: &str, rec_title: &str, reason: String) -> BatchItemOutcome {
+    BatchItemOutcome { reason: Some(reason), ..outcome_applied(rec_id, rec_title) }
+}
+
 fn outcome_skipped(rec_id: &str, rec_title: &str, reason: String) -> BatchItemOutcome {
     BatchItemOutcome {
         rec_id: rec_id.to_string(),
@@ -2209,45 +2214,89 @@ fn outcome_skipped(rec_id: &str, rec_title: &str, reason: String) -> BatchItemOu
     }
 }
 
-/// Pure receipt → outcome mapping (fail-safe direction: ONLY an explicit `ok` receipt earns a
-/// ledger entry; `fail` and MISSING are both not-applied). Split out so the failure-isolation
-/// contract is unit-testable without elevation.
-fn resolve_receipt(receipts: &std::collections::HashMap<String, bool>, rec_id: &str) -> Result<(), String> {
-    match receipts.get(rec_id) {
-        Some(true) => Ok(()),
-        Some(false) => Err(
-            "The elevated step failed for this item — it was skipped and nothing was changed for it."
-                .to_string(),
-        ),
-        None => Err(
-            "No completion receipt was written for this item — treating it as not applied (nothing is recorded that didn't verifiably happen)."
-                .to_string(),
-        ),
+/// A5 Part A: the result files older versions had the elevated helper write into the data folder (`<x>`
+/// is any text). Compy no longer writes or reads them; any left behind (a crash between write and delete)
+/// is deleted by [`clear_leftover_result_files`]. Spelled here for the data inventory.
+const LEFTOVER_RESULT_FILES: [&str; 4] = [
+    "elevation-batch-<ms>.receipts",
+    "gaming-elevation-<id>.receipts",
+    "gaming-restore-<id>.receipts",
+    "memcompress-restore-<ms>.result",
+];
+
+/// PURE: whether `name` is one of [`LEFTOVER_RESULT_FILES`] (the `<x>` part matches one or more characters).
+fn is_leftover_result_file(name: &str) -> bool {
+    LEFTOVER_RESULT_FILES.iter().any(|pattern| {
+        let (head, rest) = pattern.split_once('<').unwrap_or((pattern, ""));
+        let tail = rest.split_once('>').map(|(_, t)| t).unwrap_or("");
+        name.len() > head.len() + tail.len() && name.starts_with(head) && name.ends_with(tail)
+    })
+}
+
+/// Delete leftover result files (only plain files directly in `dir` whose names match). Best-effort: a file
+/// that cannot be deleted is left; nothing reads it.
+fn clear_leftover_result_files(dir: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let is_file = entry.file_type().map(|t| t.is_file()).unwrap_or(false);
+        if is_file && entry.file_name().to_str().is_some_and(is_leftover_result_file) {
+            let _ = std::fs::remove_file(entry.path());
+        }
     }
 }
 
-/// PURE: what the batch's one elevated step did for one staged item. Only an error that proves the
-/// elevated process never ran (UAC declined, launch failed) means nothing changed. Any other error
-/// means the script ran and failed part-way, so items that wrote an ok receipt before it stopped are
-/// on Windows and still get their ledger receipt (#616); the rest must not claim nothing changed.
+/// What the batch's one elevated step did for one staged item (A5 Part A).
+#[derive(Debug, PartialEq, Eq)]
+enum AdminItem {
+    /// Its `ok` line arrived: recorded.
+    Done,
+    /// No line arrived from a step that may have run: RECORDED (its undo restores the prior Compy read
+    /// before the step; undoing a value that never changed writes the same value back), with this warning.
+    Unconfirmed(String),
+    /// Not recorded, with this reason: its `fail` line arrived, or the step provably never ran.
+    Skipped(String),
+}
+
+/// The elevated step failed for this item (its own `catch` wrote `fail`).
+const ADMIN_ITEM_FAILED: &str =
+    "The elevated step failed for this item — it was skipped and nothing was changed for it.";
+
+/// PURE: what the batch's one elevated step did for one staged item. The lines come over the dispatch's
+/// pipe and carry its nonce (A5 Part A), so an `ok` or `fail` line is the step's own word for that item.
+///
+/// Rollback consequences (the order matters): an `ok` line is recorded whatever the run says (a1b review r2:
+/// it can only exist if the item ran). A `fail` line is not recorded. With NO line, only an error that proves
+/// the elevated process never ran (UAC declined, a launch or pre-launch refusal, the helper refusing before
+/// PowerShell) means nothing changed. Every other gap (the script stopped, the helper was killed, the pipe
+/// broke part-way, the output was cut) may hide a change, so the item is RECORDED with a warning to check it
+/// and undo it: a broken channel never reads as "nothing ran".
 fn elevated_item_outcome(
     run: &Result<(), String>,
     receipts: &std::collections::HashMap<String, bool>,
     rec_id: &str,
-) -> Result<(), String> {
-    match run {
-        // a1b review r2: an `ok` receipt can only exist if the script ran and did that item, so it is
-        // trusted even when the error text says nothing ran (the receipt is the stronger evidence).
-        Err(e) if elevation_error_nothing_ran(e) && receipts.get(rec_id) != Some(&true) => Err(format!(
-            "Elevation did not complete — nothing was changed for this item. ({e})"
+) -> AdminItem {
+    match (receipts.get(rec_id), run) {
+        (Some(true), _) => AdminItem::Done,
+        (Some(false), Ok(())) => AdminItem::Skipped(ADMIN_ITEM_FAILED.to_string()),
+        (Some(false), Err(e)) => AdminItem::Skipped(format!(
+            "{ADMIN_ITEM_FAILED} The admin step also stopped with an error ({e}), so Compy can't be sure \
+             it changed nothing: check this setting in Windows."
         )),
-        Err(e) => resolve_receipt(receipts, rec_id).map_err(|reason| {
-            format!(
-                "{reason} The admin step also stopped with an error ({e}), so Compy can't be sure \
-                 it changed nothing: check this setting in Windows."
-            )
-        }),
-        Ok(()) => resolve_receipt(receipts, rec_id),
+        (None, Err(e)) if elevation_error_nothing_ran(e) => {
+            AdminItem::Skipped(format!("Elevation did not complete — nothing was changed for this item. ({e})"))
+        }
+        (None, run) => {
+            let why = match run {
+                Err(e) => format!(" The admin step stopped with an error ({e})."),
+                Ok(()) => String::new(),
+            };
+            AdminItem::Unconfirmed(format!(
+                "Compy did not receive a result for this item from the admin step, so it may have been changed.{why} \
+                 It is recorded so you can check this setting in Windows and undo it."
+            ))
+        }
     }
 }
 
@@ -2360,16 +2409,16 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
     }
     let recorded_before_admin = applied > 0;
 
-    // ── Phase 2 — ONE elevation for every deferred command, receipts to a result FILE (data,
-    // not code: reading it never executes anything), then a ledger receipt per confirmed item.
+    // ── Phase 2 — ONE elevation for every deferred command. A5 Part A: its per-item results come back
+    // over the dispatch's own pipe, each line carrying the dispatch's random nonce (data, not code:
+    // reading them never executes anything); nothing is written to the data folder. Then a ledger
+    // receipt per item the step did or may have done (`elevated_item_outcome`).
     let mut elevation_prompts = 0usize;
     if !staged.is_empty() {
-        let receipts_path = root.path().join(format!(
-            "elevation-batch-{}.receipts",
-            Utc::now().timestamp_millis()
-        ));
-        std::fs::create_dir_all(root.path()).map_err(|e| e.to_string())?;
-        let _ = std::fs::remove_file(&receipts_path);
+        // Result files older versions left in the data folder are not read any more: clear them.
+        clear_leftover_result_files(root.path());
+        let nonce = crate::fps_pipe::random_hex()
+            .map_err(|e| format!("The admin step was not started: Compy could not make its results key ({e}). Nothing else was changed."))?;
         // Checked (never indexed) command attribution: by construction every staged range lies
         // inside all_cmds, but a panic HERE would poison HISTORY_LOCK for the whole session — so
         // an impossible mismatch aborts the batch BEFORE elevation instead.
@@ -2380,26 +2429,28 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
             })?;
             script_items.push((d.rec_id.clone(), cmds.to_vec()));
         }
-        let script = compose_batch_script(&script_items, &receipts_path.to_string_lossy())?;
+        let script = compose_batch_script(&script_items, &nonce)?;
         elevation_prompts = 1;
         // A declined UAC ran nothing, so every item is skipped and the phase-1 items stand on their
-        // own receipts. Any other error means the script ran and stopped part-way: the result file
-        // is still the only evidence of which items finished, so it is read either way (#616).
-        let run = run_elevated_powershell(&script);
-        let text = std::fs::read_to_string(&receipts_path).unwrap_or_default();
-        // Read once, so remove it now: a receipt commit that fails below returns early.
-        let _ = std::fs::remove_file(&receipts_path);
-        let receipts = parse_batch_receipts(&text);
+        // own receipts. Any other error means the script may have run and stopped part-way: the relayed
+        // lines are the only evidence of which items finished, so they are read either way (#616).
+        let crate::actions::ElevatedCapture { run, text } = crate::actions::run_elevated_capture(&script);
+        let receipts = parse_batch_receipts(&text, &nonce);
         let mut made_elevated: Vec<Made> = Vec::new();
         let first_admin_outcome = outcomes.len();
         for d in staged {
             match elevated_item_outcome(&run, &receipts, &d.rec_id) {
-                Ok(()) => {
+                AdminItem::Done => {
                     made_elevated.push(Made::new(&d.rec_id, &d.rec_title, d.result));
                     applied += 1;
                     outcomes.push(outcome_applied(&d.rec_id, &d.rec_title));
                 }
-                Err(reason) => outcomes.push(outcome_skipped(&d.rec_id, &d.rec_title, reason)),
+                AdminItem::Unconfirmed(reason) => {
+                    made_elevated.push(Made::new(&d.rec_id, &d.rec_title, d.result));
+                    applied += 1;
+                    outcomes.push(outcome_applied_unconfirmed(&d.rec_id, &d.rec_title, reason));
+                }
+                AdminItem::Skipped(reason) => outcomes.push(outcome_skipped(&d.rec_id, &d.rec_title, reason)),
             }
         }
         if !made_elevated.is_empty() {
@@ -3577,19 +3628,60 @@ mod batch_apply_tests {
         assert_eq!(it.rec_title, "Disable Fast Startup");
     }
 
-    // The fail-safe receipt contract: ONLY an explicit ok earns a ledger entry; an explicit fail
-    // and a MISSING receipt are both not-applied. (The PS-level isolation proof lives in
+    // A5 Part A, the receipt contract after a clean run: an explicit ok is recorded, an explicit fail is
+    // not, and a MISSING line (the pipe broke, the output was cut) is RECORDED with a warning, never read as
+    // "nothing changed". (The PS-level isolation proof lives in
     // actions::batch_elevation_tests::real_powershell_batch_isolates_a_failing_item.)
     #[test]
-    fn receipt_resolution_is_fail_safe() {
+    fn receipt_resolution_never_reads_a_missing_line_as_nothing_changed() {
         let mut receipts = std::collections::HashMap::new();
         receipts.insert("alpha".to_string(), true);
         receipts.insert("bravo".to_string(), false);
-        assert!(resolve_receipt(&receipts, "alpha").is_ok());
-        let failed = resolve_receipt(&receipts, "bravo").expect_err("explicit fail");
-        assert!(failed.contains("skipped"));
-        let missing = resolve_receipt(&receipts, "charlie").expect_err("missing receipt");
-        assert!(missing.contains("not applied"));
+        let ran: Result<(), String> = Ok(());
+        assert_eq!(elevated_item_outcome(&ran, &receipts, "alpha"), AdminItem::Done);
+        match elevated_item_outcome(&ran, &receipts, "bravo") {
+            AdminItem::Skipped(r) => assert!(r.contains("skipped"), "{r}"),
+            other => panic!("an explicit fail is not recorded: {other:?}"),
+        }
+        match elevated_item_outcome(&ran, &receipts, "charlie") {
+            AdminItem::Unconfirmed(r) => {
+                assert!(r.contains("may have been changed") && r.contains("undo it"), "{r}");
+                assert!(!r.contains("nothing was changed"), "{r}");
+            }
+            other => panic!("a missing line is recorded, unconfirmed: {other:?}"),
+        }
+    }
+
+    // A5 Part A: leftover result files from older versions are matched by their fixed shapes only.
+    #[test]
+    fn only_the_four_leftover_result_file_shapes_are_cleared() {
+        for name in [
+            "elevation-batch-1700000000000.receipts",
+            "gaming-elevation-ab12.receipts",
+            "gaming-restore-ab12-cd.receipts",
+            "memcompress-restore-1700000000000.result",
+        ] {
+            assert!(is_leftover_result_file(name), "{name}");
+        }
+        for name in [
+            "history.json",
+            "elevation-batch-.receipts",
+            "elevation-batch-1.receipts.bak",
+            "gaming-elevation-ab12.txt",
+            "memcompress-restore-1.results",
+            "receipts-consent.json",
+            "xelevation-batch-1.receipts",
+        ] {
+            assert!(!is_leftover_result_file(name), "{name}");
+        }
+        let dir = crate::test_scratch::scratch("a5a-leftovers");
+        std::fs::write(dir.join("elevation-batch-1.receipts"), "x:ok").unwrap();
+        std::fs::write(dir.join("history.json"), "[]").unwrap();
+        std::fs::create_dir_all(dir.join("gaming-restore-d.receipts")).unwrap();
+        clear_leftover_result_files(&dir);
+        assert!(!dir.join("elevation-batch-1.receipts").exists(), "a leftover file is deleted");
+        assert!(dir.join("history.json").exists(), "other files stay");
+        assert!(dir.join("gaming-restore-d.receipts").is_dir(), "a folder is never deleted");
     }
 
     // The UAC-cancel / elevation-failure arm, proven deterministically (no real prompt): with
@@ -3906,30 +3998,37 @@ mod receipt_commit_tests {
         let stopped: Result<(), String> = Err(elevation_outcome(Ok(exit_status(1))).expect_err("exit 1"));
         assert!(!elevation_error_nothing_ran(stopped.as_ref().expect_err("stopped")), "the script ran");
 
-        for id in ["broke", "missing"] {
-            let skip = elevated_item_outcome(&declined, &receipts, id).expect_err("a declined UAC ran nothing");
-            assert!(skip.contains("nothing was changed"), "{id}: {skip}");
-        }
+        let skipped = |o: AdminItem| match o {
+            AdminItem::Skipped(r) => r,
+            other => panic!("expected skipped, got {other:?}"),
+        };
+        let unconfirmed = |o: AdminItem| match o {
+            AdminItem::Unconfirmed(r) => r,
+            other => panic!("expected recorded-unconfirmed, got {other:?}"),
+        };
+        let skip = skipped(elevated_item_outcome(&declined, &receipts, "missing"));
+        assert!(skip.contains("nothing was changed"), "a declined UAC with no line ran nothing: {skip}");
         // a1b review r2: an `ok` receipt is proof the script ran that item, so it wins over an error
         // text that says nothing ran (e.g. a wait that failed after the step was done): recorded, so it
-        // can be undone, never "nothing was changed".
-        assert!(elevated_item_outcome(&declined, &receipts, "done").is_ok(), "an ok receipt is recorded");
+        // can be undone, never "nothing was changed". A5: a `fail` line is the same proof that it ran.
+        assert_eq!(elevated_item_outcome(&declined, &receipts, "done"), AdminItem::Done, "an ok receipt is recorded");
+        let skip = skipped(elevated_item_outcome(&declined, &receipts, "broke"));
+        assert!(skip.contains("can't be sure it changed nothing"), "{skip}");
         let not_started: Result<(), String> = Err(crate::actions::HELPER_POWERSHELL_NOT_STARTED_MSG.to_string());
-        assert!(elevated_item_outcome(&not_started, &receipts, "done").is_ok(), "an ok receipt is recorded");
-        assert!(elevated_item_outcome(&not_started, &receipts, "missing").is_err());
-        assert!(elevated_item_outcome(&stopped, &receipts, "done").is_ok(), "a finished item is recorded");
-        for id in ["broke", "missing"] {
-            let skip = elevated_item_outcome(&stopped, &receipts, id).expect_err("no ok receipt");
-            assert!(skip.contains("can't be sure it changed nothing"), "{id}: {skip}");
-            assert!(skip.contains("check this setting in Windows"), "{id}: {skip}");
-        }
+        assert_eq!(elevated_item_outcome(&not_started, &receipts, "done"), AdminItem::Done, "an ok receipt is recorded");
+        skipped(elevated_item_outcome(&not_started, &receipts, "missing"));
+        let refused: Result<(), String> = Err(crate::actions::HELPER_CHANNEL_REFUSED_MSG.to_string());
+        skipped(elevated_item_outcome(&refused, &receipts, "missing"));
+        assert_eq!(elevated_item_outcome(&stopped, &receipts, "done"), AdminItem::Done, "a finished item is recorded");
+        let skip = skipped(elevated_item_outcome(&stopped, &receipts, "broke"));
+        assert!(skip.contains("can't be sure it changed nothing"), "{skip}");
+        assert!(skip.contains("check this setting in Windows"), "{skip}");
+        // A5 Part A: no line from a step that ran (stopped, killed, pipe broke) is RECORDED so it can be undone.
+        let warn = unconfirmed(elevated_item_outcome(&stopped, &receipts, "missing"));
+        assert!(warn.contains("may have been changed") && warn.contains("exit code 1"), "{warn}");
         let ran: Result<(), String> = Ok(());
-        assert!(elevated_item_outcome(&ran, &receipts, "done").is_ok());
-        assert_eq!(
-            elevated_item_outcome(&ran, &receipts, "missing"),
-            resolve_receipt(&receipts, "missing"),
-            "a clean run keeps the existing receipt rules"
-        );
+        assert_eq!(elevated_item_outcome(&ran, &receipts, "done"), AdminItem::Done);
+        unconfirmed(elevated_item_outcome(&ran, &receipts, "missing"));
     }
 
     /// [`commit_rollback`] on row `idx` with faked effects.
@@ -5206,30 +5305,67 @@ mod leftover_restore_tests {
 
     #[test]
     fn memcompress_combined_script_banks_the_prior_before_mutating() {
-        let s = memcompress_combined_restore_script(r"C:\Users\o'brien\AppData\res.result");
+        let n = "0123456789abcdef0123456789abcdef";
+        let s = memcompress_combined_restore_script(n).expect("a ps_safe nonce");
         // Order is the contract: EAP=Stop first, prior read + bank BEFORE the mutation, the
         // confirmation marker LAST — so a failure at any step can never leave a mutation that
         // precedes its snapshot.
         let idx = |needle: &str| s.find(needle).unwrap_or_else(|| panic!("missing {needle}: {s}"));
         assert!(s.starts_with("$ErrorActionPreference='Stop';"));
-        assert!(idx("Get-MMAgent") < idx("prior:$p"), "prior read precedes its banking");
-        assert!(idx("prior:$p") < idx("Enable-MMAgent"), "snapshot banks BEFORE the mutation");
-        assert!(idx("Enable-MMAgent") < idx("done:ok"), "confirmation is the last act");
+        assert!(idx("Get-MMAgent") < idx(&format!("{n}:prior:$p")), "prior read precedes its banking");
+        assert!(idx(&format!("{n}:prior:$p")) < idx("Enable-MMAgent"), "snapshot banks BEFORE the mutation");
+        assert!(idx("Enable-MMAgent") < idx(&format!("{n}:done:ok")), "confirmation follows the mutation");
+        assert!(idx(&format!("{n}:done:ok")) < idx(&format!("{n}:end")), "the end marker is last");
         assert!(!s.to_lowercase().contains("exit"), "exit-free: {s}");
-        assert!(s.contains("o''brien"), "result path is single-quote-escaped");
+        // A5 Part A: output lines, never a file; and the nonce passes the ps_safe allowlist or nothing is built.
+        assert!(!s.contains("Add-Content") && !s.contains("$rf"), "{s}");
+        assert!(memcompress_combined_restore_script("n'; calc; '").is_err());
     }
 
     #[test]
     fn memcompress_result_parse_is_fail_safe() {
-        assert_eq!(parse_memcompress_restore_result("prior:False\ndone:ok"), Ok(false));
-        assert_eq!(parse_memcompress_restore_result("prior:True\r\ndone:ok"), Ok(true));
-        // Prior banked but the mutation never confirmed → no snapshot is earned.
-        let e = parse_memcompress_restore_result("prior:False").expect_err("unconfirmed");
-        assert!(e.contains("did not confirm") && e.contains("nothing was recorded"), "{e}");
-        // No prior at all (empty / tampered / done-only) → refuse, never guess a direction.
-        for text in ["", "done:ok", "prior:Garbage\ndone:ok"] {
-            let e = parse_memcompress_restore_result(text).expect_err("must refuse");
-            assert!(e.contains("nothing was recorded"), "{text:?}: {e}");
+        use crate::actions::MemcompressReport::{Confirmed, NoPrior, Unconfirmed};
+        let n = "0123456789abcdef0123456789abcdef";
+        let p = |t: &str| parse_memcompress_restore_result(&t.replace("N:", &format!("{n}:")), n);
+        assert_eq!(p("N:prior:False\nN:done:ok"), Confirmed(false));
+        assert_eq!(p("N:prior:True\r\nN:done:ok\nN:end"), Confirmed(true));
+        assert_eq!(p("N:prior:False"), Unconfirmed(false), "prior banked, confirmation missing");
+        // No prior at all (empty / tampered / done-only / another dispatch's lines) → no direction to undo to.
+        for text in ["", "N:done:ok", "N:prior:Garbage\nN:done:ok", "prior:False\ndone:ok"] {
+            assert_eq!(p(text), NoPrior, "{text:?}");
+        }
+        assert_eq!(
+            parse_memcompress_restore_result("fedcba9876543210fedcba9876543210:prior:True", n),
+            NoPrior,
+            "a foreign nonce is not this dispatch's prior"
+        );
+    }
+
+    /// A5 Part A, rollback consequences for the memory-compression restore: what gets recorded per outcome.
+    #[test]
+    fn memcompress_outcome_never_reads_a_broken_channel_as_nothing_changed() {
+        use crate::actions::{memcompress_outcome, MemcompressReport::*};
+        let ok: Result<(), String> = Ok(());
+        let declined: Result<(), String> = Err(ELEVATION_DECLINED_MSG.to_string());
+        let refused: Result<(), String> = Err(crate::actions::HELPER_CHANNEL_REFUSED_MSG.to_string());
+        let one = <std::process::ExitStatus as std::os::windows::process::ExitStatusExt>::from_raw(1);
+        let stopped: Result<(), String> = Err(elevation_outcome(Ok(one)).expect_err("exit 1"));
+        // Ran ok: recorded with its prior.
+        assert_eq!(memcompress_outcome(&ok, Confirmed(false)), Ok(false));
+        // Prior arrived, confirmation did not (stopped, killed, pipe broke): RECORDED, so it can be undone.
+        for run in [&ok, &stopped, &declined] {
+            assert_eq!(memcompress_outcome(run, Unconfirmed(true)), Ok(true), "{run:?}");
+        }
+        // Never started: nothing recorded, and the error is the launch's own (it says nothing ran).
+        for run in [&declined, &refused] {
+            let e = memcompress_outcome(run, NoPrior).expect_err("nothing ran");
+            assert!(elevation_error_nothing_ran(&e), "{e}");
+        }
+        // Started but no prior arrived: nothing to undo to, and the message does not claim nothing changed.
+        for run in [&ok, &stopped] {
+            let e = memcompress_outcome(run, NoPrior).expect_err("no prior");
+            assert!(e.contains("may have run") && !e.contains("nothing was changed"), "{e}");
+            assert!(!elevation_error_nothing_ran(&e), "{e}");
         }
     }
 

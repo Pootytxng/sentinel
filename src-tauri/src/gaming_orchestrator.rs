@@ -601,9 +601,14 @@ enum TierDecision {
 
 /// Map the one elevation's outcome + the per-item receipts to the tier decision.
 /// `items` = (receipt id, user-facing label) per staged item.
+///
+/// A5 Part A: the receipts are the lines relayed over the dispatch's pipe, and only lines carrying this
+/// dispatch's `nonce` count. A missing line after a run that may have started (the pipe broke, the helper
+/// was killed) is never read as "nothing ran": the staged changes stay and the session restores them.
 fn resolve_tier_elevation(
     elevation: Result<(), String>,
     receipts_text: &str,
+    nonce: &str,
     items: &[(String, String)],
 ) -> TierDecision {
     // A2b (the rule history.rs `elevated_item_outcome` uses for `ok`): a receipt for a staged item,
@@ -611,7 +616,7 @@ fn resolve_tier_elevation(
     // nothing ran. Then the staged changes are never dropped: they stay and the session aborts +
     // restores (an `ok` item is on Windows; restoring an unchanged one is a no-op by value).
     let any_receipt = || {
-        let receipts = actions::parse_batch_receipts(receipts_text);
+        let receipts = actions::parse_batch_receipts(receipts_text, nonce);
         items.iter().any(|(id, _)| receipts.contains_key(id.as_str()))
     };
     match elevation {
@@ -622,7 +627,7 @@ fn resolve_tier_elevation(
         Ok(()) => {
             // Fail-safe receipt semantics (same as the Fix batch): only an explicit `ok` counts;
             // `fail` and MISSING are both treated as not-applied.
-            let receipts = actions::parse_batch_receipts(receipts_text);
+            let receipts = actions::parse_batch_receipts(receipts_text, nonce);
             let failed: Vec<&str> = items
                 .iter()
                 .filter(|(id, _)| receipts.get(id.as_str()) != Some(&true))
@@ -640,20 +645,10 @@ fn resolve_tier_elevation(
     }
 }
 
-/// Delete the elevated tier's receipts file before the elevation. `Ok` when it is gone (deleted, or it
-/// was never there); any other failure is an `Err`, and the caller must not elevate (A3a).
-fn clear_receipts_before_elevation(receipts_path: &std::path::Path) -> Result<(), String> {
-    match std::fs::remove_file(receipts_path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(format!("the receipts file could not be cleared before the elevated step: {e}")),
-    }
-}
-
 /// Apply the advanced (elevated) tier under ONE UAC prompt. Phase 1: every item runs with the
 /// elevation-deferral sink armed — it reads + snapshots and parks its elevated command (no
-/// mutation). Phase 2: the parked commands run under a single elevation with per-item file
-/// receipts. The crash-safe invariant holds: every staged change is in the on-disk contract
+/// mutation). Phase 2: the parked commands run under a single elevation with per-item receipts
+/// relayed over the dispatch's pipe (A5 Part A; no file). The crash-safe invariant holds: every staged change is in the on-disk contract
 /// BEFORE the elevation runs (startup recovery of a change whose mutation never happened
 /// restores it to its own captured prior — a no-op by value).
 ///
@@ -720,21 +715,12 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
         })?;
         script_items.push((s.id.to_string(), cmds.to_vec()));
     }
-    // Session-scoped receipts, beside the contract (DATA out, never input in — §4 precedent).
-    // The session id is always internally generated ("gm-<millis>"), but shape-guard it anyway
-    // before it enters a filename, so a future caller feeding a disk-loaded SessionFile in here
-    // can never open a path-traversal.
-    actions::ps_safe(&file.session_id)?;
-    let receipts_path = crate::gaming_session::session_data_dir()
-        .join(format!("gaming-elevation-{}.receipts", file.session_id));
-    if let Some(dir) = receipts_path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    // A3a (a2b review): the receipts file must really be gone before the elevation, so every receipt
-    // read afterwards is this run's. A failed delete (other than "not there") refuses to elevate,
-    // before any staged entry is recorded: the caller's abort-restore then undoes only the core.
-    clear_receipts_before_elevation(&receipts_path)?;
-    let script = actions::compose_batch_script(&script_items, &receipts_path.to_string_lossy())?;
+    // A5 Part A: the receipts come back over the dispatch's own pipe, each line carrying this random
+    // nonce, so every receipt read afterwards is this run's (this replaces the A3a "clear the file
+    // first" rule: there is no file). A nonce or compose failure refuses before anything is staged.
+    let nonce = crate::fps_pipe::random_hex()
+        .map_err(|e| format!("the elevated step was not started: its results key could not be made ({e})"))?;
+    let script = actions::compose_batch_script(&script_items, &nonce)?;
 
     // Crash-safe fail-safe ordering: the contract carries every staged change BEFORE the one
     // elevation runs. Dying mid-elevation leaves an over-complete contract; recovery restores
@@ -761,13 +747,11 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
     }
 
     // Phase 2 — the ONE elevation.
-    let elevation = actions::run_elevated_powershell(&script);
-    // Read on every outcome (A2b): the file was removed before this elevation, so any receipt in it
-    // was written by THIS run, and an `ok` one must keep its change in the contract even when the
-    // elevation reported "nothing ran" (resolve_tier_elevation).
-    let receipts_text = std::fs::read_to_string(&receipts_path).unwrap_or_default();
-    let _ = std::fs::remove_file(&receipts_path);
-    match resolve_tier_elevation(elevation, &receipts_text, &id_labels) {
+    // Read on every outcome (A2b): a receipt carrying this run's nonce was written by THIS run, and an
+    // `ok` one must keep its change in the contract even when the elevation reported "nothing ran"
+    // (resolve_tier_elevation).
+    let actions::ElevatedCapture { run: elevation, text: receipts_text } = actions::run_elevated_capture(&script);
+    match resolve_tier_elevation(elevation, &receipts_text, &nonce, &id_labels) {
         TierDecision::Confirmed => Ok(()),
         TierDecision::DropStaged(msg) => {
             file.changes.truncate(staged_from);
@@ -1077,7 +1061,8 @@ fn record_restore_err<'a>(errs: &mut RestoreErrs<'a>, change: &'a SessionChange,
 // Before T6b, restore fired one UAC prompt per elevated change (stop / "Restore now"
 // after a session with USB + PCIe + service suspends = the owner-counted multiple
 // prompts, flagged at T6 as out-of-scope). Same audited §4 machinery as the apply
-// tier: `ElevationDeferral` sink → `compose_batch_script` → per-item file receipts.
+// tier: `ElevationDeferral` sink → `compose_batch_script` → per-item receipts (over the
+// dispatch's pipe since A5 Part A).
 // Restore-time conservatism throughout (the mirror of apply-time refusal): any
 // infrastructure failure BEFORE the elevation falls back to the pre-T6b per-item
 // path — a restore must stay maximally possible — while a failure OF the one
@@ -1090,9 +1075,12 @@ fn record_restore_err<'a>(errs: &mut RestoreErrs<'a>, change: &'a SessionChange,
 /// change. Fail-safe polarity: only an explicit `ok` receipt under a SUCCESSFUL
 /// elevation counts as restored — a declined/failed elevation or a `fail`/missing
 /// receipt keeps the change failed (→ RestoreFailed, contract retained, retry later).
+/// A5 Part A: only lines carrying this dispatch's `nonce` count; a broken channel leaves a change
+/// failed (contract retained), never restored.
 fn resolve_restore_batch(
     elevation: Result<(), String>,
     receipts_text: &str,
+    nonce: &str,
     items: &[(String, String)],
 ) -> Vec<(String, Result<(), String>)> {
     match elevation {
@@ -1101,7 +1089,7 @@ fn resolve_restore_batch(
             .map(|(_, label)| (label.clone(), Err(e.clone())))
             .collect(),
         Ok(()) => {
-            let receipts = actions::parse_batch_receipts(receipts_text);
+            let receipts = actions::parse_batch_receipts(receipts_text, nonce);
             items
                 .iter()
                 .map(|(id, label)| {
@@ -1196,38 +1184,26 @@ fn restore_elevated_run<'a>(
         id_labels.push((id, s.change.label.clone()));
     }
 
-    // Session-scoped receipts, beside the contract (DATA out, never input in — §4
-    // precedent). The id is internally generated ("gm-<millis>"), but shape-guard it
-    // before it enters a filename so a disk-loaded contract can never open a traversal.
+    // The id is internally generated ("gm-<millis>"); one that is not that shape came from a
+    // disk-edited contract, and the run takes the per-item path (it used to name the receipts file).
     if actions::ps_safe(session_id).is_err() {
         return staged_fallback(&staged, errs);
     }
-    let receipts_path = crate::gaming_session::session_data_dir()
-        .join(format!("gaming-restore-{session_id}.receipts"));
-    if let Some(dir) = receipts_path.parent() {
-        if std::fs::create_dir_all(dir).is_err() {
-            return staged_fallback(&staged, errs);
-        }
-    }
-    let _ = std::fs::remove_file(&receipts_path);
-    let script =
-        match actions::compose_batch_script(&script_items, &receipts_path.to_string_lossy()) {
-            Ok(s) => s,
-            Err(_) => return staged_fallback(&staged, errs),
-        };
+    // A5 Part A: the receipts come back over the dispatch's own pipe with this random nonce; no file.
+    let Ok(nonce) = crate::fps_pipe::random_hex() else {
+        return staged_fallback(&staged, errs);
+    };
+    let script = match actions::compose_batch_script(&script_items, &nonce) {
+        Ok(s) => s,
+        Err(_) => return staged_fallback(&staged, errs),
+    };
 
     // Phase 2 — the ONE elevation. Its outcome is final for this attempt: no per-item
     // fallback past this point (a decline must never be followed by more prompts).
-    let elevation = actions::run_elevated_powershell(&script);
-    let receipts_text = if elevation.is_ok() {
-        std::fs::read_to_string(&receipts_path).unwrap_or_default()
-    } else {
-        String::new()
-    };
-    let _ = std::fs::remove_file(&receipts_path);
+    let actions::ElevatedCapture { run: elevation, text: receipts_text } = actions::run_elevated_capture(&script);
     // resolve_restore_batch answers one outcome per item, in `id_labels` order, which is `staged`
     // order: zip so each outcome lands on its own change (CR-gm-restore-partial), never by label.
-    let outcomes = resolve_restore_batch(elevation, &receipts_text, &id_labels);
+    let outcomes = resolve_restore_batch(elevation, &receipts_text, &nonce, &id_labels);
     if outcomes.len() != staged.len() {
         // Impossible by construction; fail every staged change rather than guess which restored.
         for s in &staged {
@@ -2109,33 +2085,30 @@ mod elevation_batch_tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A3a (a2b review): the receipts file is really cleared before the elevation, or Compy refuses
-    /// to elevate. Gone or never there: Ok. A delete that fails for another reason (here: the name is
-    /// a folder): Err, and apply_elevated_tier returns before recording or elevating anything.
+    /// A5 Part A (replaces the A3a "clear the receipts file first" pin): the tier writes and reads no
+    /// receipts file. Its one elevation is a capture whose lines carry a fresh nonce, made before the
+    /// staged entries are recorded, and the decision reads only that nonce's lines.
     #[test]
-    fn a_receipts_file_that_cannot_be_cleared_refuses_the_elevation() {
-        let dir = std::env::temp_dir().join(format!("compy-a3a-receipts-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("gaming-elevation-x.receipts");
-        assert_eq!(clear_receipts_before_elevation(&file), Ok(()), "never there");
-        std::fs::write(&file, "adv-usb:ok\n").unwrap();
-        assert_eq!(clear_receipts_before_elevation(&file), Ok(()), "deleted");
-        assert!(!file.exists(), "a stale receipt must be gone before the elevation");
-        let blocked = dir.join("blocked.receipts");
-        std::fs::create_dir_all(&blocked).unwrap(); // remove_file on a folder fails, and not NotFound
-        let err = clear_receipts_before_elevation(&blocked).expect_err("must refuse");
-        assert!(err.contains("could not be cleared before the elevated step"), "{err}");
-        // Wired before the staged entries are recorded and before the one elevation.
+    fn the_elevated_tier_reads_its_receipts_from_the_pipe_with_a_fresh_nonce() {
         let src = include_str!("gaming_orchestrator.rs").replace("\r\n", "\n");
-        let f = src.find("fn apply_elevated_tier(").unwrap();
-        let body = &src[f..f + src[f..].find("\n}\n").unwrap()];
-        let clear = body.find("clear_receipts_before_elevation(&receipts_path)?;").expect("wired with ?");
-        assert!(clear < body.find("file.changes.push(SessionChange").unwrap(), "cleared before recording");
-        assert!(clear < body.find("actions::run_elevated_powershell(&script)").unwrap(), "cleared before elevating");
-        assert!(!body.contains("let _ = std::fs::remove_file(&receipts_path);\n    let script"), "the ignored delete is back");
-        let _ = std::fs::remove_dir_all(&dir);
+        for f in ["fn apply_elevated_tier(", "fn restore_elevated_run<"] {
+            let at = src.find(f).unwrap();
+            let body = &src[at..at + src[at..].find("\n}\n").unwrap()];
+            assert!(!body.contains(".receipts"), "{f}: no receipts file any more");
+            assert!(!body.contains("std::fs::"), "{f}: no file access around the elevation");
+            assert!(!body.contains("run_elevated_powershell("), "{f}: the batch elevation is a capture");
+            let nonce = body.find("crate::fps_pipe::random_hex()").expect("a fresh nonce per dispatch");
+            let compose = body.find("actions::compose_batch_script(&script_items, &nonce)").expect("composed with it");
+            let capture = body.find("actions::run_elevated_capture(&script)").expect("one capture");
+            assert!(nonce < compose && compose < capture, "{f}");
+        }
+        let at = src.find("fn apply_elevated_tier(").unwrap();
+        let body = &src[at..at + src[at..].find("\n}\n").unwrap()];
+        assert!(body.find("random_hex()").unwrap() < body.find("file.changes.push(SessionChange").unwrap(), "refused before recording");
     }
+
+    /// The receipt nonce used by the pinned decisions below.
+    const N: &str = "0123456789abcdef0123456789abcdef";
 
     // The pure post-elevation decision — every arm pinned (no elevation needed).
     #[test]
@@ -2144,44 +2117,62 @@ mod elevation_batch_tests {
             ("adv-usb".to_string(), "USB selective suspend off (AC)".to_string()),
             ("adv-pcie".to_string(), "PCIe ASPM off (AC)".to_string()),
         ];
+        let r = |lines: &[&str]| lines.iter().map(|l| format!("{N}:{l}\n")).collect::<String>();
         // UAC decline (launch-level) → DropStaged, honest attribution.
-        match resolve_tier_elevation(Err(ELEVATION_DECLINED_MSG.into()), "", &items) {
+        match resolve_tier_elevation(Err(ELEVATION_DECLINED_MSG.into()), "", N, &items) {
             TierDecision::DropStaged(m) => assert!(m.contains(ELEVATION_DECLINED_MSG)),
             other => panic!("a decline must drop staged, got {other:?}"),
         }
         // A2b: a receipt for any staged item means the script ran, whatever the error text says:
         // never DropStaged then (an `ok` item is on Windows), keep staged and abort + restore. With
         // no receipt at all, "nothing ran" still drops.
-        for nothing_ran in [ELEVATION_DECLINED_MSG, crate::actions::HELPER_POWERSHELL_NOT_STARTED_MSG] {
-            for receipts in ["adv-usb:ok\n", "adv-usb:fail\nadv-pcie:ok\n", "adv-pcie:fail\n"] {
-                match resolve_tier_elevation(Err(nothing_ran.into()), receipts, &items) {
+        for nothing_ran in [
+            ELEVATION_DECLINED_MSG,
+            crate::actions::HELPER_POWERSHELL_NOT_STARTED_MSG,
+            crate::actions::HELPER_CHANNEL_REFUSED_MSG,
+        ] {
+            for receipts in [r(&["adv-usb:ok"]), r(&["adv-usb:fail", "adv-pcie:ok"]), r(&["adv-pcie:fail"])] {
+                match resolve_tier_elevation(Err(nothing_ran.into()), &receipts, N, &items) {
                     TierDecision::KeepStagedAbort(m) => assert!(m.contains("Advanced options"), "{m}"),
                     other => panic!("a receipt must keep staged ({nothing_ran}, {receipts:?}), got {other:?}"),
                 }
             }
-            match resolve_tier_elevation(Err(nothing_ran.into()), "", &items) {
+            match resolve_tier_elevation(Err(nothing_ran.into()), "", N, &items) {
                 TierDecision::DropStaged(_) => {}
                 other => panic!("no receipt: nothing ran ({nothing_ran}), got {other:?}"),
             }
-            // A receipt for an id that is not staged here is not evidence about these items.
-            match resolve_tier_elevation(Err(nothing_ran.into()), "other:ok\n", &items) {
-                TierDecision::DropStaged(_) => {}
-                other => panic!("a foreign receipt is not evidence ({nothing_ran}), got {other:?}"),
+            // A receipt for an id that is not staged here is not evidence about these items, and a line
+            // without this dispatch's nonce is not a receipt at all.
+            for foreign in [r(&["other:ok"]), "adv-usb:ok\n".to_string(), format!("{}:adv-usb:ok\n", "f".repeat(32))] {
+                match resolve_tier_elevation(Err(nothing_ran.into()), &foreign, N, &items) {
+                    TierDecision::DropStaged(_) => {}
+                    other => panic!("a foreign line is not evidence ({nothing_ran}, {foreign:?}), got {other:?}"),
+                }
             }
         }
         // The process RAN and failed → conservative: keep staged, abort + restore everything.
         let ran_failed = "You approved the elevation, but the operation itself failed (exit code 1) — the prompt was fine; the command hit an error.";
-        match resolve_tier_elevation(Err(ran_failed.into()), "", &items) {
+        match resolve_tier_elevation(Err(ran_failed.into()), "", N, &items) {
             TierDecision::KeepStagedAbort(m) => assert!(m.contains("Advanced options")),
             other => panic!("ran-and-failed must keep staged, got {other:?}"),
         }
+        // A5 Part A: a clean exit whose lines never arrived (the pipe broke) is not "nothing ran".
+        match resolve_tier_elevation(Ok(()), "", N, &items) {
+            TierDecision::KeepStagedAbort(_) => {}
+            other => panic!("a broken channel must keep staged, got {other:?}"),
+        }
+        // Lines from another dispatch (no matching nonce) confirm nothing.
+        match resolve_tier_elevation(Ok(()), "adv-usb:ok\nadv-pcie:ok\n", N, &items) {
+            TierDecision::KeepStagedAbort(_) => {}
+            other => panic!("un-nonced lines must not confirm, got {other:?}"),
+        }
         // Every receipt ok → Confirmed.
-        match resolve_tier_elevation(Ok(()), "adv-usb:ok\nadv-pcie:ok\n", &items) {
+        match resolve_tier_elevation(Ok(()), &r(&["adv-usb:ok", "adv-pcie:ok"]), N, &items) {
             TierDecision::Confirmed => {}
             other => panic!("all-ok must confirm, got {other:?}"),
         }
         // A `fail` receipt → whole-session abort NAMING the failed item (no-partial).
-        match resolve_tier_elevation(Ok(()), "adv-usb:ok\nadv-pcie:fail\n", &items) {
+        match resolve_tier_elevation(Ok(()), &r(&["adv-usb:ok", "adv-pcie:fail"]), N, &items) {
             TierDecision::KeepStagedAbort(m) => {
                 assert!(m.contains("PCIe ASPM off (AC)"), "must name the failed item: {m}");
                 assert!(
@@ -2192,7 +2183,7 @@ mod elevation_batch_tests {
             other => panic!("a failed receipt must abort, got {other:?}"),
         }
         // A MISSING receipt = not applied (fail-safe direction) → abort too.
-        match resolve_tier_elevation(Ok(()), "adv-usb:ok\n", &items) {
+        match resolve_tier_elevation(Ok(()), &r(&["adv-usb:ok"]), N, &items) {
             TierDecision::KeepStagedAbort(m) => assert!(m.contains("PCIe ASPM off (AC)")),
             other => panic!("a missing receipt must abort, got {other:?}"),
         }
@@ -2332,23 +2323,28 @@ mod elevation_batch_tests {
             ("r1".to_string(), "PCIe ASPM off (AC)".to_string()),
         ];
         // Declined (or failed) elevation → EVERY staged change fails with the honest message.
-        let declined = resolve_restore_batch(Err(ELEVATION_DECLINED_MSG.into()), "", &items);
+        let r = |lines: &[&str]| lines.iter().map(|l| format!("{N}:{l}\n")).collect::<String>();
+        let declined = resolve_restore_batch(Err(ELEVATION_DECLINED_MSG.into()), "", N, &items);
         assert_eq!(declined.len(), 2);
         assert!(declined
             .iter()
             .all(|(_, r)| r.as_ref().is_err_and(|e| e == ELEVATION_DECLINED_MSG)));
         // Every receipt ok → every change restored.
-        let ok = resolve_restore_batch(Ok(()), "r0:ok\nr1:ok\n", &items);
+        let ok = resolve_restore_batch(Ok(()), &r(&["r0:ok", "r1:ok"]), N, &items);
         assert!(ok.iter().all(|(_, r)| r.is_ok()));
         // A `fail` receipt fails ONLY its own change (collect-and-continue, per item).
-        let mixed = resolve_restore_batch(Ok(()), "r0:ok\nr1:fail\n", &items);
+        let mixed = resolve_restore_batch(Ok(()), &r(&["r0:ok", "r1:fail"]), N, &items);
         assert!(mixed[0].1.is_ok());
         assert!(mixed[1].1.is_err(), "a fail receipt must fail its change");
         assert_eq!(mixed[1].0, "PCIe ASPM off (AC)", "the failure must carry its label");
         // A MISSING receipt = not restored (fail-safe direction).
-        let missing = resolve_restore_batch(Ok(()), "r0:ok\n", &items);
+        let missing = resolve_restore_batch(Ok(()), &r(&["r0:ok"]), N, &items);
         assert!(missing[0].1.is_ok());
         assert!(missing[1].1.is_err(), "a missing receipt must fail its change");
+        // A5 Part A: a broken channel (no lines) or lines without this dispatch's nonce restore nothing.
+        for text in ["", "r0:ok\nr1:ok\n"] {
+            assert!(resolve_restore_batch(Ok(()), text, N, &items).iter().all(|(_, r)| r.is_err()), "{text:?}");
+        }
     }
 
     // Runs PARTITION the restore order without reordering it — an elevated change never

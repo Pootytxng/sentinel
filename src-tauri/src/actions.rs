@@ -900,6 +900,19 @@ thread_local! {
     static ELEVATION_DISPATCH_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+// Test-only (A5 Part A): the next `run_elevated_capture` on this thread returns this instead of elevating, so
+// every receipt outcome (complete, cut short, forged, foreign nonce) is drivable without a UAC prompt.
+#[cfg(test)]
+thread_local! {
+    static FAKE_CAPTURE: std::cell::RefCell<Option<ElevatedCapture>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Make the next capture on this thread return `run` and `text` (test-only).
+#[cfg(test)]
+pub(crate) fn fake_next_capture(run: Result<(), String>, text: &str) {
+    FAKE_CAPTURE.with(|f| *f.borrow_mut() = Some(ElevatedCapture { run, text: text.to_string() }));
+}
+
 /// Read this thread's would-be-prompt count (test-only; see `ELEVATION_DISPATCH_COUNT`).
 #[cfg(test)]
 pub(crate) fn elevation_dispatch_count() -> usize {
@@ -998,24 +1011,29 @@ impl Drop for ElevationDeferral {
 }
 
 /// Compose the ONE inline elevated `-Command` for a batch: per rec, `try { <its cmds> ;
-/// receipt 'id:ok' } catch { receipt 'id:fail' }` appended to a result FILE — per-item failure
-/// isolation inside a single elevation. `$ErrorActionPreference='Stop'` promotes errors to
+/// receipt '<nonce>:id:ok' } catch { receipt '<nonce>:id:fail' }` written to the script's OUTPUT —
+/// per-item failure isolation inside a single elevation. `$ErrorActionPreference='Stop'` promotes errors to
 /// terminating so a failed step lands in `catch` (a per-cmd `-ErrorAction SilentlyContinue`,
 /// where an apply deliberately tolerates a step, still overrides — same semantics as today's
-/// per-item elevation). Rec ids pass `ps_safe` (allowlist shape) and the result path is
-/// single-quote-escaped; the captured commands themselves come from the audited apply_* builders
-/// unchanged. No `exit` may appear at this layer — enforced structurally below (an exit-bearing
-/// command is refused at compose time; the one exit-using elevated command, power-ultimate, is
-/// ALSO rejected by the Fix orchestrator before composition ever sees it).
+/// per-item elevation). Rec ids pass `ps_safe` (allowlist shape); the captured commands themselves come
+/// from the audited apply_* builders unchanged. No `exit` may appear at this layer — enforced
+/// structurally below (an exit-bearing command is refused at compose time; the one exit-using elevated
+/// command, power-ultimate, is ALSO rejected by the Fix orchestrator before composition ever sees it).
+///
+/// A5 Part A: receipts are no longer appended to a file in the user's data folder (an admin write by name
+/// in a folder the user controls, and a file any same-user program could fill with `ok` lines). They are
+/// output lines, relayed by the helper over the dispatch's pipe (`run_elevated_capture`), each carrying
+/// this dispatch's random `nonce` (`ps_safe` shape: 32 hex) so no other output can read as a receipt. The
+/// script's last statement writes `<nonce>:end`: seeing it proves every line before it arrived.
 pub(crate) fn compose_batch_script(
     items: &[(String, Vec<String>)],
-    result_path: &str,
+    nonce: &str,
 ) -> Result<String, String> {
     if items.is_empty() {
         return Err("nothing to compose".to_string());
     }
+    ps_safe(nonce)?;
     let mut script = String::from("$ErrorActionPreference='Stop'; ");
-    script.push_str(&format!("$rf='{}'; ", result_path.replace('\'', "''")));
     for (rec_id, cmds) in items {
         ps_safe(rec_id)?; // alphanumeric/._- only — safe inside the receipt literals below
         if cmds.is_empty() {
@@ -1037,9 +1055,10 @@ pub(crate) fn compose_batch_script(
             .collect::<Vec<_>>()
             .join("; ");
         script.push_str(&format!(
-            "try {{ {joined}; Add-Content -LiteralPath $rf -Value '{rec_id}:ok' }} catch {{ Add-Content -LiteralPath $rf -Value '{rec_id}:fail' }}; "
+            "try {{ {joined}; Write-Output '{nonce}:{rec_id}:ok' }} catch {{ Write-Output '{nonce}:{rec_id}:fail' }}; "
         ));
     }
+    script.push_str(&format!("Write-Output '{nonce}:end'"));
     Ok(script)
 }
 
@@ -1052,13 +1071,19 @@ fn contains_exit_token(cmd: &str) -> bool {
         .any(|tok| tok == "exit")
 }
 
-/// Parse the batch result file: one `<rec_id>:ok` / `<rec_id>:fail` line per rec. Unknown or
-/// malformed lines are ignored (the orchestrator treats a MISSING receipt as not-applied — the
-/// fail-safe direction: we only ever ledger a receipt that explicitly says ok).
-pub(crate) fn parse_batch_receipts(text: &str) -> std::collections::HashMap<String, bool> {
+/// Parse the batch's relayed output: one `<nonce>:<rec_id>:ok` / `<nonce>:<rec_id>:fail` line per rec. A line
+/// without exactly this dispatch's nonce is not a receipt (A5 Part A); unknown or malformed lines are ignored.
+/// What a MISSING receipt means is decided by the caller with [`output_complete`] (history.rs
+/// `elevated_item_outcome`: an ok earns a ledger entry; a gap after a run that started is recorded as
+/// unconfirmed, never as "nothing ran").
+pub(crate) fn parse_batch_receipts(text: &str, nonce: &str) -> std::collections::HashMap<String, bool> {
     let mut receipts = std::collections::HashMap::new();
+    let prefix = format!("{nonce}:");
     for line in text.lines() {
-        if let Some((id, status)) = line.trim().rsplit_once(':') {
+        let Some(rest) = line.trim().strip_prefix(prefix.as_str()) else {
+            continue;
+        };
+        if let Some((id, status)) = rest.rsplit_once(':') {
             match status {
                 "ok" => {
                     receipts.insert(id.to_string(), true);
@@ -1100,6 +1125,120 @@ pub(crate) const HELPER_TICKET_REFUSED: i32 = 0x4350_5333;
 /// What the parent says for [`HELPER_TICKET_REFUSED`]. Matched exactly by `elevation_error_nothing_ran`.
 pub(crate) const HELPER_TICKET_REFUSED_MSG: &str =
     "The administrator helper could not confirm this command was the one Compy sent, so no command ran.";
+
+/// A5 Part A: exit code of the elevated command helper when it was given a results pipe (`--pipe`) and
+/// could not open it or confirm Compy serves it. It refuses BEFORE the ticket and before PowerShell, so no
+/// command ran.
+pub(crate) const HELPER_CHANNEL_REFUSED: i32 = 0x4350_5335;
+
+/// What the parent says for [`HELPER_CHANNEL_REFUSED`]. Matched exactly by `elevation_error_nothing_ran`.
+pub(crate) const HELPER_CHANNEL_REFUSED_MSG: &str =
+    "The administrator helper could not open Compy's results channel, so no command ran.";
+
+/// A5 Part A: the pre-launch refusal when the app cannot create the results pipe (nothing was launched).
+const RESULTS_CHANNEL_NOT_CREATED: &str = "elevated results channel could not be created";
+
+/// One elevated dispatch whose output Compy reads (A5 Part A): how the elevation ended, and every line the
+/// helper relayed over the dispatch's pipe (joined by newlines).
+pub(crate) struct ElevatedCapture {
+    pub(crate) run: Result<(), String>,
+    pub(crate) text: String,
+}
+
+/// The most output one elevated dispatch may relay (a 32-item batch writes about 2 KiB).
+const CAPTURE_MAX_BYTES: usize = 1024 * 1024;
+
+/// A5 Part A: run ONE elevated command whose output carries results (a batch's receipts, the memory-
+/// compression restore's prior). Same helper, same ticket, same argument name as
+/// [`run_elevated_powershell`]; in addition the app creates a pipe for this dispatch and the helper relays
+/// PowerShell's output into it. Nothing is written to, or read from, the data folder. Never captured by the
+/// deferral sink: a capture IS a batch's one elevation.
+///
+/// `run` follows `elevation_outcome` exactly; a pipe the app cannot create is a pre-launch refusal (nothing
+/// ran). The caller decides what missing lines mean (history.rs `elevated_item_outcome`, gaming
+/// `resolve_tier_elevation` / `resolve_restore_batch`, [`memcompress_outcome`]); a broken channel after launch
+/// is never one of the "nothing ran" errors.
+pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
+    let none = |run: Result<(), String>| ElevatedCapture { run, text: String::new() };
+    let owned = with_error_action_stop(command);
+    let command: &str = &owned;
+    // Test-only (owner-present QA harnesses): the direct-elevation seam elevates powershell.exe through
+    // ShellExecute, which cannot hand back output, so the output goes to a temp file the test reads back.
+    // It dispatches through `run_elevated_powershell` (which counts it), so it comes before the count.
+    #[cfg(test)]
+    if FORCE_DIRECT_ELEVATION.with(|f| *f.borrow()) {
+        let out = std::env::temp_dir().join(format!("compy-qa-{}.out", std::process::id()));
+        let _ = std::fs::remove_file(&out);
+        let lit = out.to_string_lossy().replace('\'', "''");
+        let run = run_elevated_powershell(&format!("& {{ {command} }} | Out-File -LiteralPath '{lit}' -Encoding ascii"));
+        let text = std::fs::read_to_string(&out).unwrap_or_default();
+        let _ = std::fs::remove_file(&out);
+        return ElevatedCapture { run, text };
+    }
+    #[cfg(test)]
+    ELEVATION_DISPATCH_COUNT.with(|c| c.set(c.get() + 1));
+    #[cfg(test)]
+    if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
+        return none(Err(ELEVATION_DECLINED_MSG.to_string()));
+    }
+    #[cfg(test)]
+    if let Some(fake) = FAKE_CAPTURE.with(|f| f.borrow_mut().take()) {
+        return fake;
+    }
+    let exe = match std::env::current_exe() {
+        Ok(e) => e,
+        Err(e) => return none(Err(format!("cannot find own exe: {e}"))),
+    };
+    let encoded = to_hex(command.as_bytes());
+    if encoded.len() > 30_000 {
+        return none(Err("elevated command is too long to dispatch".to_string()));
+    }
+    let pipe = match crate::fps_pipe::ServerPipe::create() {
+        Ok(p) => p,
+        Err(e) => return none(Err(format!("{RESULTS_CHANNEL_NOT_CREATED}: {e}"))),
+    };
+    let name = pipe.name.clone();
+    let ticket = match mint_elevation_ticket(&encoded) {
+        Ok(t) => t,
+        Err(e) => return none(Err(e)),
+    };
+    let launched = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (l2, d2) = (launched.clone(), done.clone());
+    let reader = std::thread::spawn(move || {
+        let accept_wanted = || !d2.load(std::sync::atomic::Ordering::Acquire);
+        let client_ok = |pid: u32| crate::fps_pipe::is_our_helper(pid, &l2);
+        pipe.collect_lines(&accept_wanted, &client_ok, CAPTURE_MAX_BYTES)
+    });
+    let parent = std::process::id().to_string();
+    // Once only: stop the reader's wait for a client, and wake an `accept` that no client will end. When the
+    // helper was accepted, the wake finds the pipe busy or gone and returns once the reader is done with it.
+    let finish = || {
+        if !done.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            crate::fps_pipe::wake(&name);
+        }
+    };
+    let res = elevate_and_wait_with(
+        exe.as_os_str(),
+        &[
+            std::ffi::OsStr::new("--run-elevated"),
+            std::ffi::OsStr::new(&encoded),
+            ticket.as_os_str(),
+            std::ffi::OsStr::new("--pipe"),
+            std::ffi::OsStr::new(&name),
+            std::ffi::OsStr::new("--parent-pid"),
+            std::ffi::OsStr::new(&parent),
+        ],
+        |pid| launched.store(pid, std::sync::atomic::Ordering::Release),
+        &finish,
+    );
+    // A launch that never started a process (declined, failed) did not run `finish`: stop the wait now.
+    finish();
+    // The helper's exit closed its end of the pipe, so the reader is at end of file (or never accepted).
+    let lines = reader.join().map(|(lines, _end)| lines).unwrap_or_default();
+    let _ = std::fs::remove_file(&ticket);
+    ElevatedCapture { run: elevation_outcome(res), text: lines.join("\n") }
+}
 
 /// Quote one argument per the MSVC CommandLineToArgvW rules: bare if it has no space/tab/quote,
 /// else wrapped in quotes with `"` escaped as `\"` and backslashes doubled ONLY where they precede
@@ -1320,6 +1459,7 @@ pub(crate) fn elevation_outcome(
         Err(e) => Err(format!("could not launch elevated process: {}", e)),
         Ok(s) if s.code() == Some(HELPER_POWERSHELL_NOT_STARTED) => Err(HELPER_POWERSHELL_NOT_STARTED_MSG.into()),
         Ok(s) if s.code() == Some(HELPER_TICKET_REFUSED) => Err(HELPER_TICKET_REFUSED_MSG.into()),
+        Ok(s) if s.code() == Some(HELPER_CHANNEL_REFUSED) => Err(HELPER_CHANNEL_REFUSED_MSG.into()),
         Ok(s) if !s.success() => Err(format!(
             "You approved the elevation, but the operation itself failed (exit code {}) — the prompt was fine; the command hit an error.",
             s.code().map(|c| c.to_string()).unwrap_or_else(|| "?".into())
@@ -1341,6 +1481,8 @@ pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
     err == ELEVATION_DECLINED_MSG
         || err == HELPER_POWERSHELL_NOT_STARTED_MSG
         || err == HELPER_TICKET_REFUSED_MSG
+        || err == HELPER_CHANNEL_REFUSED_MSG
+        || err.starts_with(RESULTS_CHANNEL_NOT_CREATED)
         || err.starts_with("could not launch elevated process")
         || err.starts_with("cannot find own exe")
         || err.starts_with("elevated command is too long to dispatch")
@@ -1833,8 +1975,7 @@ mod batch_elevation_tests {
             ("fast-startup-off".to_string(), vec!["cmdA1; ".to_string()]),
             ("hags-enable".to_string(), vec!["cmdB1".to_string(), "cmdB2;".to_string()]),
         ];
-        let batch =
-            compose_batch_script(&items, r"C:\Users\o'brien\receipts.txt").expect("compose");
+        let batch = compose_batch_script(&items, "0123456789abcdef0123456789abcdef").expect("compose");
         for cmd in [
             batch.as_str(),
             "powercfg /setactive 12345678-90ab-cdef-1234-567890abcdef",
@@ -1999,13 +2140,16 @@ mod batch_elevation_tests {
             ("fast-startup-off".to_string(), vec!["cmdA1; ".to_string()]),
             ("hags-enable".to_string(), vec!["cmdB1".to_string(), "cmdB2;".to_string()]),
         ];
-        let s = compose_batch_script(&items, r"C:\Users\o'brien\receipts.txt").expect("compose");
+        let n = "0123456789abcdef0123456789abcdef";
+        let s = compose_batch_script(&items, n).expect("compose");
         assert!(s.starts_with("$ErrorActionPreference='Stop'; "), "errors must terminate into catch");
-        assert!(s.contains(r"$rf='C:\Users\o''brien\receipts.txt'"), "path single-quote-escaped");
-        assert!(s.contains("try { cmdA1; Add-Content -LiteralPath $rf -Value 'fast-startup-off:ok' }"));
-        assert!(s.contains("catch { Add-Content -LiteralPath $rf -Value 'fast-startup-off:fail' }"));
-        assert!(s.contains("try { cmdB1; cmdB2; Add-Content -LiteralPath $rf -Value 'hags-enable:ok' }"));
+        assert!(s.contains(&format!("try {{ cmdA1; Write-Output '{n}:fast-startup-off:ok' }}")));
+        assert!(s.contains(&format!("catch {{ Write-Output '{n}:fast-startup-off:fail' }}")));
+        assert!(s.contains(&format!("try {{ cmdB1; cmdB2; Write-Output '{n}:hags-enable:ok' }}")));
+        assert!(s.ends_with(&format!("Write-Output '{n}:end'")), "the end marker is the last statement");
         assert!(!s.contains("exit"), "no exit may ever appear in a composed batch");
+        // A5 Part A: nothing is written to a file any more.
+        assert!(!s.contains("Add-Content") && !s.contains("$rf"), "{s}");
     }
 
     #[test]
@@ -2016,6 +2160,9 @@ mod batch_elevation_tests {
         assert!(compose_batch_script(&[], "rf").is_err());
         let empty_cmds = vec![("fast-startup-off".to_string(), Vec::new())];
         assert!(compose_batch_script(&empty_cmds, "rf").is_err());
+        // A5 Part A: the nonce is embedded in the same literals, so it passes the same allowlist.
+        let ok = vec![("fast-startup-off".to_string(), vec!["x".to_string()])];
+        assert!(compose_batch_script(&ok, "n'; calc; '").is_err());
     }
 
     #[test]
@@ -2036,10 +2183,17 @@ mod batch_elevation_tests {
 
     #[test]
     fn parse_receipts_maps_ok_fail_and_ignores_garbage() {
-        let r = parse_batch_receipts("fast-startup-off:ok\nhags-enable:fail\n\nnot a receipt\nx:maybe\n");
+        let n = "0123456789abcdef0123456789abcdef";
+        let other = "fedcba9876543210fedcba9876543210";
+        let text = format!(
+            "{n}:fast-startup-off:ok\r\n{n}:hags-enable:fail\n\nnot a receipt\n{n}:x:maybe\n\
+             game-mode:ok\n{other}:hpet-off:ok\nx{n}:mpo-off:ok\n{n}:end\n"
+        );
+        let r = parse_batch_receipts(&text, n);
         assert_eq!(r.get("fast-startup-off"), Some(&true));
         assert_eq!(r.get("hags-enable"), Some(&false));
-        assert_eq!(r.len(), 2);
+        // A5 Part A: a line without exactly this dispatch's nonce is not a receipt.
+        assert_eq!(r.len(), 2, "{r:?}");
     }
 
     /// THE failure-isolation regression at the PowerShell level, proven against a REAL
@@ -2048,10 +2202,7 @@ mod batch_elevation_tests {
     /// elevation changes the token, not the semantics.
     #[test]
     fn real_powershell_batch_isolates_a_failing_item() {
-        let dir = crate::test_scratch::scratch_child("batch-test", format!("compy-batch-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("temp dir");
-        let rf = dir.join("receipts.txt");
-        let _ = std::fs::remove_file(&rf);
+        let n = "0123456789abcdef0123456789abcdef";
         let items = vec![
             ("alpha-ok".to_string(), vec!["Get-Date | Out-Null".to_string()]),
             (
@@ -2060,19 +2211,18 @@ mod batch_elevation_tests {
             ),
             ("charlie-ok".to_string(), vec!["$null = 1".to_string()]),
         ];
-        let script = compose_batch_script(&items, rf.to_string_lossy().as_ref()).expect("compose");
-        let status = super::quiet_command(crate::sys_exe::SysTool::PowerShell)
+        let script = compose_batch_script(&items, n).expect("compose");
+        let out = super::quiet_command(crate::sys_exe::SysTool::PowerShell)
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-            .status()
+            .output()
             .expect("powershell runs");
-        assert!(status.success(), "the batch script itself must exit 0 (failures are caught per item)");
-        let text = std::fs::read_to_string(&rf).expect("receipt file written");
-        let receipts = parse_batch_receipts(&text);
+        assert!(out.status.success(), "the batch script itself must exit 0 (failures are caught per item)");
+        let text = String::from_utf8_lossy(&out.stdout);
+        let receipts = parse_batch_receipts(&text, n);
         assert_eq!(receipts.get("alpha-ok"), Some(&true));
         assert_eq!(receipts.get("bravo-fail"), Some(&false), "the failing item must receipt fail");
         assert_eq!(receipts.get("charlie-ok"), Some(&true), "items after a failure still run");
-        let _ = std::fs::remove_file(&rf);
-        let _ = std::fs::remove_dir(&dir);
+        assert!(text.lines().any(|l| l.trim() == format!("{n}:end")), "the end marker arrives last: {text}");
     }
 }
 
@@ -2262,10 +2412,18 @@ mod elevation_attribution_tests {
         let body = &src[start..start + src[start..].find("\n}\n").unwrap()];
         let open = body.find("{\n").expect("body") + 2;
         assert_eq!(body[open..].trim(), concat!("elevate_and_wait_", "with(file, args, |_| (), || ())"), "elevate_and_wait only delegates");
-        // elevate_and_wait_with has exactly two callers in the crate: elevate_and_wait, and the FPS
-        // capture's elevated launch (monitoring.rs), which needs the started pid.
+        // elevate_and_wait_with has exactly three callers in the crate: elevate_and_wait, the FPS
+        // capture's elevated launch (monitoring.rs), and the elevated results capture (A5 Part A,
+        // `run_elevated_capture`), which both need the started pid.
         let mon = include_str!("monitoring.rs");
-        assert_eq!(whole.matches(concat!("elevate_and_", "wait_with(")).count(), 2, "its definition and elevate_and_wait");
+        assert_eq!(
+            whole.matches(concat!("elevate_and_", "wait_with(")).count(),
+            3,
+            "its definition, elevate_and_wait and run_elevated_capture"
+        );
+        let c = src.find(concat!("pub(crate) fn run_elevated_", "capture(")).expect("run_elevated_capture");
+        let cap = &src[c..c + src[c..].find("\n}\n").unwrap()];
+        assert_eq!(cap.matches(concat!("elevate_and_", "wait_with(")).count(), 1);
         assert_eq!(mon.matches(concat!("crate::actions::elevate_and_", "wait_with(")).count(), 1);
         assert_eq!(mon.matches(concat!("elevate_and_", "wait(")).count(), 0);
         // Review r2 N2: `on_ended` runs after the wait and BEFORE the process handle is closed, so the
@@ -5310,9 +5468,9 @@ pub(crate) fn rollback_hags_enable_typed(prior: Option<u32>) -> Result<(), Strin
 // snapshot BEFORE mutation, ONE elevated PS per restore (no partial mutation), fail-loud rollback,
 // and the snapshot holds the user's rotted value so the restore itself is reversible.
 // Script builders are PURE so their content is unit-testable without elevation. All interpolated
-// values are u32 integers, plus ONE sanctioned non-integer: the app-derived, single-quote-escaped
-// result-file path in the memcompress combined script (the §4 batch-receipts precedent — data out,
-// never input in).
+// values are u32 integers, plus ONE sanctioned non-integer: the app-made random nonce (`ps_safe`
+// shape) on the memcompress combined script's output lines (the §4 batch-receipts precedent, over the
+// dispatch's pipe since A5 Part A — data out, never input in).
 //
 // Deliberately ABSENT: a Defender-policy resolver. Writing HKLM\...\Policies is the absolute
 // security-settings rail — even a restore-to-stock goes through the owner, never autonomous code.
@@ -5579,38 +5737,59 @@ pub(crate) fn restore_memory_compression_with(prior: Option<bool>) -> Result<App
 
 /// Combined elevated script for the admin-only-prior case (Get-MMAgent needs admin, ca01347):
 /// capture the prior INSIDE the one elevated context — `$ErrorActionPreference='Stop'` makes the
-/// order binding (prior is written to the result file BEFORE Enable-MMAgent can run; any earlier
-/// failure aborts before the mutation). The result path is app-derived + single-quote-escaped
-/// (the §4 compose_batch_script precedent); the file is DATA out, never input in. Exit-free.
-pub(crate) fn memcompress_combined_restore_script(result_path: &str) -> String {
-    format!(
-        "$ErrorActionPreference='Stop'; $rf='{}'; $p=(Get-MMAgent).MemoryCompression; Add-Content -LiteralPath $rf -Value \"prior:$p\"; if (-not $p) {{ Enable-MMAgent -MemoryCompression }}; Add-Content -LiteralPath $rf -Value 'done:ok'",
-        result_path.replace('\'', "''")
-    )
+/// order binding (the prior is written out BEFORE Enable-MMAgent can run; any earlier failure aborts
+/// before the mutation). A5 Part A: the lines are OUTPUT carrying this dispatch's `nonce`, relayed over
+/// the dispatch's pipe (`run_elevated_capture`), never a file in the data folder. Exit-free.
+pub(crate) fn memcompress_combined_restore_script(nonce: &str) -> Result<String, String> {
+    ps_safe(nonce)?;
+    Ok(format!(
+        "$ErrorActionPreference='Stop'; $p=(Get-MMAgent).MemoryCompression; Write-Output \"{nonce}:prior:$p\"; if (-not $p) {{ Enable-MMAgent -MemoryCompression }}; Write-Output '{nonce}:done:ok'; Write-Output '{nonce}:end'"
+    ))
 }
 
-/// Fail-safe parse of the combined script's result file: a snapshot is accepted ONLY when the
-/// prior parsed AND the mutation confirmed (`done:ok`) — the §4 "only an explicit ok earns a
-/// ledger entry" direction. Anything else refuses with an honest, state-naming message.
-pub(crate) fn parse_memcompress_restore_result(text: &str) -> Result<bool, String> {
+/// What the combined restore's relayed output says. `Confirmed(p)`: prior read and change confirmed.
+/// `Unconfirmed(p)`: the prior was read (so the change, which runs only after it, MAY have happened) but its
+/// confirmation did not arrive. `NoPrior`: the prior never arrived, so there is nothing to undo to.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum MemcompressReport {
+    Confirmed(bool),
+    Unconfirmed(bool),
+    NoPrior,
+}
+
+/// PURE: read the combined restore's output (only lines with this dispatch's nonce count).
+pub(crate) fn parse_memcompress_restore_result(text: &str, nonce: &str) -> MemcompressReport {
     let mut prior: Option<bool> = None;
     let mut done = false;
+    let (p_true, p_false, ok) = (format!("{nonce}:prior:True"), format!("{nonce}:prior:False"), format!("{nonce}:done:ok"));
     for line in text.lines() {
-        match line.trim() {
-            "prior:True" => prior = Some(true),
-            "prior:False" => prior = Some(false),
-            "done:ok" => done = true,
-            _ => {}
+        let l = line.trim();
+        if l == p_true {
+            prior = Some(true);
+        } else if l == p_false {
+            prior = Some(false);
+        } else if l == ok {
+            done = true;
         }
     }
     match (prior, done) {
-        (Some(p), true) => Ok(p),
-        (Some(_), false) => Err(
-            "The elevated step captured the prior state but did not confirm the change — nothing was recorded. Re-run the check to see the current state."
-                .to_string(),
-        ),
-        (None, _) => Err(
-            "The elevated step did not report the prior state — nothing was recorded (a change is never recorded without its undo). Re-run the check to see the current state."
+        (Some(p), true) => MemcompressReport::Confirmed(p),
+        (Some(p), false) => MemcompressReport::Unconfirmed(p),
+        (None, _) => MemcompressReport::NoPrior,
+    }
+}
+
+/// PURE (A5 Part A, rollback consequences): what the memory-compression restore records. A change is never
+/// reported as "nothing happened" once the elevated step may have run: a read prior with no confirmation is
+/// RECORDED (its undo restores that prior; undoing an unchanged setting is a no-op by value). Only a run that
+/// provably never started records nothing and says nothing changed.
+pub(crate) fn memcompress_outcome(run: &Result<(), String>, report: MemcompressReport) -> Result<bool, String> {
+    match (run, report) {
+        (_, MemcompressReport::Confirmed(p)) => Ok(p),
+        (Err(e), MemcompressReport::NoPrior) if elevation_error_nothing_ran(e) => Err(e.clone()),
+        (_, MemcompressReport::Unconfirmed(p)) => Ok(p),
+        (_, MemcompressReport::NoPrior) => Err(
+            "The elevated step may have run, but Compy did not receive the prior state, so there is nothing to record an undo against. Re-run the check to see the current state."
                 .to_string(),
         ),
     }
@@ -5619,21 +5798,10 @@ pub(crate) fn parse_memcompress_restore_result(text: &str) -> Result<bool, Strin
 /// The admin-only-prior arm: ONE elevated invocation that snapshots then mutates (see the script
 /// builder above). Receipt-worthy only on a confirmed prior + confirmed mutation.
 fn restore_memory_compression_elevated_read() -> Result<ApplyResult, String> {
-    let dir = crate::compy_data_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let millis = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let path = dir.join(format!("memcompress-restore-{millis}.result"));
-    let _ = std::fs::remove_file(&path);
-    let run = run_elevated_powershell(&memcompress_combined_restore_script(&path.to_string_lossy()));
-    let text = std::fs::read_to_string(&path).unwrap_or_default();
-    let _ = std::fs::remove_file(&path);
-    // A decline or elevated failure propagates first (EAP=Stop means nothing mutated without the
-    // prior already banked); then the fail-safe parse decides whether a snapshot was earned.
-    run?;
-    let prior = parse_memcompress_restore_result(&text)?;
+    // A5 Part A: the prior and the confirmation come back over the dispatch's pipe with its nonce.
+    let nonce = crate::fps_pipe::random_hex().map_err(|e| format!("{RESULTS_CHANNEL_NOT_CREATED}: {e}"))?;
+    let capture = run_elevated_capture(&memcompress_combined_restore_script(&nonce)?);
+    let prior = memcompress_outcome(&capture.run, parse_memcompress_restore_result(&capture.text, &nonce))?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreMemoryCompressionDefault,
         rollback_action: RollbackAction::RestoreMemoryCompressionFromSnapshot,
@@ -7155,8 +7323,6 @@ mod rollback_tests {
                 }
             }
         }
-        let dir = crate::test_scratch::scratch_child("s41-restore-exit", format!("compy-s41-restore-exit-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
         // g4: every PowerShell child is waited on for at most PS_LIMIT, then killed by its own handle
         // (output_within), so a stalled child fails this test with a message instead of hanging it.
         const PS_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
@@ -7167,12 +7333,18 @@ mod rollback_tests {
                 panic!("the PowerShell child for `{what}` did not start or did not finish within {PS_LIMIT:?}; it was killed")
             })
         };
+        // A5 Part A: the receipt is the script's own output line (nonce stripped), as the pipe relays it.
+        let n = "0123456789abcdef0123456789abcdef";
         let run = |rec: &str, body: String| -> String {
-            let receipts = dir.join(format!("{rec}.txt"));
-            let _ = std::fs::remove_file(&receipts);
-            let script = compose_batch_script(&[(rec.to_string(), vec![body])], &receipts.to_string_lossy()).unwrap();
-            bounded(rec, &script);
-            std::fs::read_to_string(&receipts).unwrap_or_default().trim().to_string()
+            let script = compose_batch_script(&[(rec.to_string(), vec![body])], n).unwrap();
+            let out = bounded(rec, &script);
+            let prefix = format!("{n}:");
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter_map(|l| l.trim().strip_prefix(prefix.as_str()).map(str::to_string))
+                .filter(|l| l != "end")
+                .collect::<Vec<_>>()
+                .join("\n")
         };
         let fail_then_ok = ["findstr /c:compy-s41-none NUL".to_string(), "where.exe cmd".to_string()];
         assert_eq!(run("checked", checked_powercfg_steps(&fail_then_ok)), "checked:fail");
@@ -7189,7 +7361,6 @@ mod rollback_tests {
         assert_ne!(single(checked_powercfg_steps(&fail_then_ok)), Some(0));
         assert_eq!(single(fail_then_ok.join("; ")), Some(0), "the old chain exited 0 past a failed step");
         assert_eq!(single(checked_powercfg_steps(&ok_ok)), Some(0));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -7687,28 +7858,27 @@ mod ipc_input_fuzz_tests {
         }
     }
 
-    /// The batch receipt file is written by an elevated child and read back to decide what gets
-    /// ledgered. The fail-safe direction is that a MISSING receipt means not-applied, so the
-    /// property is that every receipt the parser reports is justified by a line that explicitly said
-    /// `ok` or `fail` — a fabricated or inferred receipt would ledger a change that never happened.
+    /// The batch receipts are relayed from an elevated child and read back to decide what gets
+    /// ledgered. The property is that every receipt the parser reports is justified by a line that
+    /// explicitly said `<nonce>:<id>:ok` or `:fail` with THIS dispatch's nonce — a fabricated, inferred or
+    /// foreign-nonce receipt would ledger (or drop) a change on another line's word.
     #[test]
     fn batch_receipts_only_report_lines_that_explicitly_said_ok_or_fail() {
+        let n = "0123456789abcdef0123456789abcdef";
         for seed in SEEDS {
             let mut rng = Rng::seeded(seed);
             for case in 0..60 {
                 let lines = 1 + rng.below(12);
                 let mut text = String::new();
                 for _ in 0..lines {
-                    match rng.below(5) {
+                    match rng.below(6) {
                         0 => {
                             let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
-                            text.push_str(id);
-                            text.push_str(":ok");
+                            text.push_str(&format!("{n}:{id}:ok"));
                         }
                         1 => {
                             let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
-                            text.push_str(id);
-                            text.push_str(":fail");
+                            text.push_str(&format!("{n}:{id}:fail"));
                         }
                         2 => {
                             let junk = hostile_string(&mut rng, 3);
@@ -7716,21 +7886,25 @@ mod ipc_input_fuzz_tests {
                         }
                         3 => {
                             let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
-                            let base = format!("{id}:ok");
+                            let base = format!("{n}:{id}:ok");
                             let m = mutate_text(&mut rng, &base);
                             text.push_str(&m);
                         }
+                        4 => {
+                            // A receipt from another dispatch (or none): never counted.
+                            let id = *rng.pick(crate::history::APPLIABLE_REC_IDS);
+                            text.push_str(&format!("{id}:ok"));
+                        }
                         _ => {
                             let junk = hostile_string(&mut rng, 2);
-                            text.push_str(&junk);
-                            text.push_str(":ok");
+                            text.push_str(&format!("{n}:{junk}:ok"));
                         }
                     }
                     text.push('\n');
                 }
 
-                for (id, ok) in parse_batch_receipts(&text) {
-                    let want = format!("{id}:{}", if ok { "ok" } else { "fail" });
+                for (id, ok) in parse_batch_receipts(&text, n) {
+                    let want = format!("{n}:{id}:{}", if ok { "ok" } else { "fail" });
                     assert!(
                         text.lines().any(|l| l.trim() == want),
                         "seed {seed} case {case}: receipt {id:?}={ok} is justified by no input line"
@@ -8311,17 +8485,17 @@ mod all_or_nothing_tests {
     fn real_powershell_batch_items_do_not_leak_the_undo_flag() {
         let fa = temp_file("batch-a");
         let fb = temp_file("batch-b");
-        let rf = fa.with_file_name("receipts.txt");
-        let _ = std::fs::remove_file(&rf);
+        let n = "0123456789abcdef0123456789abcdef";
         let a = ps_all_or_restore(&file_steps(&fa, "throw 'boom'", false, "throw 'undo boom'"));
         let b = ps_all_or_restore(&file_steps(&fb, "throw 'boom'", false, ""));
-        let script = compose_batch_script(
-            &[("item-a".to_string(), vec![a]), ("item-b".to_string(), vec![b])],
-            rf.to_string_lossy().as_ref(),
-        )
-        .expect("compose");
-        assert!(run_ps(&script));
-        let receipts = parse_batch_receipts(&std::fs::read_to_string(&rf).unwrap());
+        let script = compose_batch_script(&[("item-a".to_string(), vec![a]), ("item-b".to_string(), vec![b])], n)
+            .expect("compose");
+        let out = super::quiet_command(crate::sys_exe::SysTool::PowerShell)
+            .args(["-NoProfile", "-NonInteractive", "-Command", &format!("$ErrorActionPreference='Stop'; {script}")])
+            .output()
+            .expect("powershell runs");
+        assert!(out.status.success());
+        let receipts = parse_batch_receipts(&String::from_utf8_lossy(&out.stdout), n);
         assert_eq!(receipts.get("item-a"), Some(&true), "failed undo -> recorded");
         assert_eq!(receipts.get("item-b"), Some(&false), "clean undo -> fail receipt");
         assert_eq!(std::fs::read_to_string(&fb).unwrap(), "old");

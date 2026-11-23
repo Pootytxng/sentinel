@@ -223,30 +223,100 @@ impl ServerPipe {
         client_ok: &dyn Fn(u32) -> bool,
         relay: &mut dyn FnMut(Line),
     ) -> ServeEnd {
+        if let Err(end) = self.accept_client(wanted, client_ok) {
+            return end;
+        }
+        relay_lines(std::io::BufReader::new(self.into_file()), wanted, relay)
+    }
+
+    /// Accept clients until one passes `client_ok` (Ok), or `wanted()` stops holding / the accept fails.
+    fn accept_client(&self, wanted: &dyn Fn() -> bool, client_ok: &dyn Fn(u32) -> bool) -> Result<(), ServeEnd> {
         loop {
             if self.accept().is_err() {
-                return ServeEnd::Failed;
+                return Err(ServeEnd::Failed);
             }
             if !wanted() {
-                return ServeEnd::NotWanted;
+                return Err(ServeEnd::NotWanted);
             }
             match self.client_pid() {
-                Some(pid) if client_ok(pid) => break,
+                Some(pid) if client_ok(pid) => return Ok(()),
                 _ => {
                     // Not ours: drop it. Then ask again before waiting for the next client (review r2 N6):
                     // a launch that ended while that client held the pipe could not wake this reader, and
                     // without this check the reader would wait in `accept` until the app exits.
                     self.disconnect();
                     if !wanted() {
-                        return ServeEnd::NotWanted;
+                        return Err(ServeEnd::NotWanted);
                     }
                 }
             }
         }
-        // SAFETY: the OwnedHandle is moved into the File, which now owns and closes it.
-        let file = unsafe { std::fs::File::from_raw_handle(std::os::windows::io::IntoRawHandle::into_raw_handle(self.handle)) };
-        relay_lines(std::io::BufReader::new(file), wanted, relay)
     }
+
+    fn into_file(self) -> std::fs::File {
+        // SAFETY: the OwnedHandle is moved into the File, which now owns and closes it.
+        unsafe { std::fs::File::from_raw_handle(std::os::windows::io::IntoRawHandle::into_raw_handle(self.handle)) }
+    }
+
+    /// A5 Part A: one elevated command's output. Accept exactly the launched client (as `serve`; `accept_wanted`
+    /// stops the wait for a client that never comes), then read EVERY line to end of file (the helper exiting
+    /// closes it), each cut at [`MAX_LINE`], at most `max_total` bytes in all. Nothing is skipped once the client
+    /// is accepted: receipts must all arrive. The end says how reading stopped.
+    pub(crate) fn collect_lines(
+        self,
+        accept_wanted: &dyn Fn() -> bool,
+        client_ok: &dyn Fn(u32) -> bool,
+        max_total: usize,
+    ) -> (Vec<String>, ServeEnd) {
+        // Unlike `serve`, the CLIENT is checked before `accept_wanted`: the launch ends (and stops the wait)
+        // right after a fast helper has written everything and exited, and that output must still be read.
+        loop {
+            if self.accept().is_err() {
+                return (Vec::new(), ServeEnd::Failed);
+            }
+            match self.client_pid() {
+                Some(pid) if client_ok(pid) => break,
+                _ => {
+                    self.disconnect();
+                    if !accept_wanted() {
+                        return (Vec::new(), ServeEnd::NotWanted);
+                    }
+                }
+            }
+        }
+        let mut lines = Vec::new();
+        let end = collect_raw_lines(std::io::BufReader::new(self.into_file()), max_total, &mut |l| lines.push(l));
+        (lines, end)
+    }
+}
+
+/// Read raw text lines (cut at [`MAX_LINE`], trailing CR removed, not UTF-8 -> lossy) until end of file, at most
+/// `max_total` bytes; past the cap the read stops with `Overlong`.
+pub(crate) fn collect_raw_lines(mut reader: impl BufRead, max_total: usize, on_line: &mut dyn FnMut(String)) -> ServeEnd {
+    use std::io::Read;
+    let mut total = 0usize;
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match (&mut reader).take(MAX_LINE as u64 + 1).read_until(b'\n', &mut buf) {
+            Ok(0) | Err(_) => return ServeEnd::HelperGone,
+            Ok(n) => total += n,
+        }
+        if total > max_total {
+            return ServeEnd::Overlong;
+        }
+        if buf.last() == Some(&b'\n') {
+            buf.pop();
+        } else if buf.len() > MAX_LINE {
+            return ServeEnd::Overlong;
+        }
+        on_line(String::from_utf8_lossy(&buf).trim_end_matches('\r').to_string());
+    }
+}
+
+/// 32 lower-case hex digits from the system random number generator (A5 Part A: the per-dispatch nonce).
+pub(crate) fn random_hex() -> std::io::Result<String> {
+    Ok(random_16()?.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// The longest line the app reads from the pipe, newline excluded. A real report is a few KiB; anything

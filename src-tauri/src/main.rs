@@ -8,13 +8,10 @@ fn main() {
     // validated PowerShell command windowless (compy.exe is windows-subsystem in release → no
     // console flash) and exits with its code, BEFORE any Tauri window. The hex must byte-match
     // the one-time dispatch ticket minted by actions::run_elevated_powershell or nothing runs
-    // (the boundary-side second lock). See compy_lib::run_elevated_helper.
+    // (the boundary-side second lock). A5 Part A: an optional `--pipe <name> --parent-pid <pid>`
+    // relays its output to the app. See compy_lib::run_elevated_helper / run_elevated_helper_argv.
     if let Some(pos) = argv.iter().position(|a| a == "--run-elevated") {
-        let code = match (argv.get(pos + 1), argv.get(pos + 2)) {
-            (Some(hex), Some(ticket)) => compy_lib::run_elevated_helper(hex, ticket),
-            _ => 2,
-        };
-        std::process::exit(code);
+        std::process::exit(compy_lib::run_elevated_helper_argv(&argv[pos + 1..]));
     }
 
     // Elevated helper mode: when launched with --fps-capture, run the ETW

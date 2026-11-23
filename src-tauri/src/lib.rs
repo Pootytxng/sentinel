@@ -104,7 +104,19 @@ pub fn run_fps_capture() {
 /// bug handing this entry attacker-influenced hex has no matching ticket and executes zero
 /// PowerShell. The ticket is consumed (deleted) before the command runs, so a dispatch executes at
 /// most once. See `actions::mint_elevation_ticket` / `consume_elevation_ticket`.
-pub fn run_elevated_helper(hex: &str, ticket_path: &str) -> i32 {
+///
+/// A5 Part A: with a channel (`--pipe <name> --parent-pid <pid>`), the helper first connects to the app's
+/// pipe and checks that the app serves it (`fps_pipe::connect_to_parent`), BEFORE the ticket is consumed:
+/// a refused channel runs nothing (`actions::HELPER_CHANNEL_REFUSED`). PowerShell's output is then relayed
+/// to the app over that pipe; if the pipe breaks, the rest is read and discarded so PowerShell never blocks.
+pub fn run_elevated_helper(hex: &str, ticket_path: &str, channel: Option<(&str, u32)>) -> i32 {
+    let pipe = match channel {
+        Some((name, parent)) => match fps_pipe::connect_to_parent(name, parent) {
+            Ok(file) => Some(file),
+            Err(_) => return actions::HELPER_CHANNEL_REFUSED,
+        },
+        None => None,
+    };
     if !actions::consume_elevation_ticket(hex, ticket_path) {
         return actions::HELPER_TICKET_REFUSED;
     }
@@ -114,10 +126,42 @@ pub fn run_elevated_helper(hex: &str, ticket_path: &str) -> i32 {
     let Ok(command) = String::from_utf8(bytes) else {
         return 2;
     };
-    match elevated_powershell_command(&command).spawn() {
-        Ok(mut child) => helper_exit_code(Started::Ran(child.wait())),
+    let mut c = elevated_powershell_command(&command);
+    if pipe.is_some() {
+        c.stdout(std::process::Stdio::piped());
+    }
+    match c.spawn() {
+        Ok(mut child) => {
+            let relay = pipe.zip(child.stdout.take()).map(|(p, out)| std::thread::spawn(move || relay_output(out, p)));
+            let waited = child.wait();
+            if let Some(r) = relay {
+                let _ = r.join();
+            }
+            helper_exit_code(Started::Ran(waited))
+        }
         Err(_) => helper_exit_code(Started::NeverStarted),
     }
+}
+
+/// `compy.exe --run-elevated` argument forms (everything after the flag): `<hex> <ticket>`, or
+/// `<hex> <ticket> --pipe <name> --parent-pid <pid>` (A5 Part A). Anything else runs nothing and exits 2.
+pub fn run_elevated_helper_argv(rest: &[String]) -> i32 {
+    match rest {
+        [hex, ticket] => run_elevated_helper(hex, ticket, None),
+        [hex, ticket, p, name, q, pid] if p == "--pipe" && q == "--parent-pid" => match pid.parse::<u32>() {
+            Ok(pid) => run_elevated_helper(hex, ticket, Some((name, pid))),
+            Err(_) => 2,
+        },
+        _ => 2,
+    }
+}
+
+/// Helper side (A5 Part A): copy PowerShell's output to the app's pipe; once a write fails (the app closed
+/// the pipe), read the rest and discard it, so the child never blocks on a full output pipe. The app cuts
+/// lines and caps the total; this side only moves bytes.
+fn relay_output(mut out: impl std::io::Read, mut pipe: impl std::io::Write) {
+    let _ = std::io::copy(&mut out, &mut pipe);
+    let _ = std::io::copy(&mut out, &mut std::io::sink());
 }
 
 /// What happened to the helper's PowerShell child: it never started, or it started and this is its wait.
@@ -2357,11 +2401,11 @@ mod safety_tests {
         let marker = scratch.join("compy-boundary.txt");
         let cmd = format!("Set-Content -Path '{}' -Value x", marker.display());
         let hex = actions::to_hex(cmd.as_bytes());
-        assert_eq!(run_elevated_helper(&hex, r"C:\__compy_qa_missing__\no.ticket"), actions::HELPER_TICKET_REFUSED);
+        assert_eq!(run_elevated_helper(&hex, r"C:\__compy_qa_missing__\no.ticket", None), actions::HELPER_TICKET_REFUSED);
         // A real ticket for OTHER hex in a ticket-shaped place: still refused, still nothing run.
         let runtime = crate::test_scratch::scratch_child("boundary-other-ticket", "runtime");
         let other = actions::mint_elevation_ticket_in(&runtime, &actions::to_hex(b"exit 0"), 1).expect("mint");
-        assert_eq!(run_elevated_helper(&hex, &other.to_string_lossy()), actions::HELPER_TICKET_REFUSED);
+        assert_eq!(run_elevated_helper(&hex, &other.to_string_lossy(), None), actions::HELPER_TICKET_REFUSED);
         assert!(other.exists(), "a mismatch leaves the ticket");
         assert!(!marker.exists(), "rejected hex must execute ZERO PowerShell");
     }
@@ -2376,9 +2420,81 @@ mod safety_tests {
         let runtime = crate::test_scratch::scratch_child("boundary-dispatch", "runtime");
         let ticket = actions::mint_elevation_ticket_in(&runtime, &hex, 1).expect("mint");
         let ticket_s = ticket.to_string_lossy().to_string();
-        assert_eq!(run_elevated_helper(&hex, &ticket_s), 0);
+        assert_eq!(run_elevated_helper(&hex, &ticket_s, None), 0);
         assert!(!ticket.exists(), "the verified dispatch consumes its ticket");
-        assert_eq!(run_elevated_helper(&hex, &ticket_s), actions::HELPER_TICKET_REFUSED, "replay must be refused");
+        assert_eq!(run_elevated_helper(&hex, &ticket_s, None), actions::HELPER_TICKET_REFUSED, "replay must be refused");
+    }
+
+    // ── A5 Part A: the helper's output channel ──────────────────────────────────────────────
+
+    #[test]
+    fn a_refused_channel_runs_nothing_and_leaves_the_ticket() {
+        // No server behind this (well-formed) name: the helper refuses BEFORE consuming the ticket, and the
+        // command's marker never appears. The parent reads the code as "nothing ran".
+        let scratch = crate::test_scratch::scratch("channel-refused-marker");
+        let marker = scratch.join("compy-channel.txt");
+        let hex = actions::to_hex(format!("Set-Content -Path '{}' -Value x", marker.display()).as_bytes());
+        let runtime = crate::test_scratch::scratch_child("channel-refused", "runtime");
+        let ticket = actions::mint_elevation_ticket_in(&runtime, &hex, 1).expect("mint");
+        let name = fps_pipe::pipe_name_from([7u8; 16]);
+        let code = run_elevated_helper(&hex, &ticket.to_string_lossy(), Some((&name, std::process::id())));
+        assert_eq!(code, actions::HELPER_CHANNEL_REFUSED);
+        assert!(ticket.exists(), "a refused channel must not consume the ticket");
+        assert!(!marker.exists(), "a refused channel must execute ZERO PowerShell");
+        let status = <std::process::ExitStatus as std::os::windows::process::ExitStatusExt>::from_raw(code as u32);
+        let err = actions::elevation_outcome(Ok(status)).unwrap_err();
+        assert!(actions::elevation_error_nothing_ran(&err), "{err}");
+    }
+
+    #[test]
+    fn the_helper_relays_its_output_to_the_app_that_serves_the_pipe() {
+        // End to end in one process (unelevated): this test serves the pipe, the helper connects (the server is
+        // this process, which is also the parent it is told about), runs PowerShell, and its output arrives.
+        let pipe = fps_pipe::ServerPipe::create().expect("pipe");
+        let name = pipe.name.clone();
+        let me = std::process::id();
+        let reader = std::thread::spawn(move || pipe.collect_lines(&|| false, &|pid| pid == me, 64 * 1024));
+        let hex = actions::to_hex(b"Write-Output 'n0nce:a:ok'; Write-Output 'n0nce:end'");
+        let runtime = crate::test_scratch::scratch_child("channel-relay", "runtime");
+        let ticket = actions::mint_elevation_ticket_in(&runtime, &hex, 1).expect("mint");
+        assert_eq!(run_elevated_helper(&hex, &ticket.to_string_lossy(), Some((&name, me))), 0);
+        let (lines, _) = reader.join().unwrap();
+        assert_eq!(lines, ["n0nce:a:ok", "n0nce:end"]);
+    }
+
+    #[test]
+    fn the_helper_accepts_only_its_two_argument_forms() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        // Each malformed form exits 2 before anything (no ticket exists for these, and none is looked up).
+        for bad in [
+            s(&[]),
+            s(&["00"]),
+            s(&["00", "t", "--pipe"]),
+            s(&["00", "t", "--pipe", "n", "--parent-pid"]),
+            s(&["00", "t", "--pipe", "n", "--parent-pid", "x"]),
+            s(&["00", "t", "--pid", "n", "--parent-pid", "1"]),
+            s(&["00", "t", "extra"]),
+        ] {
+            assert_eq!(run_elevated_helper_argv(&bad), 2, "{bad:?}");
+        }
+        // The plain form reaches the ticket check (a missing ticket is refused, not run).
+        assert_eq!(run_elevated_helper_argv(&s(&["00", r"C:\__compy_qa_missing__\no.ticket"])), actions::HELPER_TICKET_REFUSED);
+    }
+
+    #[test]
+    fn the_relay_drains_powershell_output_after_the_pipe_breaks() {
+        struct Broken;
+        impl std::io::Write for Broken {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe))
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut out = std::io::Cursor::new(vec![b'x'; 300_000]);
+        relay_output(&mut out, Broken);
+        assert_eq!(out.position(), 300_000, "everything is read so the child never blocks");
     }
 
     // §C build stamp: the format is the contract both surfaces (About + dev title) render.
@@ -2814,7 +2930,12 @@ mod elevated_helper_tests {
         let src = include_str!("lib.rs").replace("\r\n", "\n");
         let f = src.find("pub fn run_elevated_helper(").unwrap();
         let body = &src[f..f + src[f..].find("\n}\n").unwrap()];
-        assert!(body.contains(".spawn() {\n        Ok(mut child) => helper_exit_code(Started::Ran(child.wait())),"));
+        // A5 Part A: the wait is bound to a name so the output relay can be joined after it; the shape is the same.
+        assert!(body.contains("match c.spawn() {\n        Ok(mut child) => {"));
+        assert!(body.contains("let waited = child.wait();"));
+        assert!(body.contains("helper_exit_code(Started::Ran(waited))"));
+        assert_eq!(body.matches("Started::NeverStarted").count(), 1, "only the spawn's own failure");
+        assert!(body.contains("Err(_) => helper_exit_code(Started::NeverStarted),"));
         assert!(!body.contains(".status()"), "status() is spawn + wait: a wait error would read as 'not started'");
     }
     use crate::sys_exe::{sys_tool_path, system_dir, SysTool, ELEVATED_ENV_ALLOWLIST};
