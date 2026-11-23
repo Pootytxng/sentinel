@@ -2903,6 +2903,8 @@ enum TaskTarget {
 /// Read a scheduled task's current state (non-elevated): "Ready" | "Disabled" | "Running" | "Unknown".
 /// Resolves the real task name first (build-drift safe); identifiers are FIXED enum constants, guarded
 /// by ps_safe_squoted and interpolated only inside '...'. Absent or unreadable → "Unknown".
+/// D2b r1: test-only now (the apply reads `scheduled_task_state_at` with the name it resolved).
+#[cfg(test)]
 pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
     let Ok(TaskTarget::Found(path, name)) = resolved_task_target(task) else {
         return "Unknown".into();
@@ -4536,7 +4538,8 @@ mod unreadable_outcome_tests {
     #[test]
     fn an_adapter_with_no_properties_is_skipped_not_unread() {
         let src = include_str!("actions.rs").replace("\r\n", "\n");
-        let at = src.find("pub(crate) fn resolve_eee() -> EeeResolution {").expect("resolve_eee");
+        // Split so this test's own text is never the first match (the D1e source pin finds by name too).
+        let at = src.find(concat!("pub(crate) fn resolve_", "eee() -> EeeResolution {")).expect("resolve_eee");
         let body = &src[at..at + src[at..].find("\n}\n").expect("end")];
         let skip = body.find("if ($_.CategoryInfo.Category -eq 'ObjectNotFound') {{ continue }}").expect("skips ObjectNotFound");
         let mark = body.find("Write-Output '{unread}'").expect("marks other errors");
