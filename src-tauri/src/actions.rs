@@ -2771,29 +2771,33 @@ pub(crate) fn bloat_removal_gate() -> bool {
 /// D2b: three answers, never two. `Ok(Some)` = found · `Ok(None)` = the read FINISHED and nothing at
 /// the path matches · `Err(TaskUnreadable)` = the read did not finish (PowerShell couldn't start, it
 /// failed, or it didn't answer within [`QUERY_READ_LIMIT`]). A failed read used to come back as None
-/// and be shown as "not found on this system". The query lists every task and filters by path with
-/// `$ErrorActionPreference = 'Stop'`, so a path with no tasks is an empty, SUCCESSFUL read, and any
-/// error at all is a non-zero exit (unreadable), not an empty list.
+/// and be shown as "not found on this system".
+///
+/// D2b r1 (C1): the query stays scoped to the ONE task folder (a whole-tree listing would let an error
+/// in any unrelated task block this task's undo). Only `ObjectNotFound` (the folder has no tasks) is a
+/// finished, empty read (exit 0, no rows); any other error is re-thrown, a non-zero exit (unreadable).
 fn resolve_task_name(path: &str, base: &str) -> Result<Option<String>, TaskUnreadable> {
+    // The caller (`resolved_task_target`) refuses an unguardable path/base first with its own sentence;
+    // this is the second line, and a command that can't be built is a read that couldn't run.
     if ps_safe_squoted(path).is_err() || ps_safe_squoted(base).is_err() {
-        return Ok(None);
+        return Err(TaskUnreadable);
     }
     #[cfg(test)]
     if let Some(forced) = FORCE_TASK_READ.with(|f| f.borrow().clone()) {
         return task_name_from_read(forced.as_ref(), base);
     }
     let mut cmd = quiet_command(SysTool::PowerShell);
-    cmd.args([
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        &format!(
-            "$ErrorActionPreference = 'Stop'; Get-ScheduledTask | Where-Object {{ $_.TaskPath -eq '{}' }} | \
-             ForEach-Object {{ $_.TaskName }}",
-            path
-        ),
-    ]);
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &task_listing_script(path)]);
     task_name_from_read(output_within(cmd, QUERY_READ_LIMIT).as_ref(), base)
+}
+
+/// PURE: the one-folder task listing. `path` must already pass `ps_safe_squoted` (it sits inside '...').
+fn task_listing_script(path: &str) -> String {
+    format!(
+        "try {{ Get-ScheduledTask -TaskPath '{}' -ErrorAction Stop | ForEach-Object {{ $_.TaskName }} }} \
+         catch {{ if ($_.CategoryInfo.Category -eq 'ObjectNotFound') {{ exit 0 }} else {{ throw }} }}",
+        path
+    )
 }
 
 /// The task read did not finish: PowerShell couldn't start, failed, or didn't answer in time.
@@ -2850,8 +2854,11 @@ pub(crate) const TASK_UNREADABLE_APPLY: &str = "Compy couldn't check this Window
 pub(crate) const TASK_NOT_FOUND_APPLY: &str = "That telemetry task isn't on this PC, so there is nothing to turn off.";
 /// Undo not run because the task read did not finish; the ledger row stays active.
 pub(crate) const TASK_UNREADABLE_UNDO: &str = "Compy couldn't check this Windows task right now, so it wasn't turned back on yet. The change stays in your Trust Ledger so you can try again.";
-/// Undo not run because the read finished and the task is no longer at its path.
-pub(crate) const TASK_NOT_FOUND_UNDO: &str = "That telemetry task is no longer on this PC, so there was nothing to turn back on.";
+/// Undo not run because the read finished and the task is no longer at its path. The undo returns Err,
+/// so the row stays open (closing it as "nothing to restore" is a separate, owner-decided change).
+pub(crate) const TASK_NOT_FOUND_UNDO: &str = "Compy couldn't find that telemetry task on this PC any more, so it couldn't turn it back on. The change stays in your Trust Ledger.";
+/// Apply/undo refused because the resolved task name failed the quoting guard (never "not on this PC").
+pub(crate) const TASK_NAME_REFUSED: &str = "Compy found that telemetry task, but its name has characters Compy won't put into a Windows command, so nothing was changed.";
 
 /// Pure name picker (build-drift policy): an EXACT match wins (older Windows); otherwise the first
 /// prefix match (a renamed task carrying a suffix like " Exp"). None if nothing at the path matches.
@@ -2863,27 +2870,49 @@ fn pick_task_name(names: &[String], base: &str) -> Option<String> {
 }
 
 /// `(path, concrete_name)` for a task, resolving build-drift in the name and RE-GUARDING the resolved
-/// name with `ps_safe_squoted` so it stays safe to interpolate into an elevated command. `Ok(None)` →
-/// the read finished and the task is absent on this system; `Err(TaskUnreadable)` → the read did not
-/// finish (caller refuses / reports Unknown rather than acting on a guess, and never says "not found").
-fn resolved_task_target(task: &KnownBloatTask) -> Result<Option<(&'static str, String)>, TaskUnreadable> {
+/// name with `ps_safe_squoted` so it stays safe to interpolate into an elevated command. `Absent` →
+/// the read finished and the task is absent on this system; `NameRefused` → found but unguardable;
+/// `Err(TaskUnreadable)` → the read did not finish (caller refuses / reports Unknown rather than acting
+/// on a guess, and never says "not found").
+fn resolved_task_target(task: &KnownBloatTask) -> Result<TaskTarget, TaskUnreadable> {
     let (path, base) = task.path_and_name();
-    let Some(name) = resolve_task_name(path, base)? else {
-        return Ok(None);
-    };
-    if ps_safe_squoted(path).is_err() || ps_safe_squoted(&name).is_err() {
-        return Ok(None);
+    if ps_safe_squoted(path).is_err() || ps_safe_squoted(base).is_err() {
+        return Ok(TaskTarget::NameRefused);
     }
-    Ok(Some((path, name)))
+    let Some(name) = resolve_task_name(path, base)? else {
+        return Ok(TaskTarget::Absent);
+    };
+    // D2b r1: a name that fails the guard was FOUND; it is refused with its own sentence, never "absent".
+    if ps_safe_squoted(&name).is_err() {
+        return Ok(TaskTarget::NameRefused);
+    }
+    Ok(TaskTarget::Found(path, name))
+}
+
+/// What a FINISHED task read found (an unfinished one is `Err(TaskUnreadable)`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TaskTarget {
+    /// `(path, concrete_name)`, both guarded for use inside '...'.
+    Found(&'static str, String),
+    /// The read finished and no task at the path matches.
+    Absent,
+    /// A task was found (or the fixed path/base itself) fails `ps_safe_squoted`: refused, never "absent".
+    NameRefused,
 }
 
 /// Read a scheduled task's current state (non-elevated): "Ready" | "Disabled" | "Running" | "Unknown".
 /// Resolves the real task name first (build-drift safe); identifiers are FIXED enum constants, guarded
 /// by ps_safe_squoted and interpolated only inside '...'. Absent or unreadable → "Unknown".
 pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
-    let Ok(Some((path, name))) = resolved_task_target(task) else {
+    let Ok(TaskTarget::Found(path, name)) = resolved_task_target(task) else {
         return "Unknown".into();
     };
+    scheduled_task_state_at(path, &name)
+}
+
+/// The state read for an already-resolved, already-guarded `(path, name)` (D2b r1: the apply passes the
+/// name it resolved, so it does not list the folder twice).
+fn scheduled_task_state_at(path: &str, name: &str) -> String {
     let mut cmd = quiet_command(SysTool::PowerShell);
     cmd.args([
         "-NoProfile",
@@ -2972,15 +3001,17 @@ pub(crate) fn apply_disable_scheduled_task(task: KnownBloatTask) -> Result<Apply
     // BEFORE any elevation — instead of popping a UAC prompt only to silently no-op on a missing task.
     // D2b: a read that did not finish refuses with its own sentence, never "not found".
     let (path, name) = match resolved_task_target(&task) {
-        Ok(Some(target)) => target,
-        Ok(None) => return Err(TASK_NOT_FOUND_APPLY.to_string()),
+        Ok(TaskTarget::Found(path, name)) => (path, name),
+        Ok(TaskTarget::Absent) => return Err(TASK_NOT_FOUND_APPLY.to_string()),
+        Ok(TaskTarget::NameRefused) => return Err(TASK_NAME_REFUSED.to_string()),
         Err(TaskUnreadable) => return Err(TASK_UNREADABLE_APPLY.to_string()),
     };
     // Rollback-first: refuse if the prior state can't be confirmed rather than recording an "Unknown"
     // prior and mutating anyway. If the task was ALREADY Disabled and the read transiently failed,
     // rollback (which treats Unknown as "was enabled") would later re-enable a task the user or an
     // environment policy intentionally left disabled. Mirrors require_service_prior for service applies.
-    let prior_state = scheduled_task_state(&task);
+    // D2b r1: reads the state of the name resolved above (the folder is not listed a second time).
+    let prior_state = scheduled_task_state_at(path, &name);
     if prior_state == "Unknown" {
         return Err("couldn't read that telemetry task's current state, so this change wasn't applied — \
                     an unconfirmed prior state can't be reliably rolled back. Nothing was changed; try again."
@@ -3031,8 +3062,9 @@ pub(crate) fn rollback_enable_scheduled_task_typed(
     // D2b: an unfinished read is an Err with its own sentence (the ledger row stays active, so the
     // user can try again); only a FINISHED read that finds no task says it is gone.
     let (path, name) = match resolved_task_target(task) {
-        Ok(Some(target)) => target,
-        Ok(None) => return Err(TASK_NOT_FOUND_UNDO.to_string()),
+        Ok(TaskTarget::Found(path, name)) => (path, name),
+        Ok(TaskTarget::Absent) => return Err(TASK_NOT_FOUND_UNDO.to_string()),
+        Ok(TaskTarget::NameRefused) => return Err(TASK_NAME_REFUSED.to_string()),
         Err(TaskUnreadable) => return Err(TASK_UNREADABLE_UNDO.to_string()),
     };
     run_elevated_powershell(&format!(
@@ -4469,6 +4501,58 @@ mod unreadable_outcome_tests {
         assert_eq!(scheduled_task_state(&KnownBloatTask::CompatibilityAppraiser), "Unknown");
     }
 
+    // D2b r1 (C1): the listing stays scoped to the task's own folder; only ObjectNotFound (no tasks
+    // there) is a finished empty read, anything else is re-thrown (a non-zero exit = unreadable).
+    #[test]
+    fn the_task_listing_reads_one_folder_and_only_object_not_found_is_an_empty_read() {
+        let s = task_listing_script(r"\Microsoft\Windows\Application Experience\");
+        assert!(s.contains(r"Get-ScheduledTask -TaskPath '\Microsoft\Windows\Application Experience\' -ErrorAction Stop"), "{s}");
+        assert!(s.contains("if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { exit 0 } else { throw }"), "{s}");
+        assert!(!s.contains("Get-ScheduledTask |"), "never the whole task tree: {s}");
+        // Both exits of that script, as the reader sees them.
+        let base = "Microsoft Compatibility Appraiser";
+        assert_eq!(task_name_from_read(Some(&out(0, "")), base), Ok(None), "ObjectNotFound: exit 0, no rows");
+        assert_eq!(task_name_from_read(Some(&out(1, "")), base), Err(TaskUnreadable), "re-thrown: exit 1");
+    }
+
+    // D2b r1: a FOUND task whose name fails the quoting guard is refused with its own sentence,
+    // never "isn't on this PC".
+    #[test]
+    fn a_found_task_with_an_unguardable_name_is_refused_never_called_absent() {
+        reset_elevation_dispatch_count();
+        let _read = ForceTaskRead::begin(Some(out(0, "Microsoft Compatibility Appraiser'x\r\n")));
+        assert_eq!(
+            apply_disable_scheduled_task(KnownBloatTask::CompatibilityAppraiser).err().expect("refused"),
+            TASK_NAME_REFUSED
+        );
+        assert_eq!(
+            rollback_enable_scheduled_task_typed(&KnownBloatTask::CompatibilityAppraiser, "Ready"),
+            Err(TASK_NAME_REFUSED.to_string())
+        );
+        assert_eq!(elevation_dispatch_count(), 0);
+    }
+
+    // D2b r1 (C2): an adapter that has no advanced properties (ObjectNotFound) is skipped, not "unread".
+    #[test]
+    fn an_adapter_with_no_properties_is_skipped_not_unread() {
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        let at = src.find("pub(crate) fn resolve_eee() -> EeeResolution {").expect("resolve_eee");
+        let body = &src[at..at + src[at..].find("\n}\n").expect("end")];
+        let skip = body.find("if ($_.CategoryInfo.Category -eq 'ObjectNotFound') {{ continue }}").expect("skips ObjectNotFound");
+        let mark = body.find("Write-Output '{unread}'").expect("marks other errors");
+        assert!(skip < mark, "the skip comes before the unread marker");
+    }
+
+    // D2b r1 (F1): the EEE state behind the Trust Ledger check: an unfinished read is None, never Off.
+    #[test]
+    fn an_unfinished_eee_read_is_no_state_never_off() {
+        assert_eq!(crate::eee_disabled_from(&EeeResolution::Unreadable), None);
+        assert_eq!(crate::eee_disabled_from(&EeeResolution::NoEligibleAdapter), Some(false));
+        assert_eq!(crate::eee_disabled_from(&EeeResolution::NoDisableSwitch), Some(false));
+        let off = resolve_eee_from(parse_eee_property_lines("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled"));
+        assert_eq!(crate::eee_disabled_from(&off), Some(true));
+    }
+
     #[test]
     fn an_eee_read_that_did_not_finish_is_unreadable_never_no_adapter() {
         assert_eq!(resolve_eee_from_read(None), EeeResolution::Unreadable);
@@ -4536,7 +4620,7 @@ mod output_within_tests {
             panic!("{name}: unbalanced body")
         }
         for name in [
-            "scheduled_task_state",
+            "scheduled_task_state_at",
             "known_task_listing",
             "installed_preload_app",
             "installed_preload_ids",
@@ -4949,6 +5033,7 @@ foreach ($a in $adapters) {{
         $props = @(Get-NetAdapterAdvancedProperty -Name $a.Name |
             Where-Object {{ $_.DisplayName -match '{names}' -or ($_.RegistryKeyword -and $_.RegistryKeyword -match '{keywords}') }})
     }} catch {{
+        if ($_.CategoryInfo.Category -eq 'ObjectNotFound') {{ continue }}
         Write-Output '{unread}'
         continue
     }}

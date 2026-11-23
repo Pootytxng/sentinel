@@ -56,12 +56,14 @@
     "taskUnreadable": "Compy couldn't check this Windows task right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.",
     "taskNotFound": "That telemetry task isn't on this PC, so there is nothing to turn off.",
     "taskUnreadableUndo": "Compy couldn't check this Windows task right now, so it wasn't turned back on yet. The change stays in your Trust Ledger so you can try again.",
-    "taskNotFoundUndo": "That telemetry task is no longer on this PC, so there was nothing to turn back on.",
+    "taskNotFoundUndo": "Compy couldn't find that telemetry task on this PC any more, so it couldn't turn it back on. The change stays in your Trust Ledger.",
+    "taskNameRefused": "Compy found that telemetry task, but its name has characters Compy won't put into a Windows command, so nothing was changed.",
     "eeeUnreadable": "Compy couldn't read your network adapters right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.",
     "eeeNoAdapter": "No connected wired network adapter on this PC offers an Energy-Efficient Ethernet setting, so there is nothing to change.",
     "eeeNoSwitch": "Your adapter's driver has an Energy-Efficient Ethernet setting, but no value Compy recognizes as off, so Compy left it as it is rather than guess.",
     "eeeUnreadReason": "Couldn't check Energy-Efficient Ethernet on your wired adapter right now.",
-    "powerSettingUnread": "Compy couldn't read this power setting, so it can't say whether it is on or off."
+    "settingUnread": "Compy couldn't read this setting right now, so it can't say whether it is on or off.",
+    "couldntCheckHeading": "Couldn't check right now"
   },
   "status": {
     "rulesRemote": "Rules: Remote (signed)",

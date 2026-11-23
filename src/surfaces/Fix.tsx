@@ -126,7 +126,44 @@ type Rec = {
 export function StateUnreadLine({ rec }: { rec: Pick<Rec, "state_unread"> }) {
   const { t } = useTranslation();
   if (!rec.state_unread) return null;
-  return <p className="fix-row-unread">{t("app.backendErrors.powerSettingUnread")}</p>;
+  return <p className="fix-row-unread">{t("app.backendErrors.settingUnread")}</p>;
+}
+
+type IneligibleRec = Pick<Rec, "id" | "title" | "ineligible_reason" | "state_unread">;
+
+/** D2b r1 (F2): split the held-back recs. A rec Compy couldn't CHECK (`state_unread`) is never "not for
+ *  this rig" and never overridable; the rest split by the user's override as before. */
+export function splitNotForThisRig<R extends IneligibleRec>(ineligible: R[], overridden: ReadonlySet<string>) {
+  const couldntCheck = ineligible.filter((r) => r.state_unread);
+  const detected = ineligible.filter((r) => !r.state_unread);
+  return {
+    couldntCheck,
+    notForThisRig: detected.filter((r) => !overridden.has(r.id)),
+    overriddenRecs: detected.filter((r) => overridden.has(r.id)),
+  };
+}
+
+/** D2b r1 (F2): the held-back recs Compy couldn't check right now: heading + each reason, no override. */
+export function CouldntCheckGroup({ recs }: { recs: IneligibleRec[] }) {
+  const { t } = useTranslation();
+  if (recs.length === 0) return null;
+  return (
+    <div className="fix-couldnt-check">
+      <h4 className="fix-couldnt-check-head">{t("app.backendErrors.couldntCheckHeading")}</h4>
+      <ul className="fix-list">
+        {recs.map((r) => (
+          <li key={r.id} className="fix-refuse-row">
+            <div className="fix-row-head">
+              <RecTitle id={r.id} title={r.title} />
+            </div>
+            <p className="fix-row-reason">
+              {r.ineligible_reason ? localizeBackendText(r.ineligible_reason, t) : t("app.backendErrors.settingUnread")}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 type Props = {
@@ -1089,9 +1126,10 @@ export default function Fix({
   // override can't resurrect anything the backend omitted as irrelevant.
   const { overridden, override, clearOverride } = useEligibilityOverrides();
   const ineligible = recs.filter((r) => r.eligible === false);
-  const notForThisRig = ineligible.filter((r) => !overridden.has(r.id));
-  const overriddenRecs = ineligible.filter((r) => overridden.has(r.id));
-  const eligibleRecs = recs.filter((r) => r.eligible !== false || overridden.has(r.id));
+  // D2b r1 (F2): a rec held back only because Compy couldn't check its hardware is neither "not for
+  // this rig" nor overridable: it goes to its own "Couldn't check right now" group.
+  const { notForThisRig, couldntCheck, overriddenRecs } = splitNotForThisRig(ineligible, overridden);
+  const eligibleRecs = recs.filter((r) => r.eligible !== false || (overridden.has(r.id) && !r.state_unread));
   // User dismissal ("Not for me"): deliberate, reversible. Dismissed = eligible + user-declined +
   // not currently applied (an APPLIED rec can't be dismissed — roll it back instead; a dismissed rec
   // that becomes applied externally just resolves normally). Dismissed leave the active denominator.
@@ -1573,8 +1611,11 @@ export default function Fix({
           standalone render here as always. Moved, never removed — same content and reasons. */}
       {/* Not for this rig — hardware-ineligible recs (eligibility train): set aside with the reason,
           and OUT of the completion denominator, so they never block "all handled" or nag. */}
-      {notForThisRig.length + overriddenRecs.length > 0 && (
+      {notForThisRig.length + overriddenRecs.length + couldntCheck.length > 0 && (
         <SidePileItem order={SIDE_PILE_ORDER.notForThisRig}>
+        {/* D2b r1 (F2): recs Compy couldn't check right now: their own heading, no override. */}
+        <CouldntCheckGroup recs={couldntCheck} />
+        {notForThisRig.length + overriddenRecs.length > 0 && (
         <CollapsibleSection title={t("optimize.fix.notForThisRig")} count={notForThisRig.length} tint="refuse">
           <p className="fix-refuse-intro">
             {t("optimize.fix.notForThisRigIntro")}
@@ -1617,6 +1658,7 @@ export default function Fix({
             ))}
           </ul>
         </CollapsibleSection>
+        )}
         </SidePileItem>
       )}
 

@@ -28,8 +28,13 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   },
   {
     rust: "TASK_NOT_FOUND_UNDO",
-    text: "That telemetry task is no longer on this PC, so there was nothing to turn back on.",
+    text: "Compy couldn't find that telemetry task on this PC any more, so it couldn't turn it back on. The change stays in your Trust Ledger.",
     key: "app.backendErrors.taskNotFoundUndo",
+  },
+  {
+    rust: "TASK_NAME_REFUSED",
+    text: "Compy found that telemetry task, but its name has characters Compy won't put into a Windows command, so nothing was changed.",
+    key: "app.backendErrors.taskNameRefused",
   },
   {
     rust: "EEE_UNREADABLE_APPLY",

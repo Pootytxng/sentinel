@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::hardware::{collect_hardware, gpu_vendor_match, HardwareInfo};
 use crate::remote_rules::{load_rules, RulesSource};
 use crate::{
-    eee_disabled_on_any_eligible_adapter, fast_startup_state,
+    eee_disabled_on_any_eligible_adapter_checked, fast_startup_state,
     game_bar_disabled, game_mode_enabled, hags_state, memory_integrity_or_vbs_active,
     mouse_accel_disabled, nagle_disabled_on_any_nic, pcie_aspm_off_on_ac_checked, reserved_storage_enabled,
     usb_selective_suspend_off_on_ac_checked, visual_effects_for_best_performance,
@@ -353,8 +353,8 @@ pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
 // shared shapes (e.g. "service-not-running" takes a service name).
 //
 // D2b: `None` = the read did not finish ("can't tell"), carried to the card as `state_unread`. Only the
-// two powercfg AC reads answer None so far (`recommendations.rs` used their unchecked forms, which
-// turned a failed or timed-out read into "not off"); every other kind keeps its existing answer.
+// two powercfg AC reads and the EEE read answer None so far (they used unchecked forms, which turned a
+// failed or timed-out read into "not off"); every other kind keeps its existing answer.
 pub(crate) fn check_state_kind(
     kind: &str,
     params: &Option<serde_json::Value>,
@@ -381,7 +381,7 @@ pub(crate) fn check_state_kind(
         "reserved-storage-disabled" => !reserved_storage_enabled(),
         "usb-selective-suspend-off-on-ac" => return usb_selective_suspend_off_on_ac_checked(),
         "pcie-aspm-off-on-ac" => return pcie_aspm_off_on_ac_checked(),
-        "eee-disabled-on-eligible-adapters" => eee_disabled_on_any_eligible_adapter(),
+        "eee-disabled-on-eligible-adapters" => return eee_disabled_on_any_eligible_adapter_checked(),
         _ => false,
     })
 }
@@ -435,11 +435,15 @@ pub(crate) fn evaluate_rule_spec(
         .map(|t| template_substitute(t, hw))
         .unwrap_or_default();
 
-    let (currently_applied, state_unread) = applied_and_unread(
+    let (currently_applied, state_read_unread) = applied_and_unread(
         spec.state_kind
             .as_ref()
             .map(|kind| check_state_kind(kind, &spec.state_params, hw, reads)),
     );
+    // D2b r1 (F2): a rec held back only because its hardware read did not finish is "couldn't check",
+    // not "not for this rig": the card leaves that group and shows no override.
+    let gate_unread = ineligible_reason.as_deref() == Some(EEE_UNREAD_REASON);
+    let state_unread = state_read_unread || gate_unread;
 
     Some(Recommendation {
         id: spec.id.clone(),
@@ -1298,6 +1302,7 @@ mod rec_tests {
         for arm in [
             "\"usb-selective-suspend-off-on-ac\" => return usb_selective_suspend_off_on_ac_checked(),",
             "\"pcie-aspm-off-on-ac\" => return pcie_aspm_off_on_ac_checked(),",
+            "\"eee-disabled-on-eligible-adapters\" => return eee_disabled_on_any_eligible_adapter_checked(),",
         ] {
             assert!(src.contains(arm), "missing: {arm}");
         }
@@ -1306,6 +1311,14 @@ mod rec_tests {
     // D2b: an EEE read that did not finish gives the card its own reason, never "no switch".
     #[test]
     fn an_unfinished_eee_read_says_couldnt_check_not_no_switch() {
+        // The live EEE state read (the rec's state kind) answers a finished, empty read here, so the
+        // card's unread flag below comes from the hardware gate alone.
+        use std::os::windows::process::ExitStatusExt;
+        let _eee = crate::actions::ForceEeeRead::begin(Some(std::process::Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        }));
         let unread = HardwareInfo {
             has_wired_ethernet_port: true,
             eee_switch_exposed: false,
@@ -1318,5 +1331,11 @@ mod rec_tests {
             .expect("kept, not dropped");
         assert!(!eee.eligible, "no offer on an unread state");
         assert_eq!(eee.ineligible_reason.as_deref(), Some(EEE_UNREAD_REASON));
+        // D2b r1 (F2): flagged unread, so the card is "couldn't check", not "not for this rig".
+        assert!(eee.state_unread);
+        // A finished read with no switch is NOT flagged unread (it stays "not for this rig").
+        let no_switch = HardwareInfo { has_wired_ethernet_port: true, ..Default::default() };
+        let eee2 = build_recommendations(&no_switch).into_iter().find(|r| r.id == "eee-disable").expect("kept");
+        assert!(!eee2.eligible && !eee2.state_unread);
     }
 }

@@ -19,7 +19,7 @@ use crate::actions::*;
 use crate::compy_data_dir;
 use crate::data_root::MutationRoot;
 use crate::{
-    eee_disabled_on_any_eligible_adapter, fast_startup_state_checked,
+    eee_disabled_on_any_eligible_adapter_checked, fast_startup_state_checked,
     game_bar_disabled, game_mode_enabled, hags_state_checked, mouse_accel_disabled,
     nagle_disabled_on_any_nic, pcie_aspm_off_on_ac_checked, reserved_storage_enabled_checked,
     service_running_checked, startup_approval_value, usb_selective_suspend_off_on_ac_checked,
@@ -735,7 +735,8 @@ pub(crate) fn probe_rec_target_with(rec_id: &str, reads: &LiveReads) -> ActiveCh
         "reserved-storage-off" => read(reserved_storage_enabled_checked().ok().map(|on| !on)),
         "usb-selective-suspend-off" => read(usb_selective_suspend_off_on_ac_checked()),
         "pcie-aspm-off" => read(pcie_aspm_off_on_ac_checked()),
-        "eee-disable" => read(Some(eee_disabled_on_any_eligible_adapter())),
+        // D2b r1 (F1): an EEE read that did not finish is Unreadable, never "turned off outside Compy".
+        "eee-disable" => read(eee_disabled_on_any_eligible_adapter_checked()),
         _ => ActiveCheck::Unrecognised,
     }
 }
@@ -3966,6 +3967,66 @@ mod receipt_commit_tests {
             read
         };
         commit_rollback(history, idx, link, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
+    }
+
+    // ── D2b r1: a telemetry-task undo whose read did not finish, or found no task, leaves the row open ──
+
+    fn applied_task_row(task: KnownBloatTask, prior_state: &str) -> AppliedChange {
+        let result = ApplyResult {
+            applied_action: AppliedAction::DisableScheduledTask { task: task.clone() },
+            rollback_action: RollbackAction::EnableScheduledTask { task },
+            snapshot: Snapshot::ScheduledTask { prior_state: prior_state.to_string() },
+            elevation_used: true,
+        };
+        build_applied_change("telemetry-appraiser", "Turn off a telemetry task", result, None).expect("build")
+    }
+
+    /// The user's undo of a task row through the REAL typed undo, with the task read forced.
+    fn undo_task_row_with_read(read: Option<std::process::Output>, expected: &str) {
+        let _read = crate::actions::ForceTaskRead::begin(read);
+        let mut history = vec![applied_task_row(KnownBloatTask::CompatibilityAppraiser, "Ready")];
+        let saves = std::cell::Cell::new(0);
+        let save = |_: &[AppliedChange]| -> Result<(), String> {
+            saves.set(saves.get() + 1);
+            Ok(())
+        };
+        let rollback = |a: &RollbackAction, s: &Snapshot| -> Result<UndoDone, String> { match (a, s) {
+            (RollbackAction::EnableScheduledTask { task }, Snapshot::ScheduledTask { prior_state }) => {
+                crate::actions::rollback_enable_scheduled_task_typed(task, prior_state).map(|()| UndoDone::Restored)
+            }
+            _ => panic!("wrong contract"),
+        } };
+        let probe = |_: &str, _: Option<&AppliedAction>| -> ActiveCheck { panic!("no probe on a failed undo") };
+        let err = commit_rollback(&mut history, 0, None, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
+            .expect_err("refused");
+        let RollbackError::Failed(msg) = err else { panic!("a failed undo, not an unrecorded one") };
+        assert_eq!(msg, expected);
+        assert_eq!(history[0].status, "applied", "the row stays open");
+        assert!(history[0].rolled_back_at.is_none() && history[0].nothing_restored.is_none());
+        assert_eq!(saves.get(), 0, "nothing saved");
+    }
+
+    #[test]
+    fn a_task_undo_whose_read_did_not_finish_or_found_no_task_leaves_the_row_open() {
+        use std::os::windows::process::ExitStatusExt;
+        undo_task_row_with_read(None, crate::actions::TASK_UNREADABLE_UNDO);
+        let empty = std::process::Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        };
+        undo_task_row_with_read(Some(empty), crate::actions::TASK_NOT_FOUND_UNDO);
+    }
+
+    // ── D2b r1 (F1): an applied EEE row whose read did not finish is "couldn't read", never "turned off" ──
+
+    #[test]
+    fn an_eee_row_whose_read_did_not_finish_probes_unreadable_never_off() {
+        let _read = crate::actions::ForceEeeRead::begin(None);
+        assert!(
+            matches!(probe_rec_target_with("eee-disable", &LiveReads::default()), ActiveCheck::Unreadable),
+            "an unread EEE state must not read as Off (\"turned off outside Compy\")"
+        );
     }
 
     // ── CR-core-parking-plan-gone: an undo whose power plan no longer exists ──

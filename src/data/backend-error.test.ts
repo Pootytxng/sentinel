@@ -33,6 +33,14 @@ describe("backend-error: the backend's refusal sentences", () => {
     expect(Object.keys(zhKeys).sort()).toEqual(Object.keys(enKeys).sort());
   });
 
+  it("no sentence contains another (contains-matching can never pick the wrong one)", () => {
+    for (const a of BACKEND_SENTENCES) {
+      for (const b of BACKEND_SENTENCES) {
+        if (a !== b) expect(a.text.includes(b.text), `${a.rust} contains ${b.rust}`).toBe(false);
+      }
+    }
+  });
+
   it("finds a sentence inside a wrapped error, and nothing else", () => {
     const unread = BACKEND_SENTENCES.find((s) => s.rust === "TASK_UNREADABLE_APPLY")!;
     expect(backendSentenceKey(unread.text)).toBe(unread.key);

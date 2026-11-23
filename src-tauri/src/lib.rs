@@ -1152,17 +1152,25 @@ pub(crate) fn pcie_aspm_off_on_ac_checked() -> Option<bool> {
     query_power_setting_ac_dc(PWR_SUBGROUP_PCIE, PWR_SETTING_PCIE_ASPM).map(|(ac, _)| ac == 0)
 }
 
-pub(crate) fn eee_disabled_on_any_eligible_adapter() -> bool {
-    // ON (in the recommended sense — EEE off) iff EVERY resolvable property reads disabled,
-    // judged by the HONEST comparator (the driver's own disabled token / "Off" / "0" — never
-    // just the English "Disabled", which misread Off-vocabulary drivers; tester-found 2026-06-10).
-    // Unresolvable (no adapter / no recognizable switch) is conservatively NOT-disabled — the rec
-    // is ineligible upstream in that case, so this never drives a false offer.
-    match crate::actions::resolve_eee() {
-        crate::actions::EeeResolution::Ready(props) => {
-            props.iter().all(crate::actions::eee_value_is_disabled)
-        }
-        _ => false,
+/// ON (in the recommended sense — EEE off) iff EVERY resolvable property reads disabled, judged by the
+/// HONEST comparator (the driver's own disabled token / "Off" / "0" — never just the English
+/// "Disabled", which misread Off-vocabulary drivers; tester-found 2026-06-10). No adapter / no
+/// recognizable switch is conservatively NOT-disabled (`Some(false)`) — the rec is ineligible upstream
+/// in that case, so this never drives a false offer.
+///
+/// D2b r1 (F1): a read that did not finish is `None` ("couldn't read"), never `Some(false)`: the Trust
+/// Ledger check reads this, and `false` there means "turned off outside Compy".
+pub(crate) fn eee_disabled_on_any_eligible_adapter_checked() -> Option<bool> {
+    eee_disabled_from(&crate::actions::resolve_eee())
+}
+
+/// PURE (D2b r1): the EEE state from a resolution. `Unreadable` → None.
+pub(crate) fn eee_disabled_from(res: &crate::actions::EeeResolution) -> Option<bool> {
+    use crate::actions::EeeResolution;
+    match res {
+        EeeResolution::Ready(props) => Some(props.iter().all(crate::actions::eee_value_is_disabled)),
+        EeeResolution::Unreadable => None,
+        EeeResolution::NoEligibleAdapter | EeeResolution::NoDisableSwitch => Some(false),
     }
 }
 
