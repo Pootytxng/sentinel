@@ -685,8 +685,8 @@ function IncidentGroupBlock({
       {lineKey && apart > 0 && (
         <p className="bb-group-apart">
           {newest.tag === "App crash"
-            ? t("gaming.blackBox.group.apartCrash", { total: count + apart, app, count: apart })
-            : t("gaming.blackBox.group.apartHang", { total: count + apart, app, count: apart })}
+            ? t("gaming.blackBox.group.apartCrash", { total: count + apart, app, grouped: count, count: apart })
+            : t("gaming.blackBox.group.apartHang", { total: count + apart, app, grouped: count, count: apart })}
         </p>
       )}
       {newest.assessment && (

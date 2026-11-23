@@ -32,6 +32,17 @@ describe("assumedBandLine", () => {
     expect(line).not.toContain("measured\":");
   });
 
+  // B6 (view-1122a "ROB RUN's measured noise is ±203%"): sessions too varied to give a figure are said
+  // to be so, never "still isn't measured" (which asks for sessions that exist) and never a number.
+  // Break check: drop the measured_too_varied branch in assumedBandLine (falls to Unmeasured).
+  it("says the game's sessions are too varied to give a figure, in both languages, with no number", () => {
+    const line = assumedBandLine({ assumed_pct: 3, measured_low1_pct: null, measured_sessions: null, measured_too_varied: true }, "ROB RUN.exe", t);
+    expect(line).toContain("lab.experimentBench.assumedBandTooVaried ");
+    expect(line).not.toContain("measured\":");
+    expect(en.experimentBench.assumedBandTooVaried).toContain("vary too much from each other for Compy to give a noise figure yet");
+    expect(zh.experimentBench.assumedBandTooVaried).toContain("差别太大，Compy 暂时给不出噪声数值");
+  });
+
   it("a figure only an earlier result carries is named as such; a 'since' figure wins over it", () => {
     const a = { assumed_pct: 3, measured_low1_pct: null, measured_sessions: null };
     const line = assumedBandLine(a, "WardogsClient.exe", t, null, { pct: 21.6, sessions: 6 });

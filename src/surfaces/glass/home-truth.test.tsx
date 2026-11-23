@@ -132,12 +132,13 @@ describe("Home truth (B1)", () => {
     expect(screen.queryByTestId("paramedic-rough")).toBeNull();
   });
 
-  it("two rough games are counted and both named in the card", async () => {
-    engine.status = { rough: [skyline, { ...skyline, game: "harbornine.exe", game_name: "Harbor Nine", rough_sessions: 3 }], games_judged: 2, back_in_range: [] };
+  it("two rough games are counted and both named in the card, each with its own date (B6)", async () => {
+    const harbor = { ...skyline, game: "harbornine.exe", game_name: "Harbor Nine", rough_sessions: 3, newest_rough_at: `${new Date().getFullYear()}-11-18T12:00:00Z` };
+    engine.status = { rough: [skyline, harbor], games_judged: 2, back_in_range: [] };
     home(false);
     expect(await screen.findByRole("heading", { level: 1, name: "2 things are worth a look" })).toBeInTheDocument();
     expect(screen.getByTestId("paramedic-rough")).toHaveTextContent(
-      "Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range. Also rougher than usual last time: Harbor Nine.",
+      "Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range. Also rougher than usual in its last measured session: Harbor Nine (Nov 18).",
     );
   });
 

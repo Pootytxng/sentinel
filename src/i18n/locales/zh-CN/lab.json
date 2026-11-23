@@ -133,6 +133,7 @@
     "noiseFloorLabel": "噪声基线",
     "noiseFloorNote": "改动必须超过此幅度才算数",
     "noiseFloorNoteGame": "{{game}} · 改动必须超过此幅度才算数",
+    "noiseTooVaried": "{{game}}：各次游戏之间差别太大，Compy 暂时给不出噪声数值",
     "safeStackLabel": "基础优化组合",
     "instrumentsReadLabel": "读取进度",
     "instrumentsReadNote": "{{total}} 站中已读 {{read}} 站",
@@ -210,15 +211,15 @@
     "alreadySetStack": "本机已是这样设置",
     "safeTweaksForPc": "适合这台电脑的基础优化项",
     "allApplied": "这台主机的 {{total}} 项已全部开启——无需再应用。",
-    "freshLeft": "下方还有 {{count}} 项待开启——每项一键完成,且可撤销。",
+    "freshLeft": "下方还有 {{count}} 项待开启——每项一键完成；Compy 会先保存每项设置，你可以撤销。",
     "driftedRestore_one": "有 {{count}} 项在 Compy 之外被关闭——请在下方恢复。",
     "driftedRestore_other": "有 {{count}} 项在 Compy 之外被关闭——请在下方恢复。",
     "mixedLeft": "下方还有 {{totalLeft}} 项——{{fresh}} 项待开启,{{drifted}} 项在 Compy 之外被关闭。",
     "appliedHistorySummary": "已应用与历史记录——Compy 做过的更改,以及哪些可以撤销",
     "appliedHistorySummaryUnvouched": "已应用与历史记录——Compy 无法保证这里的每一项更改都能撤销",
     "moreCleanupSummary": "更多清理项(可选)",
-    "powerFeaturesSummary": "进阶功能——游戏模式(进阶,可撤销)",
-    "powerFeaturesIntro": "在这里可以进行力度更大、且能被验证效果的更改。每一项都可以撤销——应用一项后,运行基准测试站,即可测出它对这台主机的实际效果。"
+    "powerFeaturesSummary": "进阶功能——游戏模式(进阶,可以撤销)",
+    "powerFeaturesIntro": "在这里可以进行力度更大、且能被验证效果的更改。每次更改前 Compy 都会先保存这项设置，所以你可以撤销——应用一项后,运行基准测试站,即可测出它对这台主机的实际效果。"
   },
   "stations": {
     "optimize": {
@@ -665,7 +666,7 @@
     "hypothesisWithBaseline": "{{metric}} 应超过这款游戏的噪声下限（至少 3%）",
     "hypothesisWithoutBaseline": "{{metric}} 应超过噪声下限",
     "title": "只测一项更改",
-    "hint": "Compy 先测基线，应用一项可撤销的更改，再实测一局，除非数据明显超过噪声，否则自动撤回这项更改。",
+    "hint": "Compy 先测基线，保存这项设置，应用一项更改，再实测一局，除非数据明显超过噪声，否则把这项更改改回原样。",
     "pickLabel": "选择要测试的更改",
     "costAck": {
       "line": "{{change}}的代价：{{cost}}",
@@ -732,7 +733,7 @@
     "applying": "应用中…",
     "startExperiment": "开始实验——应用并测量下一局",
     "ledgerBusy": "Compy 还在进行另一项更改(例如恢复之前的状态)。完成后即可开始测试。",
-    "fineprint": "现在应用一项可撤销的更改,并与你下一局 {{game}} 对局进行比较。除非明显超过噪声下限,否则将自动恢复。",
+    "fineprint": "先保存这项设置,现在应用一项更改,并与你下一局 {{game}} 对局进行比较。除非结果明显超过噪声下限,否则 Compy 会把设置改回原样。",
     "fineprintGameFallback": "对局",
     "noBaselineYet": "目前还没有基准——请先玩一局开启监测的对局。Compy 需要一份真实的「更改前」读数,绝不会凭空捏造。",
     "baselineTooShort": "这局时间太短,无法用来比较更改：只有 {{readings}} 个帧率读数,Compy 需要 {{min}} 个（约 10 分钟游戏时间）。",
@@ -948,6 +949,7 @@
     "noiseMeasuredFloor": "{{game}} 的波动小于 ±{{min}}% 时，范围取 ±{{min}}%：这是 Compy 声称有变化的最小幅度，并非测得的波动。",
     "noiseMeasuredCapUnread_other": "未计入：另有 {{count}} 次相同更改下的 {{game}} 对局，因为 Compy 无法判断是否有帧率上限限制了它们。",
     "assumedBandUnmeasured": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 的波动至今仍未测量，因此请视为未经确认。",
+    "assumedBandTooVaried": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 的各次游戏之间差别太大，Compy 暂时给不出噪声数值，因此请视为未经确认。",
     "assumedBandMeasuredSince": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 的波动在判定时尚未测量，此后已测得 ±{{measured}}%（来自 {{sessions}} 次游戏）。",
     "assumedBandMeasuredEarlier": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。Compy 曾为较早的一项结果测得 {{game}} 的波动为 ±{{measured}}%（来自 {{sessions}} 次游戏），但无法为这一项测量，因此请视此结果为未确认。",
     "assumedBandWider": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 实测的波动为 ±{{measured}}%（来自 {{sessions}} 次游戏），比该范围更宽，因此这一结果是按低于这款游戏实际波动的范围判定的。",

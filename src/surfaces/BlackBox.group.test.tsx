@@ -417,13 +417,14 @@ describe("Problems room - records outside a group are counted, not hidden", () =
     const { container } = await open([...many(22), odd(22)]);
     expect(container.querySelectorAll(".bb-list > .bb-item")).toHaveLength(2);
     expect(screen.getByText(/closed 22 times in the Windows records Compy read/)).toBeTruthy();
-    expect(screen.getByText("23 of the crash records listed here are for ROB RUN; 1 is shown separately because its details differ.")).toBeTruthy();
+    // B6 (view-1122a finding 9): the 22 above and the 1 apart add up to the 23 in the sentence, said in it.
+    expect(screen.getByText("Compy read 23 crash records for ROB RUN: the 22 counted above, and 1 shown separately because its details differ.")).toBeTruthy();
   });
 
   it("said in Chinese", async () => {
     await i18n.changeLanguage("zh-CN");
     await open([...many(22), odd(22)]);
-    expect(screen.getByText("这里列出的崩溃记录中有 23 条属于 ROB RUN；其中 1 条因细节不同而单独显示。")).toBeTruthy();
+    expect(screen.getByText("Compy 读到 ROB RUN 的崩溃记录共 23 条：上面统计的 22 条，以及因细节不同而单独显示的 1 条。")).toBeTruthy();
   });
 
   it("no line when every record of that program and kind is in the group", async () => {

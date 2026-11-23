@@ -95,8 +95,11 @@
       "lastSessionLabel": "Last session",
       "seeIn": "See in {{room}}",
       "none": "Nothing further — the verdict above covers it.",
+      "coveredAbove": "The check that needs a look is the one named above; nothing else stands out.",
       "pending": "Still reading this PC.",
       "lastSessionNone": "No before-and-after yet — play a monitored session.",
+      "lastSessionNoVerdict": "Your last session ({{game}}, {{date}}) didn't measure clearly better or worse than the one before it, or Compy couldn't compare the two. Its numbers are in {{room}}.",
+      "lastSessionNoVerdictNoRoom": "Your last session ({{game}}, {{date}}) didn't measure clearly better or worse than the one before it, or Compy couldn't compare the two.",
       "lastSessionOff": "Session comparison is off in Settings."
     },
     "cpuTemp": {
@@ -490,7 +493,9 @@
       "headline": "{{game}} ran rougher than usual last time",
       "sentenceOne": "{{game}}'s last measured session, on {{date}}, ran rougher than its usual range.",
       "sentenceMany": "{{game}}'s last {{count}} measured sessions in a row, up to {{date}}, ran rougher than its usual range.",
-      "others": "Also rougher than usual last time: {{games}}.",
+      "others": "Also rougher than usual in its last measured session: {{games}}.",
+      "otherGame": "{{game}} ({{date}})",
+      "otherSeparator": ", ",
       "separately": "Separately: {{line}}",
       "unread": "Compy couldn't read how your games ran.",
       "aGame": "A game"

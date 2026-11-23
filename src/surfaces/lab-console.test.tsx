@@ -760,6 +760,38 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     expect(tr.querySelector(".ag-v")!.textContent).not.toBe("8");
     expect(tr.querySelector(".ag-v")!.textContent).not.toBe("29");
   });
+
+  // B6 (view-1122a): the tile read "203 ±% NOISE FLOOR · ROB RUN · a change must beat this to count".
+  // The engine now refuses a band over 100% (noise_floor.rs NOISE_BAND_MAX_PCT) and flags the game as
+  // too varied; the tile shows no number and says why, in place of NOT YET (ArcGauge `emptyNote`).
+  // Break check: drop `emptyNote={noiseTooVariedNote}` from the reading; the note assert fails.
+  it("Noise floor gives no figure and says why when the game's sessions are too varied", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_experiments"
+        ? Promise.resolve([
+            {
+              id: "e1", rec_id: "visual-effects", rec_title: "x", game: "ROB RUN.exe", created_at: "2026-11-11T10:00:00Z",
+              concluded_at: "2026-11-11T11:00:00Z", verdict: "too-noisy", kept: false,
+              assumed_band: { assumed_pct: 3, measured_low1_pct: null, measured_sessions: null, measured_too_varied: true },
+            },
+          ])
+        : cmd === "get_session_summaries"
+          ? Promise.resolve([])
+          : Promise.resolve(null),
+    );
+    renderConsole();
+    const tr = reading(1);
+    await waitFor(() =>
+      expect(tr.querySelector(".ag-note")?.textContent).toBe(
+        "ROB RUN: its sessions vary too much from each other for Compy to give a noise figure yet",
+      ),
+    );
+    expect(tr.querySelector(".ag-v")?.textContent ?? "").not.toMatch(/\d/);
+    expect(tr.textContent).not.toMatch(/must beat this/);
+    // One supporting line: the reason replaces NOT YET, never joins it.
+    expect(tr.querySelector(".ag-tag-ny")).toBeNull();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────

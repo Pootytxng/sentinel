@@ -550,6 +550,8 @@ export type ComparisonResult = {
     measured_sessions: number | null;
     claimed_change?: boolean;
     judged?: boolean;
+    /** B6: no figure because the game's sessions are too varied to give one (experiment.rs). */
+    measured_too_varied?: boolean;
   } | null;
 };
 

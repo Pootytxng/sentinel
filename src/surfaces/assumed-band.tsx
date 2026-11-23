@@ -15,6 +15,9 @@ export type AssumedBand = {
   claimed_change?: boolean;
   /** The old verdict judged anything at all (an old too-noisy result did not). */
   judged?: boolean;
+  /** B6 (noise_floor.rs `NoiseUnmeasured::too_varied`): no figure because this game's sessions differ
+   *  too much from each other to give one (a band over 100%), not because there are too few. */
+  measured_too_varied?: boolean;
 };
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -50,6 +53,10 @@ export function assumedBandLine(
       measured: pct(earlier.pct),
       sessions: earlier.sessions,
     });
+  // B6: never "still isn't measured" (that asks for more sessions) when the sessions exist and are too
+  // varied to give a figure; never a figure over 100% either (the engine refuses those).
+  if (a.measured_low1_pct == null && a.measured_too_varied)
+    return t("lab.experimentBench.assumedBandTooVaried", { assumed: pct(a.assumed_pct), game: name });
   if (a.measured_low1_pct == null) return t("lab.experimentBench.assumedBandUnmeasured", { assumed: pct(a.assumed_pct), game: name });
   const [assumed, measured, sessions] = [pct(a.assumed_pct), pct(a.measured_low1_pct), a.measured_sessions ?? 0];
   if (a.measured_low1_pct <= a.assumed_pct)

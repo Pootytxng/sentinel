@@ -134,7 +134,12 @@ export function roughLine(r: RoughRead, t: TFunction, lang = "en"): string {
       ? t("home.posture.rough.sentenceOne", { game: name, date: when })
       : t("home.posture.rough.sentenceMany", { game: name, count: first.rough_sessions, date: when });
   if (games.length === 1) return main;
-  const rest = games.slice(1).map((g) => gameName(g, t)).join(", ");
+  // B6 (view-1122a finding 8): every other game is named WITH the date of its own newest rough session, so "last
+  // time" is never read as today for a game that ran rough days ago.
+  const rest = games
+    .slice(1)
+    .map((g) => t("home.posture.rough.otherGame", { game: gameName(g, t), date: roughDay(g.newest_rough_at, lang) }))
+    .join(t("home.posture.rough.otherSeparator"));
   return `${main} ${t("home.posture.rough.others", { games: rest })}`;
 }
 

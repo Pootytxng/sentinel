@@ -165,6 +165,7 @@ pub(crate) fn assumed_band_for(
         measured_sessions: measured_now.map(|n| n.sessions),
         claimed_change: true,
         judged: true,
+        measured_too_varied: false,
     })
 }
 

@@ -1628,8 +1628,10 @@ fn get_latest_comparison() -> Option<comparison::ComparisonResult> {
     // read only when there is a label to attach.
     if comparison::assumed_band_for(&r, None).is_some() {
         let sessions = sessions::get_session_summaries();
-        let now = experiment::game_noise_now(&sessions, &r.game);
-        r.assumed_band = comparison::assumed_band_for(&r, now.as_ref());
+        // B6: and, with no figure, whether that is because the sessions are too varied to give one.
+        let (now, too_varied) = experiment::game_noise_read(&sessions, &r.game);
+        r.assumed_band = comparison::assumed_band_for(&r, now.as_ref())
+            .map(|l| experiment::AssumedBandLabel { measured_too_varied: now.is_none() && too_varied, ..l });
     }
     Some(r)
 }

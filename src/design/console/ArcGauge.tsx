@@ -28,13 +28,19 @@ export function unitVisualWidth(unit: string): number {
 }
 
 export function ArcGauge({
-  label, value, max, unit, tone = "neutral", measured = true, note, grade, gradeTone = "good",
+  label, value, max, unit, tone = "neutral", measured = true, note, emptyNote, grade, gradeTone = "good",
   variant = "ring",
 }: {
   /** ReactNode so callers can gloss jargon labels inline (e.g. a <Term> tooltip on "1% low"). */
   label: ReactNode; value: number | null; max: number; unit: string; tone?: ArcTone; measured?: boolean;
   /** One quiet "how we calculate this" line under the label — shown only with a live value. */
   note?: string;
+  /**
+   * B6 (view-1122a): WHY there is no reading, when the caller knows it is not merely "not yet" (Test's
+   * noise floor when a game's sessions are too varied to give a figure). Said in place of the NOT YET
+   * tag, so the empty state still carries exactly one supporting line; never shown with a value.
+   */
+  emptyNote?: string;
   /**
    * ONE WORD SAYING WHETHER THE NUMBER IS ANY GOOD — 01-health-approved.png prints GOOD in
    * green where every other gauge prints MEASURED, and the owner ruled the comps exact
@@ -133,7 +139,8 @@ export function ArcGauge({
         {(empty || (unit.length > 0 && !unitInRing)) && (
           <span className="ag-u ag-u-side">{empty ? t("common.arcGauge.noReading") : unit}</span>
         )}
-        {empty ? <span className="ag-tag ag-tag-ny">{t("common.arcGauge.notYet")}</span>
+        {empty ? (emptyNote ? <span className="ag-note ag-note-why">{emptyNote}</span>
+                            : <span className="ag-tag ag-tag-ny">{t("common.arcGauge.notYet")}</span>)
                : grade ? <span className={`ag-grade ag-grade-${gradeTone}`}>{grade}</span>
                : measured ? <span className="ag-tag">{t("common.arcGauge.measured")}</span> : null}
         {note && !empty && <span className="ag-note">{note}</span>}

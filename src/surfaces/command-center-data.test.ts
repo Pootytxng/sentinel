@@ -308,10 +308,11 @@ describe("postureLine: B1 Home truth", () => {
   });
 
   it("every rough game Home counts is named", () => {
-    const other = { ...skyline(3), game: "harbornine.exe", game_name: "Harbor Nine" };
+    // B6 (view-1122a finding 8): each other game carries the date of its own newest rough session.
+    const other = { ...skyline(3), game: "harbornine.exe", game_name: "Harbor Nine", newest_rough_at: `${new Date().getFullYear()}-11-18T12:00:00Z` };
     const p = postureLine(readiness([check("ready", "SSD")]), null, 0, rough(skyline(2), other));
     expect(p.sentence).toMatch(
-      /^Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range\. Also rougher than usual last time: Harbor Nine\./,
+      /^Skyline Drift's last 2 measured sessions in a row, up to Nov 20, ran rougher than its usual range\. Also rougher than usual in its last measured session: Harbor Nine \(Nov 18\)\./,
     );
   });
 

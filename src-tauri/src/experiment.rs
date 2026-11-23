@@ -330,6 +330,11 @@ pub(crate) struct AssumedBandLabel {
     pub claimed_change: bool,
     /// Whether the old verdict judged anything at all (a too-noisy result did not).
     pub judged: bool,
+    /// B6 (view-1122a "203 ±% NOISE FLOOR"): `measured_low1_pct` is `None` because this game's as-is
+    /// sessions differ too much from each other to give a figure (`NoiseUnmeasured::too_varied`), not
+    /// because there are too few. The Test room says so instead of showing a band no change could beat.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub measured_too_varied: bool,
 }
 
 /// How comparable the baseline and treatment sessions were (`comparability::derive` at conclude) —
@@ -1846,14 +1851,23 @@ pub(crate) fn realplay_ready_notice(
 /// when it isn't measured (too few as-is sessions, an unreadable cap state, or a change history that
 /// can't be read): the caller then calls nothing better or worse.
 pub(crate) fn measured_noise_at(sessions: &[SessionSummary], baseline: &SessionSummary) -> Option<crate::noise_floor::GameNoise> {
+    measured_noise_result_at(sessions, baseline).ok()
+}
+
+/// B6: [`measured_noise_at`] with the reason kept: `Err(None)` when the change history can't be read,
+/// `Err(Some(why))` when the noise isn't measured (too few sessions, an unreadable cap, too varied).
+pub(crate) fn measured_noise_result_at(
+    sessions: &[SessionSummary],
+    baseline: &SessionSummary,
+) -> Result<crate::noise_floor::GameNoise, Option<crate::noise_floor::NoiseUnmeasured>> {
     let (history, coverage) = ledger_view_for_one_change_checks(
         crate::history::load_history,
         crate::history::ledger_set_aside_through,
         Some(baseline.started_at.as_str()),
     );
-    let history = ledger_for_one_change_checks(history, coverage).ok()?;
+    let history = ledger_for_one_change_checks(history, coverage).map_err(|_| None)?;
     let covered = sessions_the_ledger_covers(sessions, coverage);
-    crate::noise_floor::measure_game_noise(&covered, baseline, &ledger_rows(&history)).ok()
+    crate::noise_floor::measure_game_noise(&covered, baseline, &ledger_rows(&history)).map_err(Some)
 }
 
 /// P4-rank: the band the NEXT Trial would be judged against, only when it is measured — the
@@ -3041,6 +3055,16 @@ pub(crate) fn noise_unmeasured_message(why: &crate::noise_floor::NoiseUnmeasured
              tell that apart from a cap yet and won't test this game this way."
         );
     }
+    if why.too_varied {
+        // B6 (view-1122a): never a figure over NOISE_BAND_MAX_PCT, so never "a change must beat 203%".
+        return format!(
+            "Compy can't give a noise figure for {name} yet: its {} baseline sessions with nothing changed \
+             differ too much from each other to show what \"no change\" looks like, so no result could be \
+             told apart from that swing. Play more baseline sessions of {name} the same way (same settings, \
+             same kind of match, 10 minutes or more), then start.",
+            why.have
+        );
+    }
     let more = why.need.saturating_sub(why.have).max(1);
     let sessions = if more == 1 { "session" } else { "sessions" };
     format!(
@@ -3061,14 +3085,22 @@ pub(crate) fn noise_for_conclude(
     rows: Option<&[LedgerEntryRef<'_>]>,
 ) -> Result<crate::noise_floor::GameNoise, crate::noise_floor::NoiseUnmeasured> {
     // A band stored by an older noise model is read on this build's base (never narrower).
-    if let Some(n) = &rec.game_noise {
-        return Ok(crate::noise_floor::on_baseline_base(n.clone()));
-    }
     let unmeasured = crate::noise_floor::NoiseUnmeasured {
         have: 0,
         need: crate::noise_floor::MIN_UNCHANGED_SESSIONS,
         cap_unknown: false,
+        too_varied: false,
     };
+    if let Some(n) = &rec.game_noise {
+        let n = crate::noise_floor::on_baseline_base(n.clone());
+        // B6: a band stored at the start by a build without the max is refused the same way a new
+        // measurement is, so a Trial started on a "203%" floor is not judged on it.
+        if crate::noise_floor::band_too_wide(&n) {
+            let have = usize::try_from(n.sessions).unwrap_or(usize::MAX);
+            return Err(crate::noise_floor::NoiseUnmeasured { have, too_varied: true, ..unmeasured });
+        }
+        return Ok(n);
+    }
     match (baseline, rows) {
         (Some(b), Some(rows)) => crate::noise_floor::measure_game_noise(sessions, b, rows),
         _ => Err(unmeasured),
@@ -3539,6 +3571,7 @@ pub(crate) fn assumed_band_label(
         measured_sessions: measured_now.map(|n| n.sessions),
         claimed_change: matches!(rec.verdict.as_deref(), Some("improved" | "regressed")),
         judged: rec.verdict.as_deref() != Some("too-noisy"),
+        measured_too_varied: false,
     })
 }
 
@@ -3850,17 +3883,21 @@ pub(crate) fn get_experiments() -> Vec<ExperimentRecord> {
         return experiments;
     }
     let sessions = crate::sessions::get_session_summaries();
-    with_assumed_band_labels(experiments, |game: &str| game_noise_now(&sessions, game))
+    with_assumed_band_labels(experiments, |game: &str| game_noise_read(&sessions, game))
 }
 
 /// `game`'s noise as measured now, for an assumed-band label: the same reads a start makes for that
 /// session (#618 coverage included), so "measured now" is the band a Trial from the game's newest
 /// session would be judged on. CR-debrief-assumed-label: the stored comparison result's label reads it too.
-pub(crate) fn game_noise_now(sessions: &[SessionSummary], game: &str) -> Option<crate::noise_floor::GameNoise> {
+///
+/// B6 (view-1122a "203 ±% NOISE FLOOR"; was `game_noise_now`): also whether the newest pool
+/// that could measure it was refused as too varied ([`crate::noise_floor::NoiseUnmeasured::too_varied`]),
+/// so the Test tile says why it gives no figure instead of showing a band no change could beat.
+pub(crate) fn game_noise_read(sessions: &[SessionSummary], game: &str) -> (Option<crate::noise_floor::GameNoise>, bool) {
     // At most the newest ten readable sessions are tried, so a refresh stays bounded.
     let mut candidates = readings_newest_first(sessions, game);
     candidates.truncate(10);
-    first_measured(candidates, |from| measured_noise_at(sessions, from))
+    first_measured(candidates, |from| measured_noise_result_at(sessions, from))
 }
 
 /// Sessions of `game` with a frame-rate reading whose frame-cap state can be read, newest first.
@@ -3879,29 +3916,42 @@ fn readings_newest_first<'a>(sessions: &'a [SessionSummary], game: &str) -> Vec<
 /// measured from. The newest session of a game can be a Trial's after-session (one change more), whose
 /// own as-is pool is empty, so "measured now" walks back to the newest session that measures: the newest
 /// as-is session whose cap state can be read. `None` only when no session of the game measures.
+///
+/// B6: the walk stops at a pool refused as too varied (returns `(None, true)`): an older, smaller pool
+/// must not stand in for the newest one with a narrower figure the newest sessions don't support.
 fn first_measured(
     candidates: Vec<&SessionSummary>,
-    measure: impl FnMut(&SessionSummary) -> Option<crate::noise_floor::GameNoise>,
-) -> Option<crate::noise_floor::GameNoise> {
-    candidates.into_iter().find_map(measure)
+    mut measure: impl FnMut(&SessionSummary) -> Result<crate::noise_floor::GameNoise, Option<crate::noise_floor::NoiseUnmeasured>>,
+) -> (Option<crate::noise_floor::GameNoise>, bool) {
+    for from in candidates {
+        match measure(from) {
+            Ok(n) => return (Some(n), false),
+            Err(Some(why)) if why.too_varied => return (None, true),
+            Err(_) => {}
+        }
+    }
+    (None, false)
 }
 
 /// P4-judge-noisy: label every verdict judged on the assumed band with its game's noise as measured
 /// now (`measure_now`, by game: the band a Trial from its newest session would get; `None` = not
 /// measured, and the label says so). Only labelled records are measured; nothing is written.
+///
+/// B6: `measure_now` also says whether the game's newest pool was refused as too varied
+/// ([`game_noise_read`]); the label carries that, so the Test room never reads it as "too few".
 pub(crate) fn with_assumed_band_labels(
     mut experiments: Vec<ExperimentRecord>,
-    measure_now: impl Fn(&str) -> Option<crate::noise_floor::GameNoise>,
+    measure_now: impl Fn(&str) -> (Option<crate::noise_floor::GameNoise>, bool),
 ) -> Vec<ExperimentRecord> {
     // Opus r1 (s27): measured once per game per read, however many of its records are labelled.
-    let mut by_game: std::collections::HashMap<String, Option<crate::noise_floor::GameNoise>> =
+    let mut by_game: std::collections::HashMap<String, (Option<crate::noise_floor::GameNoise>, bool)> =
         std::collections::HashMap::new();
     for e in &mut experiments {
         if assumed_band_label(e, None).is_none() {
             continue;
         }
-        let now = by_game.entry(e.game.clone()).or_insert_with(|| measure_now(&e.game)).clone();
-        e.assumed_band = assumed_band_label(e, now.as_ref());
+        let (now, too_varied) = by_game.entry(e.game.clone()).or_insert_with(|| measure_now(&e.game)).clone();
+        e.assumed_band = assumed_band_label(e, now.as_ref()).map(|l| AssumedBandLabel { measured_too_varied: now.is_none() && too_varied, ..l });
     }
     experiments
 }
@@ -11005,7 +11055,7 @@ mod refuse_early_tests {
     // "Err(why) => unmeasured_noise_outcome(paired, why, &rec.game),": no measured band judges nothing.
     #[test]
     fn a_conclude_with_no_measured_band_judges_nothing_and_restores() {
-        let why = NoiseUnmeasured { have: 1, need: 3, cap_unknown: false };
+        let why = NoiseUnmeasured { have: 1, need: 3, cap_unknown: false, too_varied: false };
         let (r, t, p) = pair_case(30.0, 5.0, TrialOutcome::Recommended);
         // With no band, the baseline's cap is read from the baseline session itself.
         let day = crate::noise_floor::tests::rob_day();
@@ -11135,9 +11185,22 @@ mod refuse_early_tests {
         let candidates = readings_newest_first(&s, &game);
         assert_eq!(candidates[0].started_at, s[12].started_at, "the newest is the after-session");
         assert!(crate::noise_floor::measure_game_noise(&s, candidates[0], &ledger).is_err(), "it measures nothing");
-        let n = first_measured(candidates, |from| crate::noise_floor::measure_game_noise(&s, from, &ledger).ok())
+        let n = first_measured(candidates.clone(), |from| crate::noise_floor::measure_game_noise(&s, from, &ledger).map_err(Some))
+            .0
             .expect("measured from the newest as-is session");
         assert_eq!(n.sessions, 9);
+        // B6: a pool refused as too varied stops the walk: no older, narrower pool stands in for it, and
+        // the caller is told why there is no figure. Break check: drop the `too_varied` arm in first_measured.
+        let mut calls = 0;
+        let refused = first_measured(candidates, |from| {
+            calls += 1;
+            if from.started_at == s[11].started_at {
+                Err(Some(crate::noise_floor::NoiseUnmeasured { have: 9, need: 3, cap_unknown: false, too_varied: true }))
+            } else {
+                crate::noise_floor::measure_game_noise(&s, from, &ledger).map_err(Some)
+            }
+        });
+        assert_eq!((refused.0, refused.1, calls), (None, true, 2), "stops at the newest as-is pool");
         // A session whose cap state can't be read is never the one measured from.
         let mut short = s.clone();
         short[11].fps_series.truncate(10);
@@ -11240,17 +11303,35 @@ mod refuse_early_tests {
 
     #[test]
     fn unmeasured_noise_judges_nothing_and_asks_for_the_sessions_it_needs() {
-        let why = NoiseUnmeasured { have: 1, need: 3, cap_unknown: false };
+        let why = NoiseUnmeasured { have: 1, need: 3, cap_unknown: false, too_varied: false };
         let m = noise_unmeasured_message(&why, "ROB RUN.exe");
         assert!(m.contains("won't guess") && m.contains("found 1") && m.contains("Play 2 more baseline sessions"), "{m}");
         let o = unmeasured_noise_outcome(measured(180.0), &why, "ROB RUN.exe");
         assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("not-comparable", false, Some("noise-unmeasured")));
-        let cap = noise_unmeasured_message(&NoiseUnmeasured { have: 0, need: 3, cap_unknown: true }, "ROB RUN.exe");
+        let cap = noise_unmeasured_message(&NoiseUnmeasured { have: 0, need: 3, cap_unknown: true, too_varied: false }, "ROB RUN.exe");
         assert!(cap.contains("frame cap") && cap.contains("baseline session"), "{cap}");
         // A record started before P4-judge-noisy, with nothing to measure from, is never judged on its 3%.
         assert!(noise_for_conclude(&rec(150.0, 5), &[], None, None).is_err());
         let started = ExperimentRecord { game_noise: Some(WIDE), ..rec(150.0, 5) };
         assert_eq!(noise_for_conclude(&started, &[], None, None), Ok(WIDE));
+    }
+
+    // B6 (view-1122a "203 ±% NOISE FLOOR"): a band over NOISE_BAND_MAX_PCT is no figure. The Trial start
+    // refuses with words that say why (never "beat 203%"), and a Trial whose start stored such a band
+    // (an earlier build) concludes as not-comparable and restored, never judged on it.
+    // Break check: remove the `band_too_wide` check in noise_for_conclude; the stored-band assert fails.
+    #[test]
+    fn a_band_too_wide_to_be_a_figure_is_refused_at_the_start_and_at_the_conclude() {
+        let why = NoiseUnmeasured { have: 5, need: 3, cap_unknown: false, too_varied: true };
+        let m = noise_unmeasured_message(&why, "ROB RUN.exe");
+        assert!(m.contains("can't give a noise figure") && m.contains("5 baseline sessions") && m.contains("differ too much"), "{m}");
+        assert!(!m.contains('%'), "no figure in the refusal: {m}");
+        let stored = GameNoise { low1_band_pct: 203.0, sessions: 5, ..WIDE };
+        let started = ExperimentRecord { game_noise: Some(stored), ..rec(150.0, 5) };
+        let err = noise_for_conclude(&started, &[], None, None).expect_err("never judged on a 203% band");
+        assert_eq!((err.have, err.too_varied, err.cap_unknown), (5, true, false));
+        let o = unmeasured_noise_outcome(measured(180.0), &err, "ROB RUN.exe");
+        assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("not-comparable", false, Some("noise-unmeasured")));
     }
 
     #[test]
@@ -11329,11 +11410,11 @@ mod refuse_early_tests {
         let old: ExperimentRecord = serde_json::from_value(legacy_no_change()).unwrap();
         assert_eq!(
             assumed_band_label(&old, Some(&WIDE)),
-            Some(AssumedBandLabel { assumed_pct: 3.0, measured_low1_pct: Some(20.6), measured_sessions: Some(9), claimed_change: false, judged: true })
+            Some(AssumedBandLabel { assumed_pct: 3.0, measured_low1_pct: Some(20.6), measured_sessions: Some(9), claimed_change: false, judged: true, measured_too_varied: false })
         );
         assert_eq!(
             assumed_band_label(&old, None),
-            Some(AssumedBandLabel { assumed_pct: 3.0, measured_low1_pct: None, measured_sessions: None, claimed_change: false, judged: true }),
+            Some(AssumedBandLabel { assumed_pct: 3.0, measured_low1_pct: None, measured_sessions: None, claimed_change: false, judged: true, measured_too_varied: false }),
             "still unmeasured is said so"
         );
         let mut worse = old.clone();
@@ -11367,9 +11448,18 @@ mod refuse_early_tests {
         spread.between_session_noise = Some(crate::noise_floor::BetweenSessionNoise { spread_pct: 21.6, sessions: 4 });
         assert_eq!(assumed_band_label(&spread, Some(&WIDE)), None, "exp:5's band was measured");
         // Labelling hands a copy; the verdict and note stay exactly as stored.
-        let labelled = with_assumed_band_labels(vec![old.clone()], |_| None);
-        assert_eq!((labelled[0].verdict.clone(), labelled[0].verdict_note.clone()), (old.verdict, old.verdict_note));
-        assert_eq!(labelled[0].assumed_band.as_ref().map(|l| l.measured_low1_pct), Some(None));
+        let labelled = with_assumed_band_labels(vec![old.clone()], |_| (None, false));
+        assert_eq!((labelled[0].verdict.clone(), labelled[0].verdict_note.clone()), (old.verdict.clone(), old.verdict_note.clone()));
+        assert_eq!(labelled[0].assumed_band.as_ref().map(|l| (l.measured_low1_pct, l.measured_too_varied)), Some((None, false)));
+        // B6: a game whose sessions are too varied to give a figure is labelled so (the Test room says
+        // why there is no figure), and the flag never rides beside a figure. Break check: drop the
+        // `measured_too_varied` assignment in with_assumed_band_labels; the first assert fails.
+        let varied = with_assumed_band_labels(vec![old.clone()], |_| (None, true));
+        assert_eq!(varied[0].assumed_band.as_ref().map(|l| (l.measured_low1_pct, l.measured_too_varied)), Some((None, true)));
+        let json = serde_json::to_value(varied[0].assumed_band.as_ref().unwrap()).unwrap();
+        assert_eq!(json["measured_too_varied"], serde_json::json!(true));
+        let figure = with_assumed_band_labels(vec![old], |_| (Some(WIDE), true));
+        assert_eq!(figure[0].assumed_band.as_ref().map(|l| l.measured_too_varied), Some(false));
     }
 
     #[test]

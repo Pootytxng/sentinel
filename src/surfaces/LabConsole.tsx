@@ -33,7 +33,7 @@ import { measureTuning, tuningEvidence, type PostComparability } from "../data/t
 import { primaryGpu } from "../data/gpu-sensor";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { prettyGameName } from "./game-name";
-import { soleGameNoise, type MeasuredGameNoise, type SummaryExperiment } from "./test-summary";
+import { soleGameNoise, soleGameTooVaried, type MeasuredGameNoise, type SummaryExperiment } from "./test-summary";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
 import { BlackBox } from "./BlackBox";
@@ -208,10 +208,16 @@ export function LabConsole({
   const [scoreboard, setScoreboard] = useState<ScoreboardView | null>(null);
   const [trial, setTrial] = useState<TrialState | null>(null);
   const [gameNoiseNow, setGameNoiseNow] = useState<MeasuredGameNoise | null>(null);
+  // B6 (view-1122a "203 ±% NOISE FLOOR"): the game Compy gives no noise figure for because its sessions
+  // are too varied (the engine refuses a band over 100%); the tile then says why instead of a number.
+  const [gameTooVaried, setGameTooVaried] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<SummaryExperiment[] | null>("get_experiments")
-      .then((xs) => setGameNoiseNow(Array.isArray(xs) ? soleGameNoise(xs) : null))
+      .then((xs) => {
+        setGameNoiseNow(Array.isArray(xs) ? soleGameNoise(xs) : null);
+        setGameTooVaried(Array.isArray(xs) ? soleGameTooVaried(xs) : null);
+      })
       .catch(() => {});
     cachedProbe("benchmark-state", () => invoke<BenchmarkState>("get_benchmark_state"), 30_000)
       .then(setBench)
@@ -571,6 +577,12 @@ export function LabConsole({
   // tile's note then names that game, so it can never sit beside a different game's per-game line.
   const noiseFromGame = trial?.noise_floor_pct == null && cmpBand == null ? gameNoiseNow : null;
   const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : (cmpBand ?? noiseFromGame?.pct ?? null);
+  // B6: no figure at all, and one game's sessions were refused as too varied: the tile names the game and
+  // says why, never a blank "not yet" (which reads as "too few sessions") and never a 203%.
+  const noiseTooVariedNote =
+    noiseFloorPct == null && gameTooVaried != null
+      ? t("lab.labConsole.noiseTooVaried", { game: prettyGameName(gameTooVaried) || gameTooVaried })
+      : undefined;
 
   // BR — Instruments read: how far through the bench this rig has gone. Same `stationHasReading`
   // the dock already uses to mark nodes measured, so the gauge and the dock can never disagree.
@@ -813,6 +825,7 @@ export function LabConsole({
                      stamp and the note share that row, so the stamp stands down for it). */
                   measured={noiseFloorPct != null && !noiseFromGame}
                   note={noiseFromGame ? t("lab.labConsole.noiseFloorNoteGame", { game: prettyGameName(noiseFromGame.game) || noiseFromGame.game }) : undefined}
+                  emptyNote={noiseTooVariedNote}
                 />
               </div>
               <div className="lc-reading">
@@ -1072,6 +1085,7 @@ export function LabConsole({
                   max={10}
                   unit={t("lab.labConsole.unitPct")}
                   measured={noiseFloorPct != null}
+                  emptyNote={noiseTooVariedNote}
                   note={
                     noiseFloorPct == null
                       ? undefined

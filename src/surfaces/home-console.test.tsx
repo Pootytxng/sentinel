@@ -936,6 +936,11 @@ describe("HomeConsole — verdict/top-limiter one-owner dedup", () => {
     expect(topLimiterRows(c)).toHaveLength(0);
     // The exact title appears exactly once across the whole console (the regression was twice).
     expect((c.textContent!.match(/C: drive is 87% full/g) ?? []).length).toBe(1);
+    // B6 (view-1122a finding 4): the Findings tile says the flagged check IS the one above, so it never
+    // reads "Nothing further" beside "1 of 14 checks needs a look". Break check: wire limiter.none back.
+    const findings = c.querySelector(".hc-none")!.textContent!;
+    expect(findings).toBe("The check that needs a look is the one named above; nothing else stands out.");
+    expect(findings).not.toMatch(/Nothing further/);
   });
 
   it("a DIFFERENT flagged check does not suppress an unrelated top limiter (no false standdown)", () => {
@@ -1007,6 +1012,27 @@ describe("HomeConsole — the last-session intelligence line (Intelligence Phase
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     await waitFor(() => expect(state.calls).toContain("get_intelligence_headline"));
     expect(intelRow(c)).toBeNull();
+  });
+
+  // B6 (view-1122a finding 4): Home said "No before-and-after yet — play a monitored session." while Live
+  // showed a session and its comparison. A null headline means "no clear better/worse verdict", not "no
+  // session": with a session on record the tile names it and points to where its numbers are.
+  // Break check: drop the `lastSession` branch in HomeConsole's last-session tile (falls back to None).
+  it("a session on record + no verdict ⇒ the tile names that session, never 'No before-and-after yet'", async () => {
+    state.headline = null;
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    await waitFor(() => expect(state.calls).toContain("get_intelligence_headline"));
+    const tile = c.querySelector(".hc-lastsession")!.textContent!;
+    expect(tile).not.toMatch(/No before-and-after yet/);
+    expect(tile).toMatch(/^Your last session \(.+, Jul \d+(, \d{4})?\) didn't measure clearly better or worse/);
+    expect(tile).toContain("Its numbers are in Monitor.");
+  });
+
+  it("no session on record ⇒ the tile still says there is nothing to compare yet", async () => {
+    state.headline = null;
+    const c = mount({ ...props, sessions: [], rooms: groundRooms, onNavigate: () => {} }).container;
+    await waitFor(() => expect(state.calls).toContain("get_intelligence_headline"));
+    expect(c.querySelector(".hc-lastsession")!.textContent).toBe("No before-and-after yet — play a monitored session.");
   });
 
   it('compy_intelligence "0" failsafe: no line AND the IPC is never invoked', async () => {

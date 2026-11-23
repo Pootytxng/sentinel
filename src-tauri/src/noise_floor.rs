@@ -453,6 +453,19 @@ pub(crate) const NOISE_MODEL_VERSION: u32 = 3;
 /// measured band, never in place of one.
 pub(crate) const MIN_CLAIM_PCT: f64 = crate::comparison::DEFAULT_NOISE_FLOOR_PCT;
 
+/// B6 (view-1122a, the "203 ±% NOISE FLOOR"): the widest band Compy will measure, in percent. A band
+/// wider than this says a change would have to more than double the number to count: the as-is
+/// sessions differ so much from each other (or are so few, which widens the t multiplier) that they
+/// don't say what "no change" looks like. Compy then gives no noise figure at all and judges nothing on
+/// one ([`NoiseUnmeasured::too_varied`]), rather than showing an unbeatable floor as if it were one.
+pub(crate) const NOISE_BAND_MAX_PCT: f64 = 100.0;
+
+/// True when a band is too wide to be a noise figure ([`NOISE_BAND_MAX_PCT`]); either metric counts,
+/// since a verdict reads the 1% low and a veto reads the average.
+pub(crate) fn band_too_wide(n: &GameNoise) -> bool {
+    !(n.low1_band_pct <= NOISE_BAND_MAX_PCT && n.avg_band_pct <= NOISE_BAND_MAX_PCT)
+}
+
 /// Two-sided 95% Student-t multiplier for `df` degrees of freedom (the normal 1.96 past 30).
 pub(crate) fn t95(df: usize) -> f64 {
     const T: [f64; 30] = [
@@ -647,6 +660,9 @@ pub(crate) struct NoiseUnmeasured {
     pub need: usize,
     /// The session's cap state couldn't be read, so no sessions could be pooled with it.
     pub cap_unknown: bool,
+    /// B6: enough sessions were counted, but they differ so much from each other that the band came out
+    /// wider than [`NOISE_BAND_MAX_PCT`]. No figure is given and nothing is judged on one.
+    pub too_varied: bool,
 }
 
 /// A Compy change that was applied and put back entirely inside `(from, to)`: Compy's own dated apply
@@ -833,7 +849,7 @@ pub(crate) fn measure_game_noise(
 ) -> Result<GameNoise, NoiseUnmeasured> {
     let cap = cap_read(now);
     if cap == CapRead::Unknown {
-        return Err(NoiseUnmeasured { have: 0, need: MIN_UNCHANGED_SESSIONS, cap_unknown: true });
+        return Err(NoiseUnmeasured { have: 0, need: MIN_UNCHANGED_SESSIONS, cap_unknown: true, too_varied: false });
     }
     let (run, cap_unread) = as_is_run_skipping(sessions, now, ledger, crate::comparison::ARM_MAX_AGE_DAYS);
     let counted: Vec<&crate::sessions::SessionSummary> = run
@@ -848,7 +864,7 @@ pub(crate) fn measure_game_noise(
         .and_then(|m| u32::try_from(m.max(1)).ok())
         .unwrap_or(0);
     if read.len() < MIN_UNCHANGED_SESSIONS {
-        return Err(NoiseUnmeasured { have: read.len(), need: MIN_UNCHANGED_SESSIONS, cap_unknown: false });
+        return Err(NoiseUnmeasured { have: read.len(), need: MIN_UNCHANGED_SESSIONS, cap_unknown: false, too_varied: false });
     }
     let low: Vec<f64> = read.iter().map(|r| r.0).collect();
     let avg: Vec<f64> = read.iter().map(|r| r.1).collect();
@@ -861,7 +877,8 @@ pub(crate) fn measure_game_noise(
     // fall, B / (1 + B) (`fall_pct`), the same log distance below.
     let band = |step: f64| ((100.0 * (t * step / 100.0).exp_m1()).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0;
     let sessions = u32::try_from(read.len()).unwrap_or(u32::MAX);
-    (low1_step_pct.is_finite() && avg_step_pct.is_finite())
+    let unmeasured = NoiseUnmeasured { have: read.len(), need: MIN_UNCHANGED_SESSIONS, cap_unknown: false, too_varied: false };
+    let measured = (low1_step_pct.is_finite() && avg_step_pct.is_finite())
         .then(|| GameNoise {
             model: NOISE_MODEL_VERSION,
             low1_band_pct: band(low1_step_pct),
@@ -873,7 +890,13 @@ pub(crate) fn measure_game_noise(
             cap_unread: u32::try_from(cap_unread).unwrap_or(u32::MAX),
             max_gap_mins,
         })
-        .ok_or(NoiseUnmeasured { have: read.len(), need: MIN_UNCHANGED_SESSIONS, cap_unknown: false })
+        .ok_or_else(|| unmeasured.clone())?;
+    // B6: the one place every consumer (Trials, the armed comparison, the debrief, the Test tile, the
+    // component evidence) gets its band, so refusing here makes every one of them refuse alike.
+    if band_too_wide(&measured) {
+        return Err(NoiseUnmeasured { too_varied: true, ..unmeasured });
+    }
+    Ok(measured)
 }
 
 // ─── Persistence ──────────────────────────────────────────────────────────
@@ -1749,7 +1772,7 @@ pub(crate) mod tests {
         let s = rob_day();
         // At 02:29 only two as-is sessions exist.
         let why = measure_game_noise(&s, &s[1], &rob_trials()).expect_err("unmeasured");
-        assert_eq!(why, NoiseUnmeasured { have: 2, need: MIN_UNCHANGED_SESSIONS, cap_unknown: false });
+        assert_eq!(why, NoiseUnmeasured { have: 2, need: MIN_UNCHANGED_SESSIONS, cap_unknown: false, too_varied: false });
         // Three is enough, with the widest multiplier (t for two differences).
         let n = measure_game_noise(&s, &s[2], &rob_trials()).unwrap();
         assert_eq!(n.sessions, 3);
@@ -1791,6 +1814,27 @@ pub(crate) mod tests {
         }
         let n = measure_game_noise(&s, &s[3], &settled()).unwrap();
         assert_eq!((n.low1_band_pct, n.avg_band_pct), (MIN_CLAIM_PCT, MIN_CLAIM_PCT), "{n:?}");
+    }
+
+    // B6 (view-1122a): the Test tile showed "203 ±% NOISE FLOOR" for ROB RUN. That number is the real
+    // band (t times the RMS log step of the 1% low) over as-is sessions that swing wildly, not a unit
+    // bug; but a floor a change must more than double the number to beat is no noise figure. Over
+    // NOISE_BAND_MAX_PCT, nothing is measured and every consumer gets Err (too_varied), not a band.
+    // Break check: remove the `band_too_wide` early return in measure_game_noise; this test fails.
+    #[test]
+    fn sessions_that_swing_wildly_give_no_noise_figure_and_say_why() {
+        let mut s = evening();
+        for (x, low) in s.iter_mut().zip([80.0, 230.0, 70.0, 240.0]) {
+            x.low1_fps_est = low;
+            x.fps_series = free_series(240.0);
+        }
+        let why = measure_game_noise(&s, &s[3], &settled()).expect_err("no figure over the max");
+        assert_eq!(why, NoiseUnmeasured { have: 4, need: MIN_UNCHANGED_SESSIONS, cap_unknown: false, too_varied: true });
+        // The edge: a band at the max is still a figure; one tenth over it is not.
+        let at = GameNoise { low1_band_pct: NOISE_BAND_MAX_PCT, avg_band_pct: MIN_CLAIM_PCT, ..measure_game_noise(&rob_day(), &rob_day()[11], &rob_trials()).unwrap() };
+        assert!(!band_too_wide(&at));
+        assert!(band_too_wide(&GameNoise { avg_band_pct: NOISE_BAND_MAX_PCT + 0.1, ..at.clone() }));
+        assert!(band_too_wide(&GameNoise { low1_band_pct: f64::NAN, ..at }), "an unreadable band is no figure either");
     }
 
     #[test]

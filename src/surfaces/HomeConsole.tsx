@@ -22,7 +22,8 @@ import { useReducedMotion } from "../design/use-motion";
 import { useIntelligenceFlag, useHomeInterviewFlag } from "../design/use-hud";
 import { readHologramV2, readHomeInterview } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
-import { homePriorities } from "./home-facts";
+import { homePriorities, roughDay } from "./home-facts";
+import { prettyGameName } from "./game-name";
 import { sessionsKey, useHomeRough } from "./use-home-rough";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
@@ -647,6 +648,15 @@ export function HomeConsole({
       alive = false;
     };
   }, [intelOn, sessions]);
+  // B6: the newest recorded session, so the tile never says "no before-and-after yet" while Live shows one.
+  const lastSession = useMemo(() => {
+    const newest = sessions.reduce<SessionSummary | null>(
+      (a, s) => (a == null || Date.parse(s.started_at) > Date.parse(a.started_at) ? s : a),
+      null,
+    );
+    return newest ? { game: prettyGameName(newest.process_name) || newest.process_name, date: roughDay(newest.started_at, i18n.language) } : null;
+  }, [sessions, i18n.language]);
+  const liveRoom = rooms?.find((r) => r.key === "play")?.name;
 
   // ── rig view state (same persisted pref as HomeHud/HomeV2 — Cards vs 3D) ──
   const [rig3d, setRig3d] = useState(() => {
@@ -1393,9 +1403,14 @@ export function HomeConsole({
               </div>
             ) : (
               <p className="hc-none">
-                {priorities
-                  ? t("home.homeConsole.limiter.none")
-                  : t("home.homeConsole.limiter.pending")}
+                {/* B6 (view-1122a finding 4): when the verdict above IS the flagged check (the limiter stood down
+                    for it), the tile says so, so it reads as the same one thing the checks tile counts and never
+                    as "nothing found" beside "1 of 14 checks needs a look". */}
+                {!priorities
+                  ? t("home.homeConsole.limiter.pending")
+                  : verdictNamesLimiter
+                    ? t("home.homeConsole.limiter.coveredAbove")
+                    : t("home.homeConsole.limiter.none")}
               </p>
             )}
           </>
@@ -1431,9 +1446,16 @@ export function HomeConsole({
               </div>
             ) : (
               <p className="hc-none">
-                {intelOn
-                  ? t("home.homeConsole.limiter.lastSessionNone")
-                  : t("home.homeConsole.limiter.lastSessionOff")}
+                {!intelOn
+                  ? t("home.homeConsole.limiter.lastSessionOff")
+                  : lastSession
+                    ? // B6 (view-1122a finding 4): a session exists (Live shows its numbers and its comparison), so
+                      // "no before-and-after yet" was false. The engine's headline is only a clear better/worse
+                      // verdict; without one, the tile says which session it is and that no verdict came of it.
+                      liveRoom
+                      ? t("home.homeConsole.limiter.lastSessionNoVerdict", { game: lastSession.game, date: lastSession.date, room: liveRoom })
+                      : t("home.homeConsole.limiter.lastSessionNoVerdictNoRoom", { game: lastSession.game, date: lastSession.date })
+                    : t("home.homeConsole.limiter.lastSessionNone")}
               </p>
             )}
           </div>

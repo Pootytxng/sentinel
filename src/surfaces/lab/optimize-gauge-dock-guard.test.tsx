@@ -145,7 +145,7 @@ describe("safe-stack gauge readout centering (owner-caught: digits over the ring
       </ConfirmProvider>,
     );
     expect(container.querySelector(".lab-gauge-caption")!.textContent).toContain(
-      "1 left to enable below — one tap each, reversible.",
+      "1 left to enable below — one tap each; Compy saves each setting first so you can undo it.",
     );
   });
 

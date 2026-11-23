@@ -250,7 +250,7 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.getByRole("heading", { name: "Test one change" })).toBeInTheDocument();
     const hint = screen.getByText(/measures a baseline/);
     expect(hint.textContent).toBe(
-      "Compy measures a baseline, applies one reversible change, measures a real session, and puts the change back unless the numbers clearly beat the noise.",
+      "Compy measures a baseline, saves the setting, applies one change, measures a real session, and puts the change back unless the numbers clearly beat the noise.",
     );
     expect(hint.textContent!.split(/\s+/).length).toBeLessThanOrEqual(30);
     expect(hint.textContent).not.toMatch(/never promises/);

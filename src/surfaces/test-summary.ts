@@ -106,6 +106,21 @@ export function soleGameNoise(
   return games.size === 1 ? measuredGameNoise(experiments, [...games][0]) : null;
 }
 
+/** B6 (view-1122a "203 ±% NOISE FLOOR"): the one game whose noise Compy refused to give a figure for
+ *  because its sessions are too varied (`assumed_band.measured_too_varied`), when no game has a figure
+ *  and exactly one game is refused. The Test tile then says why instead of showing a number. */
+export function soleGameTooVaried(
+  experiments: readonly Pick<SummaryExperiment, "game" | "assumed_band" | "created_at" | "concluded_at">[],
+): string | null {
+  if (experiments.some((e) => e.assumed_band?.measured_low1_pct != null)) return null;
+  const games = new Set(
+    experiments
+      .filter((e) => e.assumed_band != null && e.assumed_band.measured_low1_pct == null && e.assumed_band.measured_too_varied === true)
+      .map((e) => e.game),
+  );
+  return games.size === 1 ? [...games][0] : null;
+}
+
 /** The experiment fields the summary reads (experiment.rs `ExperimentRecord`). */
 export type SummaryExperiment = {
   /** Item 7: set on read when the verdict was judged on the assumed ±3% band. */

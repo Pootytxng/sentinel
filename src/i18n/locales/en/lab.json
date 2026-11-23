@@ -133,6 +133,7 @@
     "noiseFloorLabel": "Noise floor",
     "noiseFloorNote": "a change must beat this to count",
     "noiseFloorNoteGame": "{{game}} · a change must beat this to count",
+    "noiseTooVaried": "{{game}}: its sessions vary too much from each other for Compy to give a noise figure yet",
     "safeStackLabel": "Starter stack",
     "instrumentsReadLabel": "Instruments read",
     "instrumentsReadNote": "{{read}} of {{total}} stations",
@@ -149,7 +150,7 @@
     "backToRoom": "Back to Test",
     "closeStationAriaLabel": "Close station",
     "close": "Close",
-    "optimizeReassurance": "This station applies your starter stack in one click: the lower-risk tier of the tweaks that match your hardware. Compy saves each current setting first, so these changes are reversible from the ledger.",
+    "optimizeReassurance": "This station applies your starter stack in one click: the lower-risk tier of the tweaks that match your hardware. Compy saves each current setting first, so it can roll back any of these from the ledger.",
     "tiles": {
       "stage": "Your rig on the bench",
       "reading": "Rig reading",
@@ -214,15 +215,15 @@
     "alreadySetStack": "Already set this way",
     "safeTweaksForPc": "Starter tweaks for this PC",
     "allApplied": "All {{total}} already on for this rig — nothing to apply.",
-    "freshLeft": "{{count}} left to enable below — one tap each, reversible.",
+    "freshLeft": "{{count}} left to enable below — one tap each; Compy saves each setting first so you can undo it.",
     "driftedRestore_one": "{{count}} was turned off outside Compy — restore it below.",
     "driftedRestore_other": "{{count}} were turned off outside Compy — restore them below.",
     "mixedLeft": "{{totalLeft}} left below — {{fresh}} to enable, {{drifted}} turned off outside Compy.",
     "appliedHistorySummary": "Applied & history — what Compy changed, and what you can undo",
     "appliedHistorySummaryUnvouched": "Applied & history — Compy can't promise every change here can be undone",
     "moreCleanupSummary": "More cleanup (optional)",
-    "powerFeaturesSummary": "Power features — Gaming Mode (advanced, reversible)",
-    "powerFeaturesIntro": "Bigger changes you can make and prove here. Each one is reversible — apply one, then run the Benchmark station to measure what it did on your rig."
+    "powerFeaturesSummary": "Power features — Gaming Mode (advanced, with an undo)",
+    "powerFeaturesIntro": "Bigger changes you can make and prove here. Compy saves the setting before each one, so you can undo it — apply one, then run the Benchmark station to measure what it did on your rig."
   },
   "stations": {
     "optimize": {
@@ -677,7 +678,7 @@
     "hypothesisWithBaseline": "{{metric}} should beat this game's noise floor (at least 3%)",
     "hypothesisWithoutBaseline": "{{metric}} should beat the noise floor",
     "title": "Test one change",
-    "hint": "Compy measures a baseline, applies one reversible change, measures a real session, and puts the change back unless the numbers clearly beat the noise.",
+    "hint": "Compy measures a baseline, saves the setting, applies one change, measures a real session, and puts the change back unless the numbers clearly beat the noise.",
     "pickLabel": "Pick a change to test",
     "costAck": {
       "line": "{{change}} has a cost: {{cost}}",
@@ -744,7 +745,7 @@
     "applying": "Applying…",
     "startExperiment": "Start experiment — apply & measure next session",
     "ledgerBusy": "Compy is still making another change, such as putting things back. You can start a Trial when it finishes.",
-    "fineprint": "Applies one reversible change now, then compares your next {{game}} session. Auto-restores unless it clearly beats the noise floor.",
+    "fineprint": "Saves the setting, applies one change now, then compares your next {{game}} session. Compy puts the setting back unless the result clearly beats the noise floor.",
     "fineprintGameFallback": "game",
     "noBaselineYet": "No baseline yet — play one monitored gaming session first. Compy needs a real before-reading; it won't invent one.",
     "baselineTooShort": "This session is too short to compare a change against: {{readings}} of the {{min}} frame-rate readings Compy needs (about 10 minutes of play).",
@@ -961,6 +962,7 @@
     "noiseMeasuredCapUnread_one": "Left out: 1 more of your {{game}} sessions under the same changes, because Compy couldn't read whether a frame cap held it.",
     "noiseMeasuredCapUnread_other": "Left out: {{count}} more of your {{game}} sessions under the same changes, because Compy couldn't read whether a frame cap held them.",
     "assumedBandUnmeasured": "This result was judged against an assumed ±{{assumed}}% band, before Compy measured each game's own noise. {{game}}'s noise still isn't measured, so treat it as unconfirmed.",
+    "assumedBandTooVaried": "This result was judged against an assumed ±{{assumed}}% band, before Compy measured each game's own noise. {{game}}'s sessions vary too much from each other for Compy to give a noise figure yet, so treat it as unconfirmed.",
     "assumedBandMeasuredSince": "This result was judged against an assumed ±{{assumed}}% band, before Compy measured each game's own noise. {{game}}'s noise wasn't measured when this was judged; it has since been measured at ±{{measured}}% (from {{sessions}} sessions).",
     "assumedBandMeasuredEarlier": "This result was judged against an assumed ±{{assumed}}% band, before Compy measured each game's own noise. Compy measured {{game}}'s noise at ±{{measured}}% (from {{sessions}} sessions) for an earlier result, but couldn't measure it for this one, so treat this result as unconfirmed.",
     "assumedBandWider": "This result was judged against an assumed ±{{assumed}}% band, before Compy measured each game's own noise. {{game}}'s measured noise is ±{{measured}}% (from {{sessions}} sessions), wider, so this result was judged against less noise than the game really has.",

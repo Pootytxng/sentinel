@@ -298,7 +298,7 @@
       "appliedRestored": "A setting Compy applied went off, then came back on"
     },
     "compyChange": {
-      "what": "Compy had a different number of changes on"
+      "what": "The number of changes Compy had turned on was different"
     },
     "hardwareChange": {
       "what": "Your hardware was different"
