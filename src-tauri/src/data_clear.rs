@@ -309,11 +309,13 @@ fn delete_key(d: &PlannedDelete) -> (u8, usize, String) {
         // The support record last, its working file just before it.
         return (2, usize::from(d.row_id == "support-evidence"), d.rel.clone());
     }
-    if d.rel == EXPERIMENTS_FILE {
+    if d.row_id == EXPERIMENTS_ID {
         // The Trial store last under its gate (C4 review r2 B1), so no Trial-gate re-read can follow the C4
         // note: its hidden working copies (`.experiments.json.*`) already sort before it, and the suffix puts it
-        // after every `experiments.json.*` (its `.tmp`, its set-asides) and nowhere else: among all other files
-        // it keeps the place its name gives it.
+        // after every `experiments.json.*` (its `.tmp`; its set-asides only under "clear everything", which
+        // deletes them in phase 1 — play history keeps them) and nowhere else: among all other files it keeps
+        // the place its name gives it. Matched by row id (C5c), so only the store itself, never a working
+        // file or a set-aside that classifies under it.
         return (1, 0, format!("{EXPERIMENTS_FILE}\u{10FFFF}"));
     }
     (1, 0, d.rel.clone())
@@ -1252,7 +1254,7 @@ fn delete_rows(
             if gate == Gate::Experiment && matches!(out, Ok(Removed::Deleted)) {
                 gates.after_trial_delete(); // test seam: production does nothing here
             }
-            if gate == Gate::Experiment && d.rel == EXPERIMENTS_FILE && matches!(out, Ok(Removed::Deleted)) {
+            if gate == Gate::Experiment && d.row_id == EXPERIMENTS_ID && matches!(out, Ok(Removed::Deleted)) {
                 // C4: the read above cannot hold off a plain apply (it takes only the ledger lock, and play
                 // history must not take that lock: design 3.3 and the lock-order guard). So read the change
                 // history AGAIN, still inside the Trial gate, now that the Trial store itself is gone. A row that
@@ -1393,7 +1395,7 @@ fn ledger_phase_with(
     let mut now = replan(root, plan, facts)?;
     let mut skipped = Vec::new();
     if let Some(intent) = confine {
-        (now.delete, skipped) = confine_to_confirmed(&now.delete, intent);
+        (now.delete, skipped) = confine_to_confirmed(root, &now.delete, intent);
     } else if !now.delete.is_empty() {
         // The intent record goes down BEFORE the first delete, and only after the re-plan said yes. If it
         // cannot be written, nothing is deleted. Nothing listed means nothing to roll forward (and a
@@ -1640,7 +1642,8 @@ pub(crate) struct ConfirmedFile {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct Skipped {
     pub(crate) rel: String,
-    /// `not_in_confirmed_plan`, `changed_since_confirmed`, `newer_than_clear`, `invalid_record_entry`.
+    /// `not_in_confirmed_plan`, `changed_since_confirmed`, `newer_than_clear`, `invalid_record_entry`,
+    /// `not_in_current_plan` (C5c: confirmed, still on disk, but the re-plan at this start does not list it).
     pub(crate) reason: &'static str,
 }
 
@@ -1713,8 +1716,10 @@ fn ensure_intent(root: &Path, facts: &ClearFacts, planned: &[PlannedDelete]) -> 
 /// Takes `planned` down to what the record confirmed: a file is kept for deletion only if the record lists
 /// it with the same inventory row, size and modified time, a path that stays inside the root, and a
 /// modified time no later than the record's start. Everything else is left and named. Entries of the record
-/// that are not a plain inventory file name are named too (and never acted on).
-fn confine_to_confirmed(planned: &[PlannedDelete], intent: &ClearIntent) -> (Vec<PlannedDelete>, Vec<Skipped>) {
+/// that are not a plain inventory file name are named too (and never acted on). A confirmed file that is still
+/// on disk but that the re-plan no longer lists (C5c: now kept, unknown or out of scope) is named as
+/// `not_in_current_plan`, so the run cannot call itself finished while that file is there.
+fn confine_to_confirmed(root: &Path, planned: &[PlannedDelete], intent: &ClearIntent) -> (Vec<PlannedDelete>, Vec<Skipped>) {
     let mut keep = Vec::new();
     let mut skipped = Vec::new();
     for d in planned {
@@ -1735,6 +1740,12 @@ fn confine_to_confirmed(planned: &[PlannedDelete], intent: &ClearIntent) -> (Vec
         let known_row = data_inventory::rows().iter().any(|r| r.id == e.row_id);
         if (validate_rel(&e.rel).is_err() || !known_row) && !skipped.iter().any(|s| s.rel == e.rel) {
             skipped.push(Skipped { rel: e.rel.clone(), reason: "invalid_record_entry" });
+        } else if !planned.iter().any(|d| d.rel == e.rel)
+            && !skipped.iter().any(|s| s.rel == e.rel)
+            && fs::symlink_metadata(root.join(&e.rel)).is_ok()
+        {
+            // Read only (a stat): `e.rel` passed `validate_rel`, so the path stays inside the root.
+            skipped.push(Skipped { rel: e.rel.clone(), reason: "not_in_current_plan" });
         }
     }
     (keep, skipped)
@@ -4409,7 +4420,7 @@ mod tests {
 
     /// C4 review r1 F1 (c4f): an apply that lands after a stale Trial WORKING file is deleted stops the run at
     /// experiments.json, which is KEPT, so the screen must not say the Trial results were deleted.
-    /// Break check: drop `d.rel == EXPERIMENTS_FILE` from the condition -> the flag is set and this fails.
+    /// Break check: drop `d.row_id == EXPERIMENTS_ID` from the condition -> the flag is set and this fails.
     #[test]
     fn c4f_an_apply_after_a_trial_working_file_goes_keeps_the_store_and_sets_no_note() {
         let t = Tmp::new("c4f");
@@ -4776,6 +4787,76 @@ mod tests {
         t.put("sessions.json.corrupt.6", "older than the clear"); // modified now, before `later()`'s start
         let outcome = roll(&t);
         assert!(matches!(&outcome, RollForward::Incomplete(r) if !r.kept_saved_after_clear), "{outcome:?}");
+    }
+
+    /// C5c: a CONFIRMED file that is still on disk but that this start's re-plan no longer lists (here a working
+    /// file that is now less than an hour old, so the planner keeps it) is named `not_in_current_plan`, and the
+    /// run stays Incomplete: it can never say finished while that file is there.
+    /// Break checks: drop the `not_in_current_plan` push in `confine_to_confirmed` -> Completed, fails; let
+    /// `saved_after` accept `not_in_current_plan` -> Completed with kept_saved_after_clear, fails.
+    #[test]
+    fn z8_a_confirmed_file_the_re_plan_no_longer_lists_keeps_the_run_incomplete() {
+        let t = Tmp::new("z8");
+        seed(&t);
+        pend(&t, &later()).unwrap(); // confirmed two hours from now: the working file counted as old then
+        let young = ".drift.json.12-3.tmp";
+        assert!(intent_of(&t).confirmed.iter().any(|e| e.rel == young), "the working file was confirmed");
+        let outcome = roll_forward_at(&t.root, &facts, &NoGates); // now: the same file is under an hour old
+        let RollForward::Incomplete(report) = &outcome else { panic!("expected Incomplete, got {outcome:?}") };
+        assert!(report.skipped.iter().any(|s| s.rel == young && s.reason == "not_in_current_plan"), "{:?}", report.skipped);
+        assert!(!report.kept_saved_after_clear, "{report:?}");
+        assert!(t.has(young), "never deleted");
+    }
+
+    /// C5c (z7 mirrors): files saved after the clear PLUS one changed file, or PLUS one failed delete, stay
+    /// Incomplete: only a run whose every leftover was saved after the clear counts as finished.
+    /// Break check: make `kept_saved_after_clear` ignore `nothing_failed` and the other skips (set it true
+    /// whenever any skip is `newer_than_clear`) -> fails.
+    #[test]
+    fn z7c_a_changed_file_or_a_failed_delete_beside_files_saved_after_keeps_the_run_incomplete() {
+        fn put_at(t: &Tmp, rel: &str, body: &str, at: std::time::SystemTime) {
+            t.put(rel, body);
+            fs::File::options().write(true).open(t.root.join(rel)).unwrap().set_modified(at).unwrap();
+        }
+        let after = SystemTime::now() + Duration::from_secs(3 * 3600);
+        // (1) one confirmed file changed (size differs, modified before the clear began) beside one saved after.
+        let t = Tmp::new("z7c");
+        seed(&t);
+        pend(&t, &later()).unwrap();
+        for e in intent_of(&t).confirmed {
+            if e.rel != "drift.json" {
+                let _ = fs::remove_file(t.root.join(&e.rel));
+            }
+        }
+        t.put("drift.json", "rewritten, a different size, before the clear began");
+        put_at(&t, "sessions.json", "a session played after the clear", after);
+        let outcome = roll(&t);
+        let RollForward::Incomplete(r) = &outcome else { panic!("expected Incomplete, got {outcome:?}") };
+        assert!(r.skipped.iter().any(|s| s.rel == "drift.json" && s.reason == "changed_since_confirmed"), "{:?}", r.skipped);
+        assert!(!r.kept_saved_after_clear && t.has("drift.json") && t.has("sessions.json"));
+        // (2) one confirmed, unchanged file whose delete fails, beside one saved after.
+        struct FailDrift;
+        impl ClearGates for FailDrift {
+            fn with_gate(&self, _g: Gate, store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+                if store == "drift" { Err("held by another program".into()) } else { delete() }
+            }
+            fn live_state(&self) -> LiveState {
+                LiveState::default()
+            }
+        }
+        let t = Tmp::new("z7d");
+        seed(&t);
+        pend(&t, &later()).unwrap();
+        for e in intent_of(&t).confirmed {
+            if e.rel != "drift.json" {
+                let _ = fs::remove_file(t.root.join(&e.rel));
+            }
+        }
+        put_at(&t, "sessions.json", "a session played after the clear", after);
+        let outcome = roll_forward_at(&t.root, &later, &FailDrift);
+        let RollForward::Incomplete(r) = &outcome else { panic!("expected Incomplete, got {outcome:?}") };
+        assert!(r.failed.iter().any(|f| f.rel == "drift.json"), "{r:?}");
+        assert!(!r.kept_saved_after_clear && t.has("drift.json"));
     }
 
     /// C2b review B4, start-up side: a roll-forward that gives up but cannot mark the record says so.

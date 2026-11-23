@@ -170,7 +170,8 @@ describe("Your data: clear play history", () => {
 
   // C4 review r2 B1 (c4h): the two reports the backend can now give when an apply lands while the Trial-gate files
   // go (data_clear c4g / c4g2: the Trial store is the last file under its gate). Neither shows the "deleted" note
-  // beside the "Trial results were kept" refusal.
+  // beside the "Trial results were kept" refusal. Screen-only: this feeds fixed reports, so it cannot catch a
+  // regression in the backend's delete order; data_clear c4g / c4g2 pin that order.
   it("never shows 'Trial results were deleted' beside 'so the Trial results were kept' (review r2 B1)", async () => {
     const DELETED = "Trial results were deleted, and a change was applied around the same moment.";
     const KEPT = "so the Trial results were kept";
