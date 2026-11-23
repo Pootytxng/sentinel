@@ -3500,10 +3500,10 @@ describe("ParamedicCard: a program open at the start of the rough sessions, and 
       ],
     });
     expect(text).toMatch(
-      /OBS Studio was open when 4 of 5 rough Game A sessions started, but not when the one on .+ started, and that session still ran rough\. That weakens OBS Studio as the reason\./,
+      /OBS Studio was open when 4 of 5 rough Game A sessions started; Compy didn't see it open when the one on .+ started, and that session still ran rough\. That weakens OBS Studio as the reason\./,
     );
     expect(text).toMatch(/Compy didn't record what was open when your Game A session on .+ started\./);
-    expect(text).toContain("OBS Studio was not open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
+    expect(text).toContain("Compy didn't see OBS Studio open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
     expect(text).not.toContain("Close OBS Studio before you play");
     expect(text).not.toMatch(/you closed|closed it|helped|fixed/i);
     expect(screen.queryAllByRole("button").some((b) => /close/i.test(b.textContent ?? "") && !/^Close$/.test(b.textContent ?? ""))).toBe(false);
@@ -3511,10 +3511,10 @@ describe("ParamedicCard: a program open at the start of the rough sessions, and 
 
   it("one clear session and the plain line", async () => {
     let text = await open({ ...base, why_first: null, findings: [row([line("program-not-open-clear", {})])] });
-    expect(text).toMatch(/OBS Studio was not open when your Game A session on .+ started, and that session ran in its usual range\. One session so far; Compy says a game is back in its usual range after two\./);
+    expect(text).toMatch(/Compy didn't see OBS Studio open when your Game A session on .+ started, and that session ran in its usual range\. One session so far; Compy says a game is back in its usual range after two\./);
     cleanup();
     text = await open({ ...base, why_first: null, findings: [row([line("program-not-open", {})])] });
-    expect(text).toMatch(/OBS Studio was not open when your Game A session on .+ started\./);
+    expect(text).toMatch(/Compy didn't see OBS Studio open when your Game A session on .+ started\./);
   });
 
   it("with no row left, the dated sentence is under what Compy checked (never silent)", async () => {
@@ -3526,7 +3526,7 @@ describe("ParamedicCard: a program open at the start of the rough sessions, and 
       seen: [{ id: "program-not-open-rough", args: { id: "obs", name: "OBS Studio", date: D, count: "1", r: "5", rm: "6" } }],
     });
     // The proportion is in the line itself: nothing else on the card may say the program was ever open.
-    expect(text).toMatch(/OBS Studio was open when 5 of 6 rough Game A sessions started, but not when the one on .+ started, and that session still ran rough\./);
+    expect(text).toMatch(/OBS Studio was open when 5 of 6 rough Game A sessions started; Compy didn't see it open when the one on .+ started, and that session still ran rough\./);
   });
 
   it("programs with the same start records share one line, with a plural verb", async () => {
@@ -3540,9 +3540,9 @@ describe("ParamedicCard: a program open at the start of the rough sessions, and 
       ],
     });
     expect(text).toMatch(
-      /cargo, rustc, Node\.js were open when 5 of 7 rough Game A sessions started, but not when 2 of them started \(the first on .+\), and they still ran rough\. That weakens each of them as the reason\./,
+      /cargo, rustc, Node\.js were open when 5 of 7 rough Game A sessions started; Compy didn't see them open when 2 of them started \(the first on .+\), and they still ran rough\. That weakens each of them as the reason\./,
     );
-    expect(text).toMatch(/cargo, rustc were not open when your Game A session on .+ started\./);
+    expect(text).toMatch(/Compy didn't see cargo, rustc open when your Game A session on .+ started\./);
     expect(text).not.toMatch(/Node\.js was|rustc was/);
   });
 
@@ -3553,14 +3553,14 @@ describe("ParamedicCard: a program open at the start of the rough sessions, and 
       findings: [row([line("program-not-open-clear", {})], { names: "", programs: "Lossless Scaling", notOpen: "OBS Studio", count: "1" })],
     });
     expect(text).toContain("Close Lossless Scaling before you play, then play once and press Something's wrong again.");
-    expect(text).toContain("OBS Studio was not open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
+    expect(text).toContain("Compy didn't see OBS Studio open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
     cleanup();
     text = await open({
       ...base,
       why_first: null,
       findings: [row([line("program-not-open-clear", {})], { names: "", programs: "", notOpen: "OBS Studio, Lossless Scaling", count: "2" })],
     });
-    expect(text).toContain("OBS Studio, Lossless Scaling were not open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
+    expect(text).toContain("Compy didn't see OBS Studio, Lossless Scaling open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
     expect(text).not.toContain("Close OBS Studio");
     // No notOpen (an unnamed build tool, or an unread last start): the usual steps, the generic one included.
     cleanup();
@@ -3586,7 +3586,7 @@ describe("ParamedicCard: a program open at the start of the rough sessions, and 
     const notOpenSteps = (o: Record<string, Record<string, string>>) => [o.backgroundLoad.stepNotOpen_one, o.backgroundLoad.stepNotOpen_other];
     for (const s of [...ev(zh.evidence), ...notOpenSteps(zh.fix)]) expect(s).toMatch(/开始时/);
     for (const s of [...ev(en.evidence), ...notOpenSteps(en.fix)]) expect(s).toMatch(/started\b/);
-    for (const s of [...ev(zh.evidence), ...notOpenSteps(zh.fix)]) expect(s).not.toMatch(/你关闭|关掉了|帮助|修复/);
-    for (const s of [...ev(en.evidence), ...notOpenSteps(en.fix)]) expect(s).not.toMatch(/you closed|closed it|helped|fixed/i);
+    for (const s of [...ev(zh.evidence), ...notOpenSteps(zh.fix)]) expect(s).not.toMatch(/你关闭|关掉了|帮助|修复|没有开着/);
+    for (const s of [...ev(en.evidence), ...notOpenSteps(en.fix)]) expect(s).not.toMatch(/you closed|closed it|helped|fixed|(was|were) not open/i);
   });
 });
