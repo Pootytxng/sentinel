@@ -6,10 +6,12 @@
 > `.claude/rules/rust-safety-boundary.md` (#479), which loads alongside this file. This file carries
 > the read-only remainder.
 >
-> **Both halves are one map.** `node scripts/verify-module-map.mjs` reads them together and fails on
-> a missing module, a ghost, a wrong file count, a module declared in both halves, or an unstarred
-> module that writes Windows state. It also fails if the root delegates here and this section is
-> gone — a half-map that passes vacuously is worse than no map. The `.rs` file count lives in the
+> **Both halves are one map, and the map is NOT currently verified.** `node scripts/verify-module-map.mjs`
+> reads them together and fails on a missing module, a ghost, a wrong file count, a module declared in
+> both halves, or an unstarred module that writes Windows state. No gate runs it any more: its guard
+> test was removed with the process guards in `397cfe72` (2026-11-20), and on `main` at `5e6cb40a` it
+> fails (18 `.rs` files absent from the map; the map declares 60, the tree has 80). Until the map is
+> brought back in line, read the source for which modules exist. The `.rs` file count lives in the
 > root header, deliberately in one place so it cannot drift against itself.
 
 Line counts drift — treat as rough and verify against current code before asserting.
