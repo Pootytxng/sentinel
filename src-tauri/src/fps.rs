@@ -525,15 +525,17 @@ impl Sink {
                 let _ = handle.flush();
             }
             Sink::Pipe(w) => {
-                w.send(line.to_string());
+                // A report that does not fit is counted as dropped (review r2 N3).
+                w.send_report(line.to_string());
             }
         }
     }
 
-    /// The unreadable-tick count (the app writes it to the marker file).
+    /// The unreadable-tick count (the app writes it to the marker file). A count that does not fit is
+    /// kept and re-sent at the next tick (`tell_dropped`), never counted as a dropped line (review r2 N3).
     fn marker(&self, total: u64) {
         if let Sink::Pipe(w) = self {
-            w.send(crate::fps_pipe::unreadable_line(total));
+            w.send_unreadable(total);
         }
     }
 
@@ -550,10 +552,12 @@ impl Sink {
         matches!(self, Sink::Pipe(w) if w.broken())
     }
 
-    /// Tell the app the running count of lines the queue had to drop, if it grew (the app counts them
-    /// as ticks it could not measure, never as frames lost silently).
+    /// Once per tick: re-send an unreadable count that did not fit, then tell the app the running count
+    /// of reports the queue had to drop, if it grew (the app counts them as ticks it could not measure,
+    /// never as frames lost silently).
     fn tell_dropped(&self) {
         if let Sink::Pipe(w) = self {
+            w.retry_unreadable();
             w.tell_dropped();
         }
     }

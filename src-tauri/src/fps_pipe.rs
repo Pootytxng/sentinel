@@ -232,7 +232,15 @@ impl ServerPipe {
             }
             match self.client_pid() {
                 Some(pid) if client_ok(pid) => break,
-                _ => self.disconnect(), // not ours: drop it and keep waiting for the helper
+                _ => {
+                    // Not ours: drop it. Then ask again before waiting for the next client (review r2 N6):
+                    // a launch that ended while that client held the pipe could not wake this reader, and
+                    // without this check the reader would wait in `accept` until the app exits.
+                    self.disconnect();
+                    if !wanted() {
+                        return ServeEnd::NotWanted;
+                    }
+                }
             }
         }
         // SAFETY: the OwnedHandle is moved into the File, which now owns and closes it.
@@ -317,11 +325,32 @@ fn create_with(name: &str, sddl: &str) -> std::io::Result<OwnedHandle> {
 /// Unblock a `serve` that waits for a client that will never come (stop, a declined prompt): connect to
 /// the app's own pipe and let go. The connection fails the client check (it is the app itself), and
 /// `serve` then sees `wanted()` no longer holds.
+///
+/// Review r2 N6: when another client holds the single instance, the open fails busy. Then the reader is
+/// not waiting in `accept` but checking that client, and it asks `wanted()` again after dropping it, so
+/// it stops by itself; the wake still retries a busy pipe for up to [`WAKE_PATIENCE`], in case the reader
+/// is back in `accept` by then. A pipe that no longer exists (the reader already ended) is not retried.
 pub(crate) fn wake(name: &str) {
-    if is_valid_pipe_name(name) {
-        let _ = std::fs::OpenOptions::new().write(true).open(name);
+    if !is_valid_pipe_name(name) {
+        return;
+    }
+    let until = std::time::Instant::now() + WAKE_PATIENCE;
+    let name_w = wide(name);
+    loop {
+        match std::fs::OpenOptions::new().write(true).open(name) {
+            Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY) && std::time::Instant::now() < until => {
+                // SAFETY: a NUL-terminated name that outlives the call.
+                if unsafe { WaitNamedPipeW(name_w.as_ptr(), 250) } == 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+            }
+            _ => return,
+        }
     }
 }
+
+/// How long a wake keeps trying a busy pipe.
+pub(crate) const WAKE_PATIENCE: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// One line from the helper.
 #[derive(Debug, PartialEq, Eq)]
@@ -330,8 +359,9 @@ pub(crate) enum Line {
     Report(String),
     /// The helper could not read the process snapshot this tick; its running count.
     Unreadable(u64),
-    /// The helper's running count of lines it had to drop (its queue was full). The app counts each as
-    /// a tick it could not measure, never as a lost one (review r1, non-blocking).
+    /// The helper's running count of REPORT lines it had to drop (its queue was full). The app counts each
+    /// as a tick it could not measure, never as a lost one (review r1, non-blocking). Unreadable lines are
+    /// never in this count: they are re-sent instead (review r2 N3), so no tick is counted twice.
     Dropped(u64),
     /// Nothing to report this tick (keeps the pipe busy, so a stop is noticed within a tick).
     Alive,
@@ -490,13 +520,23 @@ pub(crate) fn connect_to_parent(name: &str, parent_arg: u32) -> Result<std::fs::
 }
 
 /// Helper side: a writer thread over the pipe, so a stalled reader can never stall the capture loop.
-/// `send` never blocks (a full queue drops that line, and the drop is counted); `broken()` turns true
-/// once a write fails (the app closed the pipe: stop, exit or crash), which is the helper's signal to exit.
+/// Nothing here blocks: a full queue drops the line. `broken()` turns true once a write fails (the app
+/// closed the pipe: stop, exit or crash), which is the helper's signal to exit.
+///
+/// Review r2 N3: each kind of line is accounted for exactly once.
+/// - A dropped REPORT is counted (`send_report`), and the running count reaches the app (`tell_dropped`),
+///   which counts it as a tick it could not measure.
+/// - A dropped UNREADABLE line is NOT counted as a drop: its count is cumulative, so it is kept and sent
+///   again on the next tick (`send_unreadable` / `retry_unreadable`), and the tick is counted once, as
+///   unreadable, a tick late at most.
+/// - A dropped keepalive carries nothing and is not counted.
 pub(crate) struct PipeWriter {
     tx: std::sync::mpsc::SyncSender<String>,
     broken: std::sync::Arc<std::sync::atomic::AtomicBool>,
     dropped: std::sync::atomic::AtomicU64,
     told: std::sync::atomic::AtomicU64,
+    /// The unreadable count whose line did not fit yet (0 = none pending).
+    unsent_unreadable: std::sync::atomic::AtomicU64,
 }
 
 impl PipeWriter {
@@ -512,17 +552,48 @@ impl PipeWriter {
                 }
             }
         });
-        PipeWriter { tx, broken, dropped: Default::default(), told: Default::default() }
+        PipeWriter {
+            tx,
+            broken,
+            dropped: Default::default(),
+            told: Default::default(),
+            unsent_unreadable: Default::default(),
+        }
     }
 
-    /// Queue one line; false when the queue is full or the writer has stopped (the line is dropped and
-    /// counted).
+    /// Queue one line that carries nothing to account for (a keepalive); false when it did not fit.
     pub(crate) fn send(&self, line: String) -> bool {
+        self.tx.try_send(line).is_ok()
+    }
+
+    /// Queue one report line; a report that does not fit is dropped and counted.
+    pub(crate) fn send_report(&self, line: String) -> bool {
         let sent = self.tx.try_send(line).is_ok();
         if !sent {
             self.dropped.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         }
         sent
+    }
+
+    /// Queue the cumulative unreadable count. If it does not fit, it is kept for `retry_unreadable` (a
+    /// later, larger count replaces it); it is never counted as a dropped line.
+    pub(crate) fn send_unreadable(&self, total: u64) {
+        use std::sync::atomic::Ordering;
+        if self.tx.try_send(unreadable_line(total)).is_ok() {
+            // A count that reached the app covers any smaller one still waiting.
+            let _ = self.unsent_unreadable.fetch_update(Ordering::AcqRel, Ordering::Acquire, |p| (p <= total).then_some(0));
+        } else {
+            self.unsent_unreadable.fetch_max(total, Ordering::AcqRel);
+        }
+    }
+
+    /// Send the unreadable count that did not fit earlier, if any (called once per tick).
+    pub(crate) fn retry_unreadable(&self) {
+        use std::sync::atomic::Ordering;
+        let pending = self.unsent_unreadable.load(Ordering::Acquire);
+        if pending > 0 && self.tx.try_send(unreadable_line(pending)).is_ok() {
+            let _ = self.unsent_unreadable.compare_exchange(pending, 0, Ordering::AcqRel, Ordering::Acquire);
+        }
     }
 
     /// If lines were dropped since the app was last told, queue the running count. A count line that
@@ -699,25 +770,27 @@ mod tests {
         drop(srv.join().unwrap());
     }
 
-    /// Dropped lines are counted and the count reaches the app as its own line.
+    /// A writer whose thread is held at each flush until the test releases it, once per line.
+    struct Gate(std::sync::Arc<std::sync::Mutex<Vec<u8>>>, std::sync::Arc<std::sync::Barrier>);
+    impl Write for Gate {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.1.wait();
+            Ok(())
+        }
+    }
+
+    /// Dropped REPORTS are counted and the count reaches the app as its own line.
     #[test]
     fn dropped_lines_are_counted_and_told() {
-        struct Gate(std::sync::Arc<std::sync::Mutex<Vec<u8>>>, std::sync::Arc<std::sync::Barrier>);
-        impl Write for Gate {
-            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
-                self.0.lock().unwrap().extend_from_slice(b);
-                Ok(b.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                self.1.wait(); // hold the writer thread until the test lets it go, once per line
-                Ok(())
-            }
-        }
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let gate = std::sync::Arc::new(std::sync::Barrier::new(2));
         let w = PipeWriter::start(Gate(seen.clone(), gate.clone()));
         // One line in the writer (held at flush) + 4 queued; the rest are dropped and counted.
-        let sent = (0..10).filter(|_| w.send(ALIVE_LINE.into())).count();
+        let sent = (0..10).filter(|_| w.send_report(ALIVE_LINE.into())).count();
         assert!(sent <= 5 && w.dropped() == (10 - sent) as u64, "sent {sent}, dropped {}", w.dropped());
         let dropped = w.dropped();
         assert!(dropped >= 5);
@@ -730,6 +803,72 @@ mod tests {
         let text = String::from_utf8(seen.lock().unwrap().clone()).unwrap();
         assert_eq!(text.lines().last().map(classify_line), Some(Line::Dropped(dropped)), "{text}");
         assert_eq!(w.dropped(), dropped, "the count line itself was not a drop");
+    }
+
+    /// Review r2 N3: an unreadable count that does not fit is NOT a dropped line; it is re-sent once
+    /// there is room, as the latest cumulative count, so the app counts each unreadable tick once.
+    /// Keepalives that do not fit are not counted either.
+    #[test]
+    fn a_dropped_unreadable_count_is_resent_not_counted_as_a_drop() {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let gate = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let w = PipeWriter::start(Gate(seen.clone(), gate.clone()));
+        // One keepalive taken by the writer thread (held at its flush), then the queue of 4 filled; the
+        // rest do not fit and are not counted.
+        assert!(w.send(ALIVE_LINE.into()));
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let sent = 1 + (0..9).filter(|_| w.send(ALIVE_LINE.into())).count();
+        assert_eq!(sent, 5, "one in the writer, four queued");
+        assert_eq!(w.dropped(), 0, "keepalives are never counted");
+        // Two unreadable ticks that do not fit: kept, not counted.
+        w.send_unreadable(1);
+        w.send_unreadable(2);
+        assert_eq!(w.dropped(), 0, "an unreadable count is never a dropped line");
+        for _ in 0..sent {
+            gate.wait();
+        }
+        // Room again: the next tick re-sends the latest count, once.
+        w.retry_unreadable();
+        gate.wait();
+        w.retry_unreadable(); // nothing pending any more: sends nothing
+        w.tell_dropped(); // nothing dropped: sends nothing
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let text = String::from_utf8(seen.lock().unwrap().clone()).unwrap();
+        let counts: Vec<Line> = text.lines().map(classify_line).filter(|l| !matches!(l, Line::Alive)).collect();
+        assert_eq!(counts, vec![Line::Unreadable(2)], "{text}");
+    }
+
+    /// Review r2 N6: the launch ends while a client that is not ours holds the pipe (so the wake cannot
+    /// get in). The reader drops that client and must stop there, not wait in `accept` until the app exits.
+    #[test]
+    fn a_reader_stops_after_dropping_a_foreign_client_once_its_launch_has_ended() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        let server = ServerPipe::create().expect("create pipe");
+        let name = server.name.clone();
+        let done = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let flag = done.clone();
+        std::thread::spawn(move || {
+            let wanted = || !flag.load(Ordering::Acquire);
+            // The check of the foreign client is where the launch ends (it sets `done`), then refuses it.
+            let client_ok = |_pid: u32| {
+                flag.store(true, Ordering::Release);
+                false
+            };
+            let end = server.serve(&wanted, &client_ok, &mut |_| {});
+            let _ = tx.send(end);
+        });
+        let foreign = loop {
+            match std::fs::OpenOptions::new().write(true).open(&name) {
+                Ok(f) => break f,
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            }
+        };
+        let end = rx.recv_timeout(std::time::Duration::from_secs(3));
+        drop(foreign);
+        assert_eq!(end, Ok(ServeEnd::NotWanted), "the reader stopped instead of waiting for another client");
+        assert!(done.load(Ordering::Acquire));
     }
 
     /// A real pipe, in this process: the server relays a client's lines; a client that is not ours is

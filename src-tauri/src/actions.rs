@@ -1195,21 +1195,24 @@ pub(crate) fn elevate_and_wait(
     file: &std::ffi::OsStr,
     args: &[&std::ffi::OsStr],
 ) -> std::io::Result<std::process::ExitStatus> {
-    elevate_and_wait_with(file, args, |_| ())
+    elevate_and_wait_with(file, args, |_| (), || ())
 }
 
 /// [`elevate_and_wait`], and `on_started` is told the elevated process's pid once it runs, before the
-/// wait (hardening slice 2, review r1 B5: the capture pipe accepts exactly that pid). The target check
-/// is still the first statement; the launch is still the one `shell_runas_and_wait` call.
+/// wait (hardening slice 2, review r1 B5: the capture pipe accepts exactly that pid). `on_ended` runs
+/// once that process has exited, while its handle is still open (review r2 N2: its pid cannot be reused
+/// by another process until `on_ended` returns). Neither runs when the launch failed. The target check is
+/// still the first statement; the launch is still the one `shell_runas_and_wait` call.
 pub(crate) fn elevate_and_wait_with(
     file: &std::ffi::OsStr,
     args: &[&std::ffi::OsStr],
     on_started: impl FnOnce(u32),
+    on_ended: impl FnOnce(),
 ) -> std::io::Result<std::process::ExitStatus> {
     if let Some(refused) = elevation_target_refused(file) {
         return Err(refused);
     }
-    shell_runas_and_wait(file, args, on_started)
+    shell_runas_and_wait(file, args, on_started, on_ended)
 }
 
 /// The UAC "runas" launch itself (ShellExecuteExW) and the wait for the real exit code. Only
@@ -1219,6 +1222,7 @@ fn shell_runas_and_wait(
     file: &std::ffi::OsStr,
     args: &[&std::ffi::OsStr],
     on_started: impl FnOnce(u32),
+    on_ended: impl FnOnce(),
 ) -> std::io::Result<std::process::ExitStatus> {
     use std::os::windows::ffi::OsStrExt;
     use std::os::windows::process::ExitStatusExt;
@@ -1290,6 +1294,8 @@ fn shell_runas_and_wait(
             // Process ran; exit unknowable → same conservative polarity as above.
             Err(_) => std::process::ExitStatus::from_raw(u32::MAX),
         };
+        // Still holding the handle: the pid stays this process's until the close below (review r2 N2).
+        on_ended();
         let _ = CloseHandle(sei.hProcess);
         Ok(status)
     }
@@ -2176,13 +2182,16 @@ mod elevation_attribution_tests {
         // The FFI layer directly: elevate_and_wait itself now refuses this path before the shell
         // (see elevate_and_wait_refuses_anything_but_its_own_targets).
         let started = std::cell::Cell::new(false);
+        let ended = std::cell::Cell::new(false);
         let err = super::shell_runas_and_wait(
             std::ffi::OsStr::new(r"C:\__compy_qa_missing__\definitely-not-here.exe"),
             &[],
             |_| started.set(true),
+            || ended.set(true),
         )
         .expect_err("a nonexistent exe must surface as a LAUNCH error, not Ok(-1)");
         assert!(!started.get(), "a launch that failed reports no started pid");
+        assert!(!ended.get(), "a launch that failed reports no ended process");
         assert!(err.raw_os_error().is_some(), "got: {err}");
         let msg = elevation_outcome(Err(err)).unwrap_err();
         assert!(
@@ -2252,13 +2261,21 @@ mod elevation_attribution_tests {
         let start = src.find(concat!("pub(crate) fn elevate_and_", "wait(")).expect("elevate_and_wait");
         let body = &src[start..start + src[start..].find("\n}\n").unwrap()];
         let open = body.find("{\n").expect("body") + 2;
-        assert_eq!(body[open..].trim(), concat!("elevate_and_wait_", "with(file, args, |_| ())"), "elevate_and_wait only delegates");
+        assert_eq!(body[open..].trim(), concat!("elevate_and_wait_", "with(file, args, |_| (), || ())"), "elevate_and_wait only delegates");
         // elevate_and_wait_with has exactly two callers in the crate: elevate_and_wait, and the FPS
         // capture's elevated launch (monitoring.rs), which needs the started pid.
         let mon = include_str!("monitoring.rs");
         assert_eq!(whole.matches(concat!("elevate_and_", "wait_with(")).count(), 2, "its definition and elevate_and_wait");
         assert_eq!(mon.matches(concat!("crate::actions::elevate_and_", "wait_with(")).count(), 1);
         assert_eq!(mon.matches(concat!("elevate_and_", "wait(")).count(), 0);
+        // Review r2 N2: `on_ended` runs after the wait and BEFORE the process handle is closed, so the
+        // capture pipe stops accepting that pid while no other process can have it.
+        let f = src.find(concat!("fn shell_runas_", "and_wait(")).unwrap();
+        let ffi = &src[f..f + src[f..].find("\n}\n").unwrap()];
+        let wait = ffi.find(concat!("WaitForSingleObject(", "sei.hProcess")).expect("wait");
+        let ended = ffi.find(concat!("on_", "ended();")).expect("on_ended call");
+        let close = ffi.find(concat!("CloseHandle(", "sei.hProcess)")).expect("close");
+        assert!(wait < ended && ended < close, "wait, then on_ended, then close");
     }
 
     #[test]

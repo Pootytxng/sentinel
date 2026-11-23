@@ -918,19 +918,80 @@ impl CapturePipe {
 /// over-long line, or at the first line after the capture stops; dropping the pipe then is what ends the
 /// helper.
 fn start_capture_pipe(generation: u64) -> Result<CapturePipe, String> {
-    use std::sync::atomic::Ordering;
     let pipe = crate::fps_pipe::ServerPipe::create().map_err(|e| format!("could not create the capture pipe: {e}"))?;
     let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let launched = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     let handle = CapturePipe { name: pipe.name.clone(), launched: launched.clone(), done: done.clone() };
     std::thread::spawn(move || {
         let (out, marker) = (fps_out_path(), fps_unreadable_path());
-        let wanted = || capture_live(generation) && !done.load(Ordering::Acquire);
-        let client_ok = |pid: u32| crate::fps_pipe::is_our_helper(pid, &launched);
+        let wanted = || reader_wants(fps_active(), capture_gen(), generation, &done);
+        let client_ok = |pid: u32| {
+            let ok = crate::fps_pipe::is_our_helper(pid, &launched);
+            if ok {
+                // Review r2 N1: the one line an owner check can look for (Settings, Support record).
+                support_record(
+                    SupportOutcome::Ok,
+                    "pipe_client_accepted",
+                    "the capture helper connected to Compy's pipe, and it is the process Compy started",
+                );
+            }
+            ok
+        };
         let mut counts = RelayCounts::default();
-        let _ = pipe.serve(&wanted, &client_ok, &mut |line| relay_line(line, &mut counts, &out, &marker));
+        let _ = pipe.serve(&wanted, &client_ok, &mut |line| {
+            write_while_wanted(relay_writes(), &wanted, || relay_line(line, &mut counts, &out, &marker));
+        });
     });
     Ok(handle)
+}
+
+/// Does a reader of capture `generation` still want the helper's lines? Capture on, still the current
+/// capture, and its launch not ended. Over its inputs (the process-wide flag and counter in production,
+/// local ones in the tests), so a stale reader can be driven end to end (review r2 N4). SeqCst loads:
+/// see `write_while_wanted`.
+fn reader_wants(
+    active: &std::sync::atomic::AtomicBool,
+    current: &std::sync::atomic::AtomicU64,
+    generation: u64,
+    done: &std::sync::atomic::AtomicBool,
+) -> bool {
+    use std::sync::atomic::Ordering::{Acquire, SeqCst};
+    active.load(SeqCst) && current.load(SeqCst) == generation && !done.load(Acquire)
+}
+
+/// Relay writes in progress, across every pipe reader (review r2 N5). An atomic counter, not a lock.
+fn relay_writes() -> &'static std::sync::atomic::AtomicU32 {
+    static W: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    &W
+}
+
+/// Run `write` only if `wanted()` still holds, announcing the write in `in_flight` FIRST (review r2 N5).
+/// With `stop_fps_capture_locked` clearing the flag (SeqCst) and then waiting for `in_flight` to reach 0
+/// (SeqCst) before it removes fps.json, the two cannot interleave: either this check sees the capture
+/// stopped and writes nothing, or the stop sees this write in flight and waits for it, then removes the
+/// file. So no fps.json is written after a stop has removed it. True when it wrote.
+fn write_while_wanted(in_flight: &std::sync::atomic::AtomicU32, wanted: &dyn Fn() -> bool, write: impl FnOnce()) -> bool {
+    use std::sync::atomic::Ordering::SeqCst;
+    in_flight.fetch_add(1, SeqCst);
+    let go = wanted();
+    if go {
+        write();
+    }
+    in_flight.fetch_sub(1, SeqCst);
+    go
+}
+
+/// After the flag is cleared: wait (at most `max`) until no relay write is in flight. True when none is.
+/// A relay write is one small file write and a rename, so the wait is normally nothing.
+fn wait_for_relay_writes(in_flight: &std::sync::atomic::AtomicU32, max: std::time::Duration) -> bool {
+    let until = std::time::Instant::now() + max;
+    while in_flight.load(std::sync::atomic::Ordering::SeqCst) != 0 {
+        if std::time::Instant::now() >= until {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    true
 }
 
 /// The two running counts one helper sends: ticks whose snapshot it could not read, and lines its queue
@@ -1241,9 +1302,15 @@ fn launch_elevated_helper(exe: std::path::PathBuf, generation: u64) {
     std::thread::spawn(move || {
         use std::ffi::OsStr;
         let argv = pipe.argv();
-        let res = crate::actions::elevate_and_wait_with(exe.as_os_str(), &argv.each_ref().map(OsStr::new), |pid| {
-            pipe.launched_as(pid)
-        });
+        // Review r2 N2: the reader is told the helper ended (`finished`) while the launch still holds the
+        // helper's process handle, so its pid cannot belong to another process yet. The second call
+        // below covers a launch that never started a process (idempotent).
+        let res = crate::actions::elevate_and_wait_with(
+            exe.as_os_str(),
+            &argv.each_ref().map(OsStr::new),
+            |pid| pipe.launched_as(pid),
+            || pipe.finished(),
+        );
         pipe.finished();
         helper_running().store(false, Ordering::Release);
         // Only this capture's flag and status, as the direct-spawn wait above.
@@ -2170,7 +2237,10 @@ pub(crate) fn stop_fps_capture_ticketed(ticket: u64) {
 
 fn stop_fps_capture_locked() {
     use std::sync::atomic::Ordering;
-    fps_active().store(false, Ordering::Release);
+    // SeqCst, then wait for any relay write already past its check (review r2 N5: `write_while_wanted`),
+    // so the files removed below are not written again by this capture's reader.
+    fps_active().store(false, Ordering::SeqCst);
+    let _ = wait_for_relay_writes(relay_writes(), std::time::Duration::from_millis(500));
     *lock_status() = "idle".into();
     *lock_progress() = None;
     let _ = std::fs::remove_file(fps_out_path());
@@ -2505,12 +2575,87 @@ mod capture_pipe_tests {
             assert!(!src.contains(gone), "{gone} must be gone from the app");
         }
         assert_eq!(src.matches(concat!(".args(pipe", ".argv())")).count(), 2, "UAC-off and plain launches use the pipe argv");
-        assert_eq!(src.matches(concat!("elevate_and_wait_with(exe.as_os_str(), ", "&argv.each_ref().map(OsStr::new), |pid| {")).count(), 1);
+        assert_eq!(src.matches(concat!("&argv.each_ref()", ".map(OsStr::new),\n            |pid| pipe.launched_as(pid),\n            || pipe.finished(),\n")).count(), 1, "the elevated launch: pid in, finished before the handle closes (r2 N2)");
         assert_eq!(src.matches(concat!("crate::fps_pipe::", "is_our_helper(pid, &launched)")).count(), 1, "the reader checks its client");
         assert_eq!(src.matches(concat!("pipe.", "finished();")).count(), 5, "every helper end stops its reader");
         // Review r1 B5: each of the three launches hands its started pid to the pipe.
         assert_eq!(src.matches(concat!("pipe.launched_", "as(")).count(), 3, "elevated (pid), UAC-off and plain (child.id())");
         assert_eq!(src.matches(concat!("pipe.launched_", "as(child.id());")).count(), 2);
+    }
+
+    /// Review r2 N4, end to end over a real pipe in this process: a reader of generation g relays the
+    /// helper's report while g is current, and once generation g+1 starts it writes nothing more and stops.
+    #[test]
+    fn a_reader_of_an_older_capture_relays_nothing_once_a_newer_one_starts() {
+        use std::io::Write;
+        use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+        use std::sync::Arc;
+        let s = crate::test_scratch::scratch("relay-stale-generation");
+        let (out, marker) = (s.join("fps.json"), s.join("fps.json.snapshot-unreadable"));
+        let active = Arc::new(AtomicBool::new(true));
+        let current = Arc::new(AtomicU64::new(7));
+        let done = Arc::new(AtomicBool::new(false));
+        let server = crate::fps_pipe::ServerPipe::create().expect("pipe");
+        let name = server.name.clone();
+        let me = std::process::id();
+        let (a, c, d, o, m) = (active.clone(), current.clone(), done.clone(), out.clone(), marker.clone());
+        let reader = std::thread::spawn(move || {
+            let wanted = || super::reader_wants(&a, &c, 7, &d);
+            let in_flight = std::sync::atomic::AtomicU32::new(0);
+            let mut counts = RelayCounts::default();
+            server.serve(&wanted, &|pid| pid == me, &mut |line| {
+                super::write_while_wanted(&in_flight, &wanted, || relay_line(line, &mut counts, &o, &m));
+            })
+        });
+        let mut helper = loop {
+            match std::fs::OpenOptions::new().write(true).open(&name) {
+                Ok(f) => break f,
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            }
+        };
+        let first = r#"{"pid":1,"fps":60.0}"#;
+        writeln!(helper, "{first}").unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while std::fs::read_to_string(&out).ok().as_deref() != Some(first) && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), first, "generation 7 is current: relayed");
+        current.store(8, Ordering::SeqCst); // the next start
+        writeln!(helper, r#"{{"pid":1,"fps":30.0}}"#).unwrap();
+        let end = reader.join().unwrap();
+        assert_eq!(end, crate::fps_pipe::ServeEnd::NotWanted);
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), first, "nothing written for a superseded capture");
+        assert!(!marker.exists());
+    }
+
+    /// Review r2 N5: a relay write runs only while wanted, announced first, and the stop waits for it.
+    #[test]
+    fn a_relay_write_is_announced_first_and_never_runs_once_unwanted() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let in_flight = AtomicU32::new(0);
+        let mut wrote = 0;
+        assert!(super::write_while_wanted(&in_flight, &|| true, || wrote += 1));
+        assert!(!super::write_while_wanted(&in_flight, &|| false, || wrote += 1));
+        assert_eq!(wrote, 1, "no write once the capture is not wanted");
+        assert_eq!(in_flight.load(Ordering::SeqCst), 0, "the announcement is always withdrawn");
+        // While a write is announced, the stop's wait holds (bounded); once it is withdrawn, it returns.
+        let seen_during = std::cell::Cell::new(0);
+        super::write_while_wanted(&in_flight, &|| true, || seen_during.set(in_flight.load(Ordering::SeqCst)));
+        assert_eq!(seen_during.get(), 1, "the write runs while announced");
+        in_flight.store(1, Ordering::SeqCst);
+        let t = std::time::Instant::now();
+        assert!(!super::wait_for_relay_writes(&in_flight, std::time::Duration::from_millis(60)));
+        assert!(t.elapsed() >= std::time::Duration::from_millis(60));
+        in_flight.store(0, Ordering::SeqCst);
+        assert!(super::wait_for_relay_writes(&in_flight, std::time::Duration::from_millis(60)));
+        // The stop clears the flag (SeqCst) and waits BEFORE it removes fps.json.
+        let src = include_str!("monitoring.rs");
+        let f = src.find(concat!("fn stop_fps_", "capture_locked()")).unwrap();
+        let body = &src[f..f + src[f..].find("\n}\n").unwrap()];
+        let clear = body.find(concat!("fps_active().store(false, ", "Ordering::SeqCst)")).expect("SeqCst clear");
+        let wait = body.find(concat!("wait_for_relay_", "writes(relay_writes()")).expect("wait");
+        let remove = body.find(concat!("remove_file(fps_", "out_path())")).expect("remove");
+        assert!(clear < wait && wait < remove, "clear, wait, then remove");
     }
 }
 
@@ -2641,7 +2786,7 @@ mod capture_generation_tests {
         // start_capture_pipe (pinned below, outside this body).
         assert_eq!(body.matches(concat!("while capture_", "live(generation)")).count(), 1, "the recorder");
         assert!(!body.contains(concat!("while fps_", "active().load")), "a loop that reads only the flag outlives a stop");
-        assert_eq!(src.matches(concat!("let wanted = || capture_", "live(generation) && !done.load(Ordering::Acquire);")).count(), 1, "the pipe reader");
+        assert_eq!(src.matches(concat!("let wanted = || reader_", "wants(fps_active(), capture_gen(), generation, &done);")).count(), 1, "the pipe reader");
     }
 
     // CR-capture-async: start and stop now run on the blocking pool. A stop issued while a start is
