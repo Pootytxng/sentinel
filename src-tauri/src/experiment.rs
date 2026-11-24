@@ -7420,7 +7420,7 @@ mod experiment_tests {
 
         let legacy = ExperimentRecord { baseline_session_id: None, ..running() };
         let why = treatment_err(&legacy, &sessions, TREAT_ID);
-        assert!(why.contains("restore it and start a new one"), "a pre-lane-2b trial: {why}");
+        assert!(why.contains("Restore it and start a new one."), "a pre-lane-2b trial: {why}");
 
         let why = treatment_err(&running(), &sessions, BASE_ID);
         assert!(why.contains("the baseline itself"), "{why}");
