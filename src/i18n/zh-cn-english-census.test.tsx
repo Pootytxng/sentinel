@@ -164,12 +164,9 @@ const DEBT: string[] = [
   "Check: FreeSync is ON",
   "Check: Variable refresh rate",
   "Check: your AMD GPU reports adaptive sync enabled on a connected display",
-  "Fix: Disable Nagle's algorithm",
   "Fix: Keeps the CPU at full clock under load",
-  "Fix: Needs a wired Ethernet port",
-  "Fix: Switch to the Ultimate Performance power plan",
-  "Fix: this rig has none",
-  "Fix: other only",
+  "Fix: Switch to the Ultimate Performance power planVerified",
+  "Fix: reversible",
 ];
 
 describe("English in zh-CN screens: the census (ratchet-only)", () => {
