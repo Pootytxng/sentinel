@@ -13,6 +13,7 @@ import {
 } from "../data/knowledge";
 import { searchKnowledge } from "../data/knowledge-search";
 import { useDocumentVisible } from "../data/use-document-visible";
+import { useTuningTools } from "../data/tuning-tools";
 import {
   TOPICS,
   TOPIC_LABELS,
@@ -720,6 +721,8 @@ export default function Learn({
   onAutopsyRecorded?: (ledger: AutopsyLedgerEntry[]) => void;
 }) {
   const { t, i18n } = useTranslation();
+  // D6: with the Tuning tools off, the empty-search line says where the benchmark is.
+  const tuningTools = useTuningTools();
   // The room (asPanel) restores its last mode so returning mid-autopsy isn't an empty browse view
   // (continuity §3). A deep-link (focusId) always lands in browse; the cross-link modal doesn't persist.
   const [mode, setMode] = useState<Mode>(() => {
@@ -1052,7 +1055,9 @@ export default function Learn({
                   re-openable toggle thereafter so it stops re-claiming a block every visit. */}
               <CollapsibleGradeKey suppressed={gradeKeyEntryOpen} />
               {results.length === 0 ? (
-                <div className="lx-empty">{t("blackbook.learn.empty")}</div>
+                <div className="lx-empty">
+                  {t(tuningTools ? "blackbook.learn.empty" : "blackbook.learn.emptyToolsOff")}
+                </div>
               ) : !deferredQ.trim() && filter === "all" && verdict === "all" && topic === "all" && fits === "all" ? (
                 // §5 PURE BROWSE — "Start here" strip + collapsed category sections (the calm open).
                 <>

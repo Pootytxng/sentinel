@@ -8,6 +8,7 @@ import type { SessionSummary } from "../../types";
 import { gameLibrary, playTime, type GameEntry } from "../../data/game-library";
 import { knownFps } from "../../lib/session-metrics";
 import { Term } from "../../design/Term";
+import { useTuningTools } from "../../data/tuning-tools";
 import { TubeChart, type TubeBar } from "./TubeChart";
 import "../glass-rooms.css";
 
@@ -78,6 +79,7 @@ function GameDetail({
   onOpenTest: () => void;
 }) {
   const { t } = useTranslation();
+  const tools = useTuningTools();
   const dates = useDates();
   const time = usePlayTime();
   const recent = game.sessions.slice(0, 12).reverse();
@@ -117,9 +119,12 @@ function GameDetail({
           <button type="button" className="gl-ghost" onClick={onOpenLive}>
             {t("common.games.liveCta")}
           </button>
-          <button type="button" className="gl-cta" onClick={onOpenTest}>
-            {t("common.games.testCta")}
-          </button>
+          {/* D6: "Try a change in Test" leads to the tuning tools; offered only while they are on. */}
+          {tools && (
+            <button type="button" className="gl-cta" onClick={onOpenTest}>
+              {t("common.games.testCta")}
+            </button>
+          )}
         </div>
       </header>
 
@@ -303,6 +308,7 @@ export function GamesRoom({
   onOpenTest: () => void;
 }) {
   const { t } = useTranslation();
+  const tools = useTuningTools();
   const games = useMemo(() => gameLibrary(sessions), [sessions]);
   const [openKey, setOpenKey] = useState<string | null>(focusKey);
   useEffect(() => {
@@ -325,9 +331,12 @@ export function GamesRoom({
           </h1>
         </div>
         <div className="gl-actions">
-          <button type="button" className="gl-cta" onClick={onOpenTest}>
-            {t("common.games.testCta")}
-          </button>
+          {/* D6: "Try a change in Test" leads to the tuning tools; offered only while they are on. */}
+          {tools && (
+            <button type="button" className="gl-cta" onClick={onOpenTest}>
+              {t("common.games.testCta")}
+            </button>
+          )}
         </div>
       </header>
       {games.length === 0 ? (

@@ -290,17 +290,20 @@
         "sentenceSince": "Compy has not measured a change before and after yet, so it cannot say whether one helped. It can line up what changed and when, which shows timing, not cause.",
         "sentenceUnread": "Compy couldn't read its test records just now, so it can't say here whether it has measured a change. What Compy tested reads them itself.",
         "sentenceUnreadSince": "Compy couldn't read its test records just now, so it can't say here whether it has measured a change. It can still line up what changed and when, which shows timing, not cause.",
-        "sentenceUnavailableSince": "Before-and-after testing is off on this PC, so Compy has no measured answer here. It can still line up what changed and when, which shows timing, not cause."
+        "sentenceUnavailableSince": "Before-and-after testing is off on this PC, so Compy has no measured answer here. It can still line up what changed and when, which shows timing, not cause.",
+        "sentenceToolsOff": "Compy's before-and-after results are with its tuning tools, which are off (Settings → Tuning tools). Here it can line up what changed and when, which shows timing, not cause."
       },
       "wantFps": {
         "sentence": "Compy can test that on this PC: one session as it is now, one with a single change, and the change stays only if your game measured better.",
-        "sentenceNoJourney": "Compy can show you the starter changes it knows about. It has not measured them on your game, so any gain is expected, not proven."
+        "sentenceNoJourney": "Compy can show you the starter changes it knows about. It has not measured them on your game, so any gain is expected, not proven.",
+        "sentenceToolsOff": "Compy's before-and-after testing is one of its tuning tools, which are off (Settings → Tuning tools). The starter changes it knows about have not been measured on your game, so any gain is expected, not proven."
       },
       "wantMonitor": {
         "sentence": "Compy can put your frame rate on screen while you play and keep a summary of the run, so “it felt smoother” becomes a number you can check."
       },
       "wantScores": {
-        "sentence": "A benchmark is one repeatable run. Its value is comparison — the same run before and after a change tells you whether the change was real."
+        "sentence": "A benchmark is one repeatable run. Its value is comparison — the same run before and after a change tells you whether the change was real.",
+        "sentenceToolsOff": "Compy's benchmark is one of its tuning tools, which are off (Settings → Tuning tools). A fresh check reads this PC's current state in the meantime."
       },
       "wantSpecs": {
         "sentence": "Compy reads your parts from Windows and the drivers, and says plainly what it could not read rather than guessing."
@@ -747,8 +750,10 @@
       "title": "Your way around Compy",
       "journey": "The rail reads top to bottom: Health for the glance, Games to make a game run better, Problems to find out what went wrong, Optimize to check and fix, Live to watch the frames as they happen, History for what actually works, Test to go deeper.",
       "ground": "The rail reads top to bottom: Health for the glance, Games to make a game run better, Problems to find out what went wrong, Live to watch the frames as they happen, History for what actually works, Test to check, fix and prove it.",
+      "groundToolsOff": "The rail reads top to bottom: Health for the glance, Games to make a game run better, Problems to find out what went wrong, Live to watch the frames as they happen, History for what actually works, Test for Compy's changes and their undo.",
       "classic": "Six rooms, one job each. Here's where everything lives."
     },
+    "tieToolsOff": "Settings → Tuning tools shows the switches that change this in Test.",
     "tabBlurb": {
       "home": "Is your PC OK right now — the verdict, and what's worth a look.",
       "check": "Scan game-readiness, then apply the fixes it finds for your rig.",
@@ -759,7 +764,8 @@
       "games": "Every game Compy has measured, and how each one runs — where making a game better starts.",
       "problems": "Crashes, freezes and restarts from Windows' own records — find out what went wrong.",
       "mergedFix": "Check what's worth a look, then apply the fixes — Compy saves each current setting first, so you can undo it from the ledger.",
-      "groundLab": "Check what's worth a look and apply the fixes — Compy saves each current setting first, so you can undo it — then prove it with benchmarks, latency and diagnostics."
+      "groundLab": "Check what's worth a look and apply the fixes — Compy saves each current setting first, so you can undo it — then prove it with benchmarks, latency and diagnostics.",
+      "groundLabToolsOff": "Compy's changes and their undo, your parts, and what Windows recorded about a crash. Settings → Tuning tools adds the switches and benchmarks."
     }
   },
   "glass": {

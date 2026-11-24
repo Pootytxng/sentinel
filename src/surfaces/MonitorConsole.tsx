@@ -13,6 +13,7 @@ import {
   persistOverlayBackdrop,
 } from "../design/theme";
 import { useDocumentVisible } from "../data/use-document-visible";
+import { useTuningTools } from "../data/tuning-tools";
 import { useReducedMotion } from "../design/use-motion";
 import {
   gradeFps,
@@ -149,6 +150,9 @@ export function MonitorConsole({
   bar?: ReactNode;
 }) {
   const { t } = useTranslation();
+  // D6 (owner decision 2026-11-24): with the tuning tools off, the combined-effect tooltip must
+  // not point at Trials, which are hidden.
+  const tuningTools = useTuningTools();
   const reduced = useReducedMotion();
   const [cpu, setCpu] = useState<CpuSnap | null>(null);
   // C-19 — CPU TEMPERATURE ON THE DEFAULT FACE. It was not on this face in either mode, and the
@@ -642,7 +646,7 @@ export function MonitorConsole({
                 // a native `title` on an already-labelled span (#677, native-control hygiene).
                 <span className="mc-delta-tag">
                   {deck.changesOn > 1 ? (
-                    <Term tip={t("monitor.monitorConsole.combinedEffectTooltip")}>
+                    <Term tip={t(tuningTools ? "monitor.monitorConsole.combinedEffectTooltip" : "monitor.monitorConsole.combinedEffectTooltipToolsOff")}>
                       {t("monitor.monitorConsole.changesOn", { count: deck.changesOn })}
                       {t("monitor.monitorConsole.combinedEffectTag")}
                     </Term>

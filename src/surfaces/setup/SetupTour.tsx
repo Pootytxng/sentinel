@@ -15,6 +15,7 @@ import { useReducedMotion } from "../../design/use-motion";
 import { useScan, type ScanRecLite } from "../use-scan";
 import { buildRigParts } from "../rig/rig-parts";
 import { buildSetupSteps, type SetupStep } from "./setup-steps";
+import { useTuningTools } from "../../data/tuning-tools";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../../i18n";
@@ -54,14 +55,20 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   // proving-ground rail is the only rail, so both arguments are literal `true` now.
   // The lessons, recap and tab blurbs resolve through i18n with their English as the fallback, so
   // zh-CN reads whole (CR-zh-gpu, 2026-11-03).
+  // D6: the recap, the Test blurb and the lesson ties follow Test's Tuning tools (on or off).
+  const tools = useTuningTools();
   const steps = useMemo(
     () =>
       // `t` reaches the rig parts too, so a placeholder part name (no PSU detected → "Power Supply")
       // reads 电源 in zh-CN like the detected ones (desk review 2026-11-03).
-      buildSetupSteps(buildRigParts(hw, t), true, true, (key, fallback, vars) =>
-        t(key, { defaultValue: fallback, ...(vars ?? {}) }),
+      buildSetupSteps(
+        buildRigParts(hw, t),
+        true,
+        true,
+        (key, fallback, vars) => t(key, { defaultValue: fallback, ...(vars ?? {}) }),
+        tools,
       ),
-    [hw, t],
+    [hw, t, tools],
   );
   // The room that holds the ledger, named by its rail label as the rail renders it today: the
   // `lab` entry reads "Test" (`common.rail.lab`, localized), not the retired "Lab" (desk review

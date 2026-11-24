@@ -93,6 +93,7 @@
     "scopeIdleHint": "Press Start capture, then play — the line draws here.",
     "scopeCapturingHint": "Capturing — play a game and the line draws here.",
     "combinedEffectTooltip": "These deltas reflect all active changes (and anything else that differed) together — for a one-change-at-a-time measurement, run Test's before/after benchmark.",
+    "combinedEffectTooltipToolsOff": "These deltas reflect all active changes (and anything else that differed) together; they don't measure one change on its own.",
     "fpsScopeLabel": "fps",
     "traceSpanAgo": "{{span}} ago",
     "traceSpanNow": "now",

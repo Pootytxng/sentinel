@@ -47,6 +47,7 @@ import { ReticleCursor } from "../design/console/ReticleCursor";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { safeFixesReadyList } from "./optimize-v2-data";
 import { RerunCheckBand } from "./RerunCheckBand";
+import { useTuningTools } from "../data/tuning-tools";
 import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import { CpuTempOffer } from "./CpuTempOffer";
 import { deriveReverted } from "./use-scan";
@@ -866,6 +867,9 @@ export function HomeConsole({
   // rubric 3; guard-pinned in home-console.test.tsx). No dock (isolated mounts) → the plain
   // door stays, so Home always has exactly ONE forward affordance.
   const dockRenders = dockNodes.length > 0 && !!onNavigate;
+  // D6 Tuning tools (owner decision 2026-11-24): with them off, the routes to Test's Optimize switches stand
+  // down and the interview offers no door to a hidden station. Nothing else on Home changes.
+  const tuningTools = useTuningTools();
 
   // ── THE INTAKE BAND (BACKLOG:916 — the pre-room intent router + one-tap fast path, behind
   // compy_home_intake). The fast path is available ONLY when fully wired (the catalog resolved
@@ -944,6 +948,8 @@ export function HomeConsole({
     trials: interviewTrials,
     // The Lab's own rule (LabConsole measureKeys): Tuning is a station only where a guide exists.
     tuning: tuningGuideForVendorForLanguage(vendor, i18n.language) != null,
+    // D6: with the Tuning tools off no answer offers a door to a hidden station or the Trials bench.
+    tuningTools,
   };
 
   // Option C's apply — mirrors FirstCheck's honest inline-apply idiom: confirm names the rollback
@@ -1057,9 +1063,13 @@ export function HomeConsole({
 
                   Deliberately a quiet inline link, not a second filled button: UX-1 decision 1
                   gives this screen ONE primary, and a second one would mean none. */}
-              <button type="button" className="hc-verdict-next" onClick={onSeeInFix}>
-                {t("home.homeConsole.verdict.attentionNext", { room: fixRoomLabel })}
-              </button>
+              {/* D6: the route leads to Test's Optimize switches, a tuning tool; with the Tuning tools off
+                  it is not printed (it would name a place that no longer holds the fix). */}
+              {tuningTools && (
+                <button type="button" className="hc-verdict-next" onClick={onSeeInFix}>
+                  {t("home.homeConsole.verdict.attentionNext", { room: fixRoomLabel })}
+                </button>
+              )}
             </span>
             {/* B1 review r1 B2: a game measured rougher than usual, beside the flagged check: its own line,
                 "Separately: …", so it is shown and never read as the check's effect. */}
@@ -1367,7 +1377,7 @@ export function HomeConsole({
           readiness={readiness}
           checking={checking}
           onRunCheck={onRunCheck}
-          onSeeInFix={onSeeInFix}
+          onSeeInFix={tuningTools ? onSeeInFix : undefined}
           fixRoomLabel={fixRoomLabel}
         />
         <BentoGrid>
@@ -1409,9 +1419,11 @@ export function HomeConsole({
                 <span className="hc-limiter-tag hc-mono">
                   <RowConfidence basis={topLimiter.basis} band={topLimiter.confidence} />
                 </span>
-                <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
-                  {t("home.homeConsole.limiter.seeIn", { room: fixRoomLabel })}
-                </button>
+                {tuningTools && (
+                  <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
+                    {t("home.homeConsole.limiter.seeIn", { room: fixRoomLabel })}
+                  </button>
+                )}
               </div>
             ) : (
               <p className="hc-none">

@@ -393,7 +393,17 @@ export type InterviewFacts = {
    * = not told, the route it always had.
    */
   tuning?: boolean;
+  /**
+   * D6 (owner decision 2026-11-24, §38 layer 3 opt-in): are Test's Tuning tools on? false = the Optimize
+   * switches, Benchmark, Latency, Tuning and the Trials bench (the guided journey, "What Compy tested") are
+   * hidden, so no answer routes to them. Absent = not told, the routes they always had.
+   */
+  tuningTools?: boolean;
 };
+
+/** D6: the Test stations that are tuning tools (hidden with the tools off). Diagnostics and the crash
+ *  station stay. Mirrors data/tuning-tools.ts TUNING_STATIONS plus station 1's Optimize switches. */
+const TUNING_TOOL_STATIONS: readonly LabStationKey[] = ["optimize", "benchmark", "latency", "tuning"];
 
 // ── The finding card ────────────────────────────────────────────────────────────────────────────
 
@@ -514,8 +524,11 @@ export function interviewFinding(
     label: k("act.fastpath", { count: facts.safeStackReady }),
   });
   /** An instrument if the rail has its room, otherwise the always-there read-only fallback. */
+  const toolsOff = facts.tuningTools === false;
   const station = (s: LabStationKey, room: HomeIntakeRoom, label: string): InterviewAction =>
-    reachable(room, facts) ? { kind: "station", label, station: s, room } : runCheck();
+    reachable(room, facts) && !(toolsOff && TUNING_TOOL_STATIONS.includes(s))
+      ? { kind: "station", label, station: s, room }
+      : runCheck();
   const roomDoor = (r: HomeIntakeRoom, label: string): InterviewAction =>
     reachable(r, facts) ? { kind: "room", label, room: r } : runCheck();
 
@@ -552,7 +565,12 @@ export function interviewFinding(
       readinessLine();
       testedLine();
       direct = facts.recsLoaded;
-      if (benchArmed && reachable("lab", facts)) {
+      if (toolsOff) {
+        // D6: the journey and the Optimize switches are tuning tools; with them off the answer says where
+        // they are and offers the one-tap starter stack when it is ready, otherwise a fresh check.
+        sentence = k("wantFps.sentenceToolsOff");
+        action = fastPathOr(runCheck());
+      } else if (benchArmed && reachable("lab", facts)) {
         sentence = k("wantFps.sentence");
         action = { kind: "room", label: k("act.journey"), room: "lab", arrival: "journey" };
       } else {
@@ -575,7 +593,8 @@ export function interviewFinding(
       sessionCountLine();
       sessionLine();
       direct = fpsSession != null;
-      sentence = k("wantScores.sentence");
+      // D6: the benchmark is a tuning tool; with the tools off the answer says where it is.
+      sentence = k(toolsOff ? "wantScores.sentenceToolsOff" : "wantScores.sentence");
       action = station("benchmark", "lab", k("act.seeScores"));
       break;
     }
@@ -663,7 +682,7 @@ export function interviewFinding(
       sentence = k("heat.sentence");
       // With no Tuning station here, the last session's peak temperature is the reading Compy has.
       action =
-        facts.tuning !== false
+        facts.tuning !== false && !toolsOff
           ? station("tuning", "lab", k("act.heat"))
           : facts.sessionCount > 0
             ? roomDoor("play", k("act.readSession"))
@@ -678,7 +697,14 @@ export function interviewFinding(
       sessionCountLine();
       testedLine();
       direct = testedCount > 0;
-      if (testedCount > 0 && reachable("lab", facts)) {
+      if (toolsOff) {
+        // D6: "What Compy tested" is in the Trials bench, a tuning tool. With the tools off the answer does
+        // not claim nothing was measured (it may have been); it says where the results are, and lines up
+        // what changed and when.
+        sentence = k("didItHelp.sentenceToolsOff");
+        const since = station("blackbox", "lab", k("act.sinceWorked"));
+        action = since.kind === "station" ? { ...since, arrival: "since" } : since;
+      } else if (testedCount > 0 && reachable("lab", facts)) {
         sentence = k("didItHelp.sentenceTested");
         action = { kind: "room", label: k("act.whatTested"), room: "lab", arrival: "tested" };
       } else if (testedUnknown && benchArmed && reachable("lab", facts)) {

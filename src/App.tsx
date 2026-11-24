@@ -43,6 +43,14 @@ import { settingUndo, undoDialog } from "./data/undo-setting";
 import { newestOpenRecord, recordUndoableFromCard, type CardUndoResult } from "./data/compy-undo";
 import { runSettingWalk, trialInProgress, walkStopMessage, type WalkResult } from "./surfaces/changed-before-restore";
 import { useJourneyPhase } from "./surfaces/GuidedJourney";
+import {
+  decideTuningTools,
+  layerOneRecs,
+  readTuningToolsChoice,
+  setTuningTools,
+  useTuningTools,
+  type SlotRead,
+} from "./data/tuning-tools";
 import { settleLedgerRead, useLedgerReadRetry } from "./data/applied-changes-retry";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
@@ -702,6 +710,28 @@ function App() {
   useEffect(() => {
     invoke<boolean>("gaming_mode_enabled").then(setGamingEnabled).catch(() => {});
   }, []);
+  // D6 Tuning tools (owner decision 2026-11-24, §38 layer 3 opt-in): decided ONCE, when no choice is stored,
+  // from reads App already makes: the ledger (only after it has ANSWERED: the initial [] is not an answer) and
+  // the Gaming Mode session slot, kept RAW (readSessionSlot folds a failed read into "none"; here a failed
+  // read is "undecided"). Any ledger row or a session file → on; both empty → off; a failed read → nothing
+  // stored, the tools show this run, decided again next launch. Never re-decided once stored.
+  const tuningTools = useTuningTools();
+  // Owner decision 2026-11-24 (Nagle tuning-only): every surface outside Test's Optimize switches lists the
+  // catalog without the tuning-only recs (Home's fast path and trust loop, Live). An existing ledger row for
+  // one keeps its undo and its "turn it back on" (those read the ledger, not this list).
+  const homeRecs = useMemo(() => layerOneRecs(recs), [recs]);
+  const [slotForDecision, setSlotForDecision] = useState<SlotRead | null>(null);
+  useEffect(() => {
+    if (readTuningToolsChoice() !== null) return;
+    invoke<unknown>("get_gaming_session_state")
+      .then((s) => setSlotForDecision(s == null ? "empty" : "present"))
+      .catch(() => setSlotForDecision("unread"));
+  }, []);
+  useEffect(() => {
+    if (readTuningToolsChoice() !== null) return;
+    const decision = decideTuningTools(changesRead ? changes : null, slotForDecision);
+    if (decision !== "undecided") setTuningTools(decision === "on");
+  }, [changesRead, changes, slotForDecision]);
   // Sync the persisted close-to-tray preference to the backend on startup, so the close handler
   // knows it before the user ever closes the window (default OFF = §1 clean exit until opt-in).
   useEffect(() => {
@@ -1547,13 +1577,19 @@ function App() {
             // is exactly that class of event too. Bug found in Cowork audit of 408c860, 2026-07-19.
             void refresh();
           }}
-          onGoToLab={() => {
-            // Post-check route (tester J 2026-07-22): close the verdict and land the user in the Lab
-            // with the Optimize station auto-opened — openFixesInLab owns the race-free handoff.
-            setShowFirstCheck(false);
-            void refresh();
-            openFixesInLab();
-          }}
+          onGoToLab={
+            // D6: the CTA leads to the Optimize switches, a tuning tool; with the Tuning tools off it is not
+            // offered (the verdict keeps its other exit).
+            tuningTools
+              ? () => {
+                  // Post-check route (tester J 2026-07-22): close the verdict and land the user in the Lab
+                  // with the Optimize station auto-opened — openFixesInLab owns the race-free handoff.
+                  setShowFirstCheck(false);
+                  void refresh();
+                  openFixesInLab();
+                }
+              : undefined
+          }
           arcV2
         />
       )}
@@ -1792,7 +1828,7 @@ function App() {
                         while the Trust Ledger is empty; runs the SAME audited apply→rollback IPC,
                         consented by a click, never automatic. Renders nothing on a rig with history. */}
                     <TrustMoment
-                      recs={recs}
+                      recs={homeRecs}
                       changes={changes}
                       isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                       onChanged={refresh}
@@ -1806,7 +1842,7 @@ function App() {
                 {/* The full health check keeps the trust loop where it always stood, above the back
                     row (same gate and handlers as the summary's slot). */}
                 <TrustMoment
-                  recs={recs}
+                  recs={homeRecs}
                   changes={changes}
                   isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                   onChanged={refresh}
@@ -1867,7 +1903,7 @@ function App() {
                   // The interview's one-tap fast path only (issue #177, was the intake band's option C):
                   // derives its safe stack from the SAME recs + allowlist Optimize uses, and applies
                   // through the SAME audited one-UAC batch primitive — no new mutation boundary.
-                  recs={recs}
+                  recs={homeRecs}
                   isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                   onApplyBatch={applyBatch}
                 />
@@ -1903,7 +1939,7 @@ function App() {
                   sessions={sessions}
                   sessionsSeenAt={sessionsSeenAt}
                   priorities={priorities}
-                  recs={recs ?? []}
+                  recs={homeRecs ?? []}
                   apply={apply}
                   busyId={busyId}
                   onExport={onExport}

@@ -199,7 +199,7 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
 // source), blurbs from TAB_BLURB. Merged = the five journey rooms; ground = the four-room
 // proving-ground rail (the Lab's blurb covers the absorbed Optimize). The recap can never show
 // a room the rail doesn't have.
-export function buildTabs(merged: boolean, ground = false, tr: SetupTr = asIs): TabInfo[] {
+export function buildTabs(merged: boolean, ground = false, tr: SetupTr = asIs, tools = true): TabInfo[] {
   return railFor(merged, ground).map((r) => ({
     id: r.id,
     // The label resolves the way the rendered rail resolves it (`ShellV2.railLabel`: the relabeled
@@ -210,7 +210,9 @@ export function buildTabs(merged: boolean, ground = false, tr: SetupTr = asIs): 
     icon: r.icon,
     blurb:
       ground && r.id === "lab"
-        ? tr("home.setupTour.tabBlurb.groundLab", GROUND_LAB_BLURB)
+        ? tools
+          ? tr("home.setupTour.tabBlurb.groundLab", GROUND_LAB_BLURB)
+          : tr("home.setupTour.tabBlurb.groundLabToolsOff", GROUND_LAB_BLURB_TOOLS_OFF)
         : merged && r.id === "fix"
           ? tr("home.setupTour.tabBlurb.mergedFix", MERGED_FIX_BLURB)
           : tr(`home.setupTour.tabBlurb.${r.id}`, TAB_BLURB[r.id]),
@@ -228,13 +230,18 @@ export function buildHardwareSteps(
   merged = true,
   ground = false,
   tr: SetupTr = asIs,
+  tools = true,
 ): SetupStep[] {
   return HARDWARE_LESSONS.flatMap((rawLesson) => {
     const k = `home.setupTour.lessons.${rawLesson.kind}`;
     // The tab tie re-points by rail; each tie is its own key so a translation never has to carry
     // three rails in one string.
     const tab: HardwareLesson["tab"] = ground
-      ? rawLesson.tab.id === "check"
+      ? !tools && (rawLesson.tab.id === "check" || rawLesson.tab.id === "fix" || rawLesson.tab.id === "lab")
+        ? // D6: with the Tuning tools off, the scan, the switches and the benchmarks these ties name are
+          // hidden; the tie says where they are.
+          { id: "lab", tie: tr("home.setupTour.tieToolsOff", TIE_TOOLS_OFF) }
+        : rawLesson.tab.id === "check"
         ? { id: "lab", tie: tr(`${k}.tieGround`, "Test scans for CPU limiters and applies the top fix.") }
         : rawLesson.tab.id === "fix"
           ? {
@@ -298,6 +305,15 @@ export const JOURNEY_RECAP_BODY =
 export const GROUND_RECAP_BODY =
   "The rail reads top to bottom: Health for the glance, Games to make a game run better, Problems to find out what went wrong, Live to watch the frames as they happen, History for what actually works, Test to check, fix and prove it.";
 
+// D6 (owner decision 2026-11-24): the same three lines with Test's Tuning tools off. Test then holds
+// Compy's changes and their undo, Diagnostics and Crash & Freeze Rescue; the switches, scans and benchmarks
+// are behind Settings → Tuning tools.
+export const GROUND_RECAP_BODY_TOOLS_OFF =
+  "The rail reads top to bottom: Health for the glance, Games to make a game run better, Problems to find out what went wrong, Live to watch the frames as they happen, History for what actually works, Test for Compy's changes and their undo.";
+export const GROUND_LAB_BLURB_TOOLS_OFF =
+  "Compy's changes and their undo, your parts, and what Windows recorded about a crash. Settings → Tuning tools adds the switches and benchmarks.";
+export const TIE_TOOLS_OFF = "Settings → Tuning tools shows the switches that change this in Test.";
+
 // The ordered flow: setup steps → a hardware lesson per present component → the rail recap.
 // 2026-07-23 (tester Matthew: "the last tab is the best for clarity" — orientation must not wait
 // until the END): the FIRST step now also carries the mode's rail-orientation line, so the user
@@ -308,8 +324,11 @@ export function buildSetupSteps(
   merged = true,
   ground = false,
   tr: SetupTr = asIs,
+  tools = true,
 ): SetupStep[] {
-  const groundRecap = tr("home.setupTour.recap.ground", GROUND_RECAP_BODY);
+  const groundRecap = tools
+    ? tr("home.setupTour.recap.ground", GROUND_RECAP_BODY)
+    : tr("home.setupTour.recap.groundToolsOff", GROUND_RECAP_BODY_TOOLS_OFF);
   const journeyRecap = tr("home.setupTour.recap.journey", JOURNEY_RECAP_BODY);
   const orientation = ground ? groundRecap : merged ? journeyRecap : null;
   const setupSteps = SETUP_STEPS.map((s) =>
@@ -317,7 +336,7 @@ export function buildSetupSteps(
   );
   return [
     ...setupSteps,
-    ...buildHardwareSteps(parts, merged, ground, tr),
+    ...buildHardwareSteps(parts, merged, ground, tr, tools),
     {
       id: "tour-tabmap",
       leg: "tour",
@@ -328,7 +347,7 @@ export function buildSetupSteps(
         : merged
           ? journeyRecap
           : tr("home.setupTour.recap.classic", "Six rooms, one job each. Here's where everything lives."),
-      tabs: buildTabs(merged, ground, tr),
+      tabs: buildTabs(merged, ground, tr, tools),
     },
   ];
 }

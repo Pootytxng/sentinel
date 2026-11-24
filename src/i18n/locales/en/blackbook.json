@@ -210,6 +210,7 @@
     "howWeGrade": "How we grade",
     "goldenRules": "One change at a time · restore point first · measure, don't vibe",
     "empty": "No entry for that yet — we only answer what we've verified. If you're unsure about a tweak that isn't here, measure it with Compy's benchmark instead of trusting a forum.",
+    "emptyToolsOff": "No entry for that yet — we only answer what we've verified. If you're unsure about a tweak that isn't here, Compy's benchmark can measure it instead of trusting a forum; it is one of the tuning tools (Settings → Tuning tools).",
     "startHere": "Start here",
     "typeLabel": {
       "guide": "Guide",
