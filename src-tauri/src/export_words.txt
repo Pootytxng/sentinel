@@ -446,6 +446,7 @@ effect
 effects
 efficient
 either
+elev
 elevated
 elevation
 eligible
@@ -1055,6 +1056,7 @@ physical
 physicaldisk
 physicalmemory
 picker
+pid
 piece
 pin
 ping
@@ -1272,6 +1274,7 @@ ruleset
 run
 running
 runs
+runtime
 rust
 ryzen
 safe
@@ -1530,6 +1533,7 @@ threat
 three
 throttles
 through
+ticket
 ticks
 tier
 tiger
