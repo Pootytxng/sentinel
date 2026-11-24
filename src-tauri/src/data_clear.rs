@@ -278,7 +278,7 @@ const TRIAL_RUNNING_DETAIL: &str =
 const TRIAL_UNKNOWN_DETAIL: &str =
     "Compy can't read its Trial records, so it can't confirm that no Trial change is still on. The file was left exactly as it is.";
 const TRIALS_TIED_DETAIL: &str =
-    "Trial results stay while changes are applied or the change history cannot be read: they are linked to it.";
+    "Trial results stay while some changes Compy made have not been undone or the change history cannot be read: they are linked to them.";
 
 /// What the Trial store's gate re-reads, under that store's lock, immediately before the Trial store (or one
 /// of its working files) is deleted: a Trial that is pending or running, Trial records that can't be read, or
@@ -758,7 +758,7 @@ pub(crate) fn plan_clear(root: &Path, scope: Scope, facts: &ClearFacts) -> Clear
             LedgerCheck::Applied(rows) => {
                 plan.refuse(
                     "changes_applied",
-                    "Changes Compy made are still in place. Compy can't delete its change history while they are, because it is the only way to undo them.",
+                    "Some changes Compy made have not been undone yet. Compy can't delete its change history while any are, because it is the only way to undo them.",
                     None,
                 );
                 plan.applied_changes = rows.iter().map(|r| r.title.clone()).collect();
@@ -2568,6 +2568,23 @@ mod tests {
         assert_eq!(plan.applied_settings.iter().map(|s| s.records).sum::<usize>(), plan.applied_changes.len());
         let v = serde_json::to_value(&plan).unwrap();
         assert_eq!(v["applied_settings"][0]["records"], 3, "the screen reads these names");
+    }
+
+    /// C5d: a record counts until it is undone, even when its setting reads off now, so the backend's own detail
+    /// text says "not been undone", never "still in place" / "still applied". The changes_applied detail can be
+    /// written into clear-intent.json (`abandoned_detail`) by a start-up roll-forward that gives up.
+    /// Break check: restore "Changes Compy made are still in place." or "while changes are applied" -> fails.
+    #[test]
+    fn b1c_the_backend_details_say_not_undone_for_open_records() {
+        let t = Tmp::new("b1c");
+        seed(&t);
+        t.ledger(&[("Core parking", "applied")]);
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        let detail = &plan.refusals.iter().find(|r| r.code == "changes_applied").expect("refused").detail;
+        for d in [detail.as_str(), TRIALS_TIED_DETAIL] {
+            assert!(d.contains("not been undone"), "{d}");
+            assert!(!d.contains("still in place") && !d.contains("still applied") && !d.contains("are applied"), "{d}");
+        }
     }
 
     #[test]
