@@ -5404,6 +5404,49 @@ pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<
     Ok(())
 }
 
+#[cfg(test)]
+mod eee_script_tests {
+    use super::*;
+
+    // A6: byte-for-byte goldens for well-formed values, written from the builders' output BEFORE the quote
+    // fix. The fix must not change a single byte of a normal script (an ASCII apostrophe was already doubled).
+    pub(super) fn golden_targets() -> Vec<(EeeProperty, String)> {
+        let prop = |name: &str, display: &str, current: &str| EeeProperty {
+            adapter_name: name.into(),
+            display_name: display.into(),
+            current_value: current.into(),
+            valid_values: vec!["Disabled".into(), "Enabled".into()],
+        };
+        vec![
+            (prop("Ethernet", "Energy Efficient Ethernet", "Enabled"), "Disabled".to_string()),
+            (prop("Bob's NIC", "Green Ethernet", "On"), "Off".to_string()),
+        ]
+    }
+
+    pub(super) fn golden_snapshots() -> Vec<EeeNicSnapshot> {
+        let snap = |name: &str, display: &str, prior: &str| EeeNicSnapshot {
+            adapter_name: name.into(),
+            property_display_name: display.into(),
+            prior_value: prior.into(),
+        };
+        vec![snap("Ethernet", "Energy Efficient Ethernet", "Enabled"), snap("Bob's NIC", "Green Ethernet", "On")]
+    }
+
+    pub(super) const GOLDEN_APPLY: &str = "Set-NetAdapterAdvancedProperty -Name 'Ethernet' -DisplayName 'Energy Efficient Ethernet' -DisplayValue 'Disabled' -NoRestart -ErrorAction SilentlyContinue; Set-NetAdapterAdvancedProperty -Name 'Bob''s NIC' -DisplayName 'Green Ethernet' -DisplayValue 'Off' -NoRestart -ErrorAction SilentlyContinue; $null = 0";
+
+    pub(super) const GOLDEN_ROLLBACK: &str = "Set-NetAdapterAdvancedProperty -Name 'Ethernet' -DisplayName 'Energy Efficient Ethernet' -DisplayValue 'Enabled' -NoRestart -ErrorAction SilentlyContinue; Set-NetAdapterAdvancedProperty -Name 'Bob''s NIC' -DisplayName 'Green Ethernet' -DisplayValue 'On' -NoRestart -ErrorAction SilentlyContinue; $null = 0";
+
+    #[test]
+    fn a_normal_eee_apply_script_is_byte_for_byte_the_golden() {
+        assert_eq!(build_eee_apply_script(&golden_targets()), GOLDEN_APPLY);
+    }
+
+    #[test]
+    fn a_normal_eee_rollback_script_is_byte_for_byte_the_golden() {
+        assert_eq!(build_eee_rollback_script(&golden_snapshots()), GOLDEN_ROLLBACK);
+    }
+}
+
 
 // ─── Fast Startup off (HKLM, admin) ──────────────────────────────────────
 
