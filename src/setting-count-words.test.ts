@@ -114,6 +114,13 @@ describe("a count of settings says settings (D7)", () => {
       }
     }
     expect(offenders).toEqual([]);
+    // The Monitor delta row has a 21-word cap (monitor-console.test.tsx "the deck delta is a boxed template"), so its
+    // label says "at start" (that row is one session's deck) without "was/were" or "session". Break check: restore
+    // "...settings were on or unconfirmed at session start" -> this fails (and the cap test with it).
+    for (const [k, s] of forms(en, "monitor.monitorConsole.changesOn")) {
+      expect(s, k).toMatch(/ on or unconfirmed at start$/);
+      expect(s.split(/\s+/).length, k).toBe(8);
+    }
     const debrief = readFileSync(join("src", "surfaces", "SessionDebrief.tsx"), "utf8");
     expect(debrief).toContain('t("monitor.sessionDebrief.changesActive", { count: s.compy_changes_active })');
   });
