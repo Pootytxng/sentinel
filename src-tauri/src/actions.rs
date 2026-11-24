@@ -9906,15 +9906,15 @@ mod elevated_goldens {
             (r#"{"op":"reserved-storage-restore","enabled":false}"#, G_RESERVED_OFF),
             (concat!(r#"{"op":"power-setting-off","plan":""#, plan!(), r#"","setting":"UsbSelectiveSuspend","prior_ac":1}"#), G_POWER_SETTING_OFF),
             (
-                concat!(r#"{"op":"power-setting-restore","plan":""#, plan!(), r#"","subgroup":""#, usb_sub!(), r#"","setting":""#, usb_set!(), r#"","ac":3,"dc":2,"recommit":"plan"}"#),
+                concat!(r#"{"op":"power-setting-restore","plan":""#, plan!(), r#"","setting":"UsbSelectiveSuspend","ac":3,"dc":2,"recommit":"plan"}"#),
                 G_POWER_SETTING_RESTORE_ACTIVE,
             ),
             (
-                concat!(r#"{"op":"power-setting-restore","plan":""#, plan!(), r#"","subgroup":""#, usb_sub!(), r#"","setting":""#, usb_set!(), r#"","ac":3,"dc":2,"recommit":"no"}"#),
+                concat!(r#"{"op":"power-setting-restore","plan":""#, plan!(), r#"","setting":"UsbSelectiveSuspend","ac":3,"dc":2,"recommit":"no"}"#),
                 G_POWER_SETTING_RESTORE_OTHER,
             ),
             (
-                concat!(r#"{"op":"power-setting-restore","plan":""#, plan!(), r#"","subgroup":""#, usb_sub!(), r#"","setting":""#, usb_set!(), r#"","ac":3,"dc":2,"recommit":"current"}"#),
+                concat!(r#"{"op":"power-setting-restore","plan":""#, plan!(), r#"","setting":"UsbSelectiveSuspend","ac":3,"dc":2,"recommit":"current"}"#),
                 G_POWER_SETTING_RESTORE_UNREAD,
             ),
             (r#"{"op":"fast-startup-off"}"#, G_FAST_STARTUP_OFF),

@@ -233,6 +233,19 @@ pub(crate) enum PowerSetting {
 }
 
 impl PowerSetting {
+    /// The closed setting a saved `(subgroup, setting)` pair names (case-insensitive, as powercfg prints GUIDs).
+    /// Any other pair: `NoMatch`, so the app refuses that row's undo with the plan's §5 sentence (the change stays
+    /// in the Trust Ledger) and never builds a request for it (Slice 2 caller).
+    pub(crate) fn from_ids(subgroup: &str, setting: &str) -> Result<Self, Refused> {
+        [PowerSetting::UsbSelectiveSuspend, PowerSetting::PcieAspm]
+            .into_iter()
+            .find(|p| {
+                let (g, s) = p.ids();
+                g.eq_ignore_ascii_case(subgroup) && s.eq_ignore_ascii_case(setting)
+            })
+            .ok_or(Refused::NoMatch)
+    }
+
     fn ids(self) -> (&'static str, &'static str) {
         match self {
             PowerSetting::UsbSelectiveSuspend => (actions::PWR_SUBGROUP_USB, actions::PWR_SETTING_USB_SELECTIVE_SUSPEND),
@@ -313,7 +326,10 @@ pub(crate) enum ElevatedOp {
     ReservedStorageRestore { enabled: bool },
     // Rows 9-10.
     PowerSettingOff { plan: PlanGuid, setting: PowerSetting, prior_ac: u32 },
-    PowerSettingRestore { plan: PlanGuid, subgroup: PlanGuid, setting: PlanGuid, ac: u32, dc: u32, recommit: Recommit },
+    /// The undo writes only the two settings the apply writes (review r1: free subgroup/setting GUIDs would let a
+    /// forged request write ANY powercfg setting). An old row with any other pair refuses app-side
+    /// ([`PowerSetting::from_ids`], the saved-value sentinel's sentence). Priors stay plain u32 ([v2r M4]).
+    PowerSettingRestore { plan: PlanGuid, setting: PowerSetting, ac: u32, dc: u32, recommit: Recommit },
     // Row 11 (matched and set helper-side).
     EeeDisable { targets: Vec<EeeTarget> },
     EeeRestore { targets: Vec<EeeSaved> },
@@ -414,8 +430,9 @@ impl ElevatedOp {
                 let (subgroup, id) = setting.ids();
                 actions::power_setting_apply_script(plan.as_str(), subgroup, id, *prior_ac)
             }
-            Op::PowerSettingRestore { plan, subgroup, setting, ac, dc, recommit } => {
-                let (p, g, s) = (plan.as_str(), subgroup.as_str(), setting.as_str());
+            Op::PowerSettingRestore { plan, setting, ac, dc, recommit } => {
+                let (g, s) = setting.ids();
+                let p = plan.as_str();
                 match recommit {
                     Recommit::Plan => actions::build_power_setting_restore_cmd(p, g, s, *ac, *dc, true),
                     Recommit::No => actions::build_power_setting_restore_cmd(p, g, s, *ac, *dc, false),
@@ -1207,6 +1224,42 @@ mod tests {
             assert!(fx.events.is_empty(), "{why}: nothing read or run, got {:?}", fx.events);
             assert_eq!(connects.get(), 0, "{why}: the pipe is not touched");
             assert_eq!(actions::elevation_dispatch_count(), 0, "{why}: nothing dispatched");
+        }
+    }
+
+    /// Review r1 must-fix 3: the power-setting undo names one of the two settings the apply writes, never a free
+    /// subgroup/setting GUID pair. A request with a GUID pair or an unknown setting is refused whole with zero
+    /// reads, runs and dispatches; an old row whose saved pair is not one of the two maps to `NoMatch` (the
+    /// saved-value sentence, decided app-side). Break: give `PowerSettingRestore` back a free
+    /// `subgroup: PlanGuid` and `setting: PlanGuid` (see a8-breaks.json) and this fails.
+    #[test]
+    fn the_power_setting_undo_writes_only_the_two_closed_settings() {
+        let plan = "381b4222-f694-41f0-9685-ff5bb260df2e";
+        for op in [
+            format!(r#"{{"op":"power-setting-restore","plan":"{plan}","subgroup":"54533251-82be-4824-96c1-47b60b740d00","setting":"bc5038f7-23e0-4960-96da-33abaf5935ec","ac":100,"dc":100,"recommit":"plan"}}"#),
+            format!(r#"{{"op":"power-setting-restore","plan":"{plan}","setting":"bc5038f7-23e0-4960-96da-33abaf5935ec","ac":100,"dc":100,"recommit":"plan"}}"#),
+            format!(r#"{{"op":"power-setting-restore","plan":"{plan}","setting":"ProcessorMaxState","ac":5,"dc":5,"recommit":"plan"}}"#),
+        ] {
+            assert!(serde_json::from_str::<ElevatedOp>(&op).is_err(), "{op}");
+            let args = [hex(&request_json("single", &format!(r#"{{"ops":[{op}]}}"#)))];
+            actions::reset_elevation_dispatch_count();
+            let mut fx = Fake::default();
+            let code = helper_argv_with(&args, &mut fx, &|_, _| Ok(Box::new(SharedBuf::default()) as PipeOut));
+            assert_eq!(code, actions::HELPER_REQUEST_REFUSED, "{op}");
+            assert!(fx.events.is_empty(), "{op}: {:?}", fx.events);
+            assert_eq!(actions::elevation_dispatch_count(), 0, "{op}: nothing dispatched");
+        }
+        let ok = format!(r#"{{"op":"power-setting-restore","plan":"{plan}","setting":"PcieAspm","ac":2,"dc":1,"recommit":"no"}}"#);
+        assert!(serde_json::from_str::<ElevatedOp>(&ok).is_ok());
+        // Old rows: the saved pair maps onto the closed set, or the undo refuses with the saved-value sentence.
+        assert_eq!(PowerSetting::from_ids(actions::PWR_SUBGROUP_USB, actions::PWR_SETTING_USB_SELECTIVE_SUSPEND), Ok(PowerSetting::UsbSelectiveSuspend));
+        assert_eq!(PowerSetting::from_ids(&actions::PWR_SUBGROUP_PCIE.to_uppercase(), actions::PWR_SETTING_PCIE_ASPM), Ok(PowerSetting::PcieAspm));
+        for (g, s) in [
+            (actions::PWR_SUBGROUP_USB, actions::PWR_SETTING_PCIE_ASPM),
+            ("54533251-82be-4824-96c1-47b60b740d00", "bc5038f7-23e0-4960-96da-33abaf5935ec"),
+            ("", ""),
+        ] {
+            assert_eq!(PowerSetting::from_ids(g, s), Err(Refused::NoMatch), "{g} {s}");
         }
     }
 
