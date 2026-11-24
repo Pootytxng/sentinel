@@ -900,19 +900,6 @@ thread_local! {
     static ELEVATION_DISPATCH_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-// Test-only (A5 Part A): the next `run_elevated_capture` on this thread returns this instead of elevating, so
-// every receipt outcome (complete, cut short, forged, foreign nonce) is drivable without a UAC prompt.
-#[cfg(test)]
-thread_local! {
-    static FAKE_CAPTURE: std::cell::RefCell<Option<ElevatedCapture>> = const { std::cell::RefCell::new(None) };
-}
-
-/// Make the next capture on this thread return `run` and `text` (test-only).
-#[cfg(test)]
-pub(crate) fn fake_next_capture(run: Result<(), String>, text: &str) {
-    FAKE_CAPTURE.with(|f| *f.borrow_mut() = Some(ElevatedCapture { run, text: text.to_string() }));
-}
-
 /// Read this thread's would-be-prompt count (test-only; see `ELEVATION_DISPATCH_COUNT`).
 #[cfg(test)]
 pub(crate) fn elevation_dispatch_count() -> usize {
@@ -1181,10 +1168,6 @@ pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
     if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
         return none(Err(ELEVATION_DECLINED_MSG.to_string()));
     }
-    #[cfg(test)]
-    if let Some(fake) = FAKE_CAPTURE.with(|f| f.borrow_mut().take()) {
-        return fake;
-    }
     let exe = match std::env::current_exe() {
         Ok(e) => e,
         Err(e) => return none(Err(format!("cannot find own exe: {e}"))),
@@ -1230,7 +1213,7 @@ pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
             std::ffi::OsStr::new(&parent),
         ],
         |pid| launched.store(pid, std::sync::atomic::Ordering::Release),
-        &finish,
+        finish,
     );
     // A launch that never started a process (declined, failed) did not run `finish`: stop the wait now.
     finish();
