@@ -164,10 +164,10 @@ pub(crate) fn bench_plan_class_refusal<'a>(
     held: Option<&(String, String)>,
     mut rec_ids: impl Iterator<Item = &'a str>,
 ) -> Option<String> {
-    let (id, title) = held?;
+    let (id, _title) = held?;
     rec_ids
         .any(|w| crate::gaming_orchestrator::plan_class_clash(id, w))
-        .then(|| crate::experiment::plan_class_refusal(title, false, crate::experiment::BY_BENCHMARK))
+        .then(|| crate::experiment::plan_class_refusal(false, crate::experiment::PlanHolder::Benchmark))
 }
 
 /// Start a calibration run (no tweak, no mutation). Needs the FPS capture active + a game

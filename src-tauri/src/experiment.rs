@@ -4067,26 +4067,39 @@ pub(crate) fn held_by_trial_refusal<'a>(
     })
 }
 
-/// Who holds the plan in [`plan_class_refusal`] when it is the benchmark.
-pub(crate) const BY_BENCHMARK: &str = "the benchmark";
+/// Who holds the plan in [`plan_class_refusal`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PlanHolder {
+    Trial,
+    Benchmark,
+}
+
+/// C8: the plan-class refusals are FIXED sentences (no setting title), so `src/data/backend-error.ts` can map
+/// each one, byte-equal, to words in the user's language: an unmapped refusal is never shown (the "no String(e)
+/// in the face" rule), and the titled `format!` these replace could not be mapped. Each refuses before anything
+/// runs, so "Nothing was changed." is true of the call that returns it.
+pub(crate) const PLAN_CLASS_TRIAL_REFUSAL: &str = "The power plan or one of its settings is being measured by a \
+     Trial right now, and this change writes to the same power plan, so Compy won't make it during the \
+     measurement. Let it finish first. Nothing was changed.";
+/// [`PLAN_CLASS_TRIAL_REFUSAL`] when the benchmark is measuring (it can be cancelled, as its direct-hold
+/// refusal says).
+pub(crate) const PLAN_CLASS_BENCH_REFUSAL: &str = "The power plan or one of its settings is being measured by \
+     the benchmark right now, and this change writes to the same power plan, so Compy won't make it during the \
+     measurement. Let it finish, or cancel it, first. Nothing was changed.";
+/// [`PLAN_CLASS_TRIAL_REFUSAL`] when the Trial's start was interrupted (a Pending record).
+pub(crate) const PLAN_CLASS_INTERRUPTED_REFUSAL: &str = "An earlier Trial start on the power plan or one of \
+     its settings was interrupted and isn't resolved yet. This change writes to the same power plan, so Compy \
+     won't make it now. Check Test → Applied & history, then try again. Nothing was changed.";
 
 /// CR-plan-held-refusal: the refusal for a change to the power plan, or to a setting of it, while a
-/// Trial (`by` = "a Trial") or the benchmark (`by` = [`BY_BENCHMARK`]) is measuring the other.
-pub(crate) fn plan_class_refusal(held_title: &str, interrupted: bool, by: &str) -> String {
-    if interrupted {
-        format!(
-            "An earlier Trial start of \u{201c}{held_title}\u{201d} was interrupted and isn't resolved yet. \
-             This change writes to the same power plan, so Compy won't make it now. Check Test \u{2192} \
-             Applied & history, then try again. Nothing was changed."
-        )
-    } else {
-        // CR-plan-held-behaviour-tests: the benchmark can be cancelled, as its direct-hold refusal says.
-        let next = if by == BY_BENCHMARK { "Let it finish, or cancel it, first." } else { "Let it finish first." };
-        format!(
-            "\u{201c}{held_title}\u{201d} is being measured by {by} right now, and this change writes to the \
-             same power plan, so Compy won't make it during the measurement. {next} Nothing was changed."
-        )
+/// Trial or the benchmark is measuring the other. C8: one of three fixed sentences.
+pub(crate) fn plan_class_refusal(interrupted: bool, by: PlanHolder) -> String {
+    match (interrupted, by) {
+        (true, _) => PLAN_CLASS_INTERRUPTED_REFUSAL,
+        (false, PlanHolder::Trial) => PLAN_CLASS_TRIAL_REFUSAL,
+        (false, PlanHolder::Benchmark) => PLAN_CLASS_BENCH_REFUSAL,
     }
+    .to_string()
 }
 
 /// The UI's one-click apply (Fix, Optimize, the tour). The audited apply itself is
@@ -4179,7 +4192,7 @@ pub(crate) fn plan_class_trial_refusal<'a>(records: &[ExperimentRecord], rec_ids
         .iter()
         .filter(|e| matches!(e.status, ExperimentStatus::Pending | ExperimentStatus::Running))
         .find(|e| ids.iter().any(|w| crate::gaming_orchestrator::plan_class_clash(&e.rec_id, w)))?;
-    Some(plan_class_refusal(&held.rec_title, held.status == ExperimentStatus::Pending, "a Trial"))
+    Some(plan_class_refusal(held.status == ExperimentStatus::Pending, PlanHolder::Trial))
 }
 
 /// CR-core-parking-held-with-plan: the webview's leftover restore. The core-parking restore writes the
@@ -6636,8 +6649,23 @@ mod experiment_tests {
         let usb = [open("usb-selective-suspend-off", ExperimentStatus::Running)];
         let why = plan_class_trial_refusal(&usb, std::iter::once("power-ultimate")).expect("refused");
         assert!(why.contains("same power plan") && why.contains("by a Trial"), "{why}");
+        // C8: a fixed sentence with no setting title, so backend-error.ts can map it (and pins it byte-equal).
+        // Break check: put the held setting's title back into the sentence -> these fail.
+        assert_eq!(why, PLAN_CLASS_TRIAL_REFUSAL);
         let plan = [open("power-ultimate", ExperimentStatus::Pending)];
         assert!(plan_class_trial_refusal(&plan, std::iter::once("core-parking-forced")).unwrap().contains("was interrupted"));
+        assert_eq!(plan_class_trial_refusal(&plan, std::iter::once("core-parking-forced")).unwrap(), PLAN_CLASS_INTERRUPTED_REFUSAL);
+        assert_eq!(
+            crate::benchmark_trial::bench_plan_class_refusal(
+                Some(&("pcie-aspm-off".to_string(), "PCIe link power off".to_string())),
+                std::iter::once("power-ultimate")
+            )
+            .unwrap(),
+            PLAN_CLASS_BENCH_REFUSAL
+        );
+        for s in [PLAN_CLASS_TRIAL_REFUSAL, PLAN_CLASS_BENCH_REFUSAL, PLAN_CLASS_INTERRUPTED_REFUSAL] {
+            assert!(!s.contains('\u{201c}') && s.ends_with("Nothing was changed."), "{s}");
+        }
         // The held setting's own undo keeps today's behaviour; outside the class, nothing.
         assert_eq!(plan_class_trial_refusal(&usb, std::iter::once("usb-selective-suspend-off")), None);
         assert_eq!(plan_class_trial_refusal(&usb, std::iter::once("pcie-aspm-off")), None);

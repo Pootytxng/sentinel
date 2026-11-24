@@ -248,6 +248,21 @@ describe("runSettingWalk / walkStopMessage (C6)", () => {
     );
   });
 
+  // C8: the Trial-in-progress (power-plan class) refusal is a fixed sentence now, so a walk stopped by it says why
+  // in the user's language, and only when no record was undone in the run (it ends "Nothing was changed.").
+  // Break check: drop the PLAN_CLASS_TRIAL_REFUSAL entry from backend-error.ts -> the first line has no reason, fails.
+  it("a walk stopped by a Trial measuring the power plan names it at record 1, never after a record was undone", async () => {
+    const PLAN = BACKEND_SENTENCES.find((s) => s.rust === "PLAN_CLASS_TRIAL_REFUSAL")!;
+    const first = await runSettingWalk(rows, async (id) => {
+      if (id === "g3") throw PLAN.text;
+    });
+    expect(walkStopMessage(first, "Game Mode", t)).toContain("app.backendErrors.planTrialMeasuring");
+    const second = await runSettingWalk(rows, async (id) => {
+      if (id === "g2") throw PLAN.text;
+    });
+    expect(walkStopMessage(second, "Game Mode", t)).not.toContain("app.backendErrors.planTrialMeasuring");
+  });
+
   // u13. Break check: drop the dispatch -> no event after an unrecorded run, fails.
   it("announces a ledger change after a run in which a record ran but no write announced it", async () => {
     let events = 0;

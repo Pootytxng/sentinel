@@ -91,8 +91,8 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   },
   // C6: the fixed refusals an undo meets in front of the audited one (experiment::rollback_change →
   // gaming_orchestrator::plain_change_gate), so a stopped undo walk can say why in the user's language.
-  // Consts in gaming_orchestrator.rs. The Trial/benchmark plan-class refusal carries the setting's title,
-  // so it is not a fixed sentence and is not mapped: an unmapped reason is never shown.
+  // Consts in gaming_orchestrator.rs. C8: the Trial/benchmark plan-class refusal is now three fixed sentences
+  // (experiment.rs PLAN_CLASS_*), mapped below; it no longer carries the setting's title.
   {
     rust: "SESSION_OP_BUSY_REFUSAL",
     text: "Compy is still finishing another change or a Gaming Mode start (if a Windows permission prompt is open, answer or cancel it) — give it a second and try again",
@@ -122,6 +122,25 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     rust: "RESTORE_IN_FLIGHT_REFUSAL",
     text: "Gaming Mode is putting its changes back right now (if a Windows permission prompt is open, answer or cancel it). Try again when it has finished. Nothing was changed.",
     key: "app.backendErrors.gmRestoreInFlight",
+  },
+  // C8: an apply, undo or restore in the power-plan class while a Trial or the benchmark measures the other
+  // half (experiment::plan_class_hold_check / held_by_trial_refusal / benchmark_trial::bench_held_refusal).
+  // Consts in experiment.rs. Each refuses before anything runs; an undo walk shows the reason only when no
+  // record was undone in the run (C6 F3), so "Nothing was changed." is never said after one was.
+  {
+    rust: "PLAN_CLASS_TRIAL_REFUSAL",
+    text: "The power plan or one of its settings is being measured by a Trial right now, and this change writes to the same power plan, so Compy won't make it during the measurement. Let it finish first. Nothing was changed.",
+    key: "app.backendErrors.planTrialMeasuring",
+  },
+  {
+    rust: "PLAN_CLASS_BENCH_REFUSAL",
+    text: "The power plan or one of its settings is being measured by the benchmark right now, and this change writes to the same power plan, so Compy won't make it during the measurement. Let it finish, or cancel it, first. Nothing was changed.",
+    key: "app.backendErrors.planBenchMeasuring",
+  },
+  {
+    rust: "PLAN_CLASS_INTERRUPTED_REFUSAL",
+    text: "An earlier Trial start on the power plan or one of its settings was interrupted and isn't resolved yet. This change writes to the same power plan, so Compy won't make it now. Check Test → Applied & history, then try again. Nothing was changed.",
+    key: "app.backendErrors.planTrialInterrupted",
   },
 ];
 

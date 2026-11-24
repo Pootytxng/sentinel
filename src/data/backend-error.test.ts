@@ -10,7 +10,7 @@ import { BACKEND_SENTENCES, backendSentenceKey, localizeBackendText } from "./ba
 
 // A Rust string read as Rust reads it: a `\` at a line end drops the newline and the next line's leading
 // whitespace, and `\"` is a quote. The match below is still byte-equal to the whole const.
-const rust = ["actions.rs", "recommendations.rs", "gaming_orchestrator.rs"]
+const rust = ["actions.rs", "recommendations.rs", "gaming_orchestrator.rs", "experiment.rs"]
   .map((f) => readFileSync(join("src-tauri", "src", f), "utf8"))
   .join("\n")
   .replace(/\\\r?\n\s*/g, "");
@@ -25,7 +25,7 @@ describe("backend-error: the backend's refusal sentences", () => {
   it("each TS sentence equals its Rust const", () => {
     for (const s of BACKEND_SENTENCES) {
       const m = rustConst(s.rust);
-      expect(m, `${s.rust} not found in actions.rs / recommendations.rs / gaming_orchestrator.rs`).not.toBeNull();
+      expect(m, `${s.rust} not found in actions.rs / recommendations.rs / gaming_orchestrator.rs / experiment.rs`).not.toBeNull();
       expect(s.text, s.rust).toBe(m);
     }
   });

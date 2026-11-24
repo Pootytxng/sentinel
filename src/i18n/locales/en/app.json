@@ -84,6 +84,9 @@
     "gmLeftoverHoldsPlan": "A Gaming Mode session that didn't finish putting its changes back still holds your power plan, and this setting belongs to the power plan. Finish that session first in Gaming Mode (\"Finish the last Gaming Mode session\"). Nothing was changed.",
     "gmLeftoverHoldsSetting": "A Gaming Mode session that didn't finish putting its changes back holds this setting, and puts it back when it's finished. Finish it first in Gaming Mode (\"Finish the last Gaming Mode session\"). Nothing was changed.",
     "gmRestoreInFlight": "Gaming Mode is putting its changes back right now (if a Windows permission prompt is open, answer or cancel it). Try again when it has finished. Nothing was changed.",
+    "planTrialMeasuring": "The power plan or one of its settings is being measured by a Trial right now, and this change writes to the same power plan, so Compy won't make it during the measurement. Let it finish first. Nothing was changed.",
+    "planBenchMeasuring": "The power plan or one of its settings is being measured by the benchmark right now, and this change writes to the same power plan, so Compy won't make it during the measurement. Let it finish, or cancel it, first. Nothing was changed.",
+    "planTrialInterrupted": "An earlier Trial start on the power plan or one of its settings was interrupted and isn't resolved yet. This change writes to the same power plan, so Compy won't make it now. Check Test → Applied & history, then try again. Nothing was changed.",
     "unmapped": "Compy couldn't finish this. Details: {{detail}}",
     "unmappedNoDetail": "Compy couldn't finish this."
   },
