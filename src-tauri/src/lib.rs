@@ -158,6 +158,38 @@ pub fn run_elevated_helper_argv(rest: &[String]) -> i32 {
     }
 }
 
+/// A8 (plan a5 v4 §4): the TYPED elevated helper entry (`compy.exe --run-elevated-op <hex JSON> [--pipe <name>
+/// --parent-pid <pid>]`): the request is parsed and checked whole, the helper-side reads run, and only then the one
+/// script composed from the closed set (`elevated_ops`) runs through [`run_helper_script`]. Compiled ONLY with the
+/// `elevated-op-entry` cargo feature until Slice 2 moves the callers; no normal, release or installer build
+/// enables it, so a default build has no such entry (pinned in elevated_ops.rs's tests).
+#[cfg(feature = "elevated-op-entry")]
+pub fn run_elevated_op_argv(rest: &[String]) -> i32 {
+    elevated_ops::helper_argv(rest)
+}
+
+/// A8: the helper's PowerShell run for the typed entry: the same pieces as [`run_elevated_helper`]'s run (the
+/// cleared-environment `elevated_powershell_command`, the output relay, `helper_exit_code`), with no ticket (the
+/// typed entry composes its own script from a checked request). `run_elevated_helper` itself is unchanged.
+#[cfg_attr(not(feature = "elevated-op-entry"), allow(dead_code))]
+pub(crate) fn run_helper_script<W: std::io::Write + Send + 'static>(command: &str, pipe: Option<W>) -> i32 {
+    let mut c = elevated_powershell_command(command);
+    if pipe.is_some() {
+        c.stdout(std::process::Stdio::piped());
+    }
+    match c.spawn() {
+        Ok(mut child) => {
+            let relay = pipe.zip(child.stdout.take()).map(|(p, out)| std::thread::spawn(move || relay_output(out, p)));
+            let waited = child.wait();
+            if let Some(r) = relay {
+                let _ = r.join();
+            }
+            helper_exit_code(Started::Ran(waited))
+        }
+        Err(_) => helper_exit_code(Started::NeverStarted),
+    }
+}
+
 /// Helper side (A5 Part A): copy PowerShell's output to the app's pipe; once a write fails (the app closed
 /// the pipe), read the rest and discard it, so the child never blocks on a full output pipe. The app cuts
 /// lines and caps the total; this side only moves bytes.

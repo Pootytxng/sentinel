@@ -15,6 +15,7 @@
 #![cfg_attr(not(feature = "elevated-op-entry"), allow(dead_code))]
 
 use serde::{Deserialize, Deserializer, Serialize};
+use std::io::Write as _;
 
 use crate::actions::{self, KnownBloatTask, KnownService};
 
@@ -664,4 +665,215 @@ pub(crate) fn eee_pick_disable(listing: &EeeListing, t: &EeeTarget) -> Result<(S
 fn eee_script(set: &[(String, String, String)]) -> Result<String, Refused> {
     let targets: Vec<(&str, &str, &str)> = set.iter().map(|(g, k, v)| (g.as_str(), k.as_str(), v.as_str())).collect();
     actions::build_eee_set_by_instance_script(&targets).map_err(|_| Refused::NoMatch)
+}
+
+// ── The request and the helper entry (plan v4 §2-§3) ────────────────────────────────────────────────
+
+/// How the helper wraps the request's ops: one op run alone (today's `run_elevated_powershell`), or a batch of
+/// items each with its own receipt line (today's `compose_batch_script` over the results pipe).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Wrapper {
+    Single,
+    Batch,
+}
+
+/// One item of a request: its receipt id and its ops.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RequestItem {
+    pub(crate) id: ItemId,
+    pub(crate) ops: Vec<ElevatedOp>,
+}
+
+/// What the app asks the helper to do. Travels hex-encoded JSON in argv; checked whole before anything runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ElevatedRequest {
+    pub(crate) v: u32,
+    pub(crate) nonce: Nonce,
+    pub(crate) wrapper: Wrapper,
+    pub(crate) items: Vec<RequestItem>,
+}
+
+impl ElevatedRequest {
+    /// The request-level shape (everything a field's own grammar cannot say). Malformed = `Refused::Request`.
+    pub(crate) fn validate(&self) -> Result<(), Refused> {
+        let shape_ok = self.v == REQUEST_VERSION
+            && (1..=MAX_ITEMS).contains(&self.items.len())
+            && self.items.iter().all(|i| (1..=MAX_OPS_PER_ITEM).contains(&i.ops.len()));
+        if !shape_ok {
+            return Err(Refused::Request);
+        }
+        let mut ids: Vec<&str> = self.items.iter().map(|i| i.id.as_str()).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        if ids.len() != self.items.len() {
+            return Err(Refused::Request); // two items with one id would share a receipt
+        }
+        for op in self.items.iter().flat_map(|i| &i.ops) {
+            op.validate()?;
+        }
+        match self.wrapper {
+            Wrapper::Single if self.items.len() == 1 && self.items[0].ops.len() == 1 => Ok(()),
+            Wrapper::Batch if self.items.iter().flat_map(|i| &i.ops).all(ElevatedOp::is_batchable) => Ok(()),
+            _ => Err(Refused::Request),
+        }
+    }
+
+    /// Whether the helper must have the app's results pipe to run this request.
+    pub(crate) fn needs_pipe(&self) -> bool {
+        self.wrapper == Wrapper::Batch || self.items.iter().flat_map(|i| &i.ops).any(ElevatedOp::needs_pipe)
+    }
+}
+
+/// PURE: the argv hex -> a validated request. Every failure is `Refused::Request`; never panics on any input.
+pub(crate) fn parse_request_hex(hex: &str) -> Result<ElevatedRequest, Refused> {
+    if hex.is_empty() || hex.len() > MAX_HEX_LEN {
+        return Err(Refused::Request);
+    }
+    let bytes = actions::from_hex(hex).ok_or(Refused::Request)?;
+    let text = String::from_utf8(bytes).map_err(|_| Refused::Request)?;
+    let req: ElevatedRequest = serde_json::from_str(&text).map_err(|_| Refused::Request)?;
+    req.validate()?;
+    Ok(req)
+}
+
+/// Where the helper writes its own lines and PowerShell's relayed output: the app's results pipe.
+pub(crate) type PipeOut = Box<dyn std::io::Write + Send>;
+
+/// The helper's effects: its reads (above) and the ONE mutating PowerShell run of a request.
+pub(crate) trait HelperEffects: HelperReads {
+    /// Run `script` elevated (the helper's existing runner: cleared environment, output relayed to `pipe`) and
+    /// return the helper's exit code.
+    fn run(&mut self, script: &str, pipe: Option<PipeOut>) -> i32;
+}
+
+/// Production effects: reads through `sys_exe::elevated_command` (the helper's cleared, pinned environment, never
+/// the user's), bounded by `QUERY_READ_LIMIT`; the run through lib.rs's `run_helper_script`.
+pub(crate) struct LiveEffects;
+
+impl HelperReads for LiveEffects {
+    fn read(&mut self, _kind: ReadKind, script: &str) -> Option<std::process::Output> {
+        let mut cmd = crate::sys_exe::elevated_command(crate::sys_exe::SysTool::PowerShell);
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+        actions::output_within(cmd, actions::QUERY_READ_LIMIT)
+    }
+}
+
+impl HelperEffects for LiveEffects {
+    fn run(&mut self, script: &str, pipe: Option<PipeOut>) -> i32 {
+        crate::run_helper_script(script, pipe)
+    }
+}
+
+/// Run a validated request: compose every op (each helper-side read finishes here), then the ONE mutating run.
+/// Single: a refused op exits with its sentinel and nothing runs. Batch: a refused item writes its own
+/// `<nonce>:<id>:fail` line (nothing was changed for it) and the other items run; if none is left, the helper
+/// writes `<nonce>:end` and starts no PowerShell. A malformed request never gets here.
+pub(crate) fn run_request(req: &ElevatedRequest, pipe: Option<PipeOut>, fx: &mut dyn HelperEffects) -> i32 {
+    let refused = |r: Refused| match r {
+        Refused::Request => actions::HELPER_REQUEST_REFUSED,
+        Refused::NoMatch => actions::HELPER_SAVED_VALUE_NO_MATCH,
+    };
+    if req.needs_pipe() && pipe.is_none() {
+        return actions::HELPER_REQUEST_REFUSED;
+    }
+    match req.wrapper {
+        Wrapper::Single => {
+            let Some(op) = req.items.first().and_then(|i| i.ops.first()) else {
+                return actions::HELPER_REQUEST_REFUSED;
+            };
+            match op.script(&req.nonce, &mut *fx) {
+                Ok(script) => fx.run(&actions::with_error_action_stop(&script), pipe),
+                Err(r) => refused(r),
+            }
+        }
+        Wrapper::Batch => {
+            let Some(mut pipe) = pipe else {
+                return actions::HELPER_REQUEST_REFUSED;
+            };
+            let mut runnable: Vec<(String, Vec<String>)> = Vec::new();
+            let mut failed: Vec<&str> = Vec::new();
+            for item in &req.items {
+                let mut scripts = Vec::with_capacity(item.ops.len());
+                let mut no_match = false;
+                for op in &item.ops {
+                    match op.script(&req.nonce, &mut *fx) {
+                        Ok(s) => scripts.push(s),
+                        Err(Refused::NoMatch) => {
+                            no_match = true;
+                            break;
+                        }
+                        Err(Refused::Request) => return actions::HELPER_REQUEST_REFUSED,
+                    }
+                }
+                if no_match {
+                    failed.push(item.id.as_str());
+                } else {
+                    runnable.push((item.id.as_str().to_string(), scripts));
+                }
+            }
+            // Composed (and refused) whole before a line is written or anything runs.
+            let script = if runnable.is_empty() {
+                None
+            } else {
+                match actions::compose_batch_script(&runnable, req.nonce.as_str()) {
+                    Ok(s) => Some(s),
+                    Err(_) => return actions::HELPER_REQUEST_REFUSED,
+                }
+            };
+            let nonce = req.nonce.as_str();
+            for id in failed {
+                let _ = writeln!(pipe, "{nonce}:{id}:fail");
+            }
+            match script {
+                Some(s) => fx.run(&actions::with_error_action_stop(&s), Some(pipe)),
+                None => {
+                    let _ = writeln!(pipe, "{nonce}:end");
+                    0
+                }
+            }
+        }
+    }
+}
+
+/// The typed helper entry's argument forms (everything after its flag): `<hex>`, or
+/// `<hex> --pipe <name> --parent-pid <pid>`. Order: parse and check the whole request (pure), then connect the
+/// results pipe, then compose (reads) and run. Anything malformed refuses with `HELPER_REQUEST_REFUSED` before any
+/// read, any pipe and any PowerShell; a pipe that cannot be confirmed refuses with `HELPER_CHANNEL_REFUSED`.
+pub(crate) fn helper_argv(rest: &[String]) -> i32 {
+    helper_argv_with(rest, &mut LiveEffects, &|name, parent| {
+        crate::fps_pipe::connect_to_parent(name, parent).map(|f| Box::new(f) as PipeOut).map_err(|_| ())
+    })
+}
+
+/// [`helper_argv`] with its effects and its pipe connection passed in (tests pass fakes).
+pub(crate) fn helper_argv_with(
+    rest: &[String],
+    fx: &mut dyn HelperEffects,
+    connect: &dyn Fn(&str, u32) -> Result<PipeOut, ()>,
+) -> i32 {
+    let (hex, channel) = match rest {
+        [hex] => (hex, None),
+        [hex, p, name, q, pid] if p == "--pipe" && q == "--parent-pid" => match pid.parse::<u32>() {
+            Ok(pid) => (hex, Some((name.as_str(), pid))),
+            Err(_) => return actions::HELPER_REQUEST_REFUSED,
+        },
+        _ => return actions::HELPER_REQUEST_REFUSED,
+    };
+    let Ok(req) = parse_request_hex(hex) else {
+        return actions::HELPER_REQUEST_REFUSED;
+    };
+    if req.needs_pipe() && channel.is_none() {
+        return actions::HELPER_REQUEST_REFUSED;
+    }
+    let pipe = match channel {
+        Some((name, parent)) => match connect(name, parent) {
+            Ok(p) => Some(p),
+            Err(()) => return actions::HELPER_CHANNEL_REFUSED,
+        },
+        None => None,
+    };
+    run_request(&req, pipe, fx)
 }

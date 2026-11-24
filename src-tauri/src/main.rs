@@ -14,6 +14,13 @@ fn main() {
         std::process::exit(compy_lib::run_elevated_helper_argv(&argv[pos + 1..]));
     }
 
+    // A8 (plan a5 v4, Slice 1): the typed elevated helper entry, compiled ONLY with the `elevated-op-entry`
+    // cargo feature (off in every normal build) until Slice 2 moves the callers. See compy_lib::run_elevated_op_argv.
+    #[cfg(feature = "elevated-op-entry")]
+    if let Some(pos) = argv.iter().position(|a| a == "--run-elevated-op") {
+        std::process::exit(compy_lib::run_elevated_op_argv(&argv[pos + 1..]));
+    }
+
     // Elevated helper mode: when launched with --fps-capture, run the ETW
     // present-event consumer instead of the Tauri app. Compy spawns itself
     // with this flag (elevated) to capture FPS / frametime. See fps.rs.
