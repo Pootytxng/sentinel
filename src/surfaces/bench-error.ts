@@ -19,21 +19,11 @@ export function trialErrorText(error: string, t: TFunction): string {
 }
 
 // D7: the live trial's progress line. While it runs, benchmark_trial.rs sets `status` to one of the fixed phase
-// literals below, or to "{label}: window {got}/{n}" (collect_game_windows) with `label` one of WINDOW_LABELS. The card
-// already prints `collected/target` beside it, so a window status maps to its phase alone (no number is parsed out of
-// the English). Anything else ("No frames." while the guard rolls back, a status a later build adds) is the fixed
-// "Working…" line, never the raw English. bench-status-words.test.ts pins every literal here to the Rust source.
-export const TRIAL_PHASES: ReadonlyArray<{ status: string; key: string }> = [
-  { status: "Starting…", key: "gaming.benchmark.trialStatus.starting" },
-  { status: "Measuring baseline (change off)…", key: "gaming.benchmark.trialStatus.baselineChangeOff" },
-  { status: "Measuring baseline (stack off)…", key: "gaming.benchmark.trialStatus.baselineStackOff" },
-  { status: "Applying the change…", key: "gaming.benchmark.trialStatus.applyingChange" },
-  { status: "Applying the starter stack…", key: "gaming.benchmark.trialStatus.applyingStack" },
-  { status: "Letting it settle…", key: "gaming.benchmark.trialStatus.settling" },
-  { status: "Measuring with the change…", key: "gaming.benchmark.trialStatus.measuringChangeOn" },
-  { status: "Measuring with the stack on…", key: "gaming.benchmark.trialStatus.measuringStackOn" },
-  { status: "Rolling the change back…", key: "gaming.benchmark.trialStatus.rollingBackChange" },
-];
+// literals in the switch below, or to "{label}: window {got}/{n}" (collect_game_windows) with `label` one of
+// WINDOW_LABELS. The card already prints `collected/target` beside it, so a window status maps to its phase alone (no
+// number is parsed out of the English). Anything else ("No frames." while the guard rolls back, a status a later build
+// adds) is the fixed "Working…" line, never the raw English. D7 r1 F3: every key is a literal inside its own t() (no
+// key from a table); bench-status-words.test.ts holds the status list that pins each literal to the Rust source.
 
 /** The labels benchmark_trial.rs passes to collect_windows / collect_game_windows ("{label}: window {got}/{n}"). */
 export const WINDOW_LABELS = ["Calibrating", "Baseline", "Settling", "Treatment"] as const;
@@ -43,8 +33,26 @@ export const STACK_ROLLBACK_HEAD = "Rolling back the ";
 export const STACK_ROLLBACK_TAIL = "-tweak stack…";
 
 export function trialStatusText(status: string, kind: string, t: TFunction): string {
-  const phase = TRIAL_PHASES.find((p) => p.status === status);
-  if (phase) return t(phase.key);
+  switch (status) {
+    case "Starting…":
+      return t("gaming.benchmark.trialStatus.starting");
+    case "Measuring baseline (change off)…":
+      return t("gaming.benchmark.trialStatus.baselineChangeOff");
+    case "Measuring baseline (stack off)…":
+      return t("gaming.benchmark.trialStatus.baselineStackOff");
+    case "Applying the change…":
+      return t("gaming.benchmark.trialStatus.applyingChange");
+    case "Applying the starter stack…":
+      return t("gaming.benchmark.trialStatus.applyingStack");
+    case "Letting it settle…":
+      return t("gaming.benchmark.trialStatus.settling");
+    case "Measuring with the change…":
+      return t("gaming.benchmark.trialStatus.measuringChangeOn");
+    case "Measuring with the stack on…":
+      return t("gaming.benchmark.trialStatus.measuringStackOn");
+    case "Rolling the change back…":
+      return t("gaming.benchmark.trialStatus.rollingBackChange");
+  }
   if (status.startsWith(STACK_ROLLBACK_HEAD) && status.endsWith(STACK_ROLLBACK_TAIL))
     return t("gaming.benchmark.trialStatus.rollingBackStack");
   const stack = kind === "stack";

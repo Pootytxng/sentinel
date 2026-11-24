@@ -3,13 +3,21 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import en from "../i18n/locales/en/gaming.json";
 import zh from "../i18n/locales/zh-CN/gaming.json";
-import {
-  STACK_ROLLBACK_HEAD,
-  STACK_ROLLBACK_TAIL,
-  TRIAL_PHASES,
-  WINDOW_LABELS,
-  trialStatusText,
-} from "./bench-error";
+import { STACK_ROLLBACK_HEAD, STACK_ROLLBACK_TAIL, WINDOW_LABELS, trialStatusText } from "./bench-error";
+
+// D7 r1 F3: the pin list lives HERE, not in bench-error.ts, so no key ever reaches t() from a table: trialStatusText is a
+// switch with a literal t("…") per status, and this list is only what the test compares it with.
+const TRIAL_PHASES: ReadonlyArray<{ status: string; key: string }> = [
+  { status: "Starting…", key: "gaming.benchmark.trialStatus.starting" },
+  { status: "Measuring baseline (change off)…", key: "gaming.benchmark.trialStatus.baselineChangeOff" },
+  { status: "Measuring baseline (stack off)…", key: "gaming.benchmark.trialStatus.baselineStackOff" },
+  { status: "Applying the change…", key: "gaming.benchmark.trialStatus.applyingChange" },
+  { status: "Applying the starter stack…", key: "gaming.benchmark.trialStatus.applyingStack" },
+  { status: "Letting it settle…", key: "gaming.benchmark.trialStatus.settling" },
+  { status: "Measuring with the change…", key: "gaming.benchmark.trialStatus.measuringChangeOn" },
+  { status: "Measuring with the stack on…", key: "gaming.benchmark.trialStatus.measuringStackOn" },
+  { status: "Rolling the change back…", key: "gaming.benchmark.trialStatus.rollingBackChange" },
+];
 
 // D7: the Benchmark card's live trial line printed benchmark_trial.rs's `status` raw, so a zh-CN screen read
 // "Measuring baseline (change off)…" / "Baseline: window 3/20" in English. trialStatusText maps each fixed phase (and
@@ -57,6 +65,15 @@ describe("the Benchmark card's live trial line is said in the user's language (D
     expect(trialStatusText("Treatment: window 9/20", "tweak", t)).toBe("T(gaming.benchmark.trialStatus.measuringChangeOn)");
     expect(trialStatusText("Treatment: window 9/20", "stack", t)).toBe("T(gaming.benchmark.trialStatus.measuringStackOn)");
     expect(trialStatusText("Rolling back the 4-tweak stack…", "stack", t)).toBe("T(gaming.benchmark.trialStatus.rollingBackStack)");
+  });
+
+  // D7 r1 F3. Break check: write `return t(phase.key)` (any t() whose first argument is not a string literal) back
+  // into bench-error.ts -> fails.
+  it("bench-error.ts passes only literal keys to t()", () => {
+    const src = readFileSync(join("src", "surfaces", "bench-error.ts"), "utf8").replace(/\/\/.*$/gm, "");
+    const calls = [...src.matchAll(/\bt\(\s*([^)]*)/g)].map((m) => m[1]);
+    expect(calls.length).toBeGreaterThan(10);
+    expect(calls.filter((a) => !/^"[a-zA-Z.]+"/.test(a))).toEqual([]);
   });
 
   it("an unknown status is the fixed line, never the English", () => {
