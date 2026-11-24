@@ -4098,6 +4098,58 @@ mod recovery_f3 {
         // not "after" the clear ones since the undo, and the two clear ones are the whole story: no line.
         let reapplied = vec![record("2026-10-06T12:00:00Z", Some(B10B_UNDONE)), record("2026-10-12T00:00:00Z", None)];
         assert!(undone_lines(&undo_case(after(), reapplied)).is_empty());
+        // Review r1 gap: later = 2 (two unjudged sessions after the two clear ones). Break check: count only the first
+        // later session -> "1", fails.
+        let mut short2 = short();
+        short2.started_at = at_day(13, 10);
+        let d = undo_case(vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3), short(), short2], one_undone());
+        let lines = undone_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-clear-unjudged"], "{lines:?}");
+        assert_eq!((lines[0].args["count"].as_str(), lines[0].args["later"].as_str()), ("2", "2"));
+    }
+
+    /// b12 review r1 F2: the recovery outcome reads every session of the game, the re-applied ones too. Undo, two clear,
+    /// one unjudged, re-apply of the same setting, two clear: the card is Recovered (its two newest judged sessions are
+    /// clear), so "can't say it is back yet" would contradict it, and so would clear-once's "One session so far" (undo,
+    /// one clear, re-apply, one clear). Neither line is said once a judged session started at or after the re-apply.
+    /// Break check: drop the `Since::Clear { .. } if judged_after_reapply => None` arm -> both sequences give a line,
+    /// fails. Control: with only an UNJUDGED session after the re-apply the clear-unjudged line still shows.
+    #[test]
+    fn b12_no_clear_follow_through_line_once_a_judged_session_follows_a_reapply() {
+        let short = |day: u32| {
+            let mut s = facts(&at_day(day, 10), 30, 30, 100.0, 50.0);
+            s.compy_changes = Some(3);
+            s
+        };
+        let reapplied = |at: &str| vec![record("2026-10-06T12:00:00Z", Some(B10B_UNDONE)), record(at, None)];
+        let after = vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3), short(12), day_count(13, 50.0, 3), day_count(14, 50.0, 3)];
+        let d = undo_case(after, reapplied(&at_day(12, 12)));
+        assert_eq!(d.state, DiagnosisState::Recovered, "the outcome reads the re-applied sessions too");
+        assert!(undone_lines(&d).is_empty(), "{:?}", undone_lines(&d));
+        // clear-once: undo, one clear, re-apply, one clear.
+        let d = undo_case(vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3)], reapplied(&at_day(11, 0)));
+        assert_eq!(d.state, DiagnosisState::Recovered);
+        assert!(undone_lines(&d).is_empty(), "{:?}", undone_lines(&d));
+        // Control: only an unjudged session after the re-apply: the clear-unjudged line stands (later = 1, the one
+        // before the re-apply).
+        let after = vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3), short(12), short(13)];
+        let d = undo_case(after, reapplied(&at_day(12, 12)));
+        let lines = undone_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-clear-unjudged"], "{lines:?}");
+        assert_eq!(lines[0].args["later"], "1");
+    }
+
+    /// b12 review r1 gap: a row that may hold two games (`mixed`) is dropped by `game_rows` before judging, so after
+    /// two clear sessions it is neither "later" nor counted: no clear-unjudged line, and the two clear sessions are the
+    /// recovery's answer. Break check: keep mixed rows in `game_rows` -> a line (or a different count), fails.
+    #[test]
+    fn b12_a_mixed_row_after_two_clear_sessions_gives_no_follow_through_line() {
+        let mut mixed = day_count(12, 50.0, 3);
+        mixed.duration_secs = 30;
+        mixed.samples = 30;
+        mixed.mixed = true;
+        let d = undo_case(vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3), mixed], one_undone());
+        assert!(undone_lines(&d).is_empty(), "{:?}", undone_lines(&d));
     }
 
     /// b12 item 3: the between line carries how many sessions were JUDGED since the undo (unjudged ones are not

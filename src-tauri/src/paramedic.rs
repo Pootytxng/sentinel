@@ -2993,7 +2993,16 @@ fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
     // Review r1 FIX 1: a later apply of the same setting (same `rec_id`) puts the change back on, so sessions that
     // started at or after it say nothing about the undo: "since" ends there (exclusive), as drift ends at off_again_at.
     let reapplied = c.inp.compy_records.iter().filter(|r| r.rec_id == rec.rec_id && r.applied > undone).map(|r| r.applied).min();
+    // b12 review r1 F2: "since the undo" stops at the re-apply, but the recovery outcome reads EVERY session of the game
+    // (recovery::outcome_within via recovery_answer), the re-applied ones too. Once a judged session started at or after
+    // the re-apply, the card can be Recovered (its two newest judged sessions clear) while clear-once says "One session
+    // so far" or clear-unjudged says "can't say it is back yet". Those two lines are said only while no judged session
+    // of this game started at or after the re-apply.
+    let judged_after_reapply = reapplied.is_some_and(|u| {
+        (0..c.sess.len()).any(|i| c.judged[i].verdict != Verdict::Unjudged && c.sess[i].start().is_some_and(|t| t >= u))
+    });
     match recovery::since_restore(c, undone, reapplied) {
+        recovery::Since::Clear { .. } if judged_after_reapply => None,
         recovery::Since::Nothing => None,
         recovery::Since::Unjudged { count } => {
             Some(ev(EvidenceKind::Unknown, "compy-undone-unread", "sessions", false, &with(&[("count", count.to_string())])))
