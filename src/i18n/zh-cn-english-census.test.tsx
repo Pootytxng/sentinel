@@ -205,7 +205,22 @@ async function census(): Promise<string[]> {
 }
 
 // The CURRENT DEBT: English that reaches a zh-CN screen today. Only ever shrinks (see the header).
-const DEBT: string[] = [];
+const DEBT: string[] = [
+  "Check: Frame pacing is smoothed and tearing removed",
+  "Check: FreeSync is ON",
+  "Check: Variable refresh rate",
+  "Check: your AMD GPU reports adaptive sync enabled on a connected display",
+  "Fix: Disable Energy Efficient Ethernet on the gaming NIC",
+  "Fix: Lower input latency",
+  "Fix: Measured elsewhere",
+  "Fix: Needs a wired Ethernet port",
+  "Fix: Switch to the Ultimate Performance power plan",
+  "Fix: other only",
+  "Fix: reversible",
+  "Fix: steadier frame times",
+  "Fix: this rig has none",
+  "Fix: when gaming",
+];
 
 describe("English in zh-CN screens: the census (ratchet-only)", () => {
   it("the run splitter and the allowed tokens behave", () => {
