@@ -235,7 +235,9 @@ pub(crate) enum PowerSetting {
 impl PowerSetting {
     /// The closed setting a saved `(subgroup, setting)` pair names (case-insensitive, as powercfg prints GUIDs).
     /// Any other pair: `NoMatch`, so the app refuses that row's undo with the plan's §5 sentence (the change stays
-    /// in the Trust Ledger) and never builds a request for it (Slice 2 caller).
+    /// in the Trust Ledger) and never builds a request for it (Slice 2 caller; until then only tests call it,
+    /// hence the allowance in a feature build).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn from_ids(subgroup: &str, setting: &str) -> Result<Self, Refused> {
         [PowerSetting::UsbSelectiveSuspend, PowerSetting::PcieAspm]
             .into_iter()
