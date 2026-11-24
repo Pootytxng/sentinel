@@ -515,6 +515,7 @@
     "compyUndoneUnread_other": "“{{title}}” was undone on {{undone}}. {{count}} {{game}} sessions have been recorded since, but each was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge. Play {{game}} once the way you usually do, then press Something's wrong again.",
     "compyUndoneBetween_one": "“{{title}}” was undone on {{undone}}. One {{game}} session since was measured well enough to read, and it wasn't clearly in its usual range, so Compy can't tell yet. Play {{game}} once the way you usually do, then press Something's wrong again.",
     "compyUndoneBetween_other": "“{{title}}” was undone on {{undone}}. The {{game}} sessions since weren't clearly in its usual range, so Compy can't tell yet. Play {{game}} once the way you usually do, then press Something's wrong again.",
+    "compyUndoneReapplied": "“{{title}}” was undone on {{undone}}, then applied again on {{reapplied}}. Compy doesn't read the sessions from then on as following the undo.",
     "recoveredAfterDriverBack": "It recovered after the driver went back to {{version}}, the version from before ({{when}}).",
     "recoveredAfterDriverBackSeen": "It recovered after the driver went back to {{version}}, the version from before (Compy first saw it on {{when}}).",
     "loadCpu_one": "At their busiest (the top tenth of the session), other programs used about {{rough}}% of your processor; in normal sessions about {{base}}%.",

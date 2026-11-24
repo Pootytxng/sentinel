@@ -267,6 +267,31 @@ describe("B10: Undo this Compy change on the card", () => {
     }
   });
 
+  // b12 r2 (R2-1): the same setting was applied again after the undo. The line says both ledger times, and the older
+  // "Undone on ... play once" row (which would speak of a setting that is on again) is not shown. Break checks: drop
+  // the compy-undone-reapplied case from evidenceLine -> the en text is missing, fails; drop compyUndoneReapplied from
+  // zh-CN -> en text, fails.
+  it("re-applied after the undo: the dated line in en and zh, and no 'Undone on' row", async () => {
+    const REAPPLIED = "2026-11-23T10:15:00Z";
+    const zDayTime = (iso: string) => new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+    const f = compyFinding("possible");
+    const line = { kind: "known" as const, code: "compy-undone-reapplied", args: { title: GM, undone: UNDONE, reapplied: REAPPLIED }, against: false, source: "sessions" };
+    try {
+      await show([{ ...f, evidence: [...f.evidence, line] }], [undoneRec(), rec({ id: "gm-2", applied_at: REAPPLIED })]);
+      expect(document.body.textContent).toContain(
+        `“${GM}” was undone on ${dayTime(UNDONE)}, then applied again on ${dayTime(REAPPLIED)}. Compy doesn't read the sessions from then on as following the undo.`,
+      );
+      expect(screen.queryByTestId("paramedic-undo-compy-done")).toBeNull();
+      expect(document.body.textContent).not.toContain("Undone on");
+      await i18n.changeLanguage("zh-CN");
+      await waitFor(() =>
+        expect(document.body.textContent).toContain(`“${GM}”已于 ${zDayTime(UNDONE)} 撤销，之后又于 ${zDayTime(REAPPLIED)} 重新应用。从那时起的游戏，Compy 不会当作撤销之后的游戏来读。`),
+      );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   // b12 item 3: zh-CN has one plural form (other), so its between line must read right for ONE judged session: no
   // "几次" ("several"). Break check: put back "此后的几次游戏" in compyUndoneBetween_other -> fails.
   it("zh-CN: the between line for one judged session says no 'several'", async () => {

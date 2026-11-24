@@ -2983,7 +2983,9 @@ fn detect_compy_changes(c: &Ctx, out: &mut Out) {
 ///   is counted at most once;
 /// - `compy-undone-clear-unjudged` (Measured, b12): two or more clear sessions, then sessions Compy couldn't judge.
 ///   The recovery is "can't tell" then, so this row says it (as B4's `driver-back-clear-unjudged`); never a support;
-/// - `compy-undone-between` (Unknown): judgeable sessions since, none rough, not all clear.
+/// - `compy-undone-between` (Unknown): judgeable sessions since, none rough, not all clear;
+/// - `compy-undone-reapplied` (Known, b12 r2): the same setting was applied again after the undo and no line above
+///   stands (clear lines once a judged session followed the re-apply; unread / between once any session did).
 fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
     let mut inside = c.inp.compy_records.iter().filter(|r| c.compy_in_window(r.applied));
     let rec = inside.next()?;
@@ -3004,8 +3006,14 @@ fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
     let judged_after_reapply = reapplied.is_some_and(|u| {
         (0..c.sess.len()).any(|i| c.judged[i].verdict != Verdict::Unjudged && c.sess[i].start().is_some_and(|t| t >= u))
     });
-    match recovery::since_restore(c, undone, reapplied) {
+    // b12 review r2 (R2-1): unread and between end in "Play once, then press again"; once any session of this game
+    // started at or after the re-apply, that next session is played with the change back on and can no longer give a
+    // reading about the undo, so those lines give way to compy-undone-reapplied (below). Rough stays: a dated rough
+    // session with the change off, true whatever came later, and it counts against.
+    let any_after_reapply = reapplied.is_some_and(|u| c.sess.iter().any(|s| s.start().is_some_and(|t| t >= u)));
+    let follow = match recovery::since_restore(c, undone, reapplied) {
         recovery::Since::Clear { .. } if judged_after_reapply => None,
+        recovery::Since::Unjudged { .. } | recovery::Since::Between { .. } if any_after_reapply => None,
         recovery::Since::Nothing => None,
         recovery::Since::Unjudged { count } => {
             Some(ev(EvidenceKind::Unknown, "compy-undone-unread", "sessions", false, &with(&[("count", count.to_string())])))
@@ -3040,7 +3048,12 @@ fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
         recovery::Since::Between { count } => {
             Some(ev(EvidenceKind::Unknown, "compy-undone-between", "sessions", false, &with(&[("count", count.to_string())])))
         }
-    }
+    };
+    // b12 review r2 (R2-1): the same setting was applied again after the undo and no follow-through line above stands.
+    // Without a compy-undone-* line the card would show B10's "Undone on ...: play once" row (compy-undo.ts never looks
+    // at a later apply) for a setting that is on again. This dated line (the ledger's own times) says so instead, and
+    // its prefix hides that row. Known, never against, no candidate flag.
+    follow.or_else(|| reapplied.map(|u| ev(EvidenceKind::Known, "compy-undone-reapplied", "sessions", false, &with(&[("reapplied", iso(u))]))))
 }
 
 enum PowerRead {

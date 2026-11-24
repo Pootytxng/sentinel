@@ -514,6 +514,10 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     case "compy-undone-between":
       // b12: `count` (the sessions judged since) picks "session" / "sessions"; the _other text prints no number.
       return t("paramedic.evidence.compyUndoneBetween", { title: a.title, undone: dates.dayTime(a.undone), game, count: Number(a.count ?? 2), ...RAW });
+    // b12 r2: the same setting was applied again after the undo; the ledger's own two times. Its compy-undone- prefix
+    // hides B10's "Undone on ... play once" row, which would speak of a setting that is on again.
+    case "compy-undone-reapplied":
+      return t("paramedic.evidence.compyUndoneReapplied", { title: a.title, undone: dates.dayTime(a.undone), reapplied: dates.dayTime(a.reapplied), ...RAW });
     case "drift-restored-none":
       return t("paramedic.evidence.driftRestoredNone", { game });
     case "drift-restored-unjudged":

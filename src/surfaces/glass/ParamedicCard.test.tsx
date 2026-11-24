@@ -3058,6 +3058,15 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     expect(text).toContain("The sessions since it was back on weren't clearly in Game A's usual range, so Compy can't tell yet.");
   });
 
+  // b12 review r2 gap: the zh-CN drift lines b12 changed, pinned word for word (zh uses only the _other form, and _one is
+  // the same sentence). Break check: put back "它重新开启之后的几次游戏" or "时间太短或只测量了一部分" -> fails.
+  it("zh-CN: the drift lines b12 changed say the same in Chinese", () => {
+    const zh = loadKeys("zh-CN").evidence as Record<string, string>;
+    expect(zh.driftRestoredBetween_other).toBe("它重新开启之后，{{game}} 测量充分的游戏并不明确在平时的范围内，所以 Compy 暂时还无法判断。");
+    expect(zh.driftRestoredUnjudged_other).toBe("自它重新开启以来，记录到 {{count}} 次 {{game}} 的游戏，但时间太短，或 Compy 没能测量到足够的部分，所以 Compy 没有做判断。");
+    for (const k of ["driftRestoredBetween", "driftRestoredUnjudged"]) expect(zh[`${k}_one`], k).toBe(zh[`${k}_other`]);
+  });
+
   it("two clear sessions: the recovery says it is consistent with the setting and does not prove it", async () => {
     const f = suspect([], { in_play: true, now: "points-to", now_evidence: [backLine] });
     const text = await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery({ kind: "points-to", id: "setting-drift" }) });

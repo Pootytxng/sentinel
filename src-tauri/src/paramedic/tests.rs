@@ -4110,9 +4110,10 @@ mod recovery_f3 {
         assert_eq!((a.confidence, a.in_play), (b.confidence, b.in_play), "said, never support");
         assert!(d.findings.iter().all(|f| f.confidence == Certainty::Possible), "nothing above Possible");
         // Re-applied (same setting) before the unjudged session: that session ran with the change back on, so it is
-        // not "after" the clear ones since the undo, and the two clear ones are the whole story: no line.
+        // not "after" the clear ones since the undo; no follow-through line stands, so (r2) the re-apply line says it.
         let reapplied = vec![record("2026-10-06T12:00:00Z", Some(B10B_UNDONE)), record("2026-10-12T00:00:00Z", None)];
-        assert!(undone_lines(&undo_case(after(), reapplied)).is_empty());
+        let d = undo_case(after(), reapplied);
+        assert_eq!(undone_lines(&d).iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-reapplied"]);
         // Review r1 gap: later = 2 (two unjudged sessions after the two clear ones). Break check: count only the first
         // later session -> "1", fails.
         let mut short2 = short();
@@ -4140,11 +4141,13 @@ mod recovery_f3 {
         let after = vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3), short(12), day_count(13, 50.0, 3), day_count(14, 50.0, 3)];
         let d = undo_case(after, reapplied(&at_day(12, 12)));
         assert_eq!(d.state, DiagnosisState::Recovered, "the outcome reads the re-applied sessions too");
-        assert!(undone_lines(&d).is_empty(), "{:?}", undone_lines(&d));
+        // r2: the clear line gives way to the re-apply line (exactly that one).
+        let codes = |d: &Diagnosis| undone_lines(d).iter().map(|e| e.code).collect::<Vec<_>>();
+        assert_eq!(codes(&d), ["compy-undone-reapplied"]);
         // clear-once: undo, one clear, re-apply, one clear.
         let d = undo_case(vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3)], reapplied(&at_day(11, 0)));
         assert_eq!(d.state, DiagnosisState::Recovered);
-        assert!(undone_lines(&d).is_empty(), "{:?}", undone_lines(&d));
+        assert_eq!(codes(&d), ["compy-undone-reapplied"]);
         // Control: only an unjudged session after the re-apply: the clear-unjudged line stands (later = 1, the one
         // before the re-apply).
         let after = vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3), short(12), short(13)];
@@ -4152,6 +4155,46 @@ mod recovery_f3 {
         let lines = undone_lines(&d);
         assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-clear-unjudged"], "{lines:?}");
         assert_eq!(lines[0].args["later"], "1");
+    }
+
+    /// b12 review r2 (R2-1): after a re-apply of the same setting, a line whose "play once" can no longer give a reading
+    /// about the undo gives way to compy-undone-reapplied, dated from the ledger (args title, undone, reapplied; Known,
+    /// never against). Cases: the non-Recovered path (undo, one clear, re-apply, one judged session not clear); unread
+    /// then a session after the re-apply; between then a session after the re-apply. Controls: a re-apply with NO
+    /// session after it keeps the original line (clear-once, unread, between). Break checks: drop the
+    /// `Unjudged | Between if any_after_reapply` arm -> the unread / between cases keep their old line, fails; drop the
+    /// `or_else` re-apply line -> the non-Recovered case gives no line, fails; count only judged sessions in
+    /// `any_after_reapply` -> the unread case (an unjudged session after the re-apply) keeps unread, fails.
+    #[test]
+    fn b12_after_a_reapply_a_line_that_cannot_follow_the_undo_gives_way_to_the_reapplied_line() {
+        let short = |day: u32| {
+            let mut s = facts(&at_day(day, 10), 30, 30, 100.0, 50.0);
+            s.compy_changes = Some(3);
+            s
+        };
+        let reapplied = |at: &str| vec![record("2026-10-06T12:00:00Z", Some(B10B_UNDONE)), record(at, None)];
+        let codes = |d: &Diagnosis| undone_lines(d).iter().map(|e| e.code).collect::<Vec<_>>();
+        // Non-Recovered: one clear, re-apply, one judged session that is not clear (ratio 0.42).
+        let d = undo_case(vec![day_count(10, 50.0, 3), day_count(11, 42.0, 3)], reapplied(&at_day(11, 0)));
+        assert_ne!(d.state, DiagnosisState::Recovered, "{:?}", d.state);
+        let lines = undone_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-reapplied"], "{lines:?}");
+        assert!(!lines[0].against && lines[0].kind == EvidenceKind::Known);
+        let keys: Vec<&str> = lines[0].args.keys().copied().collect();
+        assert_eq!(keys, ["reapplied", "title", "undone"]);
+        assert_eq!(lines[0].args["undone"], iso(utc(B10B_UNDONE)));
+        assert_eq!(lines[0].args["reapplied"], iso(utc(&at_day(11, 0))));
+        let without = undo_case(vec![day_count(10, 50.0, 3), day_count(11, 42.0, 3)], Vec::new());
+        let (a, b) = (finding_of(&d, "compy-change"), finding_of(&without, "compy-change"));
+        assert_eq!((a.confidence, a.in_play), (b.confidence, b.in_play), "said, never support");
+        // Unread, then a session (unjudged too) after the re-apply.
+        assert_eq!(codes(&undo_case(vec![short(10), short(11)], reapplied(&at_day(11, 0)))), ["compy-undone-reapplied"]);
+        // Between, then a session after the re-apply.
+        assert_eq!(codes(&undo_case(vec![day_count(10, 42.0, 3), short(11)], reapplied(&at_day(11, 0)))), ["compy-undone-reapplied"]);
+        // Controls: re-applied, but no session of the game started at or after it: the original lines stand.
+        assert_eq!(codes(&undo_case(vec![day_count(10, 50.0, 3)], reapplied(&at_day(12, 0)))), ["compy-undone-clear-once"]);
+        assert_eq!(codes(&undo_case(vec![short(10)], reapplied(&at_day(12, 0)))), ["compy-undone-unread"]);
+        assert_eq!(codes(&undo_case(vec![day_count(10, 42.0, 3)], reapplied(&at_day(12, 0)))), ["compy-undone-between"]);
     }
 
     /// b12 review r1 gap: a row that may hold two games (`mixed`) is dropped by `game_rows` before judging, so after
@@ -4243,9 +4286,9 @@ mod recovery_f3 {
     #[test]
     fn b10b_sessions_after_a_reapply_of_the_same_setting_are_not_since_the_undo() {
         let reapplied = |id: &str, at: &str| vec![record("2026-10-06T12:00:00Z", Some(B10B_UNDONE)), record_of(id, at, None)];
-        // Re-applied before the rough session: no line.
+        // Re-applied before the rough session: nothing follows the undo, so (b12 r2) only the re-apply line.
         let d = undo_case(vec![day_count(10, 30.0, 3)], reapplied("game-mode", &at_day(10, 0)));
-        assert!(undone_lines(&d).is_empty(), "{:?}", undone_lines(&d));
+        assert_eq!(undone_lines(&d).iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-reapplied"]);
         // A session between the undo and the re-apply still counts; the one after the re-apply does not (count 1).
         let d = undo_case(vec![day_count(10, 30.0, 3), day_count(11, 30.0, 3)], reapplied("game-mode", &at_day(11, 0)));
         let lines = undone_lines(&d);
