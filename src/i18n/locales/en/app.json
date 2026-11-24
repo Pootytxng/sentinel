@@ -111,7 +111,7 @@
     "benchStackRollbackFailed": "Measurement finished, but Compy tried to roll the changes back and one or more rollbacks failed, so Compy can't confirm they were all undone. Check them in Test → Applied & history and undo them there.",
     "benchStackRolledBackUnrecorded": "The changes were measured and rolled back, but Compy couldn't save some of those undos to its history, so Test → Applied & history may still list them as applied.",
     "benchLedgerUnreadBefore": "Compy couldn't read its change history before measuring, so it changed nothing. Try again when it can be read.",
-    "benchLedgerUnreadAfter": "The changes were applied, but Compy couldn't re-read its change history to roll them back automatically. Undo them in Test → Applied & history.",
+    "benchLedgerUnreadAfter": "Compy ran the apply, but couldn't re-read its change history to roll back what it applied automatically. Check Test → Applied & history and undo anything this run applied.",
     "powerSettingIdRefused": "This change's saved power plan setting isn't in the form Compy expects, so Compy didn't run the undo. The change stays in your Trust Ledger.",
     "powerPlanIdRefusedUndo": "This change's saved power plan isn't in the form Compy expects, so Compy didn't switch back to it. The change stays in your Trust Ledger.",
     "settingUnread": "Compy couldn't read this setting right now, so it can't say whether it is on or off.",

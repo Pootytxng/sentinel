@@ -271,7 +271,7 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   },
   {
     rust: "BENCH_LEDGER_UNREAD_AFTER",
-    text: "The changes were applied, but Compy couldn't re-read its change history to roll them back automatically. Undo them in Test → Applied & history.",
+    text: "Compy ran the apply, but couldn't re-read its change history to roll back what it applied automatically. Check Test → Applied & history and undo anything this run applied.",
     key: "app.backendErrors.benchLedgerUnreadAfter",
   },
   // A7: the two power GUID refusals (fixed words, never the saved value).

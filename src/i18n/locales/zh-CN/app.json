@@ -111,7 +111,7 @@
     "benchStackRollbackFailed": "测量已完成，但 Compy 尝试回滚这些更改时有一项或多项回滚失败，所以 Compy 无法确认它们都已被撤销。请在「测试 → 已应用与历史记录」中查看并在那里撤销它们。",
     "benchStackRolledBackUnrecorded": "这些更改已测量并回滚，但 Compy 无法把其中部分撤销保存到它的历史中，所以「测试 → 已应用与历史记录」可能仍将它们列为已应用。",
     "benchLedgerUnreadBefore": "Compy 在测量前无法读取它的更改历史，所以没有做任何更改。请在可以读取时再试。",
-    "benchLedgerUnreadAfter": "这些更改已应用，但 Compy 无法重新读取它的更改历史来自动回滚它们。请在「测试 → 已应用与历史记录」中撤销它们。",
+    "benchLedgerUnreadAfter": "Compy 已执行应用，但无法重新读取更改历史，所以不能自动回滚这次应用的更改。请在「测试 → 已应用与历史记录」中查看，并撤销这次运行应用的更改。",
     "powerSettingIdRefused": "这项更改保存的电源计划设置不是 Compy 预期的格式，所以 Compy 没有执行撤销。这项更改仍保留在你的「信任台账」中。",
     "powerPlanIdRefusedUndo": "这项更改保存的电源计划不是 Compy 预期的格式，所以 Compy 没有切换回该计划。这项更改仍保留在你的「信任台账」中。",
     "settingUnread": "Compy 现在无法读取这项设置，因此无法判断它是开启还是关闭。",

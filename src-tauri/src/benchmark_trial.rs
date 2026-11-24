@@ -180,8 +180,8 @@ pub(crate) const BENCH_STACK_ROLLED_BACK_UNRECORDED: &str = "The changes were me
 pub(crate) const BENCH_LEDGER_UNREAD_BEFORE: &str = "Compy couldn't read its change history before measuring, so \
      it changed nothing. Try again when it can be read.";
 /// The stack was applied, but the change history couldn't be re-read to roll it back automatically.
-pub(crate) const BENCH_LEDGER_UNREAD_AFTER: &str = "The changes were applied, but Compy couldn't re-read its change \
-     history to roll them back automatically. Undo them in Test → Applied & history.";
+pub(crate) const BENCH_LEDGER_UNREAD_AFTER: &str = "Compy ran the apply, but couldn't re-read its change history to \
+     roll back what it applied automatically. Check Test → Applied & history and undo anything this run applied.";
 
 /// CR-plan-held-refusal (opus r1), PURE: only the plan-class half of [`bench_held_refusal`], for the undo
 /// and the core-parking restore: a change to the plan class while the benchmark measures the other
