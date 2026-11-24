@@ -8869,8 +8869,11 @@ mod ultimate_identity_tests {
 mod open_settings_tests {
     use super::*;
 
-    /// The shared C7 fixture as owned rows: (rec_id, status, applied_at, check, undo_contract).
-    fn fixture() -> (serde_json::Value, Vec<(String, String, String, Option<ActiveCheck>, bool)>) {
+    /// One fixture row, owned: (rec_id, status, applied_at, check, undo_contract).
+    type FxRow = (String, String, String, Option<ActiveCheck>, bool);
+
+    /// The shared C7 fixture as owned rows.
+    fn fixture() -> (serde_json::Value, Vec<FxRow>) {
         let fx: serde_json::Value =
             serde_json::from_str(include_str!("../../src/test/fixtures/open-settings-parity.json")).expect("C7 fixture parses");
         let rows = fx["rows"]
@@ -8892,7 +8895,7 @@ mod open_settings_tests {
         (fx, rows)
     }
 
-    fn count(rows: &[(String, String, String, Option<ActiveCheck>, bool)]) -> OpenSettings {
+    fn count(rows: &[FxRow]) -> OpenSettings {
         let rows: Vec<OpenSettingRow<'_>> = rows
             .iter()
             .map(|(rec, status, at, check, undo)| OpenSettingRow { rec_id: rec, status, applied_at: at, check: *check, undo_contract: *undo })
