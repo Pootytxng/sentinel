@@ -286,6 +286,17 @@ describe("your-data C2b: clear everything", () => {
     expect(undoOrder(rows).map((r) => r.id)).toEqual(["c", "a"]);
   });
 
+  // C6 review MC2: "newest" is the change history's own order (last in the file), never applied_at, which a clock
+  // set back can make disagree with it (and whose localeCompare ordering is not byte order).
+  // Break check: sort by applied_at again -> ["x", "y"], fails.
+  it("'Undo all first' follows the change history's order when applied_at disagrees with it", () => {
+    const rows = [
+      { id: "x", status: "applied", applied_at: "2026-11-05T00:00:00Z" }, // written first, clock later
+      { id: "y", status: "applied", applied_at: "2026-11-04T00:00:00Z" }, // written after it, clock set back
+    ];
+    expect(undoOrder(rows).map((r) => r.id)).toEqual(["y", "x"]);
+  });
+
   it("the status line comes from the start-up result first, then an abandoned record; unknown codes are shown", () => {
     const s = (over: Partial<ClearStatus>): ClearStatus => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [], ...over });
     expect(statusLine(s({}))).toBeNull();

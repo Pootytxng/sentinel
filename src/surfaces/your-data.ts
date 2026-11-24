@@ -358,10 +358,13 @@ export function statusLine(s: ClearStatus): { key: string; code?: string; dismis
   return null;
 }
 
-/** Rows "Undo all first" undoes: every row that is not rolled back, newest first (the ledger's order of
- *  undoing). Each goes through the existing rollback path, one at a time. */
-export function undoOrder<T extends { status: string; applied_at: string }>(rows: T[]): T[] {
-  return rows.filter((r) => r.status !== "rolled_back").sort((a, b) => b.applied_at.localeCompare(a.applied_at));
+/** Rows "Undo all first" undoes: every row that is not rolled back, newest first. `rows` are in change-history (file)
+ *  order, as `get_applied_changes` returns them, and "newest" is the LAST in that order: the backend's own rule
+ *  (history.rs `newest_applied_row`, `iter().rev()`). Not `applied_at`: a clock set back makes a later apply look
+ *  older, and the walk would end on the wrong record (C6 review MC2). Each goes through the existing rollback path,
+ *  one at a time. */
+export function undoOrder<T extends { status: string }>(rows: readonly T[]): T[] {
+  return rows.filter((r) => r.status !== "rolled_back").reverse();
 }
 
 /**
