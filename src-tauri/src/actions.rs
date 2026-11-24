@@ -5374,10 +5374,10 @@ pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<
     // A6: saved details Compy won't put into a command refuse the undo before anything is elevated; the Err
     // leaves the ledger row as it is.
     build_eee_rollback_script(adapters).map_err(|_| EEE_VALUE_REFUSED_UNDO.to_string())?;
-    // A9 (plan v4 §2 / §5, [v2r M3]): the saved strings travel as DATA and are matched in Rust by the helper
-    // (byte-equal names, a closed keyword list, the prior looked up in the driver's own list). A saved string
-    // outside the saved-text grammar, or more targets than one op carries, is a stored record outside the
-    // closed set: the one fixed sentence, and the row stays listed. So is the helper's "no longer matches".
+    // A9 review r1 F1: the saved strings travel as validated saved-text DATA and the helper places them into
+    // this same fixed template (`build_eee_rollback_script`, byte for byte), so every row this undid before
+    // (display-name-only rows included) still undoes, one target never blocking the others. A saved string
+    // longer than 256 characters is a stored record outside the closed set: the one fixed sentence, row listed.
     let text = |s: &str| crate::elevated_ops::SavedText::parse(s).map_err(|_| STORED_RECORD_REFUSED_UNDO.to_string());
     let mut saved = Vec::with_capacity(adapters.len());
     for a in adapters {
@@ -9620,17 +9620,18 @@ mod elevated_goldens {
 
     // ── rows 11-15 ──
 
-    /// Break: change a field order in `build_eee_rollback_script` (or, A9, map a saved string onto the wrong field
-    /// of the typed undo) and this fails.
+    /// Break: change a field order in `build_eee_rollback_script`, map a saved string onto the wrong field of the
+    /// typed undo, or compose the undo through the helper's keyword match again, and this fails.
     #[test]
     fn golden_eee_today_through_the_builders_and_the_sink() {
         use super::eee_script_tests::{golden_snapshots, golden_targets, GOLDEN_APPLY, GOLDEN_ROLLBACK};
         use crate::elevated_ops::{EeeSaved, ElevatedOp, SavedText};
         assert_eq!(build_eee_apply_script(&golden_targets()).as_deref(), Ok(GOLDEN_APPLY));
-        // Today's undo builder keeps its golden (it stays the A6 pre-check of the saved strings).
         assert_eq!(build_eee_rollback_script(&golden_snapshots()).as_deref(), Ok(GOLDEN_ROLLBACK));
-        // A9 (plan v4 §2, the one deliberate exception): what the undo hands the helper is the typed op with the
-        // saved strings as DATA; the helper's script is the new -InputObject one (its goldens: elevated_ops tests).
+        // A9 review r1 F1: the typed undo composes MAIN'S template byte for byte, through the caller, for the fixture
+        // (a keyword-style row and the display-name-only "Green Ethernet" row) ...
+        assert_eq!(sunk(|| rollback_eee_disable_typed(&golden_snapshots())), vec![GOLDEN_ROLLBACK.to_string()]);
+        // ... and the caller hands the helper the row's own strings as saved-text DATA.
         let t = |s: &str| SavedText::parse(s).expect("saved text");
         let saved = |a: &str, p: &str, v: &str| EeeSaved { adapter: t(a), property: t(p), prior: t(v) };
         assert_eq!(
@@ -9937,15 +9938,24 @@ mod a9_stored_record_tests {
             prior_value: "Enabled".into(),
         };
         refused_before_any_dispatch("eee", || rollback_eee_disable_typed(&[eee]));
-        // More EEE targets than one op carries.
+        // Review r1 F1: a row main can undo stays undoable: more targets than an APPLY op carries, and an empty
+        // saved value, still undo (one op, main's template).
         let many: Vec<EeeNicSnapshot> = (0..=crate::elevated_ops::MAX_TARGETS)
             .map(|i| EeeNicSnapshot {
                 adapter_name: format!("Ethernet {i}"),
                 property_display_name: "Energy Efficient Ethernet".into(),
-                prior_value: "Enabled".into(),
+                prior_value: if i == 0 { String::new() } else { "Enabled".into() },
             })
             .collect();
-        refused_before_any_dispatch("eee count", || rollback_eee_disable_typed(&many));
+        let guard = ElevationDeferral::begin().expect("sink");
+        rollback_eee_disable_typed(&many).expect("parked, not refused");
+        let parked = guard.take_deferred();
+        assert_eq!(parked.len(), 1);
+        assert_eq!(
+            crate::elevated_ops::script_of(&parked[0]),
+            build_eee_rollback_script(&many).expect("main's template"),
+            "nine targets and an empty value compose main's template"
+        );
         // A power-plan setting pair that is neither of the two the apply writes (refused before any read).
         refused_before_any_dispatch("power setting", || {
             rollback_power_plan_setting_typed("11111111-2222-3333-4444-555555555555", SUB_PROCESSOR_GUID, CPMINCORES_GUID, 1, 1)

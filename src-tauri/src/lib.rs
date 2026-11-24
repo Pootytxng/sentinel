@@ -102,10 +102,15 @@ pub const ELEVATED_OP_FLAG: &str = "--run-elevated-op";
 /// from it.
 pub const DELETED_GENERIC_ELEVATED_FLAG: &str = "--run-elevated";
 
-/// A9: what the deleted generic entry answers now: `HELPER_REQUEST_REFUSED` ("not one Compy can run, so no
-/// command ran"), whatever follows it. Pure; it looks at no argument.
+/// A9: what the deleted generic entry answers now, whatever follows it: `HELPER_POWERSHELL_NOT_STARTED`
+/// (0x4350_5334), the one "no command ran" code every shipped parent since hardening 1b understands. Review r1
+/// (b)(1): the installed build ec5bae0e maps exactly that code to "no command ran" (`git show
+/// ec5bae0e:src-tauri/src/actions.rs`: the const at :1085, its arm in `elevation_outcome` at :1290, and
+/// `elevation_error_nothing_ran` at :1310) and knows no other helper code, so an old running parent that
+/// launches this exe with the old form reads a refusal, never "approved, but the operation failed". This build
+/// never launches the old form. Pure; it looks at no argument.
 pub fn refused_generic_elevated_entry() -> i32 {
-    actions::HELPER_REQUEST_REFUSED
+    actions::HELPER_POWERSHELL_NOT_STARTED
 }
 
 /// A8 (plan a5 v4 §4) / A9: the TYPED elevated helper entry (`compy.exe --run-elevated-op <hex JSON> [--pipe <name>
@@ -2487,7 +2492,10 @@ mod safety_tests {
         let marker = scratch.join("compy-forged.txt");
         let cmd = format!("Set-Content -Path '{}' -Value x", marker.display());
         let hex = actions::to_hex(cmd.as_bytes());
-        assert_eq!(refused_generic_elevated_entry(), actions::HELPER_REQUEST_REFUSED);
+        // Review r1 (b)(1): the old name answers the one "nothing ran" code an installed old parent understands.
+        assert_eq!(refused_generic_elevated_entry(), actions::HELPER_POWERSHELL_NOT_STARTED);
+        let old = <std::process::ExitStatus as std::os::windows::process::ExitStatusExt>::from_raw(refused_generic_elevated_entry() as u32);
+        assert_eq!(actions::elevation_outcome(Ok(old)), Err(actions::HELPER_POWERSHELL_NOT_STARTED_MSG.to_string()));
         assert_eq!(run_elevated_op_argv(&[hex.clone()]), actions::HELPER_REQUEST_REFUSED);
         assert_eq!(
             run_elevated_op_argv(&[hex, r"C:\__compy_qa_missing__\no.ticket".to_string()]),

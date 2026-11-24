@@ -76,10 +76,12 @@ fn item_id_ok(s: &str) -> bool {
         || restore_id_ok(s)
 }
 
-/// Saved EEE text: DATA compared in Rust, never put into a script. 1..=256 characters, no control character.
+/// Saved EEE text: at most 256 characters (Windows' own cap on an interface name, IF_MAX_STRING_SIZE), no control
+/// character, no U+2028/U+2029. The apply compares it in Rust; the undo puts it, five-quote escaped by main's own
+/// builder, into main's fixed template (A9 review r1 F1). Empty is allowed: a driver that reported an empty
+/// DisplayValue left a row main can undo (`-DisplayValue ''`), and every such row must stay undoable.
 fn saved_text_ok(s: &str) -> bool {
-    let n = s.chars().count();
-    (1..=256).contains(&n) && !s.chars().any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}'))
+    s.chars().count() <= 256 && !s.chars().any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}'))
 }
 
 macro_rules! checked_string {
@@ -389,9 +391,12 @@ impl ElevatedOp {
         let count_ok = |n: usize| (1..=MAX_TARGETS).contains(&n);
         let ok = match self {
             ElevatedOp::EeeDisable { targets } => count_ok(targets.len()),
-            ElevatedOp::EeeRestore { targets } => count_ok(targets.len()),
+            // A9 review r1 F1: no upper count for the undo (main had none); the 30,000-character argv cap bounds
+            // it, and a row main could dispatch always fits (its script per target is longer than this JSON).
+            ElevatedOp::EeeRestore { targets } => !targets.is_empty(),
             ElevatedOp::NagleDisable { interfaces } => count_ok(interfaces.len()),
-            ElevatedOp::NagleRestore { interfaces } => count_ok(interfaces.len()),
+            // Same for the Nagle undo: every row main can undo stays undoable (review r1 F1's rule).
+            ElevatedOp::NagleRestore { interfaces } => !interfaces.is_empty(),
             ElevatedOp::PagefileRestore { init_mb, max_mb, .. } => init_mb.get() <= max_mb.get(),
             _ => true,
         };
@@ -446,13 +451,23 @@ impl ElevatedOp {
                 }
                 eee_script(&set)?
             }
+            // A9 review r1 F1 (ARCHITECTURE_LOCKS §2 Tier 1: every row main can undo stays undoable): the undo is
+            // main's own fixed template (`build_eee_rollback_script`), byte for byte, with the saved strings as
+            // validated values: SavedText's grammar here (1..=256 chars, no control character, no U+2028/9), then the
+            // builder's A6 five-quote escape (it refuses a control character). No helper read, no keyword list, so a
+            // row recorded by display name alone ("Green Ethernet", "EEE PHY", "802.3az") restores as on main. Each
+            // target is its own `-ErrorAction SilentlyContinue` statement, so one that no longer matches never blocks
+            // the others; the trailing `$null = 0` makes the run report success, as on main (see the note).
             Op::EeeRestore { targets } => {
-                let listing = read_eee(reads)?;
-                let mut set = Vec::with_capacity(targets.len());
-                for t in targets {
-                    set.push(eee_pick_restore(&listing, t)?);
-                }
-                eee_script(&set)?
+                let snaps: Vec<actions::EeeNicSnapshot> = targets
+                    .iter()
+                    .map(|t| actions::EeeNicSnapshot {
+                        adapter_name: t.adapter.as_str().to_string(),
+                        property_display_name: t.property.as_str().to_string(),
+                        prior_value: t.prior.as_str().to_string(),
+                    })
+                    .collect();
+                built(actions::build_eee_rollback_script(&snaps))?
             }
             Op::FastStartupOff {} => actions::FAST_STARTUP_OFF_SCRIPT.to_string(),
             Op::FastStartupRestore { prior } => actions::fast_startup_restore_script(*prior),
@@ -656,6 +671,9 @@ fn eee_value_at(p: &EeePropRow, i: usize) -> Result<String, Refused> {
 
 /// The undo's target: the property the row names, and the registry value at the index of its saved prior
 /// DisplayValue (exactly one byte-equal entry). Anything else: `NoMatch`.
+/// A9 review r1 F1: no longer used by the undo (which is main's own template now); kept for the tests that probe
+/// [`eee_find`], the matcher the APPLY still uses.
+#[cfg(test)]
 pub(crate) fn eee_pick_restore(listing: &EeeListing, saved: &EeeSaved) -> Result<(String, String, String), Refused> {
     let (p, _, guid) = eee_find(listing, saved.adapter.as_str(), saved.property.as_str())?;
     let hits: Vec<usize> =
@@ -1135,7 +1153,8 @@ mod tests {
             assert!(SavedText::parse(ok).is_ok(), "{ok}");
         }
         assert!(SavedText::parse(&"x".repeat(256)).is_ok());
-        for bad in [String::new(), "x".repeat(257), "a\nb".into(), "a\u{2028}b".into(), "nul\0".into(), "tab\t".into()] {
+        assert!(SavedText::parse("").is_ok(), "an empty saved value is a row main can undo (review r1 F1)");
+        for bad in ["x".repeat(257), "a\nb".into(), "a\u{2028}b".into(), "nul\0".into(), "tab\t".into()] {
             assert!(SavedText::parse(&bad).is_err(), "{bad:?}");
         }
         assert!(Percent::parse(0).is_ok() && Percent::parse(100).is_ok());
@@ -1374,7 +1393,7 @@ mod tests {
     /// for `Refused::NoMatch` in `run_request`'s batch arm and this fails.
     #[test]
     fn in_a_batch_a_refused_item_is_its_own_fail_line_and_the_rest_run() {
-        let eee = r#"{"id":"eee-disable","ops":[{"op":"eee-restore","targets":[{"adapter":"Ethernet 3","property":"Energy Efficient Ethernet","prior":"Enabled"}]}]}"#;
+        let eee = r#"{"id":"eee-disable","ops":[{"op":"eee-disable","targets":[{"adapter":"Ethernet 3","property":"Energy Efficient Ethernet"}]}]}"#;
         let svc = r#"{"id":"sysmain-disable","ops":[{"op":"service-disable","service":"SysMain"}]}"#;
         let req = parse_request_hex(&hex(&request_json("batch", &format!("{eee},{svc}")))).expect("valid");
         let buf = SharedBuf::default();
@@ -1400,7 +1419,7 @@ mod tests {
     /// one) and runs nothing. Break: map `Refused::NoMatch` to `HELPER_REQUEST_REFUSED` and this fails.
     #[test]
     fn a_single_refusal_is_the_saved_value_sentinel_and_nothing_runs() {
-        let eee = r#"{"ops":[{"op":"eee-restore","targets":[{"adapter":"Ethernet 3","property":"Energy Efficient Ethernet","prior":"Enabled"}]}]}"#;
+        let eee = r#"{"ops":[{"op":"eee-disable","targets":[{"adapter":"Ethernet 3","property":"Energy Efficient Ethernet"}]}]}"#;
         let task = r#"{"ops":[{"op":"task-enable","task":"CeipUsb"}]}"#;
         for (items, fx) in [
             (eee, Fake { eee: Some(out(0, &two_adapters())), ..Fake::default() }),
@@ -1527,6 +1546,40 @@ mod tests {
         assert!(parse_eee_listing(Some(&out(0, &format!("\u{feff}{}\r\n", two_adapters())))).is_ok(), "a byte-order mark is tolerated");
     }
 
+    /// A9 review r1 F1: the typed EEE undo is MAIN's fixed template, byte for byte, for a keyword-style row and a
+    /// row recorded by display name alone ("Green Ethernet", main's own fixture), with no helper read; a quote is
+    /// doubled by main's A6 rule, and a control character refuses (nothing composed). Break: compose `EeeRestore`
+    /// through `read_eee` + the keyword match again and this fails.
+    #[test]
+    fn the_eee_undo_is_mains_template_for_every_row_shape() {
+        let t = |s: &str| SavedText::parse(s).expect("saved text");
+        let op = ElevatedOp::EeeRestore {
+            targets: vec![
+                EeeSaved { adapter: t("Ethernet [2]"), property: t("Energy Efficient Ethernet"), prior: t("Enabled") },
+                EeeSaved { adapter: t("Bob's NIC"), property: t("Green Ethernet"), prior: t("On") },
+            ],
+        };
+        let mut fx = Fake::default();
+        let script = op.script(&Nonce::parse(N).expect("n"), &mut fx).expect("composes");
+        assert_eq!(
+            script,
+            concat!(
+                "Set-NetAdapterAdvancedProperty -Name 'Ethernet [2]' -DisplayName 'Energy Efficient Ethernet' -DisplayValue 'Enabled' -NoRestart -ErrorAction SilentlyContinue; ",
+                "Set-NetAdapterAdvancedProperty -Name 'Bob''s NIC' -DisplayName 'Green Ethernet' -DisplayValue 'On' -NoRestart -ErrorAction SilentlyContinue; ",
+                "$null = 0"
+            )
+        );
+        let main: Vec<actions::EeeNicSnapshot> = [("Ethernet [2]", "Energy Efficient Ethernet", "Enabled"), ("Bob's NIC", "Green Ethernet", "On")]
+            .iter()
+            .map(|(a, p, v)| actions::EeeNicSnapshot { adapter_name: a.to_string(), property_display_name: p.to_string(), prior_value: v.to_string() })
+            .collect();
+        assert_eq!(Ok(script), actions::build_eee_rollback_script(&main), "main's own builder");
+        assert_eq!(fx.reads(), 0, "the undo reads nothing");
+        // A forged control character never reaches a script: SavedText refuses it inside Deserialize.
+        let forged = r#"{"op":"eee-restore","targets":[{"adapter":"a\u0085b","property":"p","prior":"v"}]}"#;
+        assert!(serde_json::from_str::<ElevatedOp>(forged).is_err());
+    }
+
     /// The EEE set script, written out, and its builder's refusals. Break: drop the `EEE_KEYWORDS` check in
     /// `build_eee_set_by_instance_script` and this fails.
     #[test]
@@ -1534,8 +1587,10 @@ mod tests {
         assert_eq!(actions::build_eee_set_by_instance_script(&[(GUID_A, "*EEE", "1")]).as_deref(), Ok(GOLDEN_EEE_SET_A_1));
         let l = listing_of(&two_adapters());
         let mut fx = Fake { eee: Some(out(0, &two_adapters())), ..Fake::default() };
-        let op = ElevatedOp::EeeRestore { targets: vec![saved("Ethernet [2]", "Enabled")] };
-        assert_eq!(op.script(&Nonce::parse(N).expect("n"), &mut fx).as_deref(), Ok(GOLDEN_EEE_SET_A_1));
+        let target = EeeTarget { adapter: SavedText::parse("Ethernet [2]").expect("a"), property: SavedText::parse("Energy Efficient Ethernet").expect("p") };
+        let op = ElevatedOp::EeeDisable { targets: vec![target] };
+        let disabled = op.script(&Nonce::parse(N).expect("n"), &mut fx).expect("Ethernet [2] matches");
+        assert!(disabled.contains("-ceq '{AAAAAAAA-1111-2222-3333-444444444444}::*EEE'"), "{disabled}");
         assert_eq!(eee_pick_restore(&l, &saved("Ethernet [2]", "Enabled")).map(|t| t.0), Ok(GUID_A.to_string()));
         for (g, k, v) in [
             ("AAAAAAAA-1111-2222-3333-444444444444", "*EEE", "1"),
@@ -1681,7 +1736,7 @@ mod tests {
         let lib = shipped_text(include_str!("lib.rs"));
         let at = lib.find("pub fn refused_generic_elevated_entry() -> i32 {").expect("the refusal");
         let body = &lib[at..at + lib[at..].find("\n}\n").expect("end")];
-        assert_eq!(body.lines().nth(1).map(str::trim), Some("actions::HELPER_REQUEST_REFUSED"), "{body}");
+        assert_eq!(body.lines().nth(1).map(str::trim), Some("actions::HELPER_POWERSHELL_NOT_STARTED"), "{body}");
         assert_eq!(body.lines().count(), 2, "the refusal does nothing else: {body}");
         let at = lib.find("pub fn run_elevated_op_argv(rest: &[String]) -> i32 {").expect("the typed entry");
         assert!(!lib[..at].trim_end().ends_with(']'), "no attribute (a build flag) in front of the typed entry");
