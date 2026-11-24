@@ -33,7 +33,7 @@
     "footerEmph": "台账记录：{{n}} 条",
     "footerOutbound": "对外连接：仅签名更新检查",
     "footerIncompletePre": "台账不完整 ·",
-    "footerEmphFloor": "至少 {{n}} 项",
+    "footerEmphFloor": "至少 {{n}} 条",
     "footerEmphUnknown": "数量未知",
     "fallbackTitle": "Compy",
     "searchPlaceholder": "搜索或跳转到任意位置",

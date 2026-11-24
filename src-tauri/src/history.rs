@@ -3407,10 +3407,11 @@ pub(crate) struct OpenSettings {
     pub(crate) recs: Vec<String>,
 }
 
-/// C7: [`OpenSettings`] over `rows` in file order. Pure: no read, no write. The footer and Home's note
-/// (`src/data/live-changes.ts` `undoTally`), Health ([`crate::machine_model`] `compose_compy_changes`) and Your
-/// data's list (`data_clear::group_open_rows`) all count this; `src/test/fixtures/open-settings-parity.json`
-/// pins every one of them to the same numbers.
+/// C7: [`OpenSettings`] over `rows` in file order. Pure: no read, no write. Health
+/// (`machine_model::compose_compy_changes`) calls this. The footer and Home's note count through its TS mirror
+/// (`src/data/live-changes.ts` `undoTally`), and Your data's list groups open rows by the same rule in its own code
+/// (`data_clear::group_open_rows`). The fixture `src/test/fixtures/open-settings-parity.json` pins all of them to
+/// the same numbers.
 pub(crate) fn open_settings(rows: &[OpenSettingRow<'_>]) -> OpenSettings {
     let live_rows: Vec<LiveRow<'_>> = rows
         .iter()

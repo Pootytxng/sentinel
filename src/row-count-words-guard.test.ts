@@ -15,7 +15,8 @@ import { join } from "path";
 // open-settings-parity.test.ts).
 //
 // Break check: restore home.homeHud.ledger.changesTracked_other to "changes tracked" (or common.shellV2.footerEmph
-// to "ledger changes: {{n}}") -> this fails naming the key.
+// to "ledger changes: {{n}}") -> this fails naming the key; restore zh-CN common.shellV2.footerEmphFloor to
+// "至少 {{n}} 项" -> fails (a records count in zh-CN uses 条, never 项).
 
 const SRC = "src";
 const LOCALES_DIR = join("src", "i18n", "locales");
@@ -90,6 +91,8 @@ describe("a count of ledger rows is records, never 'changes' (C7)", () => {
         const found = forms(strings, key);
         if (found.length === 0) offenders.push(`${name}: ${key} (${file}) has no string`);
         for (const s of found) if (CHANGE_WORD[name].test(s)) offenders.push(`${name}: ${key} (${file}) says "${s}"`);
+        // zh-CN counts records with 条, never 项 (the measure word for items/settings).
+        if (name === "zh-CN") for (const s of found) if (!/条/.test(s) || /项/.test(s)) offenders.push(`${name}: ${key} (${file}) counts records without 条: "${s}"`);
       }
     }
     expect(offenders).toEqual([]);
