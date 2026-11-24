@@ -93,13 +93,30 @@ fn saved_text_ok(s: &str) -> bool {
 /// or property. The adapter and the property must be non-empty; the property may hold none of `*` `?` `[` `]` or
 /// the backtick; the adapter may hold neither `*` nor `?` (square brackets stay allowed: Windows names adapters
 /// "Ethernet [2]"; such a name is still matched as a pattern, a recorded open item). The prior may be empty.
+///
+/// A9 review r3 R3-1b: a bracket pair is itself a pattern (`[ -~]` matches any character), so the adapter may hold
+/// at most ONE pair, `[` before `]`, with no `-` inside it (no range). What a forged adapter value can still match:
+/// only names equal to it character for character (case-insensitive), except at the one bracketed position,
+/// which matches any ONE character listed inside the brackets ("Ethernet [2]" also matches "Ethernet 2").
 fn eee_restore_target_ok(t: &EeeSaved) -> bool {
     let adapter = t.adapter.as_str();
     let property = t.property.as_str();
     !adapter.is_empty()
         && !property.is_empty()
         && !adapter.contains(['*', '?'])
+        && adapter_brackets_ok(adapter)
         && !property.contains(['*', '?', '[', ']', '`'])
+}
+
+/// R3-1b: no bracket, or exactly one `[`...`]` pair in that order with no `-` between them.
+fn adapter_brackets_ok(adapter: &str) -> bool {
+    let opens: Vec<usize> = adapter.match_indices('[').map(|(i, _)| i).collect();
+    let closes: Vec<usize> = adapter.match_indices(']').map(|(i, _)| i).collect();
+    match (opens.as_slice(), closes.as_slice()) {
+        ([], []) => true,
+        ([open], [close]) => open < close && !adapter[*open..*close].contains('-'),
+        _ => false,
+    }
 }
 
 macro_rules! checked_string {
