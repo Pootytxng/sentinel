@@ -203,12 +203,12 @@ export async function runSettingWalk(
 /** C6: the line a walk that stopped shows, split by how it stopped; null when every record was undone. */
 export function walkStopMessage(r: WalkResult, title: string, t: TFunction): string | null {
   if (!r.stop) return null;
-  const vars = { title, done: r.done, total: r.total };
+  // The variables are written at each call (not a shared object) so the locale-parity guard can see them passed.
   if (r.stop.outcome === "unrecorded") {
-    const head = t("app.errors.undoPartialUnrecorded", vars);
+    const head = t("app.errors.undoPartialUnrecorded", { title, done: r.done, total: r.total });
     return r.stop.liveRead ? `${head} ${r.stop.liveRead}` : head;
   }
-  const head = t("app.errors.undoPartialFailed", vars);
+  const head = t("app.errors.undoPartialFailed", { title, done: r.done, total: r.total });
   // The owner's "no String(e) in the face" law: the backend's own text is never shown. A reason line appears only
   // when backend-error.ts knows the sentence (a fixed refusal pinned to its Rust const), in the user's language.
   const known = backendMessage(r.stop.reason, t);
