@@ -5675,7 +5675,9 @@ mod eee_script_tests {
     fn real_powershell_reads_every_curly_quote_breakout_as_data() {
         const STUB: &str = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false\nfunction Set-NetAdapterAdvancedProperty { [CmdletBinding()] param($Name, $DisplayName, $DisplayValue, [switch]$NoRestart) Write-Output \"$Name|$DisplayName|$DisplayValue\" }\n";
         let base = ["Ethernet", "Energy Efficient Ethernet", "Enabled"];
-        for tail in ["{q}", "#"] {
+        // The `#` payload first: if the escape leaks, that one parses and prints PWNED (the `{q}` one only fails
+        // to parse, which also fails here, but without showing the statement running).
+        for tail in ["#", "{q}"] {
             let mut script = String::from(STUB);
             let mut expected: Vec<String> = Vec::new();
             for q in CURLY {
