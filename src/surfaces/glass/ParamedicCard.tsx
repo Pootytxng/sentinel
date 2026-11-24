@@ -493,7 +493,9 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     case "driver-back-clear":
       return t("paramedic.evidence.driverBackClear", { game, from: a.from, date: dates.day(a.at) });
     case "driver-back-clear-unjudged":
-      return t("paramedic.evidence.driverBackClearUnjudged", { game, from: a.from, n: a.count, date: dates.day(a.at) });
+      // b12: `count` (the later, unjudged sessions) picks "The session after that" / "Each session after that"; no
+      // number is printed from it.
+      return t("paramedic.evidence.driverBackClearUnjudged", { game, from: a.from, n: a.count, count: Number(a.later ?? 2), date: dates.day(a.at) });
     case "driver-back-between":
       return t("paramedic.evidence.driverBackBetween", { game });
     // B10b: what this game's sessions say since the one Compy change in the window was undone (the ledger's own undo

@@ -3616,12 +3616,32 @@ describe("ParamedicCard: the driver read as the earlier version again (B4)", () 
     expect(text).toMatch(/On 1\.0 again, Game A's session on .+ ran in its usual range\. One session so far; Compy says a game is back in its usual range after two\./);
   });
 
+  // b12 item 4: b10b's wording for the same condition, by number of later sessions. Break checks: put back "too short or
+  // only partly measured" -> fails; stop passing `count` (later) -> the key has no base form, fails.
   it("two clear sessions on the earlier driver, then one Compy couldn't judge: said, with why not yet", async () => {
     const both = { kind: "measured" as const, code: "driver-back-clear-unjudged", args: { from: "1.0", back: BACK, at: "2026-11-21T20:00:00Z", count: "2", later: "1" }, against: false, source: "sessions" };
-    const text = await open(driverRow([changed, back, both]));
+    let text = await open(driverRow([changed, back, both]));
     expect(text).toMatch(
-      /On 1\.0 again, Game A ran in its usual range in 2 sessions, the latest on .+\. The sessions after that were too short or only partly measured, so Compy can't say it is back in its usual range yet\./,
+      /On 1\.0 again, Game A ran in its usual range in 2 sessions, the latest on .+\. The session after that was too short, or Compy couldn't measure enough of it, so Compy can't say it is back in its usual range yet\./,
     );
+    cleanup();
+    const more = { ...both, args: { ...both.args, later: "2" } };
+    text = await open(driverRow([changed, back, more]));
+    expect(text).toMatch(
+      /On 1\.0 again, Game A ran in its usual range in 2 sessions, the latest on .+\. Each session after that was too short, or Compy couldn't measure enough of it, so Compy can't say it is back in its usual range yet\./,
+    );
+  });
+
+  // b12 item 4: sessions since the driver read as the earlier version again that Compy couldn't judge, in b10b's
+  // wording. Break check: put back "too short or only partly measured" in driverBackUnjudged_one -> fails.
+  it("sessions on the earlier driver again that Compy couldn't judge are said as such", async () => {
+    const one = { kind: "unknown" as const, code: "driver-back-unjudged", args: { back: BACK, count: "1" }, against: false, source: "sessions" };
+    let text = await open(driverRow([changed, back, one]));
+    expect(text).toContain("1 Game A session has been recorded since, but it was too short, or Compy couldn't measure enough of it, so Compy didn't judge it.");
+    cleanup();
+    const two = { ...one, args: { back: BACK, count: "2" } };
+    text = await open(driverRow([changed, back, two]));
+    expect(text).toContain("2 Game A sessions have been recorded since, but each was too short, or Compy couldn't measure enough of it, so Compy didn't judge them.");
   });
 
   it("the earlier-driver line is dated and never says 'still on the old driver'", async () => {
