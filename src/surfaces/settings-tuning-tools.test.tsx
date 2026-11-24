@@ -54,7 +54,11 @@ beforeEach(() => {
     slotReject: false,
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // The switch writes "0" in some cases; never leak it into a later test.
+  localStorage.removeItem("compy_tuning_tools");
+});
 
 describe("Settings → Tuning tools", () => {
   it("says what it does and that it changes nothing on the PC", () => {

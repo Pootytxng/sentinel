@@ -232,7 +232,7 @@
     "headline": "Compy's changes and this PC's records",
     "sub": "See what Compy changed and undo it, read this PC's parts, or see what Windows recorded about a crash.",
     "action": "See your changes",
-    "note": "Here are Compy's changes and their undo. The tuning tools (the Optimize switches, Trials, Benchmark, Latency, Tuning) are off; Settings → Tuning tools turns them on, which changes nothing on your PC by itself.",
+    "note": "Here are Compy's changes and their undo. The tuning tools (the Optimize switches, Trials, Benchmark, Latency, Tuning, the GPU profile captures) are off; Settings → Tuning tools turns them on, which changes nothing on your PC by itself.",
     "openSettings": "Open Settings",
     "offOutsideTitle": "Turned off outside Compy"
   },

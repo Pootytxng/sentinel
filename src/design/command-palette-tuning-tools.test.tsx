@@ -41,7 +41,10 @@ function stationsReachable(): Set<string> {
 }
 
 beforeEach(() => localStorage.clear());
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.removeItem("compy_tuning_tools");
+});
 
 describe("palette stations follow Settings → Tuning tools", () => {
   // Break check: make `keys` ignore `tools` in CommandPalette and benchmark/latency/tuning/optimize return.

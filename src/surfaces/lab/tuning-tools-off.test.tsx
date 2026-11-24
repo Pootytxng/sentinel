@@ -120,7 +120,10 @@ beforeEach(() => {
   slot.reject = false;
   onRollback.mockClear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.removeItem("compy_tuning_tools");
+});
 
 describe("Test with the tuning tools OFF", () => {
   beforeEach(() => localStorage.setItem("compy_tuning_tools", "0"));

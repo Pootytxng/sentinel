@@ -42,7 +42,7 @@
     },
     "tuningTools": {
       "title": "Tuning tools",
-      "sub": "Shows Test's tuning tools: the Optimize switches, Trials, Benchmark, Latency and Tuning, and their results. Turning this on or off changes nothing on your PC; it only shows or hides those tools. Compy's changes and their undo, Diagnostics and Crash & Freeze Rescue stay in Test either way.",
+      "sub": "Shows Test's tuning tools: the Optimize switches, Trials, Benchmark, Latency, Tuning and the GPU profile captures, and their results. Turning this on or off changes nothing on your PC; it only shows or hides those tools. Compy's changes and their undo, Diagnostics and Crash & Freeze Rescue stay in Test either way.",
       "refusal": {
         "trial": "A Trial is in progress, so the tuning tools stay on. Conclude it or tap Restore now in the Trial first.",
         "trialUnread": "Compy couldn't read whether a Trial is in progress, so the tuning tools stay on. Try again in a moment.",
