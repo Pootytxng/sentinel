@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { recordedWithoutResult, unconfirmedTitles } from "./unconfirmed-change";
 import en from "../i18n/locales/en/optimize.json";
@@ -26,7 +27,8 @@ describe("A5 Part A: changes recorded without the admin step's own result", () =
   // The Home fast path lists the batch result too. It has no render harness, so its wiring is pinned in the
   // source: App fills `unconfirmed`, HomeConsole keeps it, HomeInterview shows each title with the warning.
   it("every surface that lists a batch result carries the unconfirmed titles through", () => {
-    const src = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    // Paths from the repository root (vitest's working directory), as the other source-pin tests read them.
+    const src = (p: string) => readFileSync(join("src", "data", p), "utf8").replace(/\r\n/g, "\n");
     expect(src("../App.tsx")).toContain("unconfirmed: unconfirmedTitles(report),");
     expect(src("../surfaces/HomeConsole.tsx")).toContain("unconfirmedItems: res.unconfirmed ?? [],");
     const interview = src("../surfaces/HomeInterview.tsx");
