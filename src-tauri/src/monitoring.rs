@@ -2240,7 +2240,15 @@ fn stop_fps_capture_locked() {
     // SeqCst, then wait for any relay write already past its check (review r2 N5: `write_while_wanted`),
     // so the files removed below are not written again by this capture's reader.
     fps_active().store(false, Ordering::SeqCst);
-    let _ = wait_for_relay_writes(relay_writes(), std::time::Duration::from_millis(500));
+    // Review r1 (accepted limit): a relay write still running after 500 ms can land after the removes below
+    // and leave one fps.json from this capture. No behaviour change: the support log says it happened.
+    if !wait_for_relay_writes(relay_writes(), std::time::Duration::from_millis(500)) {
+        support_stop(
+            SupportOutcome::Failed,
+            "relay_write_slow",
+            "a capture file write was still running 500 ms after the stop; it may land after the stop removed the file",
+        );
+    }
     *lock_status() = "idle".into();
     *lock_progress() = None;
     let _ = std::fs::remove_file(fps_out_path());
@@ -2656,6 +2664,25 @@ mod capture_pipe_tests {
         let wait = body.find(concat!("wait_for_relay_", "writes(relay_writes()")).expect("wait");
         let remove = body.find(concat!("remove_file(fps_", "out_path())")).expect("remove");
         assert!(clear < wait && wait < remove, "clear, wait, then remove");
+        // Review r1 (accepted limit): a wait that timed out is written to the support log; nothing else changes.
+        let slow = body.find(concat!("\"relay_write_", "slow\"")).expect("the slow-write support line");
+        assert!(wait < slow && slow < remove, "logged between the wait and the removes");
+    }
+
+    /// Review r1 F2: production wraps every relay of the capture's reader in `write_while_wanted` over the
+    /// shared `relay_writes()` count, exactly once (the N4 and N5 tests build their own closures, so they
+    /// would stay green if `start_capture_pipe` called `relay_line` directly).
+    #[test]
+    fn the_capture_reader_relays_only_through_write_while_wanted() {
+        // Built with concat! so this test does not count itself; the other tests call relay_line with other names.
+        let src = include_str!("monitoring.rs").replace("\r\n", "\n");
+        let wrapped = concat!("write_while_wanted(relay_writes(), &wanted, || ", "relay_line(line, &mut counts, &out, &marker));");
+        assert_eq!(src.matches(wrapped).count(), 1, "one wrapped relay in the file");
+        let f = src.find(concat!("fn start_capture_", "pipe(")).expect("start_capture_pipe");
+        let body = &src[f..f + src[f..].find("\n}\n").unwrap()];
+        assert!(body.contains(wrapped), "the wrap is in start_capture_pipe");
+        // And the reader calls relay_line nowhere else.
+        assert_eq!(body.matches(concat!("relay_", "line(")).count(), 1, "only the wrapped call");
     }
 }
 

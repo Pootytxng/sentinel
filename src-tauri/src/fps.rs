@@ -1931,3 +1931,33 @@ mod handle_free_identity_tests {
         assert!(matches!(att, Attachment::Attached { pid: 5, .. }));
     }
 }
+
+#[cfg(test)]
+mod sink_pin_tests {
+    /// Review r1 F1: each kind of line goes out through the writer call that accounts for it (review r2 N3). A
+    /// report through `send_report` (a lost one is counted, so the app never reads a stale fps.json as a measured
+    /// second), the unreadable count through `send_unreadable(total)`, a kept count re-sent by `retry_unreadable()`
+    /// before `tell_dropped()`, and the uncounted `send(` only for the keepalive.
+    #[test]
+    fn every_sink_line_goes_through_its_accounting_call() {
+        let src = include_str!("fps.rs").replace("\r\n", "\n");
+        let at = src.find(concat!("impl ", "Sink {")).expect("impl Sink");
+        let body = &src[at..at + src[at..].find("\n}\n").unwrap()];
+        // The methods, each from its `fn` to the next one.
+        fn method_in<'a>(body: &'a str, name: &str) -> &'a str {
+            let start = body.find(&format!("\n    fn {name}(")).unwrap_or_else(|| panic!("fn {name}"));
+            let rest = &body[start + 1..];
+            &rest[..rest.find("\n    fn ").map(|e| e + 1).unwrap_or(rest.len())]
+        }
+        let method = |name: &str| method_in(body, name);
+        assert!(method("report").contains(concat!("w.send_", "report(line.to_string());")), "a report is counted when dropped");
+        assert!(method("marker").contains(concat!("w.send_", "unreadable(total);")), "the unreadable count is kept when dropped");
+        let told = method("tell_dropped");
+        let retry = told.find(concat!("w.retry_", "unreadable();")).expect("tell_dropped re-sends a kept count");
+        let tell = told.find(concat!("w.tell_", "dropped();")).expect("tell_dropped tells the drop count");
+        assert!(retry < tell, "re-send the kept count, then tell the drop count");
+        // The plain, uncounted send carries only the keepalive.
+        assert_eq!(body.matches(concat!("w.", "send(")).count(), 1, "one plain send in the sink");
+        assert!(method("alive").contains(concat!("w.", "send(")), "and it is the keepalive's");
+    }
+}
