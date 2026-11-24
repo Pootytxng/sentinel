@@ -9898,3 +9898,76 @@ mod elevated_goldens {
         assert_eq!(cap.0, vec![G_BATCH.to_string()]);
     }
 }
+
+#[cfg(test)]
+mod a9_stored_record_tests {
+    //! A9 (owner decision): an undo whose stored record fails the closed elevated set's stricter checks refuses
+    //! with the ONE fixed sentence, before anything is parked or dispatched; the Err leaves the row listed.
+    use super::*;
+
+    fn refused_before_any_dispatch(label: &str, undo: impl FnOnce() -> Result<(), String>) {
+        let _force = ForceElevationError::begin();
+        reset_elevation_dispatch_count();
+        let err = undo().expect_err(label);
+        assert!(err.contains(STORED_RECORD_REFUSED_UNDO), "{label}: {err}");
+        assert_eq!(elevation_dispatch_count(), 0, "{label}: nothing dispatched");
+    }
+
+    /// Break: give any one of these refusals its own text (e.g. `NicKey::parse(..).map_err(|e| format!("{e:?}"))` in
+    /// `rollback_nagle_disable_typed`, or drop the `op.validate()` check from `run_elevated_undo_op`) and this fails.
+    #[test]
+    fn a_stored_record_outside_the_closed_set_refuses_with_the_one_sentence() {
+        assert!(elevation_error_nothing_ran(STORED_RECORD_REFUSED_UNDO), "nothing ran");
+        // A Nagle key that passes today's alphabet but is not a braced GUID.
+        let snap = NagleInterfaceSnapshot {
+            interface: "2a737441-1930-4402-8d77-b2bebba308a3".into(),
+            prior_ack: Some(1),
+            prior_nodelay: None,
+        };
+        refused_before_any_dispatch("nagle", || rollback_nagle_disable_typed(&[snap]));
+        // A pagefile record with init > max.
+        refused_before_any_dispatch("pagefile", || rollback_pagefile_typed('C', 4096, 1024));
+        // A core-parking percent above 100 (a legacy row: no plan, so no read is asked for).
+        let step = core_parking_undo_step(Some(101), Some(5), None, &|_| Some(true), &|_| Some(true), &|| None);
+        assert_eq!(step, Err(STORED_RECORD_REFUSED_UNDO.to_string()));
+        // An EEE saved string longer than the saved-text grammar.
+        let eee = EeeNicSnapshot {
+            adapter_name: "x".repeat(257),
+            property_display_name: "Energy Efficient Ethernet".into(),
+            prior_value: "Enabled".into(),
+        };
+        refused_before_any_dispatch("eee", || rollback_eee_disable_typed(&[eee]));
+        // More EEE targets than one op carries.
+        let many: Vec<EeeNicSnapshot> = (0..=crate::elevated_ops::MAX_TARGETS)
+            .map(|i| EeeNicSnapshot {
+                adapter_name: format!("Ethernet {i}"),
+                property_display_name: "Energy Efficient Ethernet".into(),
+                prior_value: "Enabled".into(),
+            })
+            .collect();
+        refused_before_any_dispatch("eee count", || rollback_eee_disable_typed(&many));
+        // A power-plan setting pair that is neither of the two the apply writes (refused before any read).
+        refused_before_any_dispatch("power setting", || {
+            rollback_power_plan_setting_typed("11111111-2222-3333-4444-555555555555", SUB_PROCESSOR_GUID, CPMINCORES_GUID, 1, 1)
+        });
+    }
+
+    /// A9: what an undo hands the helper is the op of the row it undoes, with the row's own values (one family
+    /// each; the goldens prove the composed bytes). Break: swap `ac` and `dc` in the core-parking undo's op and
+    /// this fails.
+    #[test]
+    fn an_undo_hands_the_helper_the_op_of_its_row() {
+        use crate::elevated_ops::{CoreParkingTarget, ElevatedOp, Percent, PlanGuid};
+        let plan = "11111111-2222-3333-4444-555555555555";
+        let step = core_parking_undo_step(Some(40), Some(30), Some(plan), &|_| Some(true), &|_| Some(true), &|| Some(plan.to_string()));
+        let pct = |v| Percent::parse(v).expect("percent");
+        assert_eq!(
+            step,
+            Ok(CoreParkingUndo::Run(ElevatedOp::CoreParkingRestore {
+                ac: pct(40),
+                dc: pct(30),
+                target: CoreParkingTarget::Plan { plan: PlanGuid::parse(plan).expect("plan"), reactivate: true },
+            }))
+        );
+    }
+}
