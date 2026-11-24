@@ -74,7 +74,7 @@
     "drivesUnreadReason": "Only for HDD-only systems — Compy couldn't list this rig's drives.",
     "eeeValueRefused": "Compy found your adapter's Energy-Efficient Ethernet setting, but its details contain characters Compy won't put into a Windows command, so nothing was changed.",
     "eeeValueRefusedUndo": "Compy found this change's saved adapter details, but they contain characters Compy won't put into a Windows command, so it didn't run the undo. The change stays in your Trust Ledger.",
-    "trialHoldsSetting": "A setting this action changes is being tested by a Trial right now, so Compy won't run it on top of the test. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
+    "trialHoldsSetting": "A setting this action changes is being measured by a Trial right now, so Compy won't run it during the Trial. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
     "trialStartInterrupted": "An earlier Trial start of a setting this action changes was interrupted and isn't resolved yet, so Compy won't run it now. Check Test → Applied & history, then try again. Nothing was changed.",
     "benchHoldsSetting": "A setting this action changes is being measured by the benchmark right now, so Compy won't run it on top of the measurement. Wait until the benchmark finishes and puts its change back, or cancel it. Nothing was changed.",
     "unverifiedOthersStart": "One or more other settings Compy changed earlier can't be confirmed as still in place, so a Trial couldn't show that its result is this setting's alone. Undo them in Test → Applied & history, then start the Trial again.",

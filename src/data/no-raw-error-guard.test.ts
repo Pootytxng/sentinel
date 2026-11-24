@@ -227,8 +227,8 @@ describe("B11: the same-setting refusals are mapped in both languages", () => {
     [
       "TRIAL_HOLDS_SETTING_REFUSAL",
       "trialHoldsSetting",
-      "A setting this action changes is being tested by a Trial right now, so Compy won't run it on top of the test. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
-      "这项操作要更改的某项设置正在接受一项试验，所以 Compy 不会在试验期间叠加执行它。请先等试验完成，或在「测试」中用「立即恢复」结束它。没有做任何更改。",
+      "A setting this action changes is being measured by a Trial right now, so Compy won't run it during the Trial. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
+      "这项操作要更改的某项设置正在被一项试验测量，所以 Compy 不会在试验期间执行它。请先等试验完成，或在「测试」中用「立即恢复」结束它。没有做任何更改。",
     ],
     [
       "TRIAL_START_INTERRUPTED_REFUSAL",
@@ -251,6 +251,21 @@ describe("B11: the same-setting refusals are mapped in both languages", () => {
     expect(backendSentenceKey(`experiment not started - ${enText}`)).toBe(s.key);
     // No setting title is ever part of it (the reason it can be mapped at all).
     expect(enText).not.toMatch(/[“”]/);
+  });
+
+  // D7: the Trial refusal named the same thing "a Trial" and "the test". One name: Trial (zh 试验); "Test" / 「测试」
+  // is only the room the way out is in. Break check: put "on top of the test" back into TRIAL_HOLDS_SETTING_REFUSAL
+  // (Rust, backend-error.ts and en app.json together) -> the en expectation fails; put 测试 for the Trial back into
+  // zh trialHoldsSetting -> the zh expectation fails.
+  it("TRIAL_HOLDS_SETTING_REFUSAL calls the Trial a Trial in both languages, never a test", () => {
+    const s = BACKEND_SENTENCES.find((x) => x.rust === "TRIAL_HOLDS_SETTING_REFUSAL")!;
+    for (const text of [s.text, enKeys.trialHoldsSetting]) {
+      expect(text).not.toMatch(/\btest(ed|ing)?\b/);
+      expect(text).toContain("in Test");
+    }
+    const zhText = zhKeys.trialHoldsSetting;
+    expect(zhText.replace("「测试」", "")).not.toContain("测试");
+    expect(zhText).toContain("试验");
   });
 });
 

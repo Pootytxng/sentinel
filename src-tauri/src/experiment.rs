@@ -3981,8 +3981,9 @@ pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> R
 /// in the face" rule), and the titled `format!` these replace could not be mapped. [`held_by_trial_refusal`]
 /// refuses a plain apply or a batch before anything runs, so "Nothing was changed." is true of every caller.
 /// "A setting this action changes" covers the one-click apply and a batch alike (a batch naming it is refused whole).
-pub(crate) const TRIAL_HOLDS_SETTING_REFUSAL: &str = "A setting this action changes is being tested by a Trial \
-     right now, so Compy won't run it on top of the test. Let the Trial finish, or end it with Restore now in \
+/// D7: the held thing is called a Trial (zh 试验) throughout; "test" is only the Test room ("in Test").
+pub(crate) const TRIAL_HOLDS_SETTING_REFUSAL: &str = "A setting this action changes is being measured by a \
+     Trial right now, so Compy won't run it during the Trial. Let the Trial finish, or end it with Restore now in \
      Test, first. Nothing was changed.";
 /// [`TRIAL_HOLDS_SETTING_REFUSAL`] when the Trial's start was interrupted (a Pending record).
 pub(crate) const TRIAL_START_INTERRUPTED_REFUSAL: &str = "An earlier Trial start of a setting this action \
@@ -6762,7 +6763,10 @@ mod experiment_tests {
         let store = [running, stale];
         let refused = held_by_trial_refusal(&store, std::iter::once("hags-on")).expect("the Pending one holds it too");
         assert!(refused.contains("was interrupted") && refused.contains("Nothing was changed"), "{refused}");
-        assert!(held_by_trial_refusal(&store, std::iter::once("game-mode-on")).expect("running").contains("being tested"));
+        assert!(held_by_trial_refusal(&store, std::iter::once("game-mode-on")).expect("running").contains("being measured by a Trial"));
+        // D7: one name for the thing that holds the setting. Break check: put "on top of the test" (or "being
+        // tested") back into TRIAL_HOLDS_SETTING_REFUSAL -> this fails.
+        assert!(!TRIAL_HOLDS_SETTING_REFUSAL.contains(" test") && !TRIAL_HOLDS_SETTING_REFUSAL.contains("tested"));
         // B11: fixed sentences with no setting title, so backend-error.ts can map them (and pins them byte-equal).
         // Break check: put the held setting's title back into either sentence -> these fail.
         assert_eq!(refused, TRIAL_START_INTERRUPTED_REFUSAL);

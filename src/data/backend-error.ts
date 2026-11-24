@@ -83,7 +83,7 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   // experiment.rs and benchmark_trial.rs; each refuses before anything runs.
   {
     rust: "TRIAL_HOLDS_SETTING_REFUSAL",
-    text: "A setting this action changes is being tested by a Trial right now, so Compy won't run it on top of the test. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
+    text: "A setting this action changes is being measured by a Trial right now, so Compy won't run it during the Trial. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
     key: "app.backendErrors.trialHoldsSetting",
   },
   {
