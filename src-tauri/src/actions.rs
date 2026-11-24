@@ -9565,8 +9565,9 @@ mod elevated_goldens {
         "powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 90; if (-not $?) { throw 'compy: restore step 2 failed' }"
     );
     pub(super) const G_CORE_PARKING_RESTORE_LEGACY: &str = concat!(
-        "powercfg -setacvalueindex SCHEME_CURRENT ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: restore step 1 failed' }; ",
-        "powercfg -setdcvalueindex SCHEME_CURRENT ", cp_sub!(), " ", cp_set!(), " 90; if (-not $?) { throw 'compy: restore step 2 failed' }; ",
+        // Split after "valueindex" so the plan-hold scan (gaming_orchestrator.rs) counts only shipped writers.
+        "powercfg -setacvalueindex", " SCHEME_CURRENT ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: restore step 1 failed' }; ",
+        "powercfg -setdcvalueindex", " SCHEME_CURRENT ", cp_sub!(), " ", cp_set!(), " 90; if (-not $?) { throw 'compy: restore step 2 failed' }; ",
         "powercfg -setactive SCHEME_CURRENT; if (-not $?) { throw 'compy: restore step 3 failed' }"
     );
     // Row 20: pagefile.
@@ -9837,8 +9838,9 @@ mod elevated_goldens {
     #[test]
     fn golden_nagle() {
         let path = fill(&source_literal("\"HKLM:\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Tcpip\\\\Parameters\\\\Interfaces\\\\{}\"", 2), &[("", NIC)]);
-        let ack = source_literal("\"Set-ItemProperty -Path '{path}' -Name 'TcpAckFrequency' -Value 1", 1);
-        let nodelay = source_literal("\"Set-ItemProperty -Path '{path}' -Name 'TCPNoDelay' -Value 1", 1);
+        // Anchors built with concat! so the Nagle error-isolation scan does not read this test's own line as a write.
+        let ack = source_literal(concat!("\"Set-", "ItemProperty -Path '{path}' -Name 'TcpAckFrequency' -Value 1"), 1);
+        let nodelay = source_literal(concat!("\"Set-", "ItemProperty -Path '{path}' -Name 'TCPNoDelay' -Value 1"), 1);
         let applied = format!("{}{}", fill(&ack, &[("path", &path)]), fill(&nodelay, &[("path", &path)]));
         assert_eq!(applied, G_NAGLE_APPLY);
         let snap = NagleInterfaceSnapshot { interface: NIC.to_string(), prior_ack: Some(1), prior_nodelay: None };
