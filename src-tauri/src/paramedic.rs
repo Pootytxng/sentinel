@@ -2756,18 +2756,20 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
         if c.affected.iter().any(|s| s.ram_fraction().is_none()) {
             out.unknown("memory");
         } else if let Some(w) = c.affected.iter().copied().filter(|s| full(s)).max_by_key(|s| peak(s)) {
-            // Memory was nearly full in a rough session, but the normal sessions already peaked that high:
-            // that is no change, and it is not "never nearly full" either. Said as what it is. B8: with how many
-            // rough sessions were nearly full (the same RAM_FULL_FRACTION) of how many, every one of which has a
-            // reading here, so the absolute fact is said and not only "as full as".
-            let base_peak = c.base.iter().filter_map(|s| s.peak_ram_bytes).max().unwrap_or(0);
+            // Memory was nearly full in a rough session, but the normal sessions already peaked at or above the
+            // line the rule needs them under (RAM_BASELINE_MAX_FRACTION), so it is not a lead. B8 (review r1): the
+            // measurement and the rule, not a conclusion: how many rough sessions were nearly full (the same
+            // RAM_FULL_FRACTION) of how many (every one has a reading here), the normal sessions' highest share of
+            // their OWN usable memory (the fraction the rule compares, rounded down so it never reads as the line
+            // when under it; a GB figure misleads when the memory size changed), and the line itself.
             let full_count = c.affected.iter().filter(|s| full(s)).count();
             out.ruled_out(
                 "memory-as-full",
                 &[
                     ("peakGb", gb(peak(w))),
                     ("totalGb", gb(w.ram_total_bytes.unwrap_or(0))),
-                    ("basePeakGb", gb(base_peak)),
+                    ("basePercent", format!("{}", (base_max * 100.0).floor() as u32)),
+                    ("baseLine", format!("{}", (RAM_BASELINE_MAX_FRACTION * 100.0).round() as u32)),
                     ("full", full_count.to_string()),
                     ("count", c.affected.len().to_string()),
                 ],

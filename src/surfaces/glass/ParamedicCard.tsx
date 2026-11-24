@@ -692,13 +692,15 @@ function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | n
     case "memory-pressure":
       return t("paramedic.checked.memoryPressure", { percent: a.percent, count: Number(a.count ?? 1) });
     case "memory-as-full":
-      // B8: how many rough sessions were nearly full, of how many, so the absolute fact is said, not only "as full as".
+      // B8: the measurement and Compy's rule, not a conclusion: how many rough sessions were nearly full, of how many,
+      // the normal sessions' highest share of their own usable memory, and the line the rule applies.
       return t("paramedic.checked.memoryAsFull", {
         count: Number(a.count ?? 1),
         full: a.full ?? "1",
         peakGb: a.peakGb,
         totalGb: a.totalGb,
-        basePeakGb: a.basePeakGb,
+        basePercent: a.basePercent,
+        baseLine: a.baseLine,
       });
     case "setting-drift":
       return t("paramedic.checked.settingDrift");
@@ -1303,9 +1305,13 @@ function AlsoPossible({ list, d, ctx, recovered }: { list: ParamedicFinding[]; d
 
 function Checked({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t } = ctx;
-  const ruled = present(d.not_it.map((n) => ruledOutLine(n, ctx)));
+  // B8 review r1: a line that is measured but kept out by Compy's own rule (memory nearly full in a rough session while
+  // the normal sessions were already high) is not "unchanged": it gets its own group right after the unchanged list.
+  const notALeadIds = ["memory-as-full"];
+  const ruled = present(d.not_it.filter((n) => !notALeadIds.includes(n.id)).map((n) => ruledOutLine(n, ctx)));
+  const notALead = present(d.not_it.filter((n) => notALeadIds.includes(n.id)).map((n) => ruledOutLine(n, ctx)));
   const seen = present(d.seen.map((s) => seenLine(s, ctx)));
-  if (ruled.length === 0 && seen.length === 0) return null;
+  if (ruled.length === 0 && notALead.length === 0 && seen.length === 0) return null;
   return (
     <Fold title={t("paramedic.checked.title")} testid="paramedic-checked">
       {ruled.length > 0 && (
@@ -1313,6 +1319,16 @@ function Checked({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
           <p className="gl-row-title">{t("paramedic.checked.ruledOut")}</p>
           <ul className="gl-para-lines">
             {ruled.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {notALead.length > 0 && (
+        <div data-testid="paramedic-not-a-lead">
+          <p className="gl-row-title">{t("paramedic.checked.notALead")}</p>
+          <ul className="gl-para-lines">
+            {notALead.map((l) => (
               <li key={l}>{l}</li>
             ))}
           </ul>

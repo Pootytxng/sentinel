@@ -755,7 +755,8 @@ fn memory_already_that_full_in_normal_sessions_is_not_never_nearly_full() {
     let ids: Vec<&str> = d.not_it.iter().map(|n| n.id).collect();
     assert!(!ids.contains(&"memory-pressure"), "the rough sessions peaked at 92-97%, so it is never 'never nearly full'");
     let m = d.not_it.iter().find(|n| n.id == "memory-as-full").expect("said as what it is");
-    assert!(m.args.contains_key("peakGb") && m.args.contains_key("totalGb") && m.args.contains_key("basePeakGb"));
+    assert!(m.args.contains_key("peakGb") && m.args.contains_key("totalGb") && m.args.contains_key("basePercent"));
+    assert_eq!(m.args["baseLine"], "80", "the line the rule applies, from RAM_BASELINE_MAX_FRACTION");
     assert!(d.findings.iter().all(|f| f.id != "memory-pressure"), "no change, so no finding");
     // B8: the line says how many rough sessions were nearly full, of how many (the absolute fact, not only "as full
     // as"). Normal sessions at 85%, rough ones at 95% and 85%: one of two. Break check: count every rough session as
@@ -774,6 +775,29 @@ fn memory_already_that_full_in_normal_sessions_is_not_never_nearly_full() {
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     let m = d.not_it.iter().find(|n| n.id == "memory-as-full").expect("said as what it is");
     assert_eq!((m.args["full"].as_str(), m.args["count"].as_str()), ("1", "2"), "{:?}", m.args);
+    assert_eq!((m.args["basePercent"].as_str(), m.args["baseLine"].as_str()), ("85", "80"), "{:?}", m.args);
+    // B8 review r1: the memory size changed between the normal and the rough sessions (13.0 of 15.9 GB, then 30.4 of
+    // 31.4 GB). The normal side is said as a share of ITS OWN usable memory, rounded down (81.8% -> 81), never as GB
+    // beside the bigger total. Break check: compute it from the rough session's total (the figure changes).
+    let gib = |x: f64| Some((x * 1_073_741_824.0) as u64);
+    let mut sess = steady(4);
+    for s in sess.iter_mut() {
+        s.peak_ram_bytes = gib(13.0);
+        s.ram_total_bytes = gib(15.9);
+    }
+    let mut r = facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0);
+    r.peak_ram_bytes = gib(30.4);
+    r.ram_total_bytes = gib(31.4);
+    sess.push(r);
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let m = d.not_it.iter().find(|n| n.id == "memory-as-full").expect("normal at 81%: not a lead by the rule");
+    assert_eq!(
+        (m.args["basePercent"].as_str(), m.args["peakGb"].as_str(), m.args["totalGb"].as_str(), m.args["full"].as_str(), m.args["count"].as_str()),
+        ("81", "30.4", "31.4", "1", "1"),
+        "{:?}",
+        m.args
+    );
+    assert!(!m.args.contains_key("basePeakGb"), "no GB figure beside a different total");
     // And when every rough session really stayed below 90%, the plain line is still right.
     let mut sess = steady(4);
     for s in sess.iter_mut() {
@@ -3728,6 +3752,11 @@ mod recovery_f3 {
 
     /// Four normal sessions peaking 20 of 33.7 GB, one rough one on day 9 peaking 31.0 (nearly full), then `after`.
     fn ram_then(after: Vec<SessionFacts>) -> Diagnosis {
+        ram_rough_then(&[(9, Some(31.0))], after)
+    }
+
+    /// Four normal sessions peaking 20 of 33.7 GB, rough sessions `(day, peak of 33.7 GB or no reading)`, then `after`.
+    fn ram_rough_then(rough: &[(u32, Option<f64>)], after: Vec<SessionFacts>) -> Diagnosis {
         let mut v: Vec<SessionFacts> = (1..=4)
             .map(|d| {
                 let mut s = on(d, 50.0, None);
@@ -3736,12 +3765,28 @@ mod recovery_f3 {
                 s
             })
             .collect();
-        let mut r = on(9, 30.0, None);
-        r.peak_ram_bytes = gb_of(31.0);
-        r.ram_total_bytes = gb_of(33.7);
-        v.push(r);
+        for &(day, peak) in rough {
+            let mut r = on(day, 30.0, None);
+            r.peak_ram_bytes = peak.and_then(gb_of);
+            r.ram_total_bytes = peak.and_then(|_| gb_of(33.7));
+            v.push(r);
+        }
         v.extend(after);
         with_report(v, Vec::new())
+    }
+
+    // B8 review r1: `roughGb` is the HIGHEST peak of the rough sessions with a reading (not the newest one's), and a
+    // rough session with no reading adds no number (never 0 GB). Break check: take the newest rough session's peak
+    // (roughGb becomes 25.0).
+    #[test]
+    fn b8_rough_gb_is_the_highest_read_rough_peak_and_an_unread_one_adds_nothing() {
+        let d = ram_rough_then(&[(9, Some(32.0)), (10, Some(25.0)), (11, None)], vec![later(12, true, Some(20.0))]);
+        let lines = ram_since_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["ram-since-lower-clear"], "{lines:?}");
+        assert_eq!(lines[0].args["roughGb"], "32.0");
+        let m = finding_of(&d, "memory-pressure");
+        assert_eq!(m.evidence.iter().find(|e| e.code == "ram-unrecorded").map(|e| e.args["count"].as_str()), Some("1"));
+        assert!(m.evidence.iter().flat_map(|e| e.args.values()).all(|v| v != "0.0"), "{:?}", m.evidence);
     }
 
     /// A session on `day`: clear (600 s, ratio 0.5) or a 2-minute one (not judgeable), peaking `peak` of 33.7 GB

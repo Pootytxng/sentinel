@@ -1501,24 +1501,54 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).not.toMatch(/in these sessions/);
   });
 
-  // B8 (panel 2026-11-23: 30.4 of 31.4 GB read as "fine" under "Unchanged"): memory as full as in the normal sessions
-  // says the absolute fact, how many rough sessions were nearly full of how many, and why it doesn't set them apart.
-  // Break check: drop `count` from the t() call (the singular sentence shows for 2 rough sessions).
-  it("B8: memory as full as in the normal sessions says it was nearly full, in how many, and why that doesn't set them apart", async () => {
-    const args = { peakGb: "30.4", totalGb: "31.4", basePeakGb: "29.8", full: "2", count: "3" };
-    await ask(answerOf([background()], { not_it: [{ id: "memory-as-full", args }] }));
+  // B8 (panel 2026-11-23: 30.4 of 31.4 GB read as "fine" under "Unchanged"; review r1): memory nearly full in a rough
+  // session while the normal sessions were already high says the measurement and Compy's rule, under its own heading
+  // right after the unchanged list, never under "Unchanged since your normal sessions:".
+  // Break checks: drop `count` from the t() call (the singular sentence shows for 3 rough sessions); render it in the
+  // unchanged list (the heading assert fails).
+  it("B8: memory nearly full but not a lead says the measurement and the rule, under its own heading", async () => {
+    const args = { peakGb: "30.4", totalGb: "31.4", basePercent: "94", baseLine: "80", full: "2", count: "3" };
+    await ask(answerOf([background()], { not_it: [{ id: "hardware-change", args: {} }, { id: "memory-as-full", args }] }));
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
-    expect(checked()).toContain(
-      "Memory: nearly full in 2 of the 3 rough sessions (the highest peak was 30.4 of 31.4 GB usable), but your normal sessions also peaked high (29.8 GB), so full memory doesn't set the rough sessions apart.",
+    const group = screen.getByTestId("paramedic-not-a-lead").textContent ?? "";
+    expect(group).toContain("Measured, but not a lead by Compy's rule:");
+    expect(group).toContain(
+      "Memory: nearly full in 2 of the 3 rough sessions (the highest peak was 30.4 of 31.4 GB usable). Your normal sessions peaked as high as 94% of usable memory, and Compy only treats full memory as a lead when normal sessions stayed under 80%.",
     );
+    // The unchanged list keeps only what is unchanged, and comes first.
+    const all = checked();
+    expect(all.indexOf("Graphics card and memory size: the same.")).toBeGreaterThan(-1);
+    expect(group).not.toContain("Graphics card and memory size: the same.");
+    expect(all.indexOf("Unchanged since your normal sessions:")).toBeLessThan(all.indexOf("Measured, but not a lead by Compy's rule:"));
     cleanup();
     await ask(answerOf([background()], { not_it: [{ id: "memory-as-full", args: { ...args, full: "1", count: "1" } }] }));
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     expect(checked()).toContain(
-      "Memory: nearly full in the rough session (peaked 30.4 of 31.4 GB usable), but your normal sessions also peaked high (29.8 GB), so full memory doesn't set the rough session apart.",
+      "Memory: nearly full in the rough session (peaked 30.4 of 31.4 GB usable). Your normal sessions peaked as high as 94% of usable memory, and Compy only treats full memory as a lead when normal sessions stayed under 80%.",
     );
+    expect(checked()).not.toContain("Unchanged since your normal sessions:");
+  });
+
+  it("B8: the not-a-lead memory line and its heading in Chinese", async () => {
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const args = { peakGb: "30.4", totalGb: "31.4", basePercent: "94", baseLine: "80", full: "2", count: "3" };
+      answer.value = answerOf([background()], { not_it: [{ id: "memory-as-full", args }] });
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      const group = screen.getByTestId("paramedic-not-a-lead").textContent ?? "";
+      expect(group).toContain("测到了，但按 Compy 的规则不算线索：");
+      expect(group).toContain(
+        "内存：3 次卡顿的游戏中有 2 次内存几乎用满（最高用到 30.4 GB，可用 31.4 GB）。你正常游戏时内存最高用到可用内存的 94%，而只有正常游戏时一直低于 80%，Compy 才会把内存满当作线索。",
+      );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("a crash complaint that reaches the card gets a truthful line, not the no-game text", async () => {
