@@ -248,7 +248,10 @@ describe("ParamedicCard", () => {
     const i18n = (await import("../../i18n")).default;
     await i18n.changeLanguage("zh-CN");
     try {
-      await ask({ ...base, state: { kind: "needs-more-play", sessions_needed: 2, have: 1, not_counted: 3 }, problem: null, findings: [] });
+      // The button carries its zh name here, so `ask` (which clicks the en one) is not used.
+      answer.value = { ...base, state: { kind: "needs-more-play", sessions_needed: 2, have: 1, not_counted: 3 }, problem: null, findings: [] };
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
       await waitFor(() => expect(screen.getByTestId("paramedic-needs-more-not-counted")).toBeTruthy());
       expect(screen.getByText(
         "要判断你最近一次时长和测量都足够的 Game A 游戏，Compy 要把它与之前 3 次测量充分的 Game A 游戏记录比较，才知道平时是什么样。现在有 1 次。",

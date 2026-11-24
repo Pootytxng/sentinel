@@ -678,6 +678,7 @@
   "cantTell": {
     "title": "Compy 暂时还无法判断",
     "needsMore": "要判断你最近一次时长和测量都足够的 {{game}} 游戏，Compy 要把它与之前 {{total}} 次测量充分的 {{game}} 游戏记录比较，才知道平时是什么样。现在有 {{have}} 次。",
+    "needsMoreNotCounted_one": "Compy 记录的另外 {{count}} 次 {{game}} 游戏时间太短，或 Compy 没能测量到足够的部分，所以不计入。",
     "needsMoreNotCounted_other": "Compy 记录的另外 {{count}} 次 {{game}} 游戏时间太短，或 Compy 没能测量到足够的部分，所以不计入。",
     "needsMoreWithout": "不足 {{total}} 次时，Compy 无法判断 {{game}} 是否运行得比平时差。",
     "partial": "Compy 只测量了你最近一次 {{game}} 游戏的一部分（{{percent}}%），所以不会据此判断。请在 Compy 运行的情况下再玩一次。",
