@@ -212,8 +212,51 @@ describe("ParamedicCard", () => {
   it("can't tell: says why, and never guesses", async () => {
     await ask({ ...base, state: { kind: "needs-more-play", sessions_needed: 2, have: 1 }, problem: null, findings: [] });
     await waitFor(() => expect(screen.getByText("Compy can't tell yet")).toBeTruthy());
-    expect(screen.getByText(/needs 3 normal sessions of Game A/)).toBeTruthy();
+    expect(screen.getByText(/needs 3 normal sessions of it before that one/)).toBeTruthy();
     expect(screen.queryByText("Most likely")).toBeNull();
+  });
+
+  // B7 (b5 plan slice 3): the sessions Compy holds that don't count are named, with why, only when there are
+  // any; the card says what it can't say with fewer than it needs, and never promises a verdict.
+  // Break checks: render the not-counted line at 0 (the absent-at-0 assert fails); pass `have` as its count
+  // (the count assert fails).
+  it("needs more sessions: names the sessions that don't count, only when there are any", async () => {
+    await ask({ ...base, state: { kind: "needs-more-play", sessions_needed: 2, have: 1, not_counted: 3 }, problem: null, findings: [] });
+    await waitFor(() => expect(screen.getByText("Compy can't tell yet")).toBeTruthy());
+    expect(screen.getByTestId("paramedic-needs-more-not-counted").textContent).toBe(
+      "3 other Game A sessions Compy recorded were too short or only partly measured, so they don't count.",
+    );
+    const without = screen.getByTestId("paramedic-needs-more-without").textContent!;
+    expect(without).toBe("With fewer than 3, Compy can't say whether Game A runs worse than usual.");
+    const card = screen.getByTestId("paramedic").textContent!;
+    expect(card).not.toMatch(/\b(will|likely|probably|possible)\b/i);
+    cleanup();
+    await ask({ ...base, state: { kind: "needs-more-play", sessions_needed: 2, have: 1, not_counted: 1 }, problem: null, findings: [] });
+    await waitFor(() => expect(screen.getByTestId("paramedic-needs-more-not-counted").textContent).toBe(
+      "1 other Game A session Compy recorded was too short or only partly measured, so it doesn't count.",
+    ));
+    cleanup();
+    await ask({ ...base, state: { kind: "needs-more-play", sessions_needed: 2, have: 1, not_counted: 0 }, problem: null, findings: [] });
+    await waitFor(() => expect(screen.getByText("Compy can't tell yet")).toBeTruthy());
+    expect(screen.queryByTestId("paramedic-needs-more-not-counted")).toBeNull();
+  });
+
+  it("needs more sessions: says the same in Chinese from the zh-CN keys", async () => {
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8")).cantTell;
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      await ask({ ...base, state: { kind: "needs-more-play", sessions_needed: 2, have: 1, not_counted: 3 }, problem: null, findings: [] });
+      await waitFor(() => expect(screen.getByTestId("paramedic-needs-more-not-counted")).toBeTruthy());
+      expect(screen.getByTestId("paramedic-needs-more-not-counted").textContent).toBe(
+        zh.needsMoreNotCounted_other.replace("{{count}}", "3").replace("{{game}}", "Game A"),
+      );
+      expect(screen.getByTestId("paramedic-needs-more-without").textContent).toBe(
+        zh.needsMoreWithout.replace("{{total}}", "3").replace("{{game}}", "Game A"),
+      );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("measured but nothing recorded changed: reports the problem without inventing a cause", async () => {

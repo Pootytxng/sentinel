@@ -347,7 +347,10 @@ pub(crate) enum DiagnosisState {
     /// F3: an episode of rough sessions is over: the game's newest judged sessions run the way it usually
     /// does. `Diagnosis::recovery` carries the numbers and what the recovery says about each candidate.
     Recovered,
-    NeedsMorePlay { sessions_needed: u8, have: u8 },
+    /// `have`: the normal sessions before the newest judgeable one (the one being judged). B7 `not_counted`:
+    /// the game's other sessions that count toward neither, every one too short or only partly measured
+    /// (not judgeable, or judged on under `BASELINE_COVERAGE` of its time); wire-only.
+    NeedsMorePlay { sessions_needed: u8, have: u8, not_counted: u8 },
 }
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -1035,9 +1038,14 @@ fn diagnose_game(inp: &DiagnoseInputs, complaint: Complaint, game_key: &str) -> 
             }
         }
         Verdict::NeedsMore(have) => {
+            // B7: every other session is one Compy holds but doesn't count. Before the newest judged one,
+            // `have` is the pool, and no session can be flagged rough without a baseline, so the rest were
+            // not judgeable or under BASELINE_COVERAGE; after it, every session is Unjudged by construction.
+            let not_counted = sess.len().saturating_sub(1).saturating_sub(have);
             d.state = DiagnosisState::NeedsMorePlay {
                 sessions_needed: BASELINE_MIN.saturating_sub(have) as u8,
                 have: have.min(BASELINE_MIN) as u8,
+                not_counted: not_counted.min(u8::MAX as usize) as u8,
             };
         }
         // F3: after an episode of rough sessions the next sessions say whether it is over.

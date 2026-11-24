@@ -1600,10 +1600,24 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   } else {
     body = t("paramedic.cantTell.noSessions");
   }
+  // B7 (b5 plan slice 3): on "needs more sessions", the sessions Compy holds that don't count are named with
+  // their reason (only when there are any), and the card says what it can't say without the rest. Counts
+  // only, no likelihood word, and no promise that more sessions bring a verdict.
+  const notCounted = s.kind === "needs-more-play" ? (s.not_counted ?? 0) : 0;
   return (
     <>
       <h2 className="gl-card-title">{t("paramedic.cantTell.title")}</h2>
       <p>{body}</p>
+      {s.kind === "needs-more-play" && notCounted > 0 && (
+        <p data-testid="paramedic-needs-more-not-counted">
+          {t("paramedic.cantTell.needsMoreNotCounted", { game, count: notCounted })}
+        </p>
+      )}
+      {s.kind === "needs-more-play" && (
+        <p data-testid="paramedic-needs-more-without">
+          {t("paramedic.cantTell.needsMoreWithout", { game, total: s.have + s.sessions_needed })}
+        </p>
+      )}
       {s.kind === "cant-tell" && s.why.kind === "frame-cap-changed" && d.findings[0] && (
         <Candidates rows={[d.findings[0]]} rest={[]} d={d} ctx={ctx} recovered={false} />
       )}

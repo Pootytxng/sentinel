@@ -389,9 +389,9 @@ fn a_lower_average_alone_never_fires() {
 #[test]
 fn fewer_than_three_baseline_sessions_needs_more_play() {
     let d = diagnose(&inputs(steady(3)), Complaint::Slow, Some("g"));
-    assert_eq!(d.state, DiagnosisState::NeedsMorePlay { sessions_needed: 1, have: 2 });
+    assert_eq!(d.state, DiagnosisState::NeedsMorePlay { sessions_needed: 1, have: 2, not_counted: 0 });
     let d = diagnose(&inputs(steady(1)), Complaint::Slow, Some("g"));
-    assert_eq!(d.state, DiagnosisState::NeedsMorePlay { sessions_needed: 3, have: 0 });
+    assert_eq!(d.state, DiagnosisState::NeedsMorePlay { sessions_needed: 3, have: 0, not_counted: 0 });
     // Four sessions: the fourth has exactly three before it and is judged.
     let d = diagnose(&inputs(steady(4)), Complaint::Slow, Some("g"));
     assert_eq!(d.state, DiagnosisState::NothingWrong { sessions_checked: 1 });
@@ -405,6 +405,28 @@ fn a_thinly_measured_session_is_not_a_normal_one() {
         .collect();
     let d = diagnose(&inputs(thin), Complaint::Slow, Some("g"));
     assert!(matches!(d.state, DiagnosisState::NeedsMorePlay { have: 0, .. }), "{:?}", d.state);
+    // B7: the four earlier thin sessions are held but don't count, and the card says so (the newest is
+    // the one being judged, so it is neither counted nor "not counted").
+    assert!(matches!(d.state, DiagnosisState::NeedsMorePlay { have: 0, not_counted: 4, .. }), "{:?}", d.state);
+}
+
+// B7 (b5 plan slice 3): "You have 1" after playing four times said nothing about the other three. The
+// state carries how many sessions Compy holds that don't count (too short or only partly measured), so
+// have + not_counted + the judged one is every session it holds. Break check: count every session
+// (`sess.len()`) as not counted; the counts below fail.
+#[test]
+fn needs_more_play_counts_the_sessions_that_dont_count() {
+    // One normal session, a 2-minute one (not judgeable), then a normal one (judged: one normal before it),
+    // then another 2-minute one after it (unjudged by construction).
+    let mut sess = steady(1);
+    sess.push(facts("2026-10-02T10:00:00Z", 120, 120, 100.0, 50.0));
+    sess.push(facts("2026-10-03T10:00:00Z", 600, 600, 100.0, 50.0));
+    sess.push(facts("2026-10-04T10:00:00Z", 120, 120, 100.0, 50.0));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert_eq!(d.state, DiagnosisState::NeedsMorePlay { sessions_needed: 2, have: 1, not_counted: 2 });
+    // Nothing held but the judged one: nothing to explain.
+    let d = diagnose(&inputs(steady(1)), Complaint::Slow, Some("g"));
+    assert!(matches!(d.state, DiagnosisState::NeedsMorePlay { not_counted: 0, .. }), "{:?}", d.state);
 }
 
 #[test]

@@ -1412,7 +1412,9 @@ export type ParamedicState =
   | { kind: "found" }
   /** F3: the episode is over; Diagnosis.recovery says what the recovery shows. */
   | { kind: "recovered" }
-  | { kind: "needs-more-play"; sessions_needed: number; have: number };
+  /** B7 `not_counted`: the game's other sessions Compy holds that count toward nothing (too short or only
+   *  partly measured; paramedic.rs). Optional only so older fixtures read as 0. */
+  | { kind: "needs-more-play"; sessions_needed: number; have: number; not_counted?: number };
 
 export type ParamedicMetric = { ratio: number; p99_ms: number | null; avg_fps: number };
 
