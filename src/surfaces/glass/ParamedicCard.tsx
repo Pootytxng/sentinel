@@ -497,7 +497,8 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       // number is printed from it.
       return t("paramedic.evidence.driverBackClearUnjudged", { game, from: a.from, n: a.count, count: Number(a.later ?? 2), date: dates.day(a.at) });
     case "driver-back-between":
-      return t("paramedic.evidence.driverBackBetween", { game });
+      // b12: `count` (sessions read since) picks "One ... session" / "The sessions"; the _other text prints no number.
+      return t("paramedic.evidence.driverBackBetween", { game, count: Number(a.count ?? 2) });
     // B10b: what this game's sessions say since the one Compy change in the window was undone (the ledger's own undo
     // time). Dated facts, never "the reason", never that the undo worked; no reading is "no reading", never a number.
     case "compy-undone-rough":
@@ -522,7 +523,8 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     case "drift-restored-clear":
       return t("paramedic.evidence.driftRestoredClear", { game, date: dates.day(a.at) });
     case "drift-restored-between":
-      return t("paramedic.evidence.driftRestoredBetween", { game });
+      // b12: `count` (sessions read since) picks "One ... session" / "The sessions"; the _other text prints no number.
+      return t("paramedic.evidence.driftRestoredBetween", { game, count: Number(a.count ?? 2) });
     case "recovered-drift-back":
       return t("paramedic.evidence.recoveredDriftBack", { restored: dates.dayTime(a.restored) });
     // The count of changes that are on came back up to what it was because the setting was turned back on.

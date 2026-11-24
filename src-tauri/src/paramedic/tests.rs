@@ -3112,6 +3112,18 @@ mod recovery_f3 {
         assert_eq!(f.confidence, Certainty::Possible, "said, never support");
     }
 
+    /// b12: one session on the earlier driver again that is neither rough nor clear (ratio 0.42): the between line
+    /// carries how many sessions were read since, so the card can say "One ... session". Break check: drop
+    /// ("count", ...) from the driver-back-between arm -> fails.
+    #[test]
+    fn b12_a_between_session_on_the_earlier_driver_again_carries_its_count() {
+        let d = run(with_extra(episode(), vec![on(10, 42.0, Some("1.0"))]));
+        let f = finding_of(&d, "gpu-driver-change");
+        let line = f.evidence.iter().find(|e| e.code == "driver-back-between").unwrap_or_else(|| panic!("{:?}", driver_codes(&d)));
+        assert_eq!(line.args["count"], "1");
+        assert!(!line.against);
+    }
+
     /// B4 ("what changed since the last check"): the answer carries the game's own recorded-session count and newest
     /// start, so "no new session" is said from a count, never from the rows the card happens to show.
     #[test]
@@ -3287,6 +3299,9 @@ mod recovery_f3 {
         let f = finding_of(&d, "setting-drift");
         assert!(f.evidence.iter().any(|e| e.code == "drift-restored-between"), "{:?}", drift_codes(&d));
         assert!(f.evidence.iter().all(|e| e.code != "drift-restored-clear" && !e.against));
+        // b12: the line carries how many sessions were read since (here one), so the card can say "One ... session".
+        // Break check: drop ("count", ...) from the drift-restored-between arm -> fails.
+        assert_eq!(f.evidence.iter().find(|e| e.code == "drift-restored-between").unwrap().args.get("count").map(String::as_str), Some("1"));
     }
 
     #[test]

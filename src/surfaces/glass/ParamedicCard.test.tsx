@@ -3040,8 +3040,22 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
   it("a session that was too short or mostly unread is said as not judged, never as 'none recorded'", async () => {
     const un = ev("drift-restored-unjudged", { restored: BACK, count: "1" }, { source: "sessions", kind: "unknown" });
     const text = await open({ findings: [suspect([un])] });
-    expect(text).toContain("1 Game A session has been recorded since it was back on, but it was too short or only partly measured, so Compy didn't judge it.");
+    // b12 (review r1 leftover): b10b's wording. Break check: put back "too short or only partly measured" -> fails.
+    expect(text).toContain("1 Game A session has been recorded since it was back on, but it was too short, or Compy couldn't measure enough of it, so Compy didn't judge it.");
     expect(text).not.toContain("No Game A session has been recorded");
+  });
+
+  // b12 (review r1 leftover): one session read since it was back on, neither rough nor clear: singular, in the words
+  // that hold for a session under another frame cap too. Break check: drop driftRestoredBetween_one (or stop passing
+  // `count`) -> fails.
+  it("one session read since it was back on that was neither rough nor clear says 'One ... session'", async () => {
+    const one = ev("drift-restored-between", { restored: BACK, count: "1" }, { source: "sessions", kind: "unknown" });
+    let text = await open({ findings: [suspect([one])] });
+    expect(text).toContain("One Game A session since it was back on was measured well enough to read, and it wasn't clearly in its usual range, so Compy can't tell yet.");
+    cleanup();
+    const two = ev("drift-restored-between", { restored: BACK, count: "2" }, { source: "sessions", kind: "unknown" });
+    text = await open({ findings: [suspect([two])] });
+    expect(text).toContain("The sessions since it was back on weren't clearly in Game A's usual range, so Compy can't tell yet.");
   });
 
   it("two clear sessions: the recovery says it is consistent with the setting and does not prove it", async () => {
@@ -3346,7 +3360,8 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       ["evidence", "driftRestoredRough_one"],
       ["evidence", "driftRestoredRough_other"],
       ["evidence", "driftRestoredClear"],
-      ["evidence", "driftRestoredBetween"],
+      ["evidence", "driftRestoredBetween_one"],
+      ["evidence", "driftRestoredBetween_other"],
       ["evidence", "driftRestoredItem"],
       ["evidence", "driftRestoredNamed_one"],
       ["evidence", "driftRestoredNamed_other"],
@@ -3642,6 +3657,30 @@ describe("ParamedicCard: the driver read as the earlier version again (B4)", () 
     const two = { ...one, args: { back: BACK, count: "2" } };
     text = await open(driverRow([changed, back, two]));
     expect(text).toContain("2 Game A sessions have been recorded since, but each was too short, or Compy couldn't measure enough of it, so Compy didn't judge them.");
+  });
+
+  // b12 (review r1 leftover): one session read since, neither rough nor clear: singular. Break check: drop
+  // driverBackBetween_one (or stop passing `count`) -> fails.
+  it("one session on the earlier driver again that was neither rough nor clear says 'One ... session'", async () => {
+    const one = { kind: "unknown" as const, code: "driver-back-between", args: { back: BACK, count: "1" }, against: false, source: "sessions" };
+    let text = await open(driverRow([changed, back, one]));
+    expect(text).toContain("One Game A session since was measured well enough to read, and it wasn't clearly in its usual range, so Compy can't tell yet.");
+    cleanup();
+    const two = { ...one, args: { back: BACK, count: "2" } };
+    text = await open(driverRow([changed, back, two]));
+    expect(text).toContain("The sessions since weren't clearly in Game A's usual range, so Compy can't tell yet.");
+  });
+
+  // b12 review r1 gap: the zh-CN driver-back lines b12 changed, pinned word for word (zh has one plural form, so the
+  // _other text is what every count reads). Break check: put back "时间太短或只测量了一部分" or "此后的几次游戏" -> fails.
+  it("zh-CN: the driver-back lines b12 changed say the same in Chinese", () => {
+    const zh = (JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8")) as Record<string, Record<string, string>>).evidence;
+    expect(zh.driverBackUnjudged_other).toBe("此后记录到 {{count}} 次 {{game}} 的游戏，但时间太短，或 Compy 没能测量到足够的部分，所以 Compy 没有做判断。");
+    expect(zh.driverBackClearUnjudged_other).toBe(
+      "驱动又是 {{from}} 时，{{game}} 有 {{n}} 次游戏表现在平时的范围内，最近一次在 {{date}}。之后的游戏时间太短，或 Compy 没能测量到足够的部分，所以 Compy 还不能说它已恢复到平时的范围。",
+    );
+    expect(zh.driverBackBetween_other).toBe("此后 {{game}} 测量充分的游戏并不明确在平时的范围内，所以 Compy 暂时还无法判断。");
+    for (const k of ["driverBackUnjudged", "driverBackClearUnjudged", "driverBackBetween"]) expect(zh[`${k}_one`], k).toBe(zh[`${k}_other`]);
   });
 
   it("the earlier-driver line is dated and never says 'still on the old driver'", async () => {
