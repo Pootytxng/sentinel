@@ -277,7 +277,7 @@ describe("expand/collapse detail line (e)", () => {
     expect(detail.textContent).toContain("181 1% LOW");
     expect(detail.textContent).toContain("1 SPIKE");
     expect(detail.textContent).toContain(`worst dip ${clock} — OneDrive.exe starting`);
-    expect(detail.textContent).toContain("2 COMPY-CHANGED SETTINGS ON");
+    expect(detail.textContent).toContain("2 COMPY-CHANGED SETTINGS ON OR UNCONFIRMED");
     fireEvent.click(row);
     expect(container.querySelector(".ss-detail")).toBeNull();
   });

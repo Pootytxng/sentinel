@@ -108,7 +108,7 @@
       "titlePost": ",时长 ",
       "oneLow": "1% 最低帧",
       "delta": "{{arrow}} 较上次 {{sign}}{{value}} fps",
-      "changesOn_other": "{{count}} 项由 Compy 更改的设置处于开启状态"
+      "changesOn_other": "{{count}} 项由 Compy 更改的设置已开启或无法确认"
     },
     "autopsyBody": {
       "title": "你核查了一份指南",

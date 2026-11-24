@@ -137,7 +137,7 @@ describe("SessionDebrief (audit M1)", () => {
     expect(tempTile().style.color).not.toBe("");
   });
 
-  it("the context strip counts Compy changes active during the session, and Share exports", async () => {
+  it("the context strip counts the Compy-changed settings on or unconfirmed at session start, and Share exports", async () => {
     const onExport = vi.fn();
     render(
       <ConfirmProvider>
@@ -145,7 +145,7 @@ describe("SessionDebrief (audit M1)", () => {
       </ConfirmProvider>,
     );
     expect(
-      await screen.findByText(/During this session: 2 Compy changes active/),
+      await screen.findByText(/At session start: 2 Compy-changed settings on or unconfirmed/),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Share" }));
     expect(onExport).toHaveBeenCalled();

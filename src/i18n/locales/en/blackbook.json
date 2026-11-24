@@ -113,8 +113,8 @@
       "titlePost": " for ",
       "oneLow": "1% low",
       "delta": "{{arrow}} {{sign}}{{value}} fps vs last",
-      "changesOn_one": "{{count}} Compy-changed setting on",
-      "changesOn_other": "{{count}} Compy-changed settings on"
+      "changesOn_one": "{{count}} Compy-changed setting on or unconfirmed",
+      "changesOn_other": "{{count}} Compy-changed settings on or unconfirmed"
     },
     "autopsyBody": {
       "title": "You fact-checked a guide",

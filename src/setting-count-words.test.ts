@@ -84,6 +84,40 @@ describe("a count of settings says settings (D7)", () => {
     expect(offenders).toEqual([]);
   });
 
+  // D7 review r1 F1: the SESSION count (compy_changes_active, taken when the session began: sessions.rs
+  // SessionAccumulator::with_counts) is "on" only on rows counted by the per-change rule; rows saved before 453-f1
+  // (compy_changes_per_change false) counted every setting not read as off, unreadable and unprobed included
+  // (sessions.rs:125-129, history.rs ActiveCheck::legacy_active). No TS reader tells the two apart, so every session
+  // label says "on or unconfirmed", true on both. Break check: restore monitor.sessionStack.changesOn_other to
+  // "{{count}} COMPY-CHANGED SETTINGS ON" (or zh blackbook sessionBody.changesOn_other to "...处于开启状态") -> fails.
+  it("the four session-start labels say 'on or unconfirmed', never plain 'on' (both counting rules)", () => {
+    const SESSION_KEYS = [
+      "blackbook.blackbookConsole.sessionBody.changesOn",
+      "monitor.monitorConsole.changesOn",
+      "monitor.sessionStack.changesOn",
+      "monitor.sessionDebrief.changesActive",
+    ];
+    const en = locale("en");
+    const zh = locale("zh-CN");
+    const offenders: string[] = [];
+    for (const key of SESSION_KEYS) {
+      const enForms = forms(en, key);
+      const zhForms = forms(zh, key);
+      if (enForms.length === 0 || zhForms.length === 0) offenders.push(`${key}: missing en or zh`);
+      for (const [k, s] of enForms) {
+        if (!/\bon or unconfirmed\b/i.test(s)) offenders.push(`${k}: no "on or unconfirmed" in "${s}"`);
+        if (!/\bsettings?\b/i.test(s)) offenders.push(`${k}: no "setting(s)" in "${s}"`);
+      }
+      for (const [k, s] of zhForms) {
+        if (!/(已开启或无法确认|处于开启状态或无法确认)/.test(s)) offenders.push(`${k}: no 已开启或无法确认 in "${s}"`);
+        if (!s.includes("设置")) offenders.push(`${k}: no 设置 in "${s}"`);
+      }
+    }
+    expect(offenders).toEqual([]);
+    const debrief = readFileSync(join("src", "surfaces", "SessionDebrief.tsx"), "utf8");
+    expect(debrief).toContain('t("monitor.sessionDebrief.changesActive", { count: s.compy_changes_active })');
+  });
+
   it("each key is still reached by the surface named above (the list is not stale)", () => {
     const src = (p: string) => readFileSync(join("src", ...p.split("/")), "utf8");
     expect(src("surfaces/HomeConsole.tsx")).toContain('t("home.homeConsole.inEffect.unconfirmed", { count: inEffect.unknown })');
