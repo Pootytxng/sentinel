@@ -2816,10 +2816,10 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
     openAll();
     const text = screen.getByTestId("paramedic").textContent ?? "";
     const d = day(when);
-    expect(text).toContain(`Memory peaked at 20.0 of 31.4 GB usable in your Game A session on ${d}; the highest peak in the rough sessions was 30.4 GB.`);
+    expect(text).toContain(`Memory peaked at 20.0 of 31.4 GB usable in your Game A session on ${d}; the highest peak Compy read in the rough sessions was 30.4 GB.`);
     expect(text).toContain(`Memory was nearly full again in your Game A session on ${d}: it peaked at 20.0 of 31.4 GB usable.`);
     expect(text).toContain(
-      `Memory peaked at 20.0 of 31.4 GB usable in your Game A session on ${d}, against 30.4 GB at most in the rough sessions, and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`,
+      `Memory peaked at 20.0 of 31.4 GB usable in your Game A session on ${d}, against 30.4 GB, the highest peak Compy read in the rough sessions, and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`,
     );
     expect(text).toContain(
       `Memory was nearly full again in your Game A session on ${d} (it peaked at 20.0 of 31.4 GB usable), and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`,
@@ -2843,54 +2843,68 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
     }
   });
 
-  // B9: a different usable total on the rough side is said beside its peak, and one rough session is said as one.
-  // Break checks: ignore roughTotalGb (the totals sentences are missing); ignore roughCount (the singular ones are).
-  it("B9: the rough side's own total when it differs, and one rough session in the singular, en and zh", async () => {
+  // B9 (review r1): one table over every key choice of the two lines that name the rough side: line kind x rough total
+  // sent or not x one rough session or several, in en AND zh, each rendered alone and asserted as its literal sentence,
+  // with the other seven sentences absent, so a wrong key choice fails. The date is read off the unread line rendered
+  // beside it (the card's own date format in each language) and put into the literal.
+  // Break checks: ignore roughTotalGb; ignore roughCount; swap the Single and plural keys of one line kind.
+  it("B9: every rough-side sentence is the one its line, total and count choose, en and zh", async () => {
     const when = "2026-11-22T10:00:00Z";
-    const line = (code: string, extra: Record<string, string>) =>
-      ({ kind: "measured", code, args: { date: when, peakGb: "20.0", totalGb: "63.9", roughGb: "30.4", ...extra }, against: false, source: "sessions" }) as F["evidence"][number];
-    const mem = (lines: F["evidence"]) => find("memory-pressure", { evidence: lines, fix: steps("memory-pressure") });
-    const show = async (lines: F["evidence"], button: string) => {
-      answer.value = { ...base, why_first: null, findings: [mem(lines)] };
+    type Combo = { code: "ram-since" | "ram-since-lower-clear"; total: boolean; one: boolean };
+    const combos: Combo[] = [];
+    for (const code of ["ram-since", "ram-since-lower-clear"] as const)
+      for (const total of [false, true]) for (const one of [true, false]) combos.push({ code, total, one });
+    const enTail = " One session so far; Compy says a game is back in its usual range after two.";
+    const en = (c: Combo): string => {
+      const head = "Memory peaked at 20.0 of 63.9 GB usable in your Game A session on <D>";
+      const rough = c.total ? "30.4 of 31.4 GB usable" : "30.4 GB";
+      if (c.code === "ram-since") {
+        return c.one ? `${head}; the rough session peaked at ${rough}.` : `${head}; the highest peak Compy read in the rough sessions was ${rough}.`;
+      }
+      return c.one
+        ? `${head}, against ${rough} in the rough session, and the <D> session ran in its usual range.${enTail}`
+        : `${head}, against ${rough}, the highest peak Compy read in the rough sessions, and that session ran in its usual range.${enTail}`;
+    };
+    const zhTail = "目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。";
+    const zh = (c: Combo): string => {
+      const head = "<D> 那次 Game A 游戏内存最高用到 20.0 GB（可用 63.9 GB）";
+      const rough = c.total ? "30.4 GB（可用 31.4 GB）" : "30.4 GB";
+      const who = c.one ? "卡顿的那一次最高为" : "卡顿的那几次中读到的最高为";
+      if (c.code === "ram-since") return `${head}；${who} ${rough}。`;
+      return c.one ? `${head}，${who} ${rough}，<D> 那次表现在平时的范围内。${zhTail}` : `${head}，${who} ${rough}，那次表现在平时的范围内。${zhTail}`;
+    };
+    const render1 = async (c: Combo, button: string): Promise<string> => {
+      const args: Record<string, string> = { date: when, peakGb: "20.0", totalGb: "63.9", roughGb: "30.4", roughCount: c.one ? "1" : "3" };
+      if (c.total) args.roughTotalGb = "31.4";
+      const lines = [
+        { kind: "measured", code: c.code, args, against: false, source: "sessions" },
+        { kind: "unknown", code: "ram-since-unread", args: { date: when }, against: false, source: "sessions" },
+      ] as F["evidence"];
+      answer.value = { ...base, why_first: null, findings: [find("memory-pressure", { evidence: lines, fix: steps("memory-pressure") })] };
       render(<ParamedicCard />);
       fireEvent.click(screen.getByRole("button", { name: button }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       return screen.getByTestId("paramedic").textContent ?? "";
     };
-    const d = day(when);
-    let text = await show(
-      [
-        line("ram-since", { roughTotalGb: "31.4", roughCount: "1" }),
-        line("ram-since-lower-clear", { roughTotalGb: "31.4", roughCount: "3" }),
-      ],
-      "Something's wrong",
-    );
-    expect(text).toContain(`Memory peaked at 20.0 of 63.9 GB usable in your Game A session on ${d}; the rough session peaked at 30.4 of 31.4 GB usable.`);
-    expect(text).toContain(
-      `Memory peaked at 20.0 of 63.9 GB usable in your Game A session on ${d}, against a highest peak of 30.4 of 31.4 GB usable in the rough sessions, and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`,
-    );
-    cleanup();
-    text = await show([line("ram-since", { roughCount: "3" }), line("ram-since-lower-clear", { roughCount: "1" })], "Something's wrong");
-    expect(text).toContain(`Memory peaked at 20.0 of 63.9 GB usable in your Game A session on ${d}; the highest peak in the rough sessions was 30.4 GB.`);
-    expect(text).toContain(
-      `Memory peaked at 20.0 of 63.9 GB usable in your Game A session on ${d}, against 30.4 GB in the rough session, and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`,
-    );
-    expect(text).not.toContain("the rough sessions was 30.4 GB usable");
-    cleanup();
+    const check = async (lang: "en" | "zh", sentence: (c: Combo) => string, button: string, dateOf: RegExp) => {
+      for (const c of combos) {
+        const text = await render1(c, button);
+        const date = dateOf.exec(text)?.[1];
+        expect(date, `${lang} date`).toBeTruthy();
+        const want = sentence(c).split("<D>").join(date!);
+        expect(text, `${lang} ${JSON.stringify(c)}`).toContain(want);
+        for (const other of combos.filter((o) => o !== c)) {
+          expect(text, `${lang} ${JSON.stringify(c)} must not say ${JSON.stringify(other)}`).not.toContain(sentence(other).split("<D>").join(date!));
+        }
+        cleanup();
+      }
+    };
+    await check("en", en, "Something's wrong", /Compy has no memory reading for your Game A session on (.+?)\./);
     const i18n = (await import("../../i18n")).default;
     await i18n.changeLanguage("zh-CN");
     try {
-      text = await show(
-        [line("ram-since", { roughTotalGb: "31.4", roughCount: "1" }), line("ram-since-lower-clear", { roughCount: "1" })],
-        "出问题了",
-      );
-      // The date is in the zh date format; the sentence around it is literal.
-      expect(text).toMatch(/\S+ 那次 Game A 游戏内存最高用到 20\.0 GB（可用 63\.9 GB）；卡顿的那一次最高为 30\.4 GB（可用 31\.4 GB）。/);
-      expect(text).toMatch(
-        /\S+ 那次 Game A 游戏内存最高用到 20\.0 GB（可用 63\.9 GB），卡顿的那一次最高为 30\.4 GB，\S+ 那次表现在平时的范围内。目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。/,
-      );
-      expect(text).not.toContain("卡顿的那几次");
+      await check("zh", zh, "出问题了", /Compy 没有 (\S+) 那次 Game A 游戏的内存读数。/);
     } finally {
       await i18n.changeLanguage("en");
     }
@@ -2916,7 +2930,7 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
       const text = screen.getByTestId("paramedic").textContent ?? "";
       // The date is in the zh date format; the sentence around it is literal.
       expect(text).toContain(
-        " 那次 Game A 游戏内存最高用到 20.0 GB（可用 31.4 GB），卡顿的那几次最高为 30.4 GB，那次表现在平时的范围内。目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。",
+        " 那次 Game A 游戏内存最高用到 20.0 GB（可用 31.4 GB），卡顿的那几次中读到的最高为 30.4 GB，那次表现在平时的范围内。目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。",
       );
       expect(text).toMatch(/Compy 没有 \S+ 那次 Game A 游戏的内存读数。/);
     } finally {
