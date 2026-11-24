@@ -127,14 +127,14 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }
 
-/// This process's user SID as a string (`S-1-5-21-...`), from its own token (monitoring.rs
+/// This process's user SID as a string (`S-1-5-21-...`), from its own token (own_token.rs
 /// `with_own_token`: our own token, read-only, closed after).
 fn own_user_sid() -> std::io::Result<String> {
     use windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_USER};
     // SAFETY: the buffer is 8-aligned, outlives the calls and its byte length is passed; the SID pointer
     // inside points into it and is read before it is dropped; the SID string is freed with LocalFree
     // after it is copied.
-    crate::monitoring::with_own_token(|token| unsafe {
+    crate::own_token::with_own_token(|token| unsafe {
         let mut needed = 0u32;
         let _ = GetTokenInformation(token, TokenUser, None, 0, &mut needed);
         if needed == 0 || needed > (1 << 12) {

@@ -56,6 +56,7 @@ mod machine_model; // Shared Machine Model v1 (Roadmap Phase 2, #385) — READ-O
                    // nothing, persists nothing; `compose` is pure over borrowed inputs.
 mod other_load; // TG-context v2 - RECORD ONLY: how busy everything but the game was (CPU share via a handle-free process snapshot, GPU via the GPU Engine counters), numbers only; feeds no verdict, band or wording.
 mod monitoring;
+mod own_token; // A5 Part A (store lock order): reads this process's own token; changes nothing. A leaf: depends on no Compy module.
 mod noise_floor; // P4-noise-store: this game's measured run-to-run noise per game + rig (noise_floors.json), written by Benchmark calibration, read when a Trial concludes. Stale after a driver/Windows/game-build change; never estimated.
 mod overlay_tools; // A4 read-only: detect third-party in-game overlay/OSD tools running (advisory, mutates nothing).
 mod priorities;

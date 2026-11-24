@@ -53,7 +53,7 @@ Rust: `cargo test --manifest-path src-tauri/Cargo.toml`. Dev: `npm run tauri dev
 
 ### Rust module map (`lib.rs` carved into safety-boundary modules)
 
-Complete 2026-11-23 (80 `.rs` files, counted by name; the count lives only here). **★ = the safety boundary
+Complete 2026-11-23 (81 `.rs` files, counted by name; the count lives only here). **★ = the safety boundary
 (mutation, rollback & gates) — scope any mutation-gate change against these first:** `lib.rs`
 (command surface) · `actions.rs` · `history.rs` · `gaming_orchestrator.rs` · `gaming_session.rs` ·
 `game_mode_persist.rs` · `services.rs` · `gpu_profile.rs` · `remote_rules.rs` · `receipts.rs` ·

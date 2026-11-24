@@ -27,6 +27,7 @@ Line counts drift — treat as rough and verify against current code before asse
 **Monitoring, FPS & sessions**
 - `monitoring.rs` (~1300) — monitor-tool orchestration + sensor coverage.
 - `other_load.rs` — non-game load.
+- `own_token.rs` (~20) — reads this process's own token; changes nothing. A leaf (no Compy module), so fps_pipe and monitoring reach the token without an edge into the store modules.
 - `fps.rs` (~1092) — FPS/frametime IPC (`fps.json`/`fps.alive`) from the ETW helper.
 - `sessions.rs` (~569) — session-summary persistence (`sessions.json`).
 - `stutter.rs` (~135) — stutter/1%-low derivation.

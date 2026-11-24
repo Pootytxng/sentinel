@@ -1904,21 +1904,8 @@ pub(crate) fn perf_log_access_from_token_groups(buf: &[u8]) -> PerfLogAccess {
     }
 }
 
-/// Run `f` with a read-only handle to THIS process's own token. (Our own token, never another
-/// process's: nothing here touches the game.)
-pub(crate) fn with_own_token<R>(f: impl FnOnce(windows::Win32::Foundation::HANDLE) -> Option<R>) -> Option<R> {
-    use windows::Win32::Foundation::{CloseHandle, HANDLE};
-    use windows::Win32::Security::TOKEN_QUERY;
-    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-    // SAFETY: GetCurrentProcess is a pseudo-handle; the token handle is closed before returning.
-    unsafe {
-        let mut token = HANDLE::default();
-        OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).ok()?;
-        let out = f(token);
-        let _ = CloseHandle(token);
-        out
-    }
-}
+// The own-token helper lives in the leaf module `own_token` (store lock order: fps_pipe uses it too).
+use crate::own_token::with_own_token;
 
 /// Is this process's token elevated? `None` when it cannot be read.
 pub(crate) fn process_is_elevated() -> Option<bool> {
