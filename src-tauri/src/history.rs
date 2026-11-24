@@ -3972,6 +3972,10 @@ mod batch_apply_tests {
             // A9: the request is typed; its nonce and item ids are data.
             let ids: Vec<&str> = req.items.iter().filter_map(|i| i.id.as_ref().map(|id| id.as_str())).collect();
             assert_eq!(ids, ["fast-startup-off", "hags-enable"], "one typed item per staged rec, in order");
+            // Review r1 item 8: and each item carries exactly its own apply's op.
+            use crate::elevated_ops::ElevatedOp;
+            assert_eq!(req.items[0].ops, [ElevatedOp::FastStartupOff {}]);
+            assert_eq!(req.items[1].ops, [ElevatedOp::HagsEnable {}]);
             let nonce = req.nonce.as_str();
             crate::actions::ElevatedCapture { run: Ok(()), text: format!("{nonce}:fast-startup-off:ok\n{nonce}:end\n") }
         });

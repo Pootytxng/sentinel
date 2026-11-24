@@ -1980,6 +1980,47 @@ mod elevation_batch_tests {
         d
     }
 
+    /// A9 review r1 item 8: the tier hands the helper ONE typed batch request whose items carry each staged item's
+    /// id, in order, with exactly the ops its apply parked. Break: push the tier's request items in reverse (or
+    /// give an item another's ops) and this fails.
+    #[test]
+    fn the_tier_request_carries_each_items_id_and_ops_in_order() {
+        let dir = temp_session_dir("a9-tier-request");
+        let _redirect = SessionDirOverride::begin(&dir);
+        let mut file = fixture_file("gm-a9-request");
+        save_session(&file).expect("fixture save");
+        let parking = |id: &'static str, op: crate::elevated_ops::ElevatedOp| ElevatedItem {
+            id,
+            label: format!("Synthetic {id}"),
+            apply: Box::new(move || {
+                actions::run_elevated_op(op.clone())?;
+                Ok(ApplyResult {
+                    applied_action: AppliedAction::SuspendKnownService { service: KnownService::WSearch },
+                    rollback_action: RollbackAction::ResumeServiceFromSnapshot { service: KnownService::WSearch },
+                    snapshot: Snapshot::Service { prior_state: "Stopped".into(), prior_start_mode: "Manual".into() },
+                    elevation_used: true,
+                })
+            }),
+        };
+        use crate::elevated_ops::{ElevatedOp, Wrapper};
+        let usb = ElevatedOp::HagsEnable {};
+        let svc = ElevatedOp::ServiceSuspend { service: KnownService::SysMain };
+        let (usb2, svc2) = (usb.clone(), svc.clone());
+        actions::fake_next_capture(move |req| {
+            assert_eq!(req.wrapper, Wrapper::Batch);
+            let items: Vec<(&str, &Vec<ElevatedOp>)> =
+                req.items.iter().map(|i| (i.id.as_ref().map(|id| id.as_str()).unwrap_or_default(), &i.ops)).collect();
+            assert_eq!(items, vec![("adv-usb", &vec![usb2]), ("SysMain", &vec![svc2])], "ids, order and ops");
+            let n = req.nonce.as_str();
+            actions::ElevatedCapture { run: Ok(()), text: format!("{n}:adv-usb:ok\n{n}:SysMain:ok\n{n}:end\n") }
+        });
+        let res = apply_elevated_tier(&mut file, vec![parking("adv-usb", usb), parking("SysMain", svc)]);
+        assert!(!actions::unused_fake_capture(), "the tier's one elevation reached the capture");
+        res.expect("both receipts arrived");
+        assert_eq!(file.changes.len(), 2, "both staged changes are in the contract");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     // THE T6 PIN: a full advanced tier (4 items) rides EXACTLY ONE elevation, counted at the
     // dispatch layer in run_elevated_powershell (the forced decline stands in for the real
     // prompt; sink-captured calls are deliberately not counted).

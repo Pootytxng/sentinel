@@ -1812,8 +1812,15 @@ mod tests {
         let hags = || vec![ElevatedOp::HagsEnable {}];
         assert!(ElevatedRequest::batch(vec![("a".to_string(), hags())], N).is_err(), "an id outside the closed union");
         assert!(ElevatedRequest::batch(vec![("adv-usb".to_string(), vec![ElevatedOp::UltimatePlanApply {}])], N).is_err());
-        let many: Vec<(String, Vec<ElevatedOp>)> = (0..=MAX_ITEMS).map(|i| (format!("r{i}"), hags())).collect();
-        assert!(ElevatedRequest::batch(many, N).is_err(), "33 items");
+        // Review r1 F7: 33 DISTINCT VALID ids (r0..r31 and a Gaming tier id), so only the item count can refuse it;
+        // the same 32 are accepted.
+        let mut ids: Vec<String> = (0..MAX_ITEMS).map(|i| format!("r{i}")).collect();
+        assert!(ids.iter().all(|i| ItemId::parse(i).is_ok()));
+        let ok: Vec<(String, Vec<ElevatedOp>)> = ids.iter().map(|i| (i.clone(), hags())).collect();
+        assert!(ElevatedRequest::batch(ok, N).is_ok(), "32 items is the most, and accepted");
+        ids.push("adv-usb".to_string());
+        let many: Vec<(String, Vec<ElevatedOp>)> = ids.iter().map(|i| (i.clone(), hags())).collect();
+        assert_eq!(ElevatedRequest::batch(many, N), Err(Refused::Request), "33 items");
         assert!(ElevatedRequest::batch(vec![("adv-usb".to_string(), hags())], "not-a-nonce").is_err());
         assert!(ElevatedRequest::single(ElevatedOp::NagleDisable { interfaces: vec![] }, N).is_err(), "zero targets");
         let good = ElevatedRequest::batch(vec![("adv-usb".to_string(), hags()), ("SysMain".to_string(), hags())], N).expect("good");

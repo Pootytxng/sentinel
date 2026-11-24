@@ -5020,6 +5020,17 @@ pub(crate) fn power_setting_restore_script(
     }
 }
 
+/// A9 (review r1 F7): the re-commit choice of the power-setting undo, the same three cases
+/// [`power_setting_restore_script`] composes: the recorded plan is the active one -> re-commit it; another plan is
+/// active -> write the values only; the active plan could not be read -> re-commit whichever plan is live.
+pub(crate) fn power_setting_recommit(plan_guid: &str, active: Option<&str>) -> crate::elevated_ops::Recommit {
+    match active {
+        Some(a) if a.trim().eq_ignore_ascii_case(plan_guid.trim()) => crate::elevated_ops::Recommit::Plan,
+        Some(_) => crate::elevated_ops::Recommit::No,
+        None => crate::elevated_ops::Recommit::Current,
+    }
+}
+
 pub(crate) fn rollback_power_plan_setting_typed(
     plan_guid: &str,
     subgroup_guid: &str,
@@ -5072,12 +5083,7 @@ pub(crate) fn rollback_power_plan_setting_typed(
     // Re-commit live when the restored plan is the active one; an unread active plan re-commits
     // whichever plan is live (CR-plan-unread-rollbacks A), never skips the commit.
     let active = current_power_plan_guid();
-    // The same three re-commit cases `power_setting_restore_script` composes (pinned by the A8 goldens).
-    let recommit = match active.as_deref() {
-        Some(a) if a.trim().eq_ignore_ascii_case(plan_guid.trim()) => crate::elevated_ops::Recommit::Plan,
-        Some(_) => crate::elevated_ops::Recommit::No,
-        None => crate::elevated_ops::Recommit::Current,
-    };
+    let recommit = power_setting_recommit(plan_guid, active.as_deref());
     run_elevated_undo_op(ElevatedOp::PowerSettingRestore { plan, setting, ac: prior_ac_value, dc: prior_dc_value, recommit })?;
     Ok(())
 }
@@ -6599,10 +6605,18 @@ pub(crate) fn restore_core_parking_default_with(
     let (ac, dc) = read_priors()?;
     let prior_ac = ac.ok_or("could not parse the core-parking AC index — refusing to restore blind")?;
     // A9: the closed op (a whole plan GUID, percents 0..=100); anything else refuses before anything runs.
-    let blind = || "could not parse the core-parking AC index — refusing to restore blind".to_string();
-    let typed_plan = crate::elevated_ops::PlanGuid::parse(&plan).map_err(|_| blind())?;
-    let typed_ac = crate::elevated_ops::Percent::parse(prior_ac).map_err(|_| blind())?;
-    let typed_dc = dc.map(crate::elevated_ops::Percent::parse).transpose().map_err(|_| blind())?;
+    // (Review r1 F7: each refusal names what it refused.)
+    let typed_plan = crate::elevated_ops::PlanGuid::parse(&plan).map_err(|_| {
+        "Compy couldn't read which power plan Windows is using just now, so it can't record where this change goes. \
+         Nothing was changed; try again in a moment."
+            .to_string()
+    })?;
+    let typed_ac = crate::elevated_ops::Percent::parse(prior_ac)
+        .map_err(|_| "the core-parking AC value Compy read is outside 0-100 — refusing to restore blind".to_string())?;
+    let typed_dc = dc
+        .map(crate::elevated_ops::Percent::parse)
+        .transpose()
+        .map_err(|_| "the core-parking DC value Compy read is outside 0-100 — refusing to restore blind".to_string())?;
     run_elevated(ElevatedOp::CoreParkingDefault { plan: typed_plan, prior_ac: typed_ac, prior_dc: typed_dc })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreCoreParkingDefault,
@@ -10071,5 +10085,159 @@ mod a9_exe_identity_tests {
         let id = crate::data_root::file_identity(&me);
         assert!(id.is_some(), "the running exe's identity is readable");
         assert_eq!(id, crate::data_root::file_identity(&me));
+    }
+}
+
+#[cfg(test)]
+mod a9_caller_tests {
+    //! A9 review r1 item 8: each call site hands the helper the op of the change it makes, with the values its own
+    //! reads recorded (the snapshot), caught by the deferral sink: nothing runs and nothing is dispatched. Sites
+    //! whose reads have a test seam are deterministic; the others read this machine (read-only) and, where a read is
+    //! refused here, say so and check only that a refused apply parks nothing (the precedent of
+    //! experiment.rs `a_core_parking_restore_is_not_refused_while_the_benchmark_holds_another_plan_setting`).
+    use super::*;
+    use crate::elevated_ops::{CoreParkingTarget, EeeTarget, ElevatedOp, NicKey, Percent, PlanGuid, PowerSetting, Recommit, SavedText};
+
+    fn parked(label: &str, f: impl FnOnce() -> Result<ApplyResult, String>) -> Option<(ApplyResult, Vec<ElevatedOp>)> {
+        reset_elevation_dispatch_count();
+        let guard = ElevationDeferral::begin().expect("sink");
+        let r = f();
+        let ops = guard.take_deferred();
+        assert_eq!(elevation_dispatch_count(), 0, "{label}: the sink dispatched nothing");
+        match r {
+            Ok(a) => Some((a, ops)),
+            Err(e) => {
+                assert!(ops.is_empty(), "{label}: a refused apply parks nothing ({e})");
+                eprintln!("{label}: this machine's read refused the apply, op not checked here: {e}");
+                None
+            }
+        }
+    }
+
+    /// Break: hand any of these applies another op or another value (e.g. `ServiceDisable { service:
+    /// KnownService::DiagTrack }` in `apply_service_disable`, `prior_sr: None` in `restore_mmcss_defaults`, or the
+    /// PCIe setting for the USB apply) and this fails.
+    #[test]
+    fn each_apply_hands_the_helper_its_own_op_and_values() {
+        let one = |label: &str, f: &dyn Fn() -> Result<ApplyResult, String>, want: &dyn Fn(&ApplyResult) -> ElevatedOp| {
+            if let Some((a, ops)) = parked(label, f) {
+                assert_eq!(ops, vec![want(&a)], "{label}");
+            }
+        };
+        one("service disable", &|| apply_service_disable(KnownService::SysMain), &|_| ElevatedOp::ServiceDisable { service: KnownService::SysMain });
+        one("service suspend", &|| apply_service_suspend(KnownService::WSearch), &|_| ElevatedOp::ServiceSuspend { service: KnownService::WSearch });
+        one("task disable", &|| apply_disable_scheduled_task(KnownBloatTask::CeipUsb), &|_| ElevatedOp::TaskDisable { task: KnownBloatTask::CeipUsb });
+        one("ultimate", &apply_power_ultimate, &|_| ElevatedOp::UltimatePlanApply {});
+        one("reserved storage", &apply_reserved_storage_off, &|_| ElevatedOp::ReservedStorageOff {});
+        for (sub, set, which) in [
+            (PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, PowerSetting::UsbSelectiveSuspend),
+            (PWR_SUBGROUP_PCIE, PWR_SETTING_PCIE_ASPM, PowerSetting::PcieAspm),
+        ] {
+            one("power setting", &|| apply_power_setting_off_on_ac(sub, set), &|a| match &a.snapshot {
+                Snapshot::PowerPlanSetting { plan_guid, prior_ac_value, .. } => ElevatedOp::PowerSettingOff {
+                    plan: PlanGuid::parse(plan_guid).expect("plan"),
+                    setting: which,
+                    prior_ac: *prior_ac_value,
+                },
+                other => panic!("{other:?}"),
+            });
+        }
+        one("fast startup", &apply_fast_startup_off, &|_| ElevatedOp::FastStartupOff {});
+        one("hags", &apply_hags_enable, &|_| ElevatedOp::HagsEnable {});
+        one("mmcss", &restore_mmcss_defaults, &|a| match &a.snapshot {
+            Snapshot::Mmcss { prior_system_responsiveness, .. } => ElevatedOp::MmcssDefaults { prior_sr: *prior_system_responsiveness },
+            other => panic!("{other:?}"),
+        });
+        one("priority separation", &restore_priority_separation, &|_| ElevatedOp::PrioritySeparationDefault {});
+        one("mpo", &restore_mpo_default, &|_| ElevatedOp::Mpo { value: None });
+        one("tcp", &restore_tcp_autotuning_default, &|_| ElevatedOp::TcpAutotuning { disabled: false });
+        one("nagle", &apply_nagle_disable, &|a| match &a.snapshot {
+            Snapshot::NagleNics { interfaces } => ElevatedOp::NagleDisable {
+                interfaces: interfaces.iter().map(|n| NicKey::parse(&n.interface).expect("key")).collect(),
+            },
+            other => panic!("{other:?}"),
+        });
+    }
+
+    /// Deterministic through the EEE read seam: the apply hands over exactly the (adapter, property) pairs it
+    /// recorded, in order, a display-name-only one included. Break: drop or reorder a target in `apply_eee_disable`.
+    #[test]
+    fn the_eee_apply_hands_over_its_recorded_pairs_in_order() {
+        use std::os::windows::process::ExitStatusExt;
+        let listing = "Ethernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\nBob's NIC|Green Ethernet|On|On~Off\r\n";
+        let _read = ForceEeeRead::begin(Some(std::process::Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: listing.as_bytes().to_vec(),
+            stderr: Vec::new(),
+        }));
+        let (_, ops) = parked("eee", apply_eee_disable).expect("the forced read always applies");
+        let t = |a: &str, p: &str| EeeTarget { adapter: SavedText::parse(a).expect("a"), property: SavedText::parse(p).expect("p") };
+        assert_eq!(ops, vec![ElevatedOp::EeeDisable { targets: vec![t("Ethernet", "Energy-Efficient Ethernet"), t("Bob's NIC", "Green Ethernet")] }]);
+    }
+
+    /// Core parking, through its injected reads and runner: the apply's op carries the recorded plan and both
+    /// priors; the two undo shapes without a re-commit carry the row's values. Break: pass `prior_dc: None` in
+    /// `restore_core_parking_default_with`, or `reactivate: true` for a plan that is not active.
+    #[test]
+    fn core_parking_apply_and_undo_hand_over_the_rows_values() {
+        let plan = "11111111-2222-3333-4444-555555555555";
+        let seen = std::cell::RefCell::new(Vec::new());
+        let run = |op: ElevatedOp| -> Result<(), String> {
+            seen.borrow_mut().push(op);
+            Ok(())
+        };
+        restore_core_parking_default_with(&|| Some(plan.to_string()), &|| Ok((Some(100), Some(90))), &run).expect("applies");
+        let pct = |v| Percent::parse(v).expect("pct");
+        assert_eq!(
+            seen.borrow().clone(),
+            vec![ElevatedOp::CoreParkingDefault { plan: PlanGuid::parse(plan).expect("plan"), prior_ac: pct(100), prior_dc: Some(pct(90)) }]
+        );
+        let legacy = core_parking_undo_step(Some(40), Some(30), None, &|_| panic!("not read"), &|_| panic!("not read"), &|| panic!("not read"));
+        assert_eq!(legacy, Ok(CoreParkingUndo::Run(ElevatedOp::CoreParkingRestore { ac: pct(40), dc: pct(30), target: CoreParkingTarget::Current {} })));
+        let other = "99999999-2222-3333-4444-555555555555";
+        let hidden = core_parking_undo_step(Some(40), None, Some(plan), &|_| Some(false), &|_| Some(true), &|| Some(other.to_string()));
+        assert_eq!(
+            hidden,
+            Ok(CoreParkingUndo::Run(ElevatedOp::CoreParkingRestore {
+                ac: pct(40),
+                dc: pct(40),
+                target: CoreParkingTarget::Plan { plan: PlanGuid::parse(plan).expect("plan"), reactivate: false },
+            }))
+        );
+        // The production wiring: the apply runs `run_elevated_op`, the undo `run_elevated_undo_op`.
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        assert!(src.contains(concat!("restore_core_parking_default_with(&current_power_plan_guid, &read_core_parking_priors, &run_", "elevated_op)")));
+        assert!(src.contains(concat!("        run_elevated: &run_", "elevated_undo_op,")));
+    }
+
+    /// Review r1 F7: the power-setting undo's re-commit choice, and that each choice composes exactly what
+    /// `power_setting_restore_script` composes for the same active plan. Break: map "another plan is active" to
+    /// `Recommit::Plan` in `power_setting_recommit` and this fails.
+    #[test]
+    fn the_power_setting_undo_recommits_as_main_did() {
+        let plan = "11111111-2222-3333-4444-555555555555";
+        let other = "99999999-2222-3333-4444-555555555555";
+        for (active, want) in [
+            (Some(plan.to_string()), Recommit::Plan),
+            (Some(format!(" {} ", plan.to_uppercase())), Recommit::Plan),
+            (Some(other.to_string()), Recommit::No),
+            (None, Recommit::Current),
+        ] {
+            assert_eq!(power_setting_recommit(plan, active.as_deref()), want, "{active:?}");
+            let op = ElevatedOp::PowerSettingRestore {
+                plan: PlanGuid::parse(plan).expect("plan"),
+                setting: PowerSetting::UsbSelectiveSuspend,
+                ac: 3,
+                dc: 2,
+                recommit: want,
+            };
+            assert_eq!(
+                crate::elevated_ops::script_of(&op),
+                power_setting_restore_script(plan, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 3, 2, active.as_deref()),
+                "{active:?}"
+            );
+        }
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        assert!(src.contains(concat!("let recommit = power_setting_", "recommit(plan_guid, active.as_deref());")), "the undo uses it");
     }
 }
