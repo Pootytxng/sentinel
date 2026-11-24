@@ -646,7 +646,13 @@ export function MonitorConsole({
                 // a native `title` on an already-labelled span (#677, native-control hygiene).
                 <span className="mc-delta-tag">
                   {deck.changesOn > 1 ? (
-                    <Term tip={t(tuningTools ? "monitor.monitorConsole.combinedEffectTooltip" : "monitor.monitorConsole.combinedEffectTooltipToolsOff")}>
+                    <Term
+                      tip={
+                        tuningTools
+                          ? t("monitor.monitorConsole.combinedEffectTooltip")
+                          : t("monitor.monitorConsole.combinedEffectTooltipToolsOff")
+                      }
+                    >
                       {t("monitor.monitorConsole.changesOn", { count: deck.changesOn })}
                       {t("monitor.monitorConsole.combinedEffectTag")}
                     </Term>

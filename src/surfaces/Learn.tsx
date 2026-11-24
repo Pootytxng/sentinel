@@ -1056,7 +1056,7 @@ export default function Learn({
               <CollapsibleGradeKey suppressed={gradeKeyEntryOpen} />
               {results.length === 0 ? (
                 <div className="lx-empty">
-                  {t(tuningTools ? "blackbook.learn.empty" : "blackbook.learn.emptyToolsOff")}
+                  {tuningTools ? t("blackbook.learn.empty") : t("blackbook.learn.emptyToolsOff")}
                 </div>
               ) : !deferredQ.trim() && filter === "all" && verdict === "all" && topic === "all" && fits === "all" ? (
                 // §5 PURE BROWSE — "Start here" strip + collapsed category sections (the calm open).
