@@ -900,6 +900,28 @@ thread_local! {
     static ELEVATION_DISPATCH_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+// Test-only (A5 Part A review r1 D2): the next `run_elevated_capture` on this thread is answered by this
+// closure, given the composed command (so a test can read the dispatch's nonce from it), instead of
+// elevating. A whole batch or restore then runs with a chosen result and no UAC prompt. Never shipped.
+#[cfg(test)]
+type FakeCapture = Box<dyn FnOnce(&str) -> ElevatedCapture>;
+#[cfg(test)]
+thread_local! {
+    static FAKE_CAPTURE: std::cell::RefCell<Option<FakeCapture>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Answer the next capture on this thread with `f` (test-only; see `FAKE_CAPTURE`).
+#[cfg(test)]
+pub(crate) fn fake_next_capture(f: impl FnOnce(&str) -> ElevatedCapture + 'static) {
+    FAKE_CAPTURE.with(|c| *c.borrow_mut() = Some(Box::new(f)));
+}
+
+/// Clear this thread's fake capture; `true` when one was set and never used (test-only).
+#[cfg(test)]
+pub(crate) fn unused_fake_capture() -> bool {
+    FAKE_CAPTURE.with(|c| c.borrow_mut().take().is_some())
+}
+
 /// Read this thread's would-be-prompt count (test-only; see `ELEVATION_DISPATCH_COUNT`).
 #[cfg(test)]
 pub(crate) fn elevation_dispatch_count() -> usize {
@@ -1164,6 +1186,10 @@ pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
     }
     #[cfg(test)]
     ELEVATION_DISPATCH_COUNT.with(|c| c.set(c.get() + 1));
+    #[cfg(test)]
+    if let Some(fake) = FAKE_CAPTURE.with(|f| f.borrow_mut().take()) {
+        return fake(command);
+    }
     #[cfg(test)]
     if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
         return none(Err(ELEVATION_DECLINED_MSG.to_string()));
@@ -2266,6 +2292,9 @@ mod elevation_attribution_tests {
         assert!(elevation_error_nothing_ran(
             "elevated dispatch ticket could not be minted: os error 5"
         ));
+        // A5 Part A review r1 D3: a results pipe the app could not create is refused before any launch, so no
+        // row may be recorded as "may have run" for it.
+        assert!(elevation_error_nothing_ran(&format!("{}: os error 5", super::RESULTS_CHANNEL_NOT_CREATED)));
     }
 
     #[test]
@@ -2417,6 +2446,78 @@ mod elevation_attribution_tests {
         let ended = ffi.find(concat!("on_", "ended();")).expect("on_ended call");
         let close = ffi.find(concat!("CloseHandle(", "sei.hProcess)")).expect("close");
         assert!(wait < ended && ended < close, "wait, then on_ended, then close");
+    }
+
+    /// A5 Part A review r1 D1 (the forge boundary): the elevated results capture reads only the client the
+    /// launch started. `fps_pipe` tests that `collect_lines` returns nothing from a refused client; this pins
+    /// that the capture asks exactly `is_our_helper` with the launched pid's slot, and nothing looser.
+    #[test]
+    fn the_results_capture_accepts_only_the_helper_it_launched() {
+        let src = include_str!("actions.rs");
+        let c = src.find(concat!("pub(crate) fn run_elevated_", "capture(")).expect("run_elevated_capture");
+        let cap = &src[c..c + src[c..].find("\n}\n").unwrap()];
+        assert_eq!(
+            cap.matches(concat!("let client_ok = |pid: u32| crate::fps_pipe::", "is_our_helper(pid, &l2);")).count(),
+            1,
+            "the capture's client check is the launched-pid check"
+        );
+        assert_eq!(cap.matches(concat!("pipe.collect_lines(&accept_wanted, ", "&client_ok, CAPTURE_MAX_BYTES)")).count(), 1);
+        assert_eq!(cap.matches(concat!("let (l2, d2) = (launched", ".clone(), done.clone());")).count(), 1);
+        assert_eq!(cap.matches(concat!("|pid| launched", ".store(pid, std::sync::atomic::Ordering::Release)")).count(), 1);
+        assert_eq!(cap.matches("client_ok").count(), 2, "defined once, used once");
+    }
+
+    /// A5 Part A review r1 A2: the elevated helper waits for PowerShell's output to end before it exits, so a
+    /// shipped elevated command must not start a process that could keep that output open (the app's wait
+    /// would then not return). Pinned in the production text of every module that builds elevated commands.
+    #[test]
+    fn no_shipped_elevated_command_starts_a_process_that_could_hold_the_relay_open() {
+        fn production(src: &str) -> String {
+            // Drop every `#[cfg(test)]` item (brace-matched); what is left is the shipped text.
+            let mut out = String::new();
+            let mut rest = src;
+            while let Some(hit) = rest.find("#[cfg(test)]") {
+                out.push_str(&rest[..hit]);
+                let after = &rest[hit..];
+                let Some(open) = after.find('{') else { return out };
+                let mut depth = 0usize;
+                let mut end = after.len();
+                for (i, ch) in after[open..].char_indices() {
+                    match ch {
+                        '{' => depth += 1,
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                end = open + i + 1;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                rest = &after[end..];
+            }
+            out.push_str(rest);
+            out
+        }
+        for (file, src) in [
+            ("actions.rs", include_str!("actions.rs")),
+            ("history.rs", include_str!("history.rs")),
+            ("gaming_orchestrator.rs", include_str!("gaming_orchestrator.rs")),
+        ] {
+            let shipped = production(src).to_ascii_lowercase();
+            assert!(shipped.contains("run_elevated"), "{file}: the production text was kept");
+            for starter in [
+                concat!("start-", "process"),
+                concat!("start-", "job"),
+                concat!("start-", "threadjob"),
+                concat!("invoke-", "cimmethod"),
+                concat!("invoke-", "wmimethod"),
+                concat!("cmd /c ", "start"),
+            ] {
+                assert!(!shipped.contains(starter), "{file}: a shipped command uses {starter}");
+            }
+        }
     }
 
     #[test]

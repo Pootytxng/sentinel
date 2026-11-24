@@ -3778,6 +3778,39 @@ mod batch_apply_tests {
         assert_eq!(new_count, 0, "a cancelled elevation must ledger nothing");
     }
 
+    /// A5 Part A review r1 D2: the whole batch, end to end, with the admin step's result answered by the
+    /// test capture seam (no prompt): an item whose line arrived is stored confirmed, an item whose line is
+    /// missing after a run that ended normally is stored with `result_unconfirmed`. Same two elevated recs as
+    /// above, so phase 1 only reads and defers; elevation stays forced to fail for anything else.
+    #[test]
+    fn a_batch_item_whose_result_line_is_missing_is_stored_unconfirmed() {
+        let _files = crate::data_root::shared_root_files();
+        let _force = ForceElevationError::begin();
+        let before: std::collections::HashSet<String> =
+            load_history().expect("test ledger readable").iter().map(|c| c.id.clone()).collect();
+        crate::actions::fake_next_capture(|cmd| {
+            let at = cmd.find(":fast-startup-off:ok").expect("the composed batch carries a receipt line");
+            let nonce = &cmd[at - 32..at];
+            crate::actions::ElevatedCapture { run: Ok(()), text: format!("{nonce}:fast-startup-off:ok\n{nonce}:end\n") }
+        });
+        let report = apply_recommendations_batch(vec![item("fast-startup-off"), item("hags-enable")]);
+        assert!(!crate::actions::unused_fake_capture(), "the batch's admin step reached the capture");
+        let report = report.expect("batch ran");
+        assert_eq!(report.elevation_prompts, 1);
+        let after = load_history().expect("test ledger readable");
+        let new: Vec<&AppliedChange> = after.iter().filter(|c| !before.contains(&c.id)).collect();
+        assert_eq!(new.len(), 2, "both items are recorded: {report:?}");
+        let row = |id: &str| *new.iter().find(|c| c.rec_id == id).expect(id);
+        assert!(!row("fast-startup-off").result_unconfirmed, "its line arrived");
+        assert!(row("hags-enable").result_unconfirmed, "no line after a normal end: recorded, marked unconfirmed");
+        let hags = report.items.iter().find(|o| o.rec_id == "hags-enable").expect("hags outcome");
+        assert_eq!(hags.status, "applied");
+        assert!(hags.unconfirmed, "the report marks it too");
+        // Put the shared test ledger back as it was (these two rows describe nothing that happened).
+        let kept: Vec<AppliedChange> = after.iter().filter(|c| before.contains(&c.id)).cloned().collect();
+        save_history(&crate::data_root::mutation_root().expect("test root"), &kept).expect("ledger put back");
+    }
+
     // The shared receipt builder writes the FULL rollback contract — batch receipts are
     // byte-equivalent in shape to single-apply receipts (rollback granularity unchanged).
     #[test]
@@ -5478,6 +5511,42 @@ mod leftover_restore_tests {
             assert_eq!(err, ELEVATION_DECLINED_MSG, "{err}");
         }
         assert_eq!(load_history().expect("readable").len(), before, "decline ledgers nothing");
+    }
+
+    /// A5 Part A review r1 D2: the memory-compression restore whose prior arrived but whose confirmation did
+    /// not is stored with `result_unconfirmed` (restore_leftover's `received` reaches the row). The admin
+    /// step is answered by the test capture seam (no prompt); elevation stays forced to fail for anything else.
+    /// Only the admin-only-prior arm can answer "not received": a run where this process can read the prior
+    /// itself (an elevated test run) takes the plain arm, which the forced decline stops, and says so.
+    #[test]
+    fn a_memcompress_restore_without_its_confirmation_is_stored_unconfirmed() {
+        let _files = crate::data_root::shared_root_files();
+        let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+        let _force = ForceElevationError::begin();
+        let before: std::collections::HashSet<String> =
+            load_history().expect("readable").iter().map(|c| c.id.clone()).collect();
+        crate::actions::fake_next_capture(|cmd| {
+            let at = cmd.find(":prior:$p").expect("the restore script reports its prior");
+            let nonce = &cmd[at - 32..at];
+            crate::actions::ElevatedCapture { run: Ok(()), text: format!("{nonce}:prior:False\n") }
+        });
+        let outcome = restore_leftover("memory-compression-off", "QA seam test");
+        let unused = crate::actions::unused_fake_capture();
+        let view = match outcome {
+            Ok(v) => v,
+            Err(e) if e == ELEVATION_DECLINED_MSG && unused => {
+                eprintln!("prior readable without elevation: the plain arm ran (nothing to check here)");
+                return;
+            }
+            Err(e) => panic!("{e}"),
+        };
+        assert!(view.result_unconfirmed, "prior received, confirmation missing: recorded, marked unconfirmed");
+        let after = load_history().expect("readable");
+        let new: Vec<&AppliedChange> = after.iter().filter(|c| !before.contains(&c.id)).collect();
+        assert_eq!(new.len(), 1);
+        assert!(new[0].result_unconfirmed, "the stored row says so");
+        let kept: Vec<AppliedChange> = after.iter().filter(|c| before.contains(&c.id)).cloned().collect();
+        save_history(&crate::data_root::mutation_root().expect("test root"), &kept).expect("ledger put back");
     }
 
     #[test]

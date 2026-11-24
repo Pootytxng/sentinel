@@ -714,6 +714,37 @@ mod tests {
         assert_eq!(lines, ["n0nce:a:ok", "n0nce:end"], "{end:?}");
     }
 
+    /// A5 Part A review r1 D1 (the forge boundary): a client that `client_ok` refuses is disconnected and NONE of
+    /// what it wrote is ever returned; the next client, accepted, is read. With the wait for a client over after
+    /// the refusal, nothing at all is returned.
+    #[test]
+    fn a_refused_clients_lines_are_never_returned_and_the_accepted_clients_are() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let write = |name: String, text: &'static [u8]| {
+            std::thread::spawn(move || {
+                let mut f = open_pipe_for_writing(&name).expect("connect");
+                f.write_all(text).expect("write");
+            })
+        };
+        // A forger first (refused), then the launched helper (accepted).
+        let pipe = ServerPipe::create().expect("pipe");
+        write(pipe.name.clone(), b"n0nce:forged:ok\r\nn0nce:end\r\n").join().expect("first client");
+        let second = write(pipe.name.clone(), b"n0nce:b:ok\r\n");
+        let asked = AtomicUsize::new(0);
+        let client_ok = |_pid: u32| asked.fetch_add(1, Ordering::SeqCst) > 0;
+        let (lines, end) = pipe.collect_lines(&|| true, &client_ok, 64 * 1024);
+        second.join().expect("second client");
+        assert_eq!(lines, ["n0nce:b:ok"], "only the accepted client's lines ({end:?})");
+        assert_eq!(asked.load(Ordering::SeqCst), 2, "each client was checked");
+
+        // A refused client and no further wait: nothing is returned.
+        let pipe = ServerPipe::create().expect("pipe");
+        write(pipe.name.clone(), b"n0nce:forged:ok\r\n").join().expect("client");
+        let (lines, end) = pipe.collect_lines(&|| false, &|_| false, 64 * 1024);
+        assert!(lines.is_empty(), "{lines:?}");
+        assert_eq!(end, ServeEnd::NotWanted);
+    }
+
     #[test]
     fn only_a_compy_capture_pipe_name_is_accepted() {
         let good = pipe_name_from([0xab; 16]);

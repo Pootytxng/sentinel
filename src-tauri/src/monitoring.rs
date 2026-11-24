@@ -3408,6 +3408,11 @@ mod plain_start_tests {
         assert!(!own.contains(concat!("Open", "Process(")), "the token helper opens a process handle");
         assert!(!own.contains(concat!("Duplicate", "Handle")));
         assert!(own.contains(concat!("CloseHandle(", "token)")), "the token handle is closed");
+        // Review r1 A4: read access only; a wider token access (adjusting privileges) is not this helper.
+        assert!(own.contains(concat!("GetCurrentProcess(), ", "TOKEN_QUERY, &mut token)")), "the token is opened for query only");
+        for wider in ["TOKEN_ADJUST", "TOKEN_ALL_ACCESS", "TOKEN_DUPLICATE", "TOKEN_IMPERSONATE", "TOKEN_ASSIGN_PRIMARY", "TOKEN_WRITE"] {
+            assert!(!own.contains(wider), "the token helper asks for {wider}");
+        }
         for other in ["sysinfo", "Toolhelp", "EnumProcesses", "refresh_processes"] {
             assert!(!region.contains(other), "the launch/token code enumerates processes: {other}");
             assert!(!own.contains(other), "the token helper enumerates processes: {other}");
