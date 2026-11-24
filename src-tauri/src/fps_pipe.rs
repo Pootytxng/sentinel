@@ -581,7 +581,7 @@ impl PipeWriter {
         use std::sync::atomic::Ordering;
         if self.tx.try_send(unreadable_line(total)).is_ok() {
             // A count that reached the app covers any smaller one still waiting.
-            let _ = self.unsent_unreadable.fetch_update(Ordering::AcqRel, Ordering::Acquire, |p| (p <= total).then_some(0));
+            let _ = self.unsent_unreadable.try_update(Ordering::AcqRel, Ordering::Acquire, |p| (p <= total).then_some(0));
         } else {
             self.unsent_unreadable.fetch_max(total, Ordering::AcqRel);
         }
