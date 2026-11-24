@@ -212,7 +212,6 @@ const DEBT: string[] = [
   "Check: your AMD GPU reports adaptive sync enabled on a connected display",
   "Fix: Disable Energy Efficient Ethernet on the gaming NIC",
   "Fix: Lower input latency",
-  "Fix: Measured elsewhere",
   "Fix: Needs a wired Ethernet port",
   "Fix: Switch to the Ultimate Performance power plan",
   "Fix: other only",
