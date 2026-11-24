@@ -9227,3 +9227,471 @@ mod all_or_nothing_tests {
         }
     }
 }
+
+// ─── A8 (plan a5 v4, Slice 1, commit 1): byte-for-byte goldens of today's elevated scripts ───────────
+//
+// Every elevated operation of the plan's inventory (22 rows) and the wrappers, captured from the CURRENT
+// code with fixed values, so the typed set (elevated_ops.rs) can prove it composes the same bytes. Three
+// capture methods, the strongest that is deterministic for each script:
+// - a pure builder called directly;
+// - an undo run under the deferral sink (`ElevationDeferral` captures the command instead of elevating),
+//   for undos that read nothing from the machine first (the task undo's read goes through `ForceTaskRead`);
+// - for a script written inline in an apply that reads the machine before it composes, the string literal
+//   decoded from this file's own source and filled with the fixed values.
+// Written by hand from the templates; UNPROVEN until `cargo test elevated_goldens` runs on this commit.
+#[cfg(test)]
+mod elevated_goldens {
+    use super::*;
+
+    macro_rules! plan { () => { "11111111-2222-3333-4444-555555555555" }; }
+    macro_rules! other_plan { () => { "99999999-8888-7777-6666-555555555555" }; }
+    macro_rules! usb_sub { () => { "2a737441-1930-4402-8d77-b2bebba308a3" }; }
+    macro_rules! usb_set { () => { "48e6b7a6-50f5-4782-a5d4-53bb8f07e226" }; }
+    macro_rules! cp_sub { () => { "54533251-82be-4824-96c1-47b60b740d00" }; }
+    macro_rules! cp_set { () => { "0cc5b647-c1df-4637-891a-dec35c318583" }; }
+    macro_rules! nonce { () => { "0123456789abcdef0123456789abcdef" }; }
+    macro_rules! nic { () => { "{2A737441-1930-4402-8D77-B2BEBBA308A3}" }; }
+    macro_rules! nic_path { () => { concat!(r"HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\", nic!()) }; }
+    macro_rules! mmcss { () => { r"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" }; }
+    macro_rules! power_key { () => { r"HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" }; }
+    macro_rules! gfx_key { () => { r"HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" }; }
+    macro_rules! prio_key { () => { r"HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl" }; }
+    macro_rules! dwm_key { () => { r"HKLM:\SOFTWARE\Microsoft\Windows\Dwm" }; }
+    macro_rules! setactive_step {
+        () => {
+            concat!(
+                "$compyActive = powercfg /getactivescheme; if (-not $?) { throw 'compy: step 2 failed' }; ",
+                "if (-not ($compyActive -match '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')) { throw 'compy: step 2 failed' }; ",
+                "if ($compyActive -match '", plan!(), "') { powercfg /setactive ", plan!(), "; if (-not $?) { throw 'compy: step 2 failed' } }"
+            )
+        };
+    }
+
+    pub(super) const PLAN: &str = plan!();
+    pub(super) const OTHER_PLAN: &str = other_plan!();
+    pub(super) const NONCE: &str = nonce!();
+    pub(super) const NIC: &str = nic!();
+
+    // Rows 1-4: services.
+    pub(super) const G_SERVICE_DISABLE: &str = "Set-Service -Name SysMain -StartupType Disabled; Stop-Service -Name SysMain -Force -ErrorAction SilentlyContinue";
+    pub(super) const G_SERVICE_RESTORE_RUNNING: &str = "Set-Service -Name SysMain -StartupType Automatic; Start-Service -Name SysMain";
+    pub(super) const G_SERVICE_RESTORE_STOPPED: &str = "Set-Service -Name DiagTrack -StartupType Manual";
+    pub(super) const G_SERVICE_SUSPEND: &str = "Stop-Service -Name WSearch -Force -ErrorAction SilentlyContinue";
+    pub(super) const G_SERVICE_RESUME: &str = "Start-Service -Name WSearch";
+    // Row 5: scheduled tasks (the name as resolved from a drifted listing).
+    pub(super) const G_TASK_DISABLE: &str = r"Disable-ScheduledTask -TaskPath '\Microsoft\Windows\Application Experience\' -TaskName 'Microsoft Compatibility Appraiser Exp' | Out-Null";
+    pub(super) const G_TASK_ENABLE: &str = r"Enable-ScheduledTask -TaskPath '\Microsoft\Windows\Application Experience\' -TaskName 'Microsoft Compatibility Appraiser Exp' | Out-Null";
+    // Rows 6-7: the Ultimate plan.
+    pub(super) const G_ULTIMATE_APPLY: &str = concat!(
+        "$ult = powercfg /list | Select-String 'Ultimate Performance' | Select-Object -First 1; ",
+        "if ($ult -match 'GUID: ([0-9a-f-]{36})') { powercfg /setactive $matches[1]; if ($?) { exit 0 }; exit 1 } ",
+        "$dup = powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>&1; ",
+        "if ($dup -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { powercfg /setactive $matches[1]; if ($?) { exit 0 }; exit 1 } ",
+        "exit 1"
+    );
+    pub(super) const G_ULTIMATE_UNDO: &str = concat!("powercfg /setactive ", plan!());
+    // Row 8: Reserved Storage.
+    pub(super) const G_RESERVED_OFF: &str = "Set-WindowsReservedStorageState -State Disabled";
+    pub(super) const G_RESERVED_ON: &str = "Set-WindowsReservedStorageState -State Enabled";
+    // Row 9: a power-plan setting off on AC (USB selective suspend, prior AC 1).
+    pub(super) const G_POWER_SETTING_OFF: &str = concat!(
+        "$compyDone=0; $compyUndoFailed=$false; try { ",
+        "powercfg /setacvalueindex ", plan!(), " ", usb_sub!(), " ", usb_set!(), " 0; if (-not $?) { throw 'compy: step 1 failed' }; $compyDone=1; ",
+        setactive_step!(), "; $compyDone=2; ",
+        "} catch { $compyErr=$_; ",
+        "if ($compyDone -ge 1) { try { powercfg /setacvalueindex ", plan!(), " ", usb_sub!(), " ", usb_set!(), " 1; if (-not $?) { throw 'compy: undo 1 failed' } } catch { $compyUndoFailed=$true } }; ",
+        "if (-not $compyUndoFailed) { throw $compyErr } }"
+    );
+    // Row 10: its undo (AC 3, DC 2): the plan active / another plan active / the active plan unread.
+    pub(super) const G_POWER_SETTING_RESTORE_ACTIVE: &str = concat!(
+        "powercfg /setacvalueindex ", plan!(), " ", usb_sub!(), " ", usb_set!(), " 3; if (-not $?) { throw 'compy: restore step 1 failed' }; ",
+        "powercfg /setdcvalueindex ", plan!(), " ", usb_sub!(), " ", usb_set!(), " 2; if (-not $?) { throw 'compy: restore step 2 failed' }; ",
+        "powercfg /setactive ", plan!(), "; if (-not $?) { throw 'compy: restore step 3 failed' }"
+    );
+    pub(super) const G_POWER_SETTING_RESTORE_OTHER: &str = concat!(
+        "powercfg /setacvalueindex ", plan!(), " ", usb_sub!(), " ", usb_set!(), " 3; if (-not $?) { throw 'compy: restore step 1 failed' }; ",
+        "powercfg /setdcvalueindex ", plan!(), " ", usb_sub!(), " ", usb_set!(), " 2; if (-not $?) { throw 'compy: restore step 2 failed' }"
+    );
+    pub(super) const G_POWER_SETTING_RESTORE_UNREAD: &str = concat!(
+        "powercfg /setacvalueindex ", plan!(), " ", usb_sub!(), " ", usb_set!(), " 3; if (-not $?) { throw 'compy: restore step 1 failed' }; ",
+        "powercfg /setdcvalueindex ", plan!(), " ", usb_sub!(), " ", usb_set!(), " 2; if (-not $?) { throw 'compy: restore step 2 failed' }; ",
+        "powercfg /setactive SCHEME_CURRENT; if (-not $?) { throw 'compy: restore step 3 failed' }"
+    );
+    // Row 11 (EEE): today's goldens already live in `eee_script_tests` (GOLDEN_APPLY / GOLDEN_ROLLBACK).
+    // Row 12: Fast Startup.
+    pub(super) const G_FAST_STARTUP_OFF: &str = concat!("Set-ItemProperty -Path '", power_key!(), "' -Name 'HiberbootEnabled' -Value 0 -Type DWord");
+    pub(super) const G_FAST_STARTUP_RESTORE_1: &str = concat!("Set-ItemProperty -Path '", power_key!(), "' -Name 'HiberbootEnabled' -Value 1 -Type DWord");
+    pub(super) const G_FAST_STARTUP_RESTORE_NONE: &str = concat!("Remove-ItemProperty -Path '", power_key!(), "' -Name 'HiberbootEnabled' -ErrorAction SilentlyContinue");
+    // Row 13: HAGS.
+    pub(super) const G_HAGS_ENABLE: &str = concat!("Set-ItemProperty -Path '", gfx_key!(), "' -Name 'HwSchMode' -Value 2 -Type DWord");
+    pub(super) const G_HAGS_RESTORE_1: &str = concat!("Set-ItemProperty -Path '", gfx_key!(), "' -Name 'HwSchMode' -Value 1 -Type DWord");
+    pub(super) const G_HAGS_RESTORE_NONE: &str = concat!("Remove-ItemProperty -Path '", gfx_key!(), "' -Name 'HwSchMode' -ErrorAction SilentlyContinue");
+    // Rows 14-15: memory compression (plain on / off, and the combined prior-then-change script).
+    pub(super) const G_MEMCOMPRESS_ON: &str = "if (-not (Get-MMAgent).MemoryCompression) { Enable-MMAgent -MemoryCompression }";
+    pub(super) const G_MEMCOMPRESS_OFF: &str = "if ((Get-MMAgent).MemoryCompression) { Disable-MMAgent -MemoryCompression }";
+    pub(super) const G_MEMCOMPRESS_COMBINED: &str = concat!(
+        "$ErrorActionPreference='Stop'; $p=(Get-MMAgent).MemoryCompression; Write-Output \"", nonce!(), ":prior:$p\"; ",
+        "if (-not $p) { Enable-MMAgent -MemoryCompression }; Write-Output '", nonce!(), ":done:ok'; Write-Output '", nonce!(), ":end'"
+    );
+    // Row 16: MMCSS (apply with a read prior 14 / an absent prior; the undo SR 14, NTI absent).
+    pub(super) const G_MMCSS_APPLY_14: &str = concat!(
+        "$compyDone=0; $compyUndoFailed=$false; try { ",
+        "Set-ItemProperty -Path '", mmcss!(), "' -Name 'SystemResponsiveness' -Value 20 -Type DWord; $compyDone=1; ",
+        "Set-ItemProperty -Path '", mmcss!(), "' -Name 'NetworkThrottlingIndex' -Value 10 -Type DWord; $compyDone=2; ",
+        "} catch { $compyErr=$_; ",
+        "if ($compyDone -ge 1) { try { Set-ItemProperty -Path '", mmcss!(), "' -Name 'SystemResponsiveness' -Value 14 -Type DWord } catch { $compyUndoFailed=$true } }; ",
+        "if (-not $compyUndoFailed) { throw $compyErr } }"
+    );
+    pub(super) const G_MMCSS_APPLY_NONE: &str = concat!(
+        "$compyDone=0; $compyUndoFailed=$false; try { ",
+        "Set-ItemProperty -Path '", mmcss!(), "' -Name 'SystemResponsiveness' -Value 20 -Type DWord; $compyDone=1; ",
+        "Set-ItemProperty -Path '", mmcss!(), "' -Name 'NetworkThrottlingIndex' -Value 10 -Type DWord; $compyDone=2; ",
+        "} catch { $compyErr=$_; ",
+        "if ($compyDone -ge 1) { try { Remove-ItemProperty -Path '", mmcss!(), "' -Name 'SystemResponsiveness' } catch { $compyUndoFailed=$true } }; ",
+        "if (-not $compyUndoFailed) { throw $compyErr } }"
+    );
+    pub(super) const G_MMCSS_RESTORE: &str = concat!(
+        "Set-ItemProperty -Path '", mmcss!(), "' -Name 'SystemResponsiveness' -Value 14 -Type DWord; ",
+        "Remove-ItemProperty -Path '", mmcss!(), "' -Name 'NetworkThrottlingIndex' -ErrorAction SilentlyContinue"
+    );
+    // Row 17: Win32 priority separation.
+    pub(super) const G_PRIORITY_DEFAULT: &str = concat!("Set-ItemProperty -Path '", prio_key!(), "' -Name 'Win32PrioritySeparation' -Value 2 -Type DWord");
+    pub(super) const G_PRIORITY_RESTORE_38: &str = concat!("Set-ItemProperty -Path '", prio_key!(), "' -Name 'Win32PrioritySeparation' -Value 38 -Type DWord");
+    pub(super) const G_PRIORITY_RESTORE_NONE: &str = concat!("Remove-ItemProperty -Path '", prio_key!(), "' -Name 'Win32PrioritySeparation' -ErrorAction SilentlyContinue");
+    // Row 18: MPO.
+    pub(super) const G_MPO_DEFAULT: &str = concat!("Remove-ItemProperty -Path '", dwm_key!(), "' -Name 'OverlayTestMode' -ErrorAction SilentlyContinue");
+    pub(super) const G_MPO_RESTORE_5: &str = concat!("Set-ItemProperty -Path '", dwm_key!(), "' -Name 'OverlayTestMode' -Value 5 -Type DWord");
+    // Row 19: core parking (apply with priors AC 100 / DC 90 and with no DC prior; undo on the recorded plan
+    // with and without the re-commit; the legacy undo of a row that recorded no plan).
+    pub(super) const G_CORE_PARKING_APPLY: &str = concat!(
+        "$compyDone=0; $compyUndoFailed=$false; try { ",
+        "powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 0; if (-not $?) { throw 'compy: step 1 failed' }; $compyDone=1; ",
+        "powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 0; if (-not $?) { throw 'compy: step 2 failed' }; $compyDone=2; ",
+        setactive_step!(), "; $compyDone=3; ",
+        "} catch { $compyErr=$_; ",
+        "if ($compyDone -ge 2) { try { powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 90; if (-not $?) { throw 'compy: undo 2 failed' } } catch { $compyUndoFailed=$true } }; ",
+        "if ($compyDone -ge 1) { try { powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: undo 1 failed' } } catch { $compyUndoFailed=$true } }; ",
+        "if (-not $compyUndoFailed) { throw $compyErr } }"
+    );
+    pub(super) const G_CORE_PARKING_APPLY_NO_DC: &str = concat!(
+        "$compyDone=0; $compyUndoFailed=$false; try { ",
+        "powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 0; if (-not $?) { throw 'compy: step 1 failed' }; $compyDone=1; ",
+        "powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 0; if (-not $?) { throw 'compy: step 2 failed' }; $compyDone=2; ",
+        setactive_step!(), "; $compyDone=3; ",
+        "} catch { $compyErr=$_; ",
+        "if ($compyDone -ge 2) { try { powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: undo 2 failed' } } catch { $compyUndoFailed=$true } }; ",
+        "if ($compyDone -ge 1) { try { powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: undo 1 failed' } } catch { $compyUndoFailed=$true } }; ",
+        "if (-not $compyUndoFailed) { throw $compyErr } }"
+    );
+    pub(super) const G_CORE_PARKING_RESTORE_ACTIVE: &str = concat!(
+        "powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: restore step 1 failed' }; ",
+        "powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 90; if (-not $?) { throw 'compy: restore step 2 failed' }; ",
+        "powercfg -setactive ", plan!(), "; if (-not $?) { throw 'compy: restore step 3 failed' }"
+    );
+    pub(super) const G_CORE_PARKING_RESTORE_INACTIVE: &str = concat!(
+        "powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: restore step 1 failed' }; ",
+        "powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 90; if (-not $?) { throw 'compy: restore step 2 failed' }"
+    );
+    pub(super) const G_CORE_PARKING_RESTORE_LEGACY: &str = concat!(
+        "powercfg -setacvalueindex SCHEME_CURRENT ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: restore step 1 failed' }; ",
+        "powercfg -setdcvalueindex SCHEME_CURRENT ", cp_sub!(), " ", cp_set!(), " 90; if (-not $?) { throw 'compy: restore step 2 failed' }; ",
+        "powercfg -setactive SCHEME_CURRENT; if (-not $?) { throw 'compy: restore step 3 failed' }"
+    );
+    // Row 20: pagefile.
+    pub(super) const G_PAGEFILE_AUTOMATIC: &str = "$cs = Get-CimInstance Win32_ComputerSystem; $cs | Set-CimInstance -Property @{AutomaticManagedPagefile=$true}";
+    pub(super) const G_PAGEFILE_RESTORE: &str = concat!(
+        "$cs = Get-CimInstance Win32_ComputerSystem; $cs | Set-CimInstance -Property @{AutomaticManagedPagefile=$false}; ",
+        r"Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' -Name 'PagingFiles' -Value @('C:\pagefile.sys 1024 4096') -Type MultiString"
+    );
+    // Row 21: TCP auto-tuning.
+    pub(super) const G_TCP_NORMAL: &str = "netsh int tcp set global autotuninglevel=normal";
+    pub(super) const G_TCP_DISABLED: &str = "netsh int tcp set global autotuninglevel=disabled";
+    // Row 22: Nagle (one interface; the undo with ack 1 recorded and no-delay absent).
+    pub(super) const G_NAGLE_APPLY: &str = concat!(
+        "Set-ItemProperty -Path '", nic_path!(), "' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; ",
+        "Set-ItemProperty -Path '", nic_path!(), "' -Name 'TCPNoDelay' -Value 1 -Type DWord -ErrorAction SilentlyContinue; "
+    );
+    pub(super) const G_NAGLE_RESTORE: &str = concat!(
+        "Set-ItemProperty -Path '", nic_path!(), "' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; ",
+        "Remove-ItemProperty -Path '", nic_path!(), "' -Name 'TCPNoDelay' -ErrorAction SilentlyContinue; "
+    );
+    // The wrappers: a Single run's prefix, and a two-item batch (a service and the Nagle apply, whose trailing
+    // "; " the composer trims).
+    pub(super) const G_SINGLE_SERVICE_DISABLE: &str = "$ErrorActionPreference='Stop'; Set-Service -Name SysMain -StartupType Disabled; Stop-Service -Name SysMain -Force -ErrorAction SilentlyContinue";
+    pub(super) const G_BATCH: &str = concat!(
+        "$ErrorActionPreference='Stop'; ",
+        "try { Set-Service -Name SysMain -StartupType Disabled; Stop-Service -Name SysMain -Force -ErrorAction SilentlyContinue; Write-Output '", nonce!(), ":sysmain-disable:ok' } catch { Write-Output '", nonce!(), ":sysmain-disable:fail' }; ",
+        "try { Set-ItemProperty -Path '", nic_path!(), "' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; ",
+        "Set-ItemProperty -Path '", nic_path!(), "' -Name 'TCPNoDelay' -Value 1 -Type DWord -ErrorAction SilentlyContinue; Write-Output '", nonce!(), ":nagle-disable:ok' } catch { Write-Output '", nonce!(), ":nagle-disable:fail' }; ",
+        "Write-Output '", nonce!(), ":end'"
+    );
+
+    // ── capture helpers ─────────────────────────────────────────────────────────────────────────────
+
+    /// Run `f` with the deferral sink armed and return what it would have elevated; nothing is dispatched.
+    pub(super) fn sunk(f: impl FnOnce() -> Result<(), String>) -> Vec<String> {
+        reset_elevation_dispatch_count();
+        let guard = ElevationDeferral::begin().expect("sink");
+        f().expect("captured by the sink, not run");
+        let got = guard.take_deferred();
+        assert_eq!(elevation_dispatch_count(), 0, "the sink dispatched nothing");
+        got
+    }
+
+    /// This file's source above the golden module (so a golden's own text is never found).
+    fn shipped_source() -> String {
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        let end = src.find(concat!("mod elevated_", "goldens {")).expect("golden module");
+        src[..end].to_string()
+    }
+
+    /// The value of the Rust string literal that starts with `anchor` (which begins at its opening quote), found
+    /// exactly `times` times in the shipped source; every occurrence must decode to the same value.
+    pub(super) fn source_literal(anchor: &str, times: usize) -> String {
+        let src = shipped_source();
+        let hits: Vec<usize> = src.match_indices(anchor).map(|(i, _)| i).collect();
+        assert_eq!(hits.len(), times, "source literal {anchor:?}");
+        let values: Vec<String> = hits.iter().map(|&at| decode_literal(&src[at..])).collect();
+        assert!(values.iter().all(|v| *v == values[0]), "{anchor:?} decodes alike everywhere");
+        values[0].clone()
+    }
+
+    /// Decode a Rust (non-raw) string literal at the start of `s`: the escapes this file uses, and a backslash at
+    /// a line end, which drops the newline and the next line's leading whitespace.
+    pub(super) fn decode_literal(s: &str) -> String {
+        let c: Vec<char> = s.chars().collect();
+        assert_eq!(c.first(), Some(&'"'), "a literal starts with a quote");
+        let mut out = String::new();
+        let mut i = 1;
+        loop {
+            match c[i] {
+                '"' => return out,
+                '\\' => {
+                    i += 1;
+                    match c[i] {
+                        '\n' => {
+                            i += 1;
+                            while matches!(c[i], ' ' | '\t' | '\n' | '\r') {
+                                i += 1;
+                            }
+                            continue;
+                        }
+                        'n' => out.push('\n'),
+                        't' => out.push('\t'),
+                        'r' => out.push('\r'),
+                        '\\' => out.push('\\'),
+                        '"' => out.push('"'),
+                        '\'' => out.push('\''),
+                        other => panic!("an escape the decoder does not know: \\{other}"),
+                    }
+                    i += 1;
+                }
+                ch => {
+                    out.push(ch);
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    /// Fill a `format!` template: `{{`/`}}` are braces, `{}` takes the next unnamed value, `{0}` / `{name}` the value
+    /// under that key. Every placeholder must have a value.
+    pub(super) fn fill(template: &str, values: &[(&str, &str)]) -> String {
+        let mut out = String::new();
+        let mut next = 0;
+        let mut rest = template;
+        while let Some(i) = rest.find(['{', '}']) {
+            out.push_str(&rest[..i]);
+            let tail = &rest[i..];
+            if tail.starts_with("{{") || tail.starts_with("}}") {
+                out.push(tail.chars().next().unwrap_or('{'));
+                rest = &tail[2..];
+                continue;
+            }
+            assert!(tail.starts_with('{'), "a lone closing brace in {template:?}");
+            let close = tail.find('}').expect("closed placeholder");
+            let key = &tail[1..close];
+            let value = if key.is_empty() {
+                let unnamed: Vec<&str> = values.iter().filter(|(k, _)| k.is_empty()).map(|(_, v)| *v).collect();
+                next += 1;
+                unnamed[next - 1]
+            } else {
+                values.iter().find(|(k, _)| *k == key).map(|(_, v)| *v).expect("a value for every key")
+            };
+            out.push_str(value);
+            rest = &tail[close + 1..];
+        }
+        out.push_str(rest);
+        out
+    }
+
+    fn finished_listing(stdout: &str) -> std::process::Output {
+        use std::os::windows::process::ExitStatusExt;
+        std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: stdout.as_bytes().to_vec(), stderr: Vec::new() }
+    }
+
+    // ── rows 1-5 ──
+
+    /// Break: change one byte of the service-disable template in `apply_service_disable` and this fails.
+    #[test]
+    fn golden_service_disable_and_suspend_templates() {
+        let disable = source_literal("\"Set-Service -Name {0} -StartupType Disabled;", 1);
+        assert_eq!(fill(&disable, &[("0", "SysMain")]), G_SERVICE_DISABLE);
+        let suspend = source_literal("\"Stop-Service -Name {} -Force -ErrorAction SilentlyContinue\"", 1);
+        assert_eq!(fill(&suspend, &[("", "WSearch")]), G_SERVICE_SUSPEND);
+    }
+
+    /// Break: change "Set-Service -Name {} -StartupType {}" in the service undo and this fails.
+    #[test]
+    fn golden_service_restore_and_resume_through_the_sink() {
+        let running = sunk(|| rollback_service_disable_typed(&KnownService::SysMain, "Running", "Auto"));
+        assert_eq!(running, vec![G_SERVICE_RESTORE_RUNNING.to_string()]);
+        let stopped = sunk(|| rollback_service_disable_typed(&KnownService::DiagTrack, "Stopped", "Manual"));
+        assert_eq!(stopped, vec![G_SERVICE_RESTORE_STOPPED.to_string()]);
+        let resumed = sunk(|| rollback_service_suspend_typed(&KnownService::WSearch, "Running"));
+        assert_eq!(resumed, vec![G_SERVICE_RESUME.to_string()]);
+        assert!(sunk(|| rollback_service_suspend_typed(&KnownService::WSearch, "Stopped")).is_empty(), "a stopped prior elevates nothing");
+    }
+
+    /// Break: change the Enable-ScheduledTask template, or pick the exact name over the drifted one, and this fails.
+    #[test]
+    fn golden_scheduled_task_disable_and_enable() {
+        let disable = source_literal("\"Disable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null\"", 1);
+        let (path, _) = KnownBloatTask::CompatibilityAppraiser.path_and_name();
+        assert_eq!(fill(&disable, &[("", path), ("", "Microsoft Compatibility Appraiser Exp")]), G_TASK_DISABLE);
+        let _read = ForceTaskRead::begin(Some(finished_listing("Microsoft Compatibility Appraiser Exp\r\nProgramDataUpdater\r\n")));
+        let enabled = sunk(|| rollback_enable_scheduled_task_typed(&KnownBloatTask::CompatibilityAppraiser, "Ready"));
+        assert_eq!(enabled, vec![G_TASK_ENABLE.to_string()]);
+    }
+
+    // ── rows 6-10 ──
+
+    /// Break: change one character of the Ultimate apply literal (or its line joins) and this fails.
+    #[test]
+    fn golden_ultimate_plan_apply_and_undo() {
+        assert_eq!(source_literal("\"$ult = powercfg /list", 1), G_ULTIMATE_APPLY);
+        assert_eq!(sunk(|| rollback_power_ultimate_typed(PLAN)), vec![G_ULTIMATE_UNDO.to_string()]);
+    }
+
+    /// Break: change "Set-WindowsReservedStorageState -State Disabled" in the apply and this fails.
+    #[test]
+    fn golden_reserved_storage() {
+        assert_eq!(source_literal("\"Set-WindowsReservedStorageState -State Disabled\"", 1), G_RESERVED_OFF);
+        assert_eq!(sunk(|| rollback_reserved_storage_off_typed(true)), vec![G_RESERVED_ON.to_string()]);
+        assert_eq!(sunk(|| rollback_reserved_storage_off_typed(false)), vec![G_RESERVED_OFF.to_string()]);
+    }
+
+    /// Break: change a step of `power_setting_apply_script` / `setactive_if_still_active_step` and this fails.
+    #[test]
+    fn golden_power_setting_apply_and_restore() {
+        assert_eq!(power_setting_apply_script(PLAN, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1), G_POWER_SETTING_OFF);
+        let restore = |active| power_setting_restore_script(PLAN, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 3, 2, active);
+        assert_eq!(restore(Some(PLAN)), G_POWER_SETTING_RESTORE_ACTIVE);
+        assert_eq!(restore(Some(OTHER_PLAN)), G_POWER_SETTING_RESTORE_OTHER);
+        assert_eq!(restore(None), G_POWER_SETTING_RESTORE_UNREAD);
+    }
+
+    // ── rows 11-15 ──
+
+    /// Break: change a field order in `build_eee_rollback_script` and this fails.
+    #[test]
+    fn golden_eee_today_through_the_builders_and_the_sink() {
+        use super::eee_script_tests::{golden_snapshots, golden_targets, GOLDEN_APPLY, GOLDEN_ROLLBACK};
+        assert_eq!(build_eee_apply_script(&golden_targets()).as_deref(), Ok(GOLDEN_APPLY));
+        assert_eq!(sunk(|| rollback_eee_disable_typed(&golden_snapshots())), vec![GOLDEN_ROLLBACK.to_string()]);
+    }
+
+    /// Break: change "-Value 0 -Type DWord" in the Fast Startup apply, or the HAGS value 2, and this fails.
+    #[test]
+    fn golden_fast_startup_and_hags() {
+        let off = source_literal(r#""Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value 0"#, 1);
+        assert_eq!(off, G_FAST_STARTUP_OFF);
+        assert_eq!(sunk(|| rollback_fast_startup_off_typed(Some(1))), vec![G_FAST_STARTUP_RESTORE_1.to_string()]);
+        assert_eq!(sunk(|| rollback_fast_startup_off_typed(None)), vec![G_FAST_STARTUP_RESTORE_NONE.to_string()]);
+        let on = source_literal(r#""Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 2"#, 1);
+        assert_eq!(on, G_HAGS_ENABLE);
+        assert_eq!(sunk(|| rollback_hags_enable_typed(Some(1))), vec![G_HAGS_RESTORE_1.to_string()]);
+        assert_eq!(sunk(|| rollback_hags_enable_typed(None)), vec![G_HAGS_RESTORE_NONE.to_string()]);
+    }
+
+    /// Break: drop the `if (-not ...)` guard from the memory-compression enable, or move the combined
+    /// script's prior line after the change, and this fails.
+    #[test]
+    fn golden_memory_compression() {
+        let applied = sunk(|| restore_memory_compression_with(Some(false)).map(|_| ()));
+        assert_eq!(applied, vec![G_MEMCOMPRESS_ON.to_string()]);
+        assert_eq!(sunk(|| rollback_memory_compression_typed(Some(true))), vec![G_MEMCOMPRESS_ON.to_string()]);
+        assert_eq!(sunk(|| rollback_memory_compression_typed(Some(false))), vec![G_MEMCOMPRESS_OFF.to_string()]);
+        assert_eq!(memcompress_combined_restore_script(NONCE).as_deref(), Ok(G_MEMCOMPRESS_COMBINED));
+    }
+
+    // ── rows 16-22 ──
+
+    /// Break: change the MMCSS stock value 20 or the absent-prior undo and this fails.
+    #[test]
+    fn golden_mmcss_priority_and_mpo() {
+        assert_eq!(mmcss_apply_script(Some(14)), G_MMCSS_APPLY_14);
+        assert_eq!(mmcss_apply_script(None), G_MMCSS_APPLY_NONE);
+        assert_eq!(sunk(|| rollback_mmcss_typed(Some(14), None)), vec![G_MMCSS_RESTORE.to_string()]);
+        assert_eq!(priority_separation_restore_script(), G_PRIORITY_DEFAULT);
+        assert_eq!(sunk(|| rollback_priority_separation_typed(Some(38))), vec![G_PRIORITY_RESTORE_38.to_string()]);
+        assert_eq!(sunk(|| rollback_priority_separation_typed(None)), vec![G_PRIORITY_RESTORE_NONE.to_string()]);
+        assert_eq!(set_or_remove_dword(DWM_PATH, "OverlayTestMode", None), G_MPO_DEFAULT);
+        assert_eq!(sunk(|| rollback_mpo_typed(Some(5))), vec![G_MPO_RESTORE_5.to_string()]);
+    }
+
+    /// Break: swap the DC and AC undo order in `core_parking_apply_script` and this fails.
+    #[test]
+    fn golden_core_parking() {
+        assert_eq!(core_parking_apply_script(PLAN, 100, Some(90)), G_CORE_PARKING_APPLY);
+        assert_eq!(core_parking_apply_script(PLAN, 100, None), G_CORE_PARKING_APPLY_NO_DC);
+        assert_eq!(core_parking_plan_script(PLAN, 100, 90, true), G_CORE_PARKING_RESTORE_ACTIVE);
+        assert_eq!(core_parking_plan_script(PLAN, 100, 90, false), G_CORE_PARKING_RESTORE_INACTIVE);
+        assert_eq!(core_parking_script(100, 90), G_CORE_PARKING_RESTORE_LEGACY);
+    }
+
+    /// Break: change "AutomaticManagedPagefile=$false" in the pagefile undo and this fails.
+    #[test]
+    fn golden_pagefile_and_tcp() {
+        let applied = sunk(|| restore_pagefile_automatic_with(vec!["C:\\pagefile.sys 1024 4096".to_string()]).map(|_| ()));
+        assert_eq!(applied, vec![G_PAGEFILE_AUTOMATIC.to_string()]);
+        assert_eq!(sunk(|| rollback_pagefile_typed('c', 1024, 4096)), vec![G_PAGEFILE_RESTORE.to_string()]);
+        assert_eq!(tcp_autotuning_script(false), G_TCP_NORMAL);
+        assert_eq!(sunk(|| rollback_tcp_autotuning_typed(true)), vec![G_TCP_DISABLED.to_string()]);
+        assert_eq!(sunk(|| rollback_tcp_autotuning_typed(false)), vec![G_TCP_NORMAL.to_string()]);
+    }
+
+    /// Break: change the Nagle interface path template (it is written twice, apply and undo) and this fails.
+    #[test]
+    fn golden_nagle() {
+        let path = fill(&source_literal("\"HKLM:\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\Tcpip\\\\Parameters\\\\Interfaces\\\\{}\"", 2), &[("", NIC)]);
+        let ack = source_literal("\"Set-ItemProperty -Path '{path}' -Name 'TcpAckFrequency' -Value 1", 1);
+        let nodelay = source_literal("\"Set-ItemProperty -Path '{path}' -Name 'TCPNoDelay' -Value 1", 1);
+        let applied = format!("{}{}", fill(&ack, &[("path", &path)]), fill(&nodelay, &[("path", &path)]));
+        assert_eq!(applied, G_NAGLE_APPLY);
+        let snap = NagleInterfaceSnapshot { interface: NIC.to_string(), prior_ack: Some(1), prior_nodelay: None };
+        assert_eq!(sunk(|| rollback_nagle_disable_typed(&[snap])), vec![G_NAGLE_RESTORE.to_string()]);
+    }
+
+    // ── the wrappers ──
+
+    /// Break: drop the `trim_end_matches(';')` in `compose_batch_script`, or the Single prefix, and this fails.
+    #[test]
+    fn golden_single_and_batch_wrappers() {
+        assert_eq!(with_error_action_stop(G_SERVICE_DISABLE), G_SINGLE_SERVICE_DISABLE);
+        assert_eq!(with_error_action_stop(G_MEMCOMPRESS_COMBINED), G_MEMCOMPRESS_COMBINED, "an embedded preference is not doubled");
+        let items = vec![
+            ("sysmain-disable".to_string(), vec![G_SERVICE_DISABLE.to_string()]),
+            ("nagle-disable".to_string(), vec![G_NAGLE_APPLY.to_string()]),
+        ];
+        assert_eq!(compose_batch_script(&items, NONCE).as_deref(), Ok(G_BATCH));
+    }
+
+    /// The decoder and the filler themselves (a golden is only as good as the reading of the source).
+    #[test]
+    fn the_source_decoder_reads_rust_literals_exactly() {
+        assert_eq!(decode_literal("\"a\\\\b\\\"c\\'d\" tail"), "a\\b\"c'd");
+        assert_eq!(decode_literal("\"one; \\\n         two\""), "one; two");
+        assert_eq!(fill("{{x}} {} {0} {k} {}", &[("", "a"), ("0", "z"), ("k", "v"), ("", "b")]), "{x} a z v b");
+    }
+}
