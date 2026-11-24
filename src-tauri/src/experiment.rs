@@ -4079,17 +4079,17 @@ pub(crate) enum PlanHolder {
 /// in the face" rule), and the titled `format!` these replace could not be mapped. Each refuses before anything
 /// runs, so "Nothing was changed." is true of the call that returns it.
 pub(crate) const PLAN_CLASS_TRIAL_REFUSAL: &str = "The power plan or one of its settings is being measured by a \
-     Trial right now, and this change writes to the same power plan, so Compy won't make it during the \
-     measurement. Let it finish first. Nothing was changed.";
+     Trial right now, and this action writes to the same power plan, so Compy won't run it during the \
+     measurement. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.";
 /// [`PLAN_CLASS_TRIAL_REFUSAL`] when the benchmark is measuring (it can be cancelled, as its direct-hold
 /// refusal says).
 pub(crate) const PLAN_CLASS_BENCH_REFUSAL: &str = "The power plan or one of its settings is being measured by \
-     the benchmark right now, and this change writes to the same power plan, so Compy won't make it during the \
+     the benchmark right now, and this action writes to the same power plan, so Compy won't run it during the \
      measurement. Let it finish, or cancel it, first. Nothing was changed.";
 /// [`PLAN_CLASS_TRIAL_REFUSAL`] when the Trial's start was interrupted (a Pending record).
 pub(crate) const PLAN_CLASS_INTERRUPTED_REFUSAL: &str = "An earlier Trial start on the power plan or one of \
-     its settings was interrupted and isn't resolved yet. This change writes to the same power plan, so Compy \
-     won't make it now. Check Test → Applied & history, then try again. Nothing was changed.";
+     its settings was interrupted and isn't resolved yet. This action writes to the same power plan, so Compy \
+     won't run it now. Check Test → Applied & history, then try again. Nothing was changed.";
 
 /// CR-plan-held-refusal: the refusal for a change to the power plan, or to a setting of it, while a
 /// Trial or the benchmark is measuring the other. C8: one of three fixed sentences.
@@ -6665,7 +6665,16 @@ mod experiment_tests {
         );
         for s in [PLAN_CLASS_TRIAL_REFUSAL, PLAN_CLASS_BENCH_REFUSAL, PLAN_CLASS_INTERRUPTED_REFUSAL] {
             assert!(!s.contains('\u{201c}') && s.ends_with("Nothing was changed."), "{s}");
+            // C8 r1 F2: these refuse an undo and a restore too, so the refused thing is named "this action"
+            // ("won't run it"), never "this change" ("won't make it"), which on an undo reads as the change
+            // already made. Break check: put "this change writes" back into any of the three -> fails.
+            let lower = s.to_lowercase();
+            assert!(lower.contains("this action writes") && s.contains("won't run it"), "{s}");
+            assert!(!lower.contains("this change") && !s.contains("won't make it"), "{s}");
         }
+        // C8 r1 F1: a running Trial can be ended from Test with its Restore now button, so the Trial sentence
+        // names that way out. Break check: put back "Let it finish first." -> fails.
+        assert!(PLAN_CLASS_TRIAL_REFUSAL.contains("Let the Trial finish, or end it with Restore now in Test, first."));
         // The held setting's own undo keeps today's behaviour; outside the class, nothing.
         assert_eq!(plan_class_trial_refusal(&usb, std::iter::once("usb-selective-suspend-off")), None);
         assert_eq!(plan_class_trial_refusal(&usb, std::iter::once("pcie-aspm-off")), None);

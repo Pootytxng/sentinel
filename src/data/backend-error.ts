@@ -129,17 +129,17 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   // record was undone in the run (C6 F3), so "Nothing was changed." is never said after one was.
   {
     rust: "PLAN_CLASS_TRIAL_REFUSAL",
-    text: "The power plan or one of its settings is being measured by a Trial right now, and this change writes to the same power plan, so Compy won't make it during the measurement. Let it finish first. Nothing was changed.",
+    text: "The power plan or one of its settings is being measured by a Trial right now, and this action writes to the same power plan, so Compy won't run it during the measurement. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
     key: "app.backendErrors.planTrialMeasuring",
   },
   {
     rust: "PLAN_CLASS_BENCH_REFUSAL",
-    text: "The power plan or one of its settings is being measured by the benchmark right now, and this change writes to the same power plan, so Compy won't make it during the measurement. Let it finish, or cancel it, first. Nothing was changed.",
+    text: "The power plan or one of its settings is being measured by the benchmark right now, and this action writes to the same power plan, so Compy won't run it during the measurement. Let it finish, or cancel it, first. Nothing was changed.",
     key: "app.backendErrors.planBenchMeasuring",
   },
   {
     rust: "PLAN_CLASS_INTERRUPTED_REFUSAL",
-    text: "An earlier Trial start on the power plan or one of its settings was interrupted and isn't resolved yet. This change writes to the same power plan, so Compy won't make it now. Check Test → Applied & history, then try again. Nothing was changed.",
+    text: "An earlier Trial start on the power plan or one of its settings was interrupted and isn't resolved yet. This action writes to the same power plan, so Compy won't run it now. Check Test → Applied & history, then try again. Nothing was changed.",
     key: "app.backendErrors.planTrialInterrupted",
   },
 ];
