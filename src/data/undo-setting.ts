@@ -1,5 +1,7 @@
+import type { TFunction } from "i18next";
 import type { AppliedChange } from "../types";
 import { hasUndo } from "./live-changes";
+import { keptOutsideUndoBody } from "./kept-outside-undo";
 
 // C6: one undo per setting. A setting re-applied N times without an undo between has N open records in the change
 // history; each record's undo puts back what Compy saved just before that record's change. Undoing them newest
@@ -67,4 +69,47 @@ export function settingUndo(
   if (undoneOutOfOrder(changes, recId)) return { kind: "one", why: "out_of_order", open: rows.length };
   if (trial !== "none") return { kind: "one", why: "trial", open: rows.length };
   return { kind: "walk", rows };
+}
+
+/** The words of the Applied card's Undo confirm: what App passes to `confirm()`. */
+export type UndoDialog = { title: string; body: string; confirmLabel: string };
+
+/** C8 r1 F3: the Undo confirm for a `settingUndo` decision, built here so it can be tested without rendering App.
+ *  Pure: no IPC, no state; App's `rollback` (one record) and `walkSetting` (the walk) pass the result to
+ *  `confirm()` as is. A walk names the count of the list it walks; a one-record undo of a setting with several
+ *  open records adds the sentence that says why only one record is undone. */
+export function undoDialog(
+  plan: SettingUndo,
+  change: Pick<AppliedChange, "rec_title" | "restores_label" | "snapshot" | "changed_outside">,
+  t: TFunction,
+): UndoDialog {
+  if (plan.kind === "walk") {
+    const total = plan.rows.length; // the count the dialog shows is the list the walk uses
+    return {
+      title: t("app.dialogs.rollbackTitle", { title: change.rec_title }),
+      body: t("app.dialogs.rollbackManyBody", { total }),
+      confirmLabel: t("app.dialogs.rollbackMany", { total }),
+    };
+  }
+  const note =
+    plan.why === "no_saved_undo"
+      ? t("app.dialogs.rollbackOneNoSavedUndo")
+      : plan.why === "out_of_order"
+        ? t("app.dialogs.rollbackOneOutOfOrder")
+        : plan.why === "trial"
+          ? t("app.dialogs.rollbackOneTrial")
+          : plan.why === "list_unread"
+            ? t("app.dialogs.rollbackOneUnread")
+            : "";
+  const dest = change.restores_label
+    ? t("app.dialogs.rollbackDest", { label: change.restores_label })
+    : "";
+  // Undo after "Keep <plan>": a row recorded as changed outside Compy names the plan the undo
+  // switches to, not the generic "how it was before".
+  const body = keptOutsideUndoBody(change, t) ?? t("app.dialogs.rollbackBody", { dest });
+  return {
+    title: t("app.dialogs.rollbackTitle", { title: change.rec_title }),
+    body: note ? `${body} ${note}` : body,
+    confirmLabel: t("app.dialogs.rollback"),
+  };
 }

@@ -123,6 +123,8 @@ describe("C6 per-setting undo: the audited path only (source pins)", () => {
     );
     expect(body).toMatch(/settingUndo\(walkList, change\.rec_id, trial\)/);
     expect(body).not.toMatch(/settingUndo\([^)]*\bchanges\b/);
-    expect(body).toMatch(/plan\.why === "no_saved_undo"\s*\?\s*t\("app\.dialogs\.rollbackOneNoSavedUndo"\)/);
+    // C8 r1 F3: F1's note now comes from undoDialog (its words per case: undo-card-dialog.test.ts); App passes the
+    // decision it made from the re-read list to it.
+    expect(body).toMatch(/confirm\(undoDialog\(plan, change, t\)\)/);
   });
 });

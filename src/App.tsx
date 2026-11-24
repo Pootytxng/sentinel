@@ -37,10 +37,9 @@ import { prewarmScan } from "./surfaces/use-scan";
 import { inEffectCounts, useMachineModel } from "./data/machine-model";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, BatchApplyResult, ExportResult, PendingCareIncident } from "./types";
-import { keptOutsideUndoBody } from "./data/kept-outside-undo";
 import { confirmedCount, unconfirmedTitles } from "./data/unconfirmed-change";
 import { hasUndo } from "./data/live-changes";
-import { settingUndo } from "./data/undo-setting";
+import { settingUndo, undoDialog } from "./data/undo-setting";
 import { runSettingWalk, trialInProgress, walkStopMessage, type WalkResult } from "./surfaces/changed-before-restore";
 import { useJourneyPhase } from "./surfaces/GuidedJourney";
 import { settleLedgerRead, useLedgerReadRetry } from "./data/applied-changes-retry";
@@ -1080,27 +1079,9 @@ function App() {
     }
     const plan = settingUndo(walkList, change.rec_id, trial);
     if (plan.kind === "walk") return walkSetting(change, plan.rows);
-    const note =
-      plan.why === "no_saved_undo"
-        ? t("app.dialogs.rollbackOneNoSavedUndo")
-        : plan.why === "out_of_order"
-          ? t("app.dialogs.rollbackOneOutOfOrder")
-          : plan.why === "trial"
-            ? t("app.dialogs.rollbackOneTrial")
-            : plan.why === "list_unread"
-              ? t("app.dialogs.rollbackOneUnread")
-              : "";
-    const dest = change.restores_label
-      ? t("app.dialogs.rollbackDest", { label: change.restores_label })
-      : "";
-    const body = keptOutsideUndoBody(change, t) ?? t("app.dialogs.rollbackBody", { dest });
-    const ok = await confirm({
-      title: t("app.dialogs.rollbackTitle", { title: change.rec_title }),
-      // Undo after "Keep <plan>": a row recorded as changed outside Compy names the plan the undo
-      // switches to, not the generic "how it was before".
-      body: note ? `${body} ${note}` : body,
-      confirmLabel: t("app.dialogs.rollback"),
-    });
+    // C8 r1 F3: the dialog's title, body (with the note that says why only one record is undone) and confirm
+    // label are built by undoDialog (data/undo-setting.ts; its words in en and zh-CN: data/undo-card-dialog.test.ts).
+    const ok = await confirm(undoDialog(plan, change, t));
     if (!ok) return false;
     setBusyId(change.id);
     setError(null);
@@ -1127,12 +1108,8 @@ function App() {
   // failure or a refusal. Single run: refused while another ledger write holds `busyId` (the care restore sets it too).
   const walkSetting = async (change: AppliedChange, rows: AppliedChange[]): Promise<boolean> => {
     if (busyId !== null || rows.length === 0) return false;
-    const total = rows.length; // the count the dialog shows is the list the walk uses
-    const ok = await confirm({
-      title: t("app.dialogs.rollbackTitle", { title: change.rec_title }),
-      body: t("app.dialogs.rollbackManyBody", { total }),
-      confirmLabel: t("app.dialogs.rollbackMany", { total }),
-    });
+    const total = rows.length; // the count the dialog shows (undoDialog: rows.length) is the list the walk uses
+    const ok = await confirm(undoDialog({ kind: "walk", rows }, change, t));
     if (!ok) return false;
     setBusyId(change.id);
     setError(null);
