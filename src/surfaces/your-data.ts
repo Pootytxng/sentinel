@@ -19,7 +19,13 @@ export type Kept = { rel: string; code: string; detail: string };
 export type WebviewTarget = { key: string; prefix: boolean; session_storage: boolean };
 
 /** One setting whose ledger records are not all undone, and how many are open (C5a). */
-export type AppliedSetting = { rec_id: string; title: string; records: number };
+export type AppliedSetting = {
+  rec_id: string;
+  title: string;
+  records: number;
+  /** A5 Part A: how many of its open records were recorded without the admin step's own result. Absent = 0. */
+  unconfirmed_records?: number;
+};
 
 /** The settings a refusal lists: the backend's grouping by setting id (data_clear `group_open_rows`). The app and
  *  its backend ship together, so there is no older answer to fall back on (C5 review: the title fallback was dead). */

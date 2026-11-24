@@ -269,7 +269,16 @@ export function YourData() {
                   <p className="receipts-hint">{t(k("appliedTitle"))}</p>
                   <ul className="receipts-hint">
                     {settings.map((s) => (
-                      <li key={s.rec_id}>{s.records > 1 ? t(k("appliedSettingMany"), { title: s.title, records: s.records }) : s.title}</li>
+                      <li key={s.rec_id}>
+                        {s.records > 1 ? t(k("appliedSettingMany"), { title: s.title, records: s.records }) : s.title}
+                        {/* A5 Part A: a change recorded without the admin step's result never reads as a normal one. */}
+                        {(s.unconfirmed_records ?? 0) > 0 && (
+                          <span className="sev-warn" data-testid="your-data-applied-unconfirmed">
+                            {" "}
+                            {t("optimize.fix.resultUnconfirmed")}
+                          </span>
+                        )}
+                      </li>
                     ))}
                   </ul>
                   <p className="receipts-hint">{t(k("appliedSummary"), { settings: settings.length, records })}</p>

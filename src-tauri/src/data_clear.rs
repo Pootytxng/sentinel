@@ -694,6 +694,9 @@ pub(crate) struct AppliedSetting {
     pub(crate) rec_id: String,
     pub(crate) title: String,
     pub(crate) records: usize,
+    /// A5 Part A: how many of its open rows were recorded without the admin step's own result. The list shows
+    /// the check-and-undo warning for a setting with any, so it never reads as a normal change. Wire only.
+    pub(crate) unconfirmed_records: usize,
 }
 
 /// Groups open rows by setting, newest apply first (RFC 3339 strings compared as text, as the ledger writes
@@ -704,9 +707,18 @@ fn group_open_rows(rows: &[crate::history::OpenRow]) -> Vec<AppliedSetting> {
     let mut out: Vec<AppliedSetting> = Vec::new();
     for i in order {
         let r = &rows[i];
+        let unconfirmed = usize::from(r.result_unconfirmed);
         match out.iter_mut().find(|s| s.rec_id == r.rec_id) {
-            Some(s) => s.records += 1,
-            None => out.push(AppliedSetting { rec_id: r.rec_id.clone(), title: r.title.clone(), records: 1 }),
+            Some(s) => {
+                s.records += 1;
+                s.unconfirmed_records += unconfirmed;
+            }
+            None => out.push(AppliedSetting {
+                rec_id: r.rec_id.clone(),
+                title: r.title.clone(),
+                records: 1,
+                unconfirmed_records: unconfirmed,
+            }),
         }
     }
     out
@@ -2568,6 +2580,32 @@ mod tests {
         assert_eq!(plan.applied_settings.iter().map(|s| s.records).sum::<usize>(), plan.applied_changes.len());
         let v = serde_json::to_value(&plan).unwrap();
         assert_eq!(v["applied_settings"][0]["records"], 3, "the screen reads these names");
+        assert_eq!(v["applied_settings"][0]["unconfirmed_records"], 0, "nothing here was recorded unconfirmed");
+    }
+
+    /// A5 Part A: an open row recorded without the admin step's own result is counted on its setting, so the
+    /// Your data list shows the check-and-undo warning; a rolled-back one no longer counts.
+    #[test]
+    fn a5a_the_refusal_counts_open_rows_recorded_without_their_result() {
+        let t = Tmp::new("a5a-unconfirmed");
+        seed(&t);
+        let row = |id: &str, rec: &str, at: &str, status: &str, unconfirmed: bool| {
+            let mark = if unconfirmed { r#","result_unconfirmed":true"# } else { "" };
+            format!(r#"{{"id":"{id}","rec_id":"{rec}","rec_title":"{rec}","applied_at":"{at}","snapshot":{{}},"status":"{status}"{mark}}}"#)
+        };
+        let rows = [
+            row("g1", "game-mode", "2026-11-01T00:00:00Z", "applied", true),
+            row("g2", "game-mode", "2026-11-02T00:00:00Z", "applied", false),
+            row("v1", "visual-effects", "2026-11-03T00:00:00Z", "rolled_back", true),
+            row("h1", "hags-enable", "2026-11-04T00:00:00Z", "applied", false),
+        ];
+        t.put("history.json", &format!("[{}]", rows.join(",")));
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        let got: Vec<(&str, usize, usize)> =
+            plan.applied_settings.iter().map(|s| (s.rec_id.as_str(), s.records, s.unconfirmed_records)).collect();
+        assert_eq!(got, [("hags-enable", 1, 0), ("game-mode", 2, 1)]);
+        let v = serde_json::to_value(&plan).unwrap();
+        assert_eq!(v["applied_settings"][1]["unconfirmed_records"], 1, "the screen reads this name");
     }
 
     /// C5d: a record counts until it is undone, even when its setting reads off now, so the backend's own detail

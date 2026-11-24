@@ -546,6 +546,31 @@ describe("Your data: clear everything", () => {
     expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain("clear_everything");
   });
 
+  // A5 Part A. Break check: drop the `unconfirmed_records` block in YourData.tsx -> no warning, fails.
+  it("a setting with a change recorded without the admin step's result says so in the list", async () => {
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: () => ({
+        ...REFUSED,
+        applied_settings: [
+          { rec_id: "core-parking", title: "Core parking", records: 1, unconfirmed_records: 1 },
+          { rec_id: "game-mode", title: "Game mode", records: 1, unconfirmed_records: 0 },
+        ],
+      }),
+    });
+    render(<YourData />);
+    await openEverything();
+    const applied = await screen.findByTestId("your-data-applied");
+    const notes = screen.getAllByTestId("your-data-applied-unconfirmed");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toContain(
+      "Compy didn't get a result for this change, so it is recorded as made. Check the setting in Windows, and undo it here if you don't want it.",
+    );
+    const lines = [...applied.querySelectorAll("li")].map((li) => li.textContent ?? "");
+    expect(lines[0].startsWith("Core parking ")).toBe(true);
+    expect(lines[1]).toBe("Game mode");
+  });
+
   it("the licence box re-plans; the delete sends the shown fingerprint and choice; afterwards it asks to close and reopen", async () => {
     window.localStorage.setItem("compy_onboarded_v1", "1");
     window.localStorage.setItem("compy_theme", "dark");

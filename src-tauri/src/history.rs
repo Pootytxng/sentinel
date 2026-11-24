@@ -2574,6 +2574,9 @@ pub(crate) struct OpenRow {
     pub(crate) rec_id: String,
     pub(crate) title: String,
     pub(crate) applied_at: String,
+    /// A5 Part A: the row was recorded without the admin step's own result (`AppliedChange::result_unconfirmed`),
+    /// so the list says to check it in Windows, never presenting it as a normal change.
+    pub(crate) result_unconfirmed: bool,
 }
 
 /// The ledger's rows that are NOT rolled back (still counted as applied), read from `path` without moving,
@@ -2586,7 +2589,12 @@ pub(crate) fn open_rows_at(path: &Path) -> Result<Vec<OpenRow>, String> {
     Ok(read_history_unlocked(path)?
         .into_iter()
         .filter(|c| c.status != "rolled_back")
-        .map(|c| OpenRow { rec_id: c.rec_id, title: c.rec_title, applied_at: c.applied_at })
+        .map(|c| OpenRow {
+            rec_id: c.rec_id,
+            title: c.rec_title,
+            applied_at: c.applied_at,
+            result_unconfirmed: c.result_unconfirmed,
+        })
         .collect())
 }
 
