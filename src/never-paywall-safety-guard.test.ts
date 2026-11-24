@@ -64,6 +64,9 @@ describe("#195 §5 — safety is never behind Pro", () => {
   const safety = FILES.filter((f) => SAFETY_IPC.test(f.raw));
 
   it("finds a real safety surface to guard (the derivation is not silently empty)", () => {
+    // 29 files on 2026-11-24 (B10 "Undo this Compy change" on the Something's-wrong card: + data/compy-undo.ts, which
+    // decides what the card offers before App's one rollback_change; + surfaces/glass/ParamedicCard.tsx, which offers
+    // it; + surfaces/glass/HomeGlass.tsx, which passes App's undo to the card).
     // 26 files on 2026-11-23 (C6 per-setting undo: + data/undo-setting.ts, which decides whether "Undo" walks a
     // setting's open records through rollback_change; + surfaces/changed-before-restore.ts, whose runSettingWalk runs
     // that walk; + data/backend-error.ts, which maps the refusals an undo meets in front of rollback_change).
@@ -85,7 +88,7 @@ describe("#195 §5 — safety is never behind Pro", () => {
     expect(
       safety.map((f) => f.path),
       "the mutation/rollback surface shrank — either a refactor renamed the commands (update SAFETY_IPC) or the match is broken",
-    ).toHaveLength(26);
+    ).toHaveLength(29);
   });
 
   it("no file that applies, rolls back, or reads the Trust Ledger touches the Pro gate", () => {

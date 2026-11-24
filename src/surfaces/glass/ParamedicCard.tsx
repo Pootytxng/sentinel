@@ -2,9 +2,12 @@
 // (`paramedic_diagnose`) on a tap, shows what the engine returned in plain words, and offers steps the owner does
 // in Windows. Its one action (B3, owner decision 2026-11-21) is "Turn it back on" for a setting Compy applied that
 // reads off now, and it is the Test room's own path (src/data/turn-back-on.ts: the same confirm, the same audited
-// apply, the same undo); nothing else here changes the PC. It says what changed before the problem, never that it
-// caused it (Constitution 17). The engine returns codes and numbers; every sentence here is a locale string. Keys
-// are literal, one t() call per key (never composed).
+// apply, the same undo). B10 (owner decision 2026-11-24, no-admin undos only) adds "Undo this Compy change" on the
+// compy-change row: the card only decides what to offer (src/data/compy-undo.ts) and passes ids to App's
+// `undoOneRecord`, which re-reads at the click and makes one `rollback_change` through App's own confirm. Nothing else
+// here changes the PC. It says what changed before the problem, never that it caused it (Constitution 17). The engine
+// returns codes and numbers; every sentence here is a locale string. Keys are literal, one t() call per key (never
+// composed).
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -12,8 +15,10 @@ import { driftShort, stampOf } from "../drift-named";
 import { requestCheckFocus } from "../check-focus";
 import { roughLine, type RoughGame } from "../home-facts";
 import { turnBackOn, type RevertedChange } from "../../data/turn-back-on";
+import { compyUndoOffer, type CardUndoResult } from "../../data/compy-undo";
 import { useConfirmOptional } from "../../design/ConfirmDialog";
 import type {
+  AppliedChange,
   Drift,
   ParamedicDiagnosis,
   ParamedicEvidence,
@@ -52,6 +57,18 @@ type Ctx = {
   onOpenCheck?: () => void;
   /** B3: "Turn it back on" in the card, through the Lab's own path. Absent when the card cannot offer it. */
   reapply?: Reapply;
+  /** B10: "Undo this Compy change" on the compy-change row. Absent when the card cannot offer it. */
+  compyUndo?: CompyUndo;
+};
+
+/** B10: the ledger list the card was given (to draw from; App re-reads at the click), the settings the drift list names
+ *  (null = not loaded), the record being undone, what each press came back with, and the press handler (ids only). */
+type CompyUndo = {
+  list: AppliedChange[];
+  driftRecs: ReadonlySet<string> | null;
+  busy: string | null;
+  results: Record<string, CardUndoResult["kind"]>;
+  press: (recId: string, id: string) => void;
 };
 
 /** B3: the settings this card may turn back on (the ledger says Compy applied them and they read off now, and the live
@@ -1071,8 +1088,23 @@ function restoredAt(f: ParamedicFinding): string | undefined {
 }
 
 /** The steps for one candidate; they sit inside its row, which opens on a tap. */
-function FixBlock({ fix, ctx, possible, restored, appliedOnly }: { fix: ParamedicFix; ctx: Ctx; possible: boolean; restored?: string; appliedOnly?: boolean }) {
+function FixBlock({
+  fix,
+  ctx,
+  possible,
+  restored,
+  appliedOnly,
+  finding,
+}: {
+  fix: ParamedicFix;
+  ctx: Ctx;
+  possible: boolean;
+  restored?: string;
+  appliedOnly?: boolean;
+  finding?: ParamedicFinding;
+}) {
   const steps = stepLines(fix, ctx, restored, appliedOnly);
+  const undo = fix.kind === "steps" && fix.code === "compy-change" && finding ? <CompyUndoRow f={finding} ctx={ctx} /> : null;
   if (steps.length > 0) {
     // Navigation only: the one-press "turn it back on" lives in the Test room's check, with its own confirm. The
     // button is shown only for the applied-changes setting; nothing else has a turn-on there.
@@ -1121,10 +1153,83 @@ function FixBlock({ fix, ctx, possible, restored, appliedOnly }: { fix: Paramedi
             {ctx.t("paramedic.fix.settingDrift.openCheck", { room: ctx.t("common.rail.lab") })}
           </button>
         )}
+        {undo}
       </div>
     );
   }
   return fix.kind === "none" ? <p className="gl-para-note">{ctx.t("paramedic.fix.none")}</p> : null;
+}
+
+/** B10: what the compy-change row offers, from the ledger list the card was given and the finding's own window and
+ *  count (src/data/compy-undo.ts). A button only for one record that passes every rule; one record otherwise is named
+ *  with where to undo it; several are listed, never "undo all"; an undone one gets the ledger's own date. */
+function CompyUndoRow({ f, ctx }: { f: ParamedicFinding; ctx: Ctx }) {
+  const { t } = ctx;
+  const cu = ctx.compyUndo;
+  if (!cu || f.since_when.kind !== "observed-between") return null;
+  const count = f.evidence.find((e) => e.code === "count-changed")?.args;
+  const offer = compyUndoOffer({ from: f.since_when.from, to: f.since_when.to, countFrom: count?.from, countTo: count?.to }, cu.list, cu.driftRecs);
+  switch (offer.kind) {
+    case "none":
+      return null;
+    case "several":
+      return (
+        <p className="gl-para-note" data-testid="paramedic-undo-compy-several">
+          {t("paramedic.fix.compyChange.several", { count: offer.count, titles: offer.titles.join(", "), ...RAW })}
+        </p>
+      );
+    case "noUndoHere":
+      return (
+        <p className="gl-para-note" data-testid="paramedic-undo-compy-none">
+          {t("paramedic.fix.compyChange.noUndoHere", { title: offer.title, ...RAW })}
+        </p>
+      );
+    case "undone":
+      // The date is the ledger's rolled_back_at, never the click's.
+      return (
+        <p className="gl-para-note" data-testid="paramedic-undo-compy-done">
+          {t("paramedic.fix.compyChange.undone", { date: ctx.dates.dayTime(offer.at), title: offer.title, game: ctx.game, ...RAW })}
+        </p>
+      );
+    case "button": {
+      const result = cu.results[offer.id];
+      const line =
+        result === "unrecorded"
+          ? t("common.undoUnrecorded")
+          : result === "trial"
+            ? t("paramedic.fix.compyChange.trialRunning")
+            : result === "changed"
+              ? t("paramedic.fix.compyChange.changedSinceDrawn")
+              : result === "unread"
+                ? t("paramedic.fix.compyChange.listUnread")
+                : null;
+      // Done: the button goes; the dated line comes from the ledger's next list (rolled_back_at), never from the press.
+      // Unrecorded: it ran on Windows but isn't saved, so it is never called undone and is not offered again here.
+      const showButton = result !== "done" && result !== "unrecorded";
+      return (
+        <>
+          {showButton && (
+            <button
+              type="button"
+              className="gl-ghost"
+              data-testid="paramedic-undo-compy"
+              aria-disabled={cu.busy != null}
+              onClick={() => {
+                if (cu.busy == null) cu.press(offer.recId, offer.id);
+              }}
+            >
+              {t("paramedic.fix.compyChange.undoButton", { title: offer.title, ...RAW })}
+            </button>
+          )}
+          {line && (
+            <p className="gl-para-note" data-testid="paramedic-undo-compy-result">
+              {line}
+            </p>
+          )}
+        </>
+      );
+    }
+  }
 }
 
 function whyFirst(d: ParamedicDiagnosis, ctx: Ctx): string | null {
@@ -1307,7 +1412,7 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
             </div>
           )}
           {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
-          {!recovered && <FixBlock fix={f.fix} ctx={ctx} possible={f.confidence === "possible"} restored={restoredAt(f)} appliedOnly={appliedOnly(f)} />}
+          {!recovered && <FixBlock fix={f.fix} ctx={ctx} possible={f.confidence === "possible"} restored={restoredAt(f)} appliedOnly={appliedOnly(f)} finding={f} />}
           {!recovered && f === d.findings[0] && f.confidence !== "possible" && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
         </div>
       )}
@@ -1804,6 +1909,8 @@ export function ParamedicCard({
   onOpenCheck,
   reverted = null,
   onChanged,
+  changes = null,
+  undoCompyChange,
 }: {
   noGames?: boolean;
   games?: RecordedGame[];
@@ -1815,6 +1922,10 @@ export function ParamedicCard({
   reverted?: RevertedChange[] | null;
   /** Run after a turn-on, like after any apply (App's refresh). */
   onChanged?: () => Promise<unknown> | void;
+  /** B10: the ledger's records (null = not read: no undo offered). Used to DRAW the offer only; App re-reads at the click. */
+  changes?: AppliedChange[] | null;
+  /** B10: App's `undoOneRecord`: ids and one sentence in, one `rollback_change` (or a refusal with no call) out. */
+  undoCompyChange?: (recId: string, expectedId: string, extraBody: string) => Promise<CardUndoResult>;
 } = {}) {
   const { t, i18n } = useTranslation();
   // B3: the Lab's confirm dialog. Without one (an isolated mount) the card offers no turn-on at all.
@@ -1822,6 +1933,10 @@ export function ParamedicCard({
   const [turning, setTurning] = useState<string | null>(null);
   const [turnedOn, setTurnedOn] = useState<{ rec_id: string; title: string; at: string }[]>([]);
   const pressing = useRef(false);
+  // B10: the record whose undo App is running, and what each press came back with (memory only, this mount).
+  const [undoing, setUndoing] = useState<string | null>(null);
+  const [undoResults, setUndoResults] = useState<Record<string, CardUndoResult["kind"]>>({});
+  const undoPressing = useRef(false);
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
   const [more, setMore] = useState(false);
@@ -1948,15 +2063,39 @@ export function ParamedicCard({
       });
   };
   const reapply: Reapply | undefined = offer.length > 0 ? { offer, busy: turning, done: turnedOn, press } : undefined;
+  const game = answer ? (answer.game_name ?? answer.game ?? "") : "";
+  // B10: one press at a time; the card passes ids and the confirm's extra sentence, App does the rest.
+  const pressUndo = (recId: string, id: string) => {
+    if (!undoCompyChange || undoPressing.current) return;
+    undoPressing.current = true;
+    setUndoing(id);
+    void undoCompyChange(recId, id, t("paramedic.fix.compyChange.undoExtra", { game, ...RAW }))
+      .then((r) => {
+        if (alive.current) setUndoResults((prev) => ({ ...prev, [id]: r.kind }));
+      })
+      .catch(() => {
+        if (alive.current) setUndoResults((prev) => ({ ...prev, [id]: "failed" }));
+      })
+      .finally(() => {
+        undoPressing.current = false;
+        if (alive.current) setUndoing(null);
+      });
+  };
+  // The settings the live drift list names (by rec id, or by title for a drift title with no id). Not loaded: null.
+  const driftRecs: ReadonlySet<string> | null =
+    drifts == null ? null : new Set([...liveIds, ...(changes ?? []).filter((c) => titlesWithoutId.has(c.rec_title)).map((c) => c.rec_id)]);
+  const compyUndo: CompyUndo | undefined =
+    changes && undoCompyChange ? { list: changes, driftRecs, busy: undoing, results: undoResults, press: pressUndo } : undefined;
   const ctx: Ctx | null = answer
     ? {
           t,
           dates,
-          game: answer.game_name ?? answer.game ?? "",
+          game,
           drifts,
           lang: i18n.language,
           startRecord: answer.start_record,
           reapply,
+          compyUndo,
           // Opening the health check asks for the "turn it back on" row to take focus there.
           onOpenCheck: onOpenCheck ? () => { requestCheckFocus("applied-changes"); onOpenCheck(); } : undefined,
         }

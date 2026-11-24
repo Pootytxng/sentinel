@@ -1,0 +1,190 @@
+// B10 (owner decision 2026-11-24: the coordinator's recommendation, no-admin undos only): "Undo this Compy change" on
+// the Something's-wrong card. The card decides only what to offer, from the ledger list it is given and the finding's
+// own window; App's `undoOneRecord` (mocked here, it is App's) re-reads at the click and makes the one undo. These
+// tests render the real card; nothing reaches Windows.
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+
+const answer = vi.hoisted(() => ({ value: null as unknown }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: () => Promise.resolve(answer.value),
+}));
+
+import "../../i18n";
+import type { AppliedChange, ParamedicDiagnosis } from "../../types";
+import type { CardUndoResult } from "../../data/compy-undo";
+import { ParamedicCard } from "./ParamedicCard";
+
+afterEach(() => {
+  cleanup();
+  answer.value = null;
+});
+
+const WIN_FROM = "2026-11-19T05:00:00Z";
+const WIN_TO = "2026-11-19T17:00:00Z";
+const ref = (at: string) => ({ started_at: at, game: "game-a", duration_secs: 3600, samples: 3500, avg_fps: 120, low1_fps: 80 });
+type F = ParamedicDiagnosis["findings"][number];
+const compyFinding = (confidence: F["confidence"], from = "3", to = "4"): F => ({
+  id: "compy-change",
+  confidence,
+  in_play: true,
+  evidence: [{ kind: "known", code: "count-changed", args: { from, to }, against: false, source: "sessions" }],
+  since_when: { kind: "observed-between", from: WIN_FROM, to: WIN_TO },
+  fix: { kind: "steps", code: "compy-change", args: {} },
+  now: null,
+  now_evidence: [],
+});
+const other: F = {
+  id: "gpu-driver-change",
+  confidence: "likely",
+  in_play: false,
+  evidence: [{ kind: "known", code: "driver-changed", args: { from: "1.0", to: "2.0" }, against: false, source: "snapshots" }],
+  since_when: { kind: "observed-between", from: WIN_FROM, to: WIN_TO },
+  fix: { kind: "steps", code: "gpu-driver-change", args: { from: "1.0" } },
+  now: null,
+  now_evidence: [],
+};
+const diagnosis = (findings: F[]): ParamedicDiagnosis => ({
+  complaint: "unknown",
+  state: { kind: "found" },
+  game: "game-a",
+  game_name: "Game A",
+  problem: {
+    rule: "stutter-collapse",
+    spikes: false,
+    avg_lower: false,
+    before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
+    now: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
+    last_normal_at: "2026-11-19T04:00:00Z",
+    last_full_normal_at: "2026-11-19T04:00:00Z",
+    sessions_affected: [ref("2026-11-19T17:00:00Z")],
+    partial_sessions: [],
+    other_games_affected: [],
+    later_unjudged: 0,
+  },
+  findings,
+  not_it: [],
+  unknowns: [],
+  limits: [],
+  seen: [],
+  baseline: ref("2026-11-19T04:00:00Z"),
+  first_bad: ref("2026-11-19T17:00:00Z"),
+  mixed_sessions: [],
+  why_first: null,
+  recovery: null,
+  earlier_episode: null,
+  method: "paramedic-rules-v1",
+});
+
+const GM = "Enable Windows Game Mode";
+const rec = (over: Partial<AppliedChange> = {}): AppliedChange =>
+  ({
+    id: "gm-1",
+    rec_id: "game-mode",
+    rec_title: GM,
+    applied_at: "2026-11-19T10:00:00Z",
+    snapshot: null,
+    status: "applied",
+    is_still_active: true,
+    active_check: "on",
+    undo_contract: true,
+    rollback_action: { kind: "restore-game-mode-from-snapshot" },
+    ...over,
+  }) as AppliedChange;
+
+const openAll = () => {
+  for (let i = 0; i < 6; i++) {
+    const closed = screen.queryAllByRole("button").filter((b) => b.getAttribute("aria-expanded") === "false");
+    if (closed.length === 0) return;
+    closed.forEach((b) => fireEvent.click(b));
+  }
+};
+
+const show = async (findings: F[], changes: AppliedChange[], undo = vi.fn<(r: string, i: string, e: string) => Promise<CardUndoResult>>()) => {
+  answer.value = diagnosis(findings);
+  const view = render(<ParamedicCard drifts={[]} changes={changes} undoCompyChange={undo} />);
+  fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+  await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
+  openAll();
+  return { undo, view };
+};
+
+describe("B10: Undo this Compy change on the card", () => {
+  // Break check: drop the button branch in CompyUndoRow -> no button, fails.
+  it("one Compy record in the window, count +1, confirmed on, no-admin undo: one button that passes ids only", async () => {
+    const undo = vi.fn<(r: string, i: string, e: string) => Promise<CardUndoResult>>().mockResolvedValue({ kind: "cancelled" });
+    await show([compyFinding("likely")], [rec()], undo);
+    fireEvent.click(screen.getByTestId("paramedic-undo-compy"));
+    await waitFor(() => expect(undo).toHaveBeenCalledTimes(1));
+    const [recId, id, extra] = undo.mock.calls[0];
+    expect([recId, id]).toEqual(["game-mode", "gm-1"]);
+    expect(typeof extra).toBe("string");
+    expect(extra).toContain("Game A");
+    expect(extra).toContain("it doesn't tell Compy whether this change was the reason");
+    expect(screen.getByTestId("paramedic-undo-compy").textContent).toBe(`Undo “${GM}”`);
+  });
+
+  it("is offered on an 'also possible' row too", async () => {
+    await show([other, compyFinding("possible")], [rec()]);
+    expect(screen.getByTestId("paramedic-undo-compy")).toBeTruthy();
+  });
+
+  // Break check: show the button for an admin rollback action -> fails.
+  it("an undo that needs admin rights is named, with where to undo it, and no button", async () => {
+    await show([compyFinding("likely")], [rec({ rec_id: "hags-enable", rec_title: "Enable HAGS", rollback_action: { kind: "restore-hw-sch-mode-from-snapshot" } })]);
+    expect(screen.queryByTestId("paramedic-undo-compy")).toBeNull();
+    expect(screen.getByTestId("paramedic-undo-compy-none").textContent).toBe(
+      "Compy doesn't offer to undo “Enable HAGS” from this card. You can see it, and undo it if you choose, in Test → Applied & history.",
+    );
+  });
+
+  it("two records in the window are listed, never undone together", async () => {
+    await show([compyFinding("likely", "3", "5")], [rec(), rec({ id: "vfx-1", rec_id: "visual-effects", rec_title: "Trim visual effects", applied_at: "2026-11-19T11:00:00Z", rollback_action: { kind: "restore-visual-effects-from-snapshot" } })]);
+    expect(screen.queryByTestId("paramedic-undo-compy")).toBeNull();
+    expect(screen.getByTestId("paramedic-undo-compy-several").textContent).toBe(
+      `Compy recorded 2 of its changes in that time: ${GM}, Trim visual effects. To see which one matters, undo one at a time in Test → Applied & history, and play once after each.`,
+    );
+  });
+
+  // Break checks: mark the record undone on any result ("failed" -> done) -> the button goes, fails; show the dated
+  // line on "unrecorded" -> fails.
+  it.each([
+    ["failed", null, true],
+    ["cancelled", null, true],
+    ["trial", "A Trial is running, or Compy can't tell, so it didn't undo anything. Finish the Trial first.", true],
+    ["changed", "This changed since the card was drawn, so Compy didn't undo anything. Press Something's wrong again.", true],
+    ["unread", "Compy couldn't read its change list just now, so it didn't undo anything. Press Something's wrong again.", true],
+    ["unrecorded", "The undo worked on Windows, but Compy couldn't save it to its history, so Applied & history may still list this change. Check the setting in Windows if unsure.", false],
+  ] as const)("a press that came back %s: no 'Undone' line", async (kind, line, buttonStays) => {
+    const undo = vi.fn<(r: string, i: string, e: string) => Promise<CardUndoResult>>().mockResolvedValue({ kind });
+    await show([compyFinding("likely")], [rec()], undo);
+    fireEvent.click(screen.getByTestId("paramedic-undo-compy"));
+    await waitFor(() => expect(undo).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(!!screen.queryByTestId("paramedic-undo-compy")).toBe(buttonStays));
+    expect(screen.queryByTestId("paramedic-undo-compy-done")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Undone on/);
+    if (line) expect(screen.getByTestId("paramedic-undo-compy-result").textContent).toBe(line);
+    else expect(screen.queryByTestId("paramedic-undo-compy-result")).toBeNull();
+  });
+
+  // Break check: date the line from the click (or applied_at) instead of rolled_back_at -> the date differs, fails.
+  it("once the ledger says it is undone, the line takes its date from rolled_back_at", async () => {
+    const at = "2026-11-22T09:30:00Z";
+    await show([compyFinding("likely")], [rec({ status: "rolled_back", rolled_back_at: at, active_check: null })]);
+    const when = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(at));
+    expect(screen.getByTestId("paramedic-undo-compy-done").textContent).toBe(
+      `Undone on ${when}: “${GM}”. Play Game A once the way you usually do, then press Something's wrong again.`,
+    );
+    expect(screen.queryByTestId("paramedic-undo-compy")).toBeNull();
+  });
+
+  it("no ledger list or no undo from App: nothing is offered", async () => {
+    answer.value = diagnosis([compyFinding("likely")]);
+    render(<ParamedicCard drifts={[]} changes={null} undoCompyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
+    openAll();
+    expect(screen.queryByTestId("paramedic-undo-compy")).toBeNull();
+    expect(screen.queryByTestId("paramedic-undo-compy-none")).toBeNull();
+  });
+});

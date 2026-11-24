@@ -577,7 +577,15 @@
     },
     "compyChange": {
       "step1": "Open {{room}} and look at the changes Compy has on. Undo the newest one.",
-      "step2": "Play {{game}} once, then press Something's wrong again."
+      "step2": "Play {{game}} once, then press Something's wrong again.",
+      "undoButton": "Undo “{{title}}”",
+      "undoExtra": "Compy recorded this change between your last normal {{game}} session and the first rough one. Undoing it puts back what Compy saved before it; it doesn't tell Compy whether this change was the reason.",
+      "undone": "Undone on {{date}}: “{{title}}”. Play {{game}} once the way you usually do, then press Something's wrong again.",
+      "several_other": "Compy recorded {{count}} of its changes in that time: {{titles}}. To see which one matters, undo one at a time in Test → Applied & history, and play once after each.",
+      "noUndoHere": "Compy doesn't offer to undo “{{title}}” from this card. You can see it, and undo it if you choose, in Test → Applied & history.",
+      "changedSinceDrawn": "This changed since the card was drawn, so Compy didn't undo anything. Press Something's wrong again.",
+      "trialRunning": "A Trial is running, or Compy can't tell, so it didn't undo anything. Finish the Trial first.",
+      "listUnread": "Compy couldn't read its change list just now, so it didn't undo anything. Press Something's wrong again."
     },
     "none": "Compy has no change to offer for this. Check it in Windows, then play once more.",
     "frameCapChange": {

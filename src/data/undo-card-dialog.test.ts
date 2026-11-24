@@ -96,13 +96,30 @@ describe("the Applied card's Undo dialog, per case (C8, plan u4/u5; r1 F3)", () 
   });
 });
 
-// The source pin: App builds no Undo-dialog words itself; `rollback` and `walkSetting` each pass undoDialog's
-// result to confirm() once. Break check: put a `t("app.dialogs.rollbackOneTrial")` back into App's rollback, or
-// call confirm({ title: ... }) there -> fails.
+// The source pin: App builds no Undo-dialog words itself; `rollback`, `walkSetting` and B10's `undoOneRecord` (the
+// Something's-wrong card's one undo) each pass undoDialog's result to confirm() once, and App has no other call.
+// Break check: put a `t("app.dialogs.rollbackOneTrial")` back into App's rollback, or call confirm({ title: ... })
+// there -> fails.
 describe("App's Undo dialogs come from undoDialog", () => {
   const app = readFileSync(join("src", "App.tsx"), "utf8");
-  const rollback = app.split("const rollback = async")[1]?.split("const walkSetting = async")[0] ?? "";
-  const walk = app.split("const walkSetting = async")[1]?.split("\n  };\n")[0] ?? "";
+  // Each function's own body: from its declaration to its closing `};` at two-space indent.
+  const fn = (name: string) => app.split(`const ${name} = async`)[1]?.split("\n  };\n")[0] ?? "";
+  const rollback = fn("rollback");
+  const walk = fn("walkSetting");
+  const card = fn("undoOneRecord");
+
+  it("App calls undoDialog in exactly these three places", () => {
+    expect(app.match(/undoDialog\(/g)?.length).toBe(3);
+  });
+
+  // B10: the card's undo is the Applied card's one-record confirm, plus the card's one sentence where a note goes.
+  // Break check: build the card's confirm with t("app.dialogs.rollbackTitle", ...) in undoOneRecord -> fails.
+  it("undoOneRecord uses the one-record undoDialog and adds only the card's sentence", () => {
+    expect(card.match(/undoDialog\(/g)?.length).toBe(1);
+    expect(card).toMatch(/const dialog = undoDialog\(\{ kind: "one", why: "single", open: 1 \}, row, t\);/);
+    expect(card).toMatch(/confirm\(\{ \.\.\.dialog, body: `\$\{dialog\.body\} \$\{extraBody\}` \}\)/);
+    expect(card).not.toMatch(/app\.dialogs\.rollback|keptOutsideUndoBody/);
+  });
 
   it("rollback calls undoDialog exactly once and builds none of its words", () => {
     expect(rollback.match(/undoDialog\(/g)?.length).toBe(1);

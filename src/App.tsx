@@ -40,6 +40,7 @@ import type { BatchApplyReport, BatchApplyResult, ExportResult, PendingCareIncid
 import { confirmedCount, unconfirmedTitles } from "./data/unconfirmed-change";
 import { hasUndo } from "./data/live-changes";
 import { settingUndo, undoDialog } from "./data/undo-setting";
+import { newestOpenRecord, recordUndoableFromCard, type CardUndoResult } from "./data/compy-undo";
 import { runSettingWalk, trialInProgress, walkStopMessage, type WalkResult } from "./surfaces/changed-before-restore";
 import { useJourneyPhase } from "./surfaces/GuidedJourney";
 import { settleLedgerRead, useLedgerReadRetry } from "./data/applied-changes-retry";
@@ -1102,6 +1103,54 @@ function App() {
     return recorded;
   };
 
+  // B10 (owner decision 2026-11-24, no-admin undos only): the Something's-wrong card's "Undo this Compy change". The
+  // card passes ids and one sentence, never a change object. Here, at the click, the ledger and the Trial records are
+  // read again, and nothing runs unless no Trial is running (or unknown) and the setting's newest open record is still
+  // the one the card offered and still passes the card's rules (data/compy-undo.ts). Then the Applied card's own
+  // one-record path: its confirm (plus the card's sentence), the busy flag, exactly ONE `rollback_change` (per-record
+  // elevation, never the C6 walk) and the same error mapping.
+  const undoOneRecord = async (recId: string, expectedId: string, extraBody: string): Promise<CardUndoResult> => {
+    if (busyId !== null) return { kind: "busy" };
+    const fresh = await invoke<AppliedChange[]>("get_applied_changes")
+      .then((v) => (Array.isArray(v) ? v : null))
+      .catch(() => null);
+    const xs = await invoke<{ status: string }[]>("get_experiments")
+      .then((v) => (Array.isArray(v) ? v : null))
+      .catch(() => null);
+    if (trialInProgress(xs, journey.kind === "idle") !== "none") return { kind: "trial" };
+    if (!fresh) return { kind: "unread" };
+    const row = newestOpenRecord(fresh, recId);
+    if (!row || row.id !== expectedId || !recordUndoableFromCard(fresh, row)) return { kind: "changed" };
+    // The Applied card's one-record confirm (C8 `undoDialog`, same title, body and label), with the card's sentence
+    // where a one-record note goes.
+    const dialog = undoDialog({ kind: "one", why: "single", open: 1 }, row, t);
+    const ok = await confirm({ ...dialog, body: `${dialog.body} ${extraBody}` });
+    if (!ok) return { kind: "cancelled" };
+    setBusyId(expectedId);
+    setError(null);
+    try {
+      await writeLedger("rollback_change", { changeId: expectedId });
+    } catch (e) {
+      const known = backendMessage(e, t);
+      if (known) {
+        fail(known, e);
+        return { kind: "failed" };
+      }
+      // Ran on Windows but not saved: the card says so (never "undone", no date); no banner on top of it.
+      if (isUnrecordedUndo(e)) return { kind: "unrecorded" };
+      fail(t("app.errors.rollbackFailed"), e);
+      return { kind: "failed" };
+    } finally {
+      setBusyId(null);
+    }
+    try {
+      await refresh();
+    } catch {
+      // The undo is recorded; a failed refresh is not a failed undo. The card reads the next list it is given.
+    }
+    return { kind: "done" };
+  };
+
   // C6: undo every open record of one setting, newest first by change-history order, each through the audited
   // `rollback_change` (the same per-record path and per-record elevation as one Undo; no batch). Runs through
   // `runRestore`, so it stops at the first record that does not finish and tells "ran but not saved" apart from a
@@ -1730,6 +1779,8 @@ function App() {
                    not read, or could not be read: then the card offers no button) and refreshes like any apply. */
                 changes={changesRead && !changesReadFailed ? changes : null}
                 onChanged={refresh}
+                /* B10: the card's "Undo this Compy change": App re-reads at the click and makes one rollback_change. */
+                undoCompyChange={undoOneRecord}
                 /* The first-win journey's slot, below the answer (GL-empty; the move #225 finding 1
                    made for FirstWin). TrustMoment used to render ABOVE this page, so on a fresh rig
                    it pushed the eyebrow and the h1 from y110 to y314. It gates on an empty ledger,
