@@ -23,6 +23,8 @@ vi.mock("@tauri-apps/api/core", () => ({
     }
     if (cmd === "get_benchmark_state") return Promise.resolve(state.bench);
     if (cmd === "get_trial_state") return Promise.resolve(state.trial);
+    // List commands answer a list in the product (LabConsole's tuning evidence filters them).
+    if (cmd === "get_session_summaries" || cmd === "get_tuning_comparability") return Promise.resolve([]);
     return Promise.resolve(null);
   }),
 }));

@@ -14,6 +14,11 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_gaming_session_state") {
       return slot.reject ? Promise.reject(new Error("unreadable")) : Promise.resolve(slot.value);
     }
+    // List commands answer a list in the product (LabConsole's tuning evidence filters them).
+    if (cmd === "get_session_summaries" || cmd === "get_tuning_comparability") return Promise.resolve([]);
+    // Nothing running (a null or failed run-state read keeps Benchmark shown: review r1 F2).
+    if (cmd === "get_experiments") return Promise.resolve([]);
+    if (cmd === "get_benchmark_state" || cmd === "get_trial_state") return Promise.resolve({ running: false });
     return Promise.resolve(null);
   }),
 }));
