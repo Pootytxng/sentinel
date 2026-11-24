@@ -631,6 +631,7 @@
     "powerPlanChange": "用于对比的两次游戏的电源计划：相同。",
     "displayRefreshLower": "屏幕刷新率：仍是 {{hz}} Hz。",
     "windowsBuildChange": "Windows：仍是 {{build}} 版本。",
+    "memoryAsFull_one": "内存：{{count}} 次卡顿的游戏中有 {{full}} 次内存几乎用满（最高用到 {{peakGb}} GB，可用 {{totalGb}} GB）。你正常游戏时内存最高用到可用内存的 {{basePercent}}%，而只有正常游戏时一直低于 {{baseLine}}%，Compy 才会把内存满当作线索。",
     "memoryAsFull_other": "内存：{{count}} 次卡顿的游戏中有 {{full}} 次内存几乎用满（最高用到 {{peakGb}} GB，可用 {{totalGb}} GB）。你正常游戏时内存最高用到可用内存的 {{basePercent}}%，而只有正常游戏时一直低于 {{baseLine}}%，Compy 才会把内存满当作线索。",
     "notALead": "测到了，但按 Compy 的规则不算线索：",
     "windowsUpdate": "Windows：这段时间内没有质量更新或功能更新。",
