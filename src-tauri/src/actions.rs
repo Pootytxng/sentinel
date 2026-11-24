@@ -1867,8 +1867,8 @@ pub(crate) fn ps_squote_value(value: &str) -> Result<String, String> {
 }
 
 /// A6: the power-setting undo's refusal when a recorded plan/subgroup/setting id is not GUID-shaped.
-pub(crate) const POWER_SETTING_ID_REFUSED: &str =
-    "This entry's recorded power plan setting isn't a plan/setting id - cannot roll back blind.";
+/// A7: plain words (it was "isn't a plan/setting id - cannot roll back blind"), mapped in backend-error.ts.
+pub(crate) const POWER_SETTING_ID_REFUSED: &str = "This change's saved power plan setting isn't in the form Compy expects, so Compy didn't run the undo. The change stays in your Trust Ledger.";
 
 /// A6: a GUID that reaches a Windows command (powercfg plan/subgroup/setting ids read back from
 /// history.json) must be exactly `8-4-4-4-12` hex digits: no braces, no spaces, nothing else. `ps_safe`
@@ -1914,12 +1914,21 @@ mod guid_shape_tests {
         let not_hex = "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz";
         // Review r1 F1: the EXACT refusal, so a removed check fails on every PC (with it gone, the call would end
         // at the plan list, the active-plan read or the forced decline, each with other text).
-        assert_eq!(rollback_power_ultimate_typed(not_hex), Err(guid_exact(not_hex).unwrap_err()));
+        assert_eq!(rollback_power_ultimate_typed(not_hex), Err(POWER_PLAN_ID_REFUSED_UNDO.to_string()));
+        // A7: every shape problem gets the same fixed words, never the raw saved value.
+        for bad in ["", "abc", "{381b4222-f694-41f0-9685-ff5bb260df2e}", "381b4222-f694-41f0-9685-ff5bb260df2e; calc"] {
+            assert_eq!(rollback_power_ultimate_typed(bad), Err(POWER_PLAN_ID_REFUSED_UNDO.to_string()), "{bad:?}");
+        }
         let refused = Err(POWER_SETTING_ID_REFUSED.to_string());
         assert_eq!(rollback_power_plan_setting_typed(not_hex, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1), refused);
         let balanced = "381b4222-f694-41f0-9685-ff5bb260df2e";
         assert_eq!(rollback_power_plan_setting_typed(balanced, not_hex, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1), refused);
         assert_eq!(rollback_power_plan_setting_typed(balanced, PWR_SUBGROUP_USB, not_hex, 1, 1), refused);
+        let injected = "381b4222-f694-41f0-9685-ff5bb260df2e; calc";
+        assert_eq!(rollback_power_plan_setting_typed(injected, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1), refused);
+        for e in [POWER_PLAN_ID_REFUSED_UNDO, POWER_SETTING_ID_REFUSED] {
+            assert!(!e.contains("381b") && !e.contains("zzzz"), "fixed words, never the saved value");
+        }
         assert_eq!(elevation_dispatch_count(), 0, "refused before any elevation");
     }
 }
@@ -4116,12 +4125,15 @@ pub(crate) fn apply_power_ultimate() -> Result<ApplyResult, String> {
     })
 }
 
+/// A7: the Ultimate undo's refusal when the saved plan id is not exactly GUID-shaped. Fixed words, without
+/// the saved value (it used to be guid_exact's developer text with the raw value).
+pub(crate) const POWER_PLAN_ID_REFUSED_UNDO: &str = "This change's saved power plan isn't in the form Compy expects, so Compy didn't switch back to it. The change stays in your Trust Ledger.";
+
 pub(crate) fn rollback_power_ultimate_typed(prior_guid: &str) -> Result<(), String> {
-    if prior_guid.len() != 36 {
-        return Err("no valid prior plan GUID in snapshot".into());
-    }
-    ps_safe(prior_guid)?; // GUID is hex+hyphens — reject anything that isn't
-    guid_exact(prior_guid)?; // A6: exactly 8-4-4-4-12 hex (ps_safe alone is not GUID-shaped)
+    // A6: exactly 8-4-4-4-12 hex (ps_safe alone is not GUID-shaped); this also covers the old length check.
+    // A7: one plain refusal for every shape problem.
+    guid_exact(prior_guid).map_err(|_| POWER_PLAN_ID_REFUSED_UNDO.to_string())?;
+    ps_safe(prior_guid)?; // implied by the GUID shape; kept as the guard every elevated token passes
     run_elevated_powershell(&format!("powercfg /setactive {}", prior_guid))?;
     Ok(())
 }
@@ -5141,14 +5153,14 @@ pub(crate) fn rollback_power_plan_setting_typed(
     // its prior GUID — a tampered/garbled ledger entry must fail loud BEFORE it can reach the
     // elevated command line, never inject shell metacharacters. Every legitimate value is a bare
     // `[0-9a-f-]` GUID, which ps_safe admits.
-    ps_safe(plan_guid)?;
-    ps_safe(subgroup_guid)?;
-    ps_safe(setting_guid)?;
-    // A6: and each exactly GUID-shaped (8-4-4-4-12 hex). The refusal names the plan, so the existing
-    // "the plan is gone" wording test still reads a plan sentence.
+    // A6: each exactly GUID-shaped (8-4-4-4-12 hex). A7: checked FIRST, so every shape problem (an injected
+    // `;` included) gets the one plain sentence and never ps_safe's developer text with the raw value.
     for g in [plan_guid, subgroup_guid, setting_guid] {
         guid_exact(g).map_err(|_| POWER_SETTING_ID_REFUSED.to_string())?;
     }
+    ps_safe(plan_guid)?;
+    ps_safe(subgroup_guid)?;
+    ps_safe(setting_guid)?;
     // Restore AC/DC to the EXACT plan this was applied to. If that plan no
     // longer exists (deleted, or never captured), fail safe with a clear
     // message — we will NOT silently restore the value onto whatever plan
