@@ -876,6 +876,7 @@
     "baselineTooShortLeftOut": "Those readings are only the time the game was in front: {{span}} were left out because another window was in front.",
     "pastExperiments": "Past experiments",
     "deltaSuffix": "% 1% low",
+    "abortedLine": "This Trial ended without Compy confirming its setting is back where it was. Check it in Test → Applied & history; if it isn't listed there, check it in Windows.",
     "runningTitlePrefix": "Experiment in progress —",
     "runningBaselinePre": "Baseline · {{game}} — avg",
     "fpsUnit": "fps",

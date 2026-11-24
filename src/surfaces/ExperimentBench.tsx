@@ -880,14 +880,6 @@ function noteMark(i: number, total: number): string {
   return total <= 3 ? ["*", "†", "‡"][i] : String(i + 1);
 }
 
-// The backend tags a stop reason with machine prefixes ("start-aborted: …", "user-restored; …",
-// stacked as "crash-during-treatment; target-unreadable-at-conclude; …") so the record stays
-// sortable. The owner reads the sentence after them, never a tag.
-function abortReasonText(reason: string): string {
-  const text = reason.replace(/^(?:[a-z]+(?:-[a-z]+)+[:;]\s+)+/, "") || reason;
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 // A Trial started by an older Compy lacks the baseline session id (pre lane 2b) or the apply time
 // (pre #611 r1). The backend refuses to conclude it and says so, so the bench offers only Restore.
 function canConclude(exp: Experiment): exp is Experiment & { applied_at: string; baseline_session_id: string } {
@@ -1909,8 +1901,15 @@ export default function ExperimentBench({
                     )}
                   </span>
                 )}
+                {/* D7: an aborted row's stored stop_reason is never shown. Its writers (experiment.rs
+                    reconcile_interrupted_starts_in, mark_failed_apply, abort_start, finish_conclude,
+                    restore_experiment, settle_restore) embed raw detail ({e}, {err}, a change id) and
+                    stack onto any earlier reason, and older builds wrote others, so the set is not
+                    closed: one fixed line, true on every Aborted path, in the user's language. */}
                 {x.stop_reason && x.status === "aborted" && (
-                  <span className="exp-bench-abort">{abortReasonText(x.stop_reason)}</span>
+                  <span className="exp-bench-abort" data-testid="exp-aborted-line">
+                    {t("lab.experimentBench.abortedLine")}
+                  </span>
                 )}
                 {baselineReceipt(x, t) && (
                   <span className="exp-bench-abort" data-testid="exp-baseline-receipt">

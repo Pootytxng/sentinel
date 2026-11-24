@@ -864,6 +864,7 @@
     "baselineTooShortLeftOut": "这些读数只包括游戏在前台的时间：另有 {{span}} 因为其他窗口在前台而没有计入。",
     "pastExperiments": "历史实验",
     "deltaSuffix": "% 1% 最低帧",
+    "abortedLine": "这次试验结束时，Compy 没有确认这项设置已恢复原样。请在「测试 → 已应用与历史记录」中查看；如果那里没有列出，请在 Windows 中查看。",
     "runningTitlePrefix": "实验进行中——",
     "runningBaselinePre": "基准 · {{game}} —— 平均",
     "fpsUnit": "fps",

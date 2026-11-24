@@ -1301,8 +1301,11 @@ describe("ExperimentBench (armed)", () => {
     expectEachNoteOnceAndOffTheRows();
   });
 
-  // Self-review #583 lane 2b: an aborted row showed the backend's machine tag ("start-aborted: …").
-  it("shows an aborted result's reason as a sentence, without the machine tag", async () => {
+  // Self-review #583 lane 2b: an aborted row showed the backend's machine tag ("start-aborted: …"). D7: it then
+  // showed the English after the tag, raw OS text included ("Access is denied."). The stored stop_reason is not a
+  // closed set (experiment.rs writers embed {e}/{err}/a change id), so the row shows one fixed line instead.
+  // Break check: render abortReasonText(x.stop_reason) (or x.stop_reason) again in .exp-bench-abort -> fails.
+  it("shows an aborted result as one fixed line, never the stored reason", async () => {
     state.gate = true;
     state.experiments = [
       {
@@ -1313,17 +1316,21 @@ describe("ExperimentBench (armed)", () => {
     ];
     render(<ExperimentBench />);
     const reason = await waitFor(() => {
-      const el = document.querySelector(".exp-bench-abort");
+      const el = document.querySelector('[data-testid="exp-aborted-line"]');
       expect(el).not.toBeNull();
       return el!;
     });
-    expect(reason.textContent).toMatch(/^The setting didn't read back as changed; /);
-    expect(reason.textContent).not.toContain("start-aborted");
+    expect(reason.textContent).toBe(
+      "This Trial ended without Compy confirming its setting is back where it was. Check it in Test → Applied & history; if it isn't listed there, check it in Windows.",
+    );
+    expect(document.body.textContent).not.toContain("Access is denied");
+    expect(document.body.textContent).not.toContain("start-aborted");
+    expect(document.body.textContent).not.toMatch(/didn't read back as changed/i);
   });
 
   // #611 review round 2: a crash whose conclude-time read failed, and whose read after the restore
   // still showed the setting changed, carries two stacked tags (experiment.rs); both must go.
-  it("strips every stacked machine tag from an aborted crash's reason", async () => {
+  it("an aborted crash with stacked tags shows the same fixed line, no tag and no stored sentence", async () => {
     state.gate = true;
     state.experiments = [
       {
@@ -1334,12 +1341,39 @@ describe("ExperimentBench (armed)", () => {
     ];
     render(<ExperimentBench />);
     const reason = await waitFor(() => {
-      const el = document.querySelector(".exp-bench-abort");
+      const el = document.querySelector('[data-testid="exp-aborted-line"]');
       expect(el).not.toBeNull();
       return el!;
     });
-    expect(reason.textContent).toMatch(/^A read afterwards shows the setting as changed/);
-    expect(reason.textContent).not.toMatch(/crash-during-treatment|target-unreadable/);
+    expect(reason.textContent).toMatch(/^This Trial ended without Compy confirming its setting is back where it was\./);
+    expect(document.body.textContent).not.toMatch(/crash-during-treatment|target-unreadable|a read afterwards/i);
+  });
+
+  // D7: zh-CN gets the same fixed line in Chinese, never the English stop_reason.
+  it("zh-CN: an aborted row's line is Chinese and carries no stored English", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      state.gate = true;
+      state.experiments = [
+        {
+          ...NOT_COMPARABLE_EXPERIMENT, id: "ab-zh", status: "aborted", verdict: null, treatment: null, noise_evidence: null,
+          stop_reason: "interrupted-start: Compy closed while this experiment was starting, after the change (chg-1) was applied.",
+        },
+      ];
+      render(<ExperimentBench />);
+      const reason = await waitFor(() => {
+        const el = document.querySelector('[data-testid="exp-aborted-line"]');
+        expect(el).not.toBeNull();
+        return el!;
+      });
+      expect(reason.textContent).toBe(
+        "这次试验结束时，Compy 没有确认这项设置已恢复原样。请在「测试 → 已应用与历史记录」中查看；如果那里没有列出，请在 Windows 中查看。",
+      );
+      expect(document.body.textContent).not.toContain("interrupted-start");
+      expect(document.body.textContent).not.toContain("chg-1");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   // #611 review round 2: a Trial an older Compy started has no baseline id or no apply time, and the
