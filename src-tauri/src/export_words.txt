@@ -519,6 +519,7 @@ failed
 failure
 failures
 falls
+false
 family
 fantasy
 fast
@@ -641,7 +642,6 @@ hand
 handful
 handicap
 handle
-happen
 hard
 harder
 hardware
@@ -759,6 +759,7 @@ keeping
 keeps
 kept
 kernel
+key
 keyboard
 keyboards
 killer
@@ -872,6 +873,7 @@ measurements
 media
 mediatek
 medium
+memcompress
 memory
 menu
 method
@@ -1231,6 +1233,7 @@ restores
 restoring
 restricted
 result
+results
 resyncs
 retained
 return
@@ -1422,6 +1425,7 @@ stamped
 stamping
 standard
 start
+started
 starting
 startmode
 starts
@@ -1559,7 +1563,6 @@ transitions
 transparency
 treat
 treated
-treating
 tried
 trigger
 trim
@@ -1645,7 +1648,6 @@ vbs
 vdf
 vec
 vendor
-verifiably
 verified
 verify
 version
