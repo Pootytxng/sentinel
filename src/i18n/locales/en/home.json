@@ -527,7 +527,7 @@
       "body": "That's the loop every change gets: applied, receipted, reversible. Both steps are in your Trust Ledger."
     },
     "errors": {
-      "applyFailed": "Couldn't apply it. Nothing on your PC was changed.",
+      "applyFailed": "Couldn't apply it. An apply can stop part-way, so Compy can't confirm nothing on your PC changed.",
       "rollbackFailed": "The apply worked but the rollback didn't finish. The change is still active and undoable in Test under \"Applied & history\".",
       "rollbackRefused": "The apply worked, but Compy didn't undo it, so the change is still active and undoable in Test under \"Applied & history\". Why the undo didn't run: {{reason}}"
     }

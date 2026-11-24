@@ -88,7 +88,9 @@ describe("TrustMoment — B11: no raw backend text", () => {
     render(<TrustMoment recs={[REC]} changes={[]} isAppliable={() => true} onChanged={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /watch it work/i }));
     const err = await screen.findByText((_, el) => el?.classList.contains("tm-error") ?? false);
-    expect(err.textContent).toBe("Couldn't apply it. Nothing on your PC was changed.");
+    // B11 r1: an unmapped apply error can follow a part-way apply (history::dispatch_apply writes in steps, and
+    // record_receipt's rollback-first undo can fail too), so the generic line never claims nothing changed.
+    expect(err.textContent).toBe("Couldn't apply it. An apply can stop part-way, so Compy can't confirm nothing on your PC changed.");
   });
 
   it("says the same in Chinese", async () => {
