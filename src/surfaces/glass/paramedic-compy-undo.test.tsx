@@ -10,7 +10,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: () => Promise.resolve(answer.value),
 }));
 
-import "../../i18n";
+import i18n from "../../i18n";
 import type { AppliedChange, ParamedicDiagnosis } from "../../types";
 import type { CardUndoResult } from "../../data/compy-undo";
 import { ParamedicCard } from "./ParamedicCard";
@@ -191,6 +191,64 @@ describe("B10: Undo this Compy change on the card", () => {
     await show([compyFinding("likely")], [rec()]);
     expect(document.body.textContent).toContain("Undo the newest one");
     expect(screen.getByTestId("paramedic-undo-compy")).toBeTruthy();
+  });
+
+  // ==== B10b: what was read since the undo (the engine's compy-undone-* lines) =====================================
+  const UNDONE = "2026-11-22T09:30:00Z";
+  const AT = "2026-11-23T20:00:00Z";
+  const dayTime = (iso: string) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+  const day = (iso: string) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(iso));
+  const withLine = (code: string, kind: "measured" | "unknown", args: Record<string, string>, against = false): F => {
+    const f = compyFinding("possible");
+    return { ...f, evidence: [...f.evidence, { kind, code, args: { title: GM, undone: UNDONE, ...args }, against, source: "sessions" }] };
+  };
+  const undoneRec = () => rec({ status: "rolled_back", rolled_back_at: UNDONE, active_check: null });
+
+  // Break check: drop the compy-undone-rough case from evidenceLine -> the line is missing, fails.
+  it.each([
+    ["compy-undone-rough", "measured", { at: AT, count: "1" }, true, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A still ran rough on ${day(AT)}.`],
+    ["compy-undone-rough", "measured", { at: AT, count: "2" }, true, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A still ran rough in 2 sessions since, the first on ${day(AT)}.`],
+    ["compy-undone-clear-once", "measured", { at: AT }, false, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A's session on ${day(AT)} ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`],
+    ["compy-undone-unread", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 1 Game A session has been recorded since, but it was too short or only partly measured, so Compy has no reading it can judge.`],
+    ["compy-undone-between", "unknown", {}, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.`],
+  ] as const)("%s says what was read since the undo, dated from the ledger", async (code, kind, args, against, text) => {
+    await show([withLine(code, kind, args, against)], [undoneRec()]);
+    expect(document.body.textContent).toContain(text);
+    expect(document.body.textContent).not.toMatch(/\b(fixed|caused|probably|safe|worked)\b/i);
+  });
+
+  // Decided: once a session was read after the undo, the evidence line says when it was undone and what was read, so
+  // the "Undone on ... play once, then press again" line (and the steps) are not repeated. Break check: keep the
+  // undone line when a compy-undone-* line is present -> two "was undone"/"Undone on" lines, fails.
+  it("with a line read since the undo, the 'Undone on' line and the steps are not repeated", async () => {
+    await show([withLine("compy-undone-clear-once", "measured", { at: AT })], [undoneRec()]);
+    expect(screen.queryByTestId("paramedic-undo-compy-done")).toBeNull();
+    expect(document.body.textContent).not.toContain("Undone on");
+    expect(document.body.textContent).not.toContain("Undo the newest one");
+  });
+
+  // zh-CN literal. Break check: drop compyUndoneRough_one from zh-CN -> falls back to en text, fails.
+  it("zh-CN says the same lines in Chinese", async () => {
+    const zDayTime = (iso: string) => new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+    const zDay = (iso: string) => new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric" }).format(new Date(iso));
+    // The card is opened in en (show() presses the en button), then the language is switched; the open card re-renders.
+    try {
+      await show([withLine("compy-undone-rough", "measured", { at: AT, count: "1" }, true)], [undoneRec()]);
+      await i18n.changeLanguage("zh-CN");
+      await waitFor(() => expect(document.body.textContent).toContain(`“${GM}”已于 ${zDayTime(UNDONE)} 撤销，Game A 在 ${zDay(AT)} 仍然不顺。`));
+      cleanup();
+      await i18n.changeLanguage("en");
+      await show([withLine("compy-undone-unread", "unknown", { count: "2" })], [undoneRec()]);
+      await i18n.changeLanguage("zh-CN");
+      await waitFor(() => expect(document.body.textContent).toContain(`“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后记录到 2 次 Game A 的游戏，但时间太短或只测量了一部分，所以 Compy 没有可以判断的读数。`));
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  it("with no session since the undo, the 'Undone on' line stays (it is the one next step)", async () => {
+    await show([compyFinding("likely")], [undoneRec()]);
+    expect(screen.getByTestId("paramedic-undo-compy-done")).toBeTruthy();
   });
 
   it("no ledger list or no undo from App: nothing is offered", async () => {

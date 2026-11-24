@@ -496,6 +496,16 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.driverBackClearUnjudged", { game, from: a.from, n: a.count, date: dates.day(a.at) });
     case "driver-back-between":
       return t("paramedic.evidence.driverBackBetween", { game });
+    // B10b: what this game's sessions say since the one Compy change in the window was undone (the ledger's own undo
+    // time). Dated facts, never "the reason", never that the undo worked; no reading is "no reading", never a number.
+    case "compy-undone-rough":
+      return t("paramedic.evidence.compyUndoneRough", { title: a.title, undone: dates.dayTime(a.undone), game, count: Number(a.count ?? 1), date: dates.day(a.at), ...RAW });
+    case "compy-undone-clear-once":
+      return t("paramedic.evidence.compyUndoneClearOnce", { title: a.title, undone: dates.dayTime(a.undone), game, date: dates.day(a.at), ...RAW });
+    case "compy-undone-unread":
+      return t("paramedic.evidence.compyUndoneUnread", { title: a.title, undone: dates.dayTime(a.undone), game, count: Number(a.count ?? 1), ...RAW });
+    case "compy-undone-between":
+      return t("paramedic.evidence.compyUndoneBetween", { title: a.title, undone: dates.dayTime(a.undone), game, ...RAW });
     case "drift-restored-none":
       return t("paramedic.evidence.driftRestoredNone", { game });
     case "drift-restored-unjudged":
@@ -1106,6 +1116,11 @@ function FixBlock({
   const offer = fix.kind === "steps" && fix.code === "compy-change" && finding ? compyOfferFor(finding, ctx) : null;
   // B10 review r1 F3: once the row's change is undone, its "undo the newest one" and "play once" steps go: the undone
   // line carries the one next step, and step 1 would point at a different, unnamed change.
+  // B10b: once a session of the game was played after the undo, the evidence line above says when it was undone and
+  // what was read since, so neither the steps nor the "Undone on ... play once, then press again" line (whose next
+  // step is already done) is repeated. With no session since, the "Undone on" line stays: it is the one next step.
+  const readSince = fix.kind === "steps" && fix.code === "compy-change" && !!finding?.evidence.some((e) => e.code.startsWith("compy-undone-"));
+  if (readSince) return null;
   const steps = offer?.kind === "undone" ? [] : stepLines(fix, ctx, restored, appliedOnly);
   const undo = offer ? <CompyUndoRow offer={offer} ctx={ctx} /> : null;
   if (offer?.kind === "undone") return undo;

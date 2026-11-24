@@ -275,6 +275,30 @@ pub(crate) fn compy_applies_from(read: Result<Vec<crate::history::LedgerStamp>, 
     }
 }
 
+/// B10b: one record of Compy's own ledger as the compy-change follow-through reads it: when it was applied, its title,
+/// and when it was undone (`rolled_back_at`, only when the record is rolled back and the time parses). From the same
+/// stamps read as [`CompyApplies`]; nothing else of the ledger is read, nothing is stored or exported.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CompyRecord {
+    pub applied: DateTime<Utc>,
+    pub title: String,
+    pub undone: Option<DateTime<Utc>>,
+}
+
+/// The stamps as [`CompyRecord`]s (a row whose apply time does not parse is left out, as in [`compy_applies_from`]).
+/// A read that failed gives none: the follow-through then says nothing (never "not undone").
+pub(crate) fn compy_records_from(read: &Result<Vec<crate::history::LedgerStamp>, String>) -> Vec<CompyRecord> {
+    let Ok(stamps) = read else { return Vec::new() };
+    stamps
+        .iter()
+        .filter_map(|s| {
+            let applied = ts(&s.applied_at)?;
+            let undone = if s.status == "rolled_back" { s.rolled_back_at.as_deref().and_then(ts) } else { None };
+            Some(CompyRecord { applied, title: s.title.clone(), undone })
+        })
+        .collect()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct EarliestChange {
     pub at: DateTime<Utc>,

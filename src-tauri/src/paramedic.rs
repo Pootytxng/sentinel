@@ -302,6 +302,11 @@ pub(crate) struct DiagnoseInputs {
     /// change came first.
     #[serde(skip)]
     compy_applies: extras::CompyApplies,
+    /// B10b: the same stamps with each record's undo time, for the compy-change follow-through. Wire-only: read with
+    /// `compy_applies` in one read, never stored or exported. Empty when not read or unreadable (no line, never
+    /// "not undone").
+    #[serde(skip)]
+    compy_records: Vec<extras::CompyRecord>,
 }
 
 // ---- Outputs: codes, ids and numbers. The UI owns every sentence. ----------------------------
@@ -1145,7 +1150,9 @@ pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String
     tauri::async_runtime::spawn_blocking(move || -> Result<Diagnosis, String> {
         let _flight = flight;
         let mut inp = read_inputs_from(&crate::compy_data_dir())?;
-        inp.compy_applies = extras::compy_applies_from(crate::history::read_ledger_stamps());
+        let stamps = crate::history::read_ledger_stamps();
+        inp.compy_records = extras::compy_records_from(&stamps);
+        inp.compy_applies = extras::compy_applies_from(stamps);
         let fetch = |t0, t1, exe: String| changes::read_real_changes(t0, t1, &exe);
         let fetch_mods = |exe: String, others: Vec<String>, budget: std::time::Duration| mods::read_real_mods(&exe, &others, budget);
         let fetch_crashes = |exe: String| extras::read_real_crashes(&exe);
@@ -1307,6 +1314,7 @@ fn inputs_from_parts(
         sightings_unread: false,
         drift_unread: false,
         compy_applies: extras::CompyApplies::NotRead,
+        compy_records: Vec::new(),
         changes: ChangeRead::NotRead,
         mods: ModInput::default(),
         crashes: CrashRead::NotRead,
@@ -2929,6 +2937,10 @@ fn detect_compy_changes(c: &Ctx, out: &mut Out) {
     }
     let from = c.baseline_newest.compy_changes.unwrap_or(lo).to_string();
     let to = c.first_bad.compy_changes.unwrap_or(now[0]).to_string();
+    let mut evidence = vec![ev(EvidenceKind::Known, "count-changed", "sessions", false, &[("from", from), ("to", to)])];
+    let undone = compy_undone_since(c);
+    let undone_rough = undone.as_ref().is_some_and(|e| e.against);
+    evidence.extend(undone);
     out.cands.push(Cand {
         id: "compy-change",
         t: true,
@@ -2937,11 +2949,48 @@ fn detect_compy_changes(c: &Ctx, out: &mut Out) {
         confounded: false,
         r: false,
         m: false,
-        c1: now.iter().any(|&n| !outside(n)),
+        // B10b: a rough session after the change was undone contradicts it, as B4's driver-back-rough does.
+        c1: now.iter().any(|&n| !outside(n)) || undone_rough,
         since: whole_window(c),
         fix: steps("compy-change", &[]),
-        evidence: vec![ev(EvidenceKind::Known, "count-changed", "sessions", false, &[("from", from), ("to", to)])],
+        evidence,
     });
+}
+
+/// B10b: what this game's sessions say since the ONE Compy change recorded in the window [win_start, win_end) was
+/// undone. The undo time is the ledger's own `rolled_back_at` (an undo with no readable time, or one inside the window,
+/// gives no line). Sessions are on the "after" side by their START (`recovery::since_restore`, as B4 does): one that
+/// started before the undo and ended after it is not after it. Dated facts only, never "the reason", never that the
+/// undo worked:
+/// - no session since: no line;
+/// - `compy-undone-unread` (Unknown): sessions since, none judgeable. Never a number;
+/// - `compy-undone-rough` (Measured, AGAINST, sets C1 like B4's `driver-back-rough`): at least one rough session since;
+/// - `compy-undone-clear-once` (Measured): exactly one judgeable session since and it ran in its usual range: said,
+///   NEVER a support (no candidate flag changes);
+/// - two or more clear sessions: no line. The recovery's own compy row (`recovered-compy-back`) answers, so the undo
+///   is counted at most once;
+/// - `compy-undone-between` (Unknown): judgeable sessions since, none rough, not all clear.
+fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
+    let mut inside = c.inp.compy_records.iter().filter(|r| r.applied >= c.win_start && r.applied < c.win_end);
+    let rec = inside.next()?;
+    if inside.next().is_some() {
+        return None;
+    }
+    let undone = rec.undone.filter(|u| *u >= c.win_end)?;
+    let base = [("title", rec.title.clone()), ("undone", iso(undone))];
+    let with = |more: &[(&'static str, String)]| -> Vec<(&'static str, String)> { base.iter().cloned().chain(more.iter().cloned()).collect() };
+    match recovery::since_restore(c, undone, None) {
+        recovery::Since::Nothing => None,
+        recovery::Since::Unjudged { count } => {
+            Some(ev(EvidenceKind::Unknown, "compy-undone-unread", "sessions", false, &with(&[("count", count.to_string())])))
+        }
+        recovery::Since::Rough { at, count } => {
+            Some(ev(EvidenceKind::Measured, "compy-undone-rough", "sessions", true, &with(&[("at", at), ("count", count.to_string())])))
+        }
+        recovery::Since::Clear { at, count: 1 } => Some(ev(EvidenceKind::Measured, "compy-undone-clear-once", "sessions", false, &with(&[("at", at)]))),
+        recovery::Since::Clear { .. } => None,
+        recovery::Since::Between => Some(ev(EvidenceKind::Unknown, "compy-undone-between", "sessions", false, &with(&[]))),
+    }
 }
 
 enum PowerRead {
