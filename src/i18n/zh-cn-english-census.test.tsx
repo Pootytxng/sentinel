@@ -1,16 +1,30 @@
 // D3a step 1: the English-in-zh-CN census (plan: _train/d3-plan.md §D3a).
 //
-// Renders surfaces that show BACKEND text (Rust labels, details, values, reasons) in a zh-CN UI, fed
-// the exact English the backend sends today, and lists every visible Latin-script run that is not an
-// allowed token (product and hardware names, units). The list is pinned below as the CURRENT DEBT.
-// Ratchet-only, like orphan-key-guard's ALLOWED:
+// What it checks, and only that: TWO zh-CN screens, fed copies of what Rust sends today for the few
+// items below, and the visible Latin-script runs in their DOM text nodes that are not an allowed token
+// (product, vendor and hardware names, units). The items:
+//   - Check, the per-check list opened: ONE readiness row, the VRR check in its verified-on variant
+//     (readiness.rs, the `vrr` check: label, detail, value, action label copied as sent);
+//   - Fix, the "fixes" view: TWO recs, "power-ultimate" (recommendations.rs, build_recommendations:
+//     title, description, impact, provenance copied as sent) and "eee-disable" held back for a rig with
+//     no wired port (baseline-rules-v1.json fields + the HasWiredEthernetPort reason from
+//     recommendations.rs), with the "not for this rig" group opened so its title and reason are read.
+// The runs found are pinned below as the CURRENT DEBT. Ratchet-only, like orphan-key-guard's ALLOWED:
 //   - a run that is not in DEBT fails (a new English leak into a Chinese screen),
 //   - a DEBT entry that no longer appears fails too (it was fixed: delete it, the list only shrinks).
 // Never add to DEBT to get green; fix the leak (a stable code + an i18n key, D3a step 2) instead.
 //
-// BASELINE NOTE (2026-11-23): this file was written while builds were paused. The first DEBT below is
-// what reading the source predicts; the first run prints the exact list it found, and that run's list
-// is the baseline (pinned once, then only ever shrunk).
+// NOT COVERED (English this census cannot see; follow-ups, not proof of absence):
+//   - attributes: aria-label (TrustSwitch's label embeds rec.title raw), title=, alt=, placeholder=;
+//   - collapsed details: each slim row's closed detail (description, "why it matters", what changes);
+//     the "not for this rig" group IS opened here, but nothing else collapsed is;
+//   - other VRR variants (off / advisory / unknown, readiness.rs) and every other readiness check;
+//   - every other rec (about 20; only the two above are fed), and the Tune view;
+//   - every screen other than Check and Fix (Home, Lab, the ledger, the export UI, banners, dialogs).
+//
+// BASELINE NOTE: DEBT is the list printed by the first run after the review-r1 fixes (real Rust copies,
+// text-node join, "x" dropped), pinned exactly as printed in the commit whose message says "baseline
+// recorded from first run, not edited"; from then on it only ever shrinks.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
@@ -60,6 +74,41 @@ import Check from "../surfaces/Check";
 import Fix from "../surfaces/Fix";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { invalidateProbe } from "../data/probe-cache";
+import { readFileSync } from "node:fs";
+import baselineRules from "../../src-tauri/resources/baseline-rules-v1.json";
+
+type Provenance = "verified" | "measured-signal" | "expected-impact";
+type Severity = "safe" | "moderate" | "advanced";
+
+// recommendations.rs, build_recommendations: the "power-ultimate" rec's text as Rust sends it today.
+const POWER_ULTIMATE = {
+  id: "power-ultimate",
+  title: "Switch to the Ultimate Performance power plan",
+  description:
+    "Windows ships with a hidden 'Ultimate Performance' power plan that keeps your CPU at peak responsiveness instead of letting it nap between workloads. Better for gaming. The honest tradeoff: this permanently switches your daily power profile, so the higher power draw is in effect even when you're not gaming. A future Compy release will offer a Gaming Mode that automatically switches to high-performance only while a game is running, so your daily profile stays alone — this rec is the manual interim option.",
+  impact: "Lower input latency · steadier frame times (when gaming)",
+  currently_applied: false,
+  provenance: "measured-signal" as Provenance,
+  severity: "moderate" as Severity,
+  eligible: true,
+};
+
+// recommendations.rs, hardware_ineligibility_reason: what a rig with no wired port is told.
+const NO_WIRED_PORT_REASON = "Needs a wired Ethernet port — this rig has none (Wi-Fi / other only).";
+
+// baseline-rules-v1.json's "eee-disable" rule (read from the file itself), held back on such a rig.
+const eeeRule = baselineRules.rules.find((r) => r.id === "eee-disable")!;
+const EEE_HELD_BACK = {
+  id: eeeRule.id,
+  title: eeeRule.title,
+  description: eeeRule.description,
+  impact: eeeRule.impact,
+  currently_applied: false,
+  provenance: eeeRule.provenance as Provenance,
+  severity: eeeRule.severity as Severity,
+  eligible: false,
+  ineligible_reason: NO_WIRED_PORT_REASON,
+};
 
 afterEach(async () => {
   cleanup();
@@ -75,7 +124,7 @@ export const ALLOWED_TOKENS = new Set([
   "FreeSync", "G-SYNC", "GSYNC", "VRR", "HDR", "DirectX", "Vulkan",
   "GPU", "CPU", "RAM", "SSD", "HDD", "NVMe", "SATA", "USB", "PCIe", "BIOS", "UEFI", "XMP", "EXPO",
   "Wi-Fi", "Ethernet", "LAN", "DNS", "IP", "UAC",
-  "FPS", "fps", "Hz", "ms", "GB", "MB", "KB", "TB", "MHz", "GHz", "W", "x",
+  "FPS", "fps", "Hz", "ms", "GB", "MB", "KB", "TB", "MHz", "GHz", "W",
 ]);
 
 /** Every maximal run of Latin words (letters, inner hyphens/apostrophes, joined by spaces). */
@@ -88,7 +137,14 @@ export function englishLeaks(text: string): string[] {
   return latinRuns(text).filter((run) => run.split(/[  ]+/).some((w) => !ALLOWED_TOKENS.has(w)));
 }
 
-const visible = (el: HTMLElement) => el.textContent ?? "";
+/** The DOM text, node by node, joined with "\n" (latinRuns never joins across it), so neighbouring
+ *  elements never fuse into one run the way `textContent` glues them ("...power planVerified"). */
+const visible = (el: HTMLElement) => {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const out: string[] = [];
+  while (walker.nextNode()) out.push(walker.currentNode.nodeValue ?? "");
+  return out.join("\n");
+};
 
 /** Every leak found on the surfaces below, deduplicated and sorted, as `<surface>: <run>`. */
 async function census(): Promise<string[]> {
@@ -116,28 +172,7 @@ async function census(): Promise<string[]> {
   // Fix: rec titles, impact lines and "not for this rig" reasons come from Rust as English.
   const fix = render(
     <Fix
-      recs={[
-        {
-          id: "power-ultimate",
-          title: "Switch to the Ultimate Performance power plan",
-          description: "",
-          impact: "Keeps the CPU at full clock under load.",
-          currently_applied: false,
-          provenance: "verified",
-          severity: "moderate",
-        },
-        {
-          id: "nagle-disable",
-          title: "Disable Nagle's algorithm",
-          description: "",
-          impact: "",
-          currently_applied: false,
-          provenance: "expected-impact",
-          severity: "moderate",
-          eligible: false,
-          ineligible_reason: "Needs a wired Ethernet port — this rig has none (Wi-Fi / other only).",
-        },
-      ]}
+      recs={[POWER_ULTIMATE, EEE_HELD_BACK]}
       startup={[]}
       changes={[]}
       busyId={null}
@@ -152,6 +187,17 @@ async function census(): Promise<string[]> {
       view="fixes"
     />,
   );
+  // Open the "not for this rig" group (collapsed by default) so the held-back rec's title and reason
+  // are in the DOM the census reads.
+  const notForRig = i18n.t("optimize.fix.notForThisRig");
+  const groupHead = [...fix.container.querySelectorAll<HTMLButtonElement>("button.fix-group-head")].find(
+    (b) => b.querySelector(".fix-group-title")?.textContent === notForRig,
+  );
+  if (!groupHead) throw new Error("the 'not for this rig' group did not render");
+  if (groupHead.getAttribute("aria-expanded") !== "true") fireEvent.click(groupHead);
+  await waitFor(() => {
+    if (!fix.container.querySelector(".fix-refuse-row")) throw new Error("the 'not for this rig' group is not open");
+  });
   for (const run of englishLeaks(visible(fix.container))) found.add(`Fix: ${run}`);
   fix.unmount();
 
@@ -159,15 +205,7 @@ async function census(): Promise<string[]> {
 }
 
 // The CURRENT DEBT: English that reaches a zh-CN screen today. Only ever shrinks (see the header).
-const DEBT: string[] = [
-  "Check: Frame pacing is smoothed and tearing removed",
-  "Check: FreeSync is ON",
-  "Check: Variable refresh rate",
-  "Check: your AMD GPU reports adaptive sync enabled on a connected display",
-  "Fix: Keeps the CPU at full clock under load",
-  "Fix: Switch to the Ultimate Performance power planVerified",
-  "Fix: reversible",
-];
+const DEBT: string[] = [];
 
 describe("English in zh-CN screens: the census (ratchet-only)", () => {
   it("the run splitter and the allowed tokens behave", () => {
@@ -180,6 +218,23 @@ describe("English in zh-CN screens: the census (ratchet-only)", () => {
     expect(englishLeaks("你的 AMD GPU 支持 FreeSync，刷新率 144 Hz")).toEqual([]);
     expect(englishLeaks("FreeSync: on")).toEqual(["on"]);
     expect(englishLeaks("Nagle's algorithm")).toEqual(["Nagle's algorithm"]);
+  });
+
+  it("the fed text is a copy of what Rust sends today", () => {
+    // Rust string literals as source text, `\`-continuations and escaped quotes undone.
+    const rs = (p: string) => readFileSync(p, "utf8").replace(/\\\r?\n\s*/g, "").replace(/\\"/g, '"');
+    const recs = rs("src-tauri/src/recommendations.rs");
+    for (const s of [POWER_ULTIMATE.title, POWER_ULTIMATE.description, POWER_ULTIMATE.impact, NO_WIRED_PORT_REASON])
+      expect(recs, s).toContain(`"${s}"`);
+    expect(recs).toMatch(/id: "power-ultimate"[\s\S]*?provenance: Provenance::MeasuredSignal/);
+    const readiness = rs("src-tauri/src/readiness.rs");
+    for (const s of [
+      "Variable refresh rate (G-SYNC / FreeSync)",
+      "FreeSync is ON — your AMD GPU reports adaptive sync enabled on a connected display. Frame pacing is smoothed and tearing removed.",
+      "FreeSync: on",
+      "Open VRR settings",
+    ])
+      expect(readiness, s).toContain(s);
   });
 
   it("no new English reaches a zh-CN screen, and fixed debt is removed from the list", async () => {
