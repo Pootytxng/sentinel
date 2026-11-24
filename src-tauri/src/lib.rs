@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 mod actions;
-mod elevated_ops; // A8 (plan a5 v4, Slice 1): the CLOSED set of typed elevated operations (no script-text variant; every field grammar-checked in the helper; scripts composed by actions.rs's builders). Its helper entry is reachable only with the `elevated-op-entry` cargo feature, which no normal build enables, until Slice 2 moves the callers.
+mod elevated_ops; // A8 (plan a5 v4, Slice 1): the CLOSED set of typed elevated operations (no script-text variant; every field grammar-checked in the helper; scripts composed by actions.rs's builders). A9 (Slice 2): every elevated caller sends a typed request, and its `--run-elevated-op` entry is the ONLY elevated entry (the generic hex entry and its ticket are deleted).
 mod install_location; // A3: where this compy.exe runs from (Program Files vs the user's own folder) and whether an old per-user copy is left; read-only, one support-log line per launch.
 mod sys_exe; // The ONE resolver for Windows system tools (absolute path from the real system dir) + pinned child environment. Hardening slice 1.
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
@@ -31,7 +31,7 @@ mod experiment; // Intelligence Phase 3 — user-started single-variable experim
 mod export;
 mod fps;
 #[cfg(windows)]
-mod win_handle; // Handle-bound final-path check and delete-on-close (data_clear's handle delete, the elevation ticket's consume); a leaf module.
+mod win_handle; // Handle-bound final-path check and delete-on-close (data_clear's handle delete); a leaf module.
 mod fps_pipe; // Hardening slice 2 - the capture helper's reports travel over a pipe the app creates (random name, this user and Administrators only, both ends identity-checked from the process snapshot); the app writes fps.json itself and the helper opens no file.
 #[cfg(test)]
 mod fuzz_support; // Test-only deterministic input generator for the property/fuzz suites (persistence parsing + bounded IPC inputs). Never compiled into the shipped binary.
@@ -91,87 +91,34 @@ pub fn run_fps_capture() {
     fps::run_capture();
 }
 
-/// Entry point for the elevated command helper (`compy.exe --run-elevated <hex> <ticket>`, Wave 0).
-/// Decodes the hex-encoded PowerShell command produced by `actions::run_elevated_powershell` and runs
-/// it via `quiet_command` (CREATE_NO_WINDOW) — windowless in a release build, so no console flashes.
-/// Returns PowerShell's exit code so the parent's `elevation_outcome` attribution is preserved; a
-/// bad/missing or non-UTF-8 arg returns non-zero (fail-safe: the parent reports "approved, but the
-/// operation failed" — never a false success, and never runs garbage). Does NOT depend on the live
-/// catalog.
-///
-/// Boundary-side second lock (defense-in-depth, 2026-07-15): the hex must byte-match the one-time
-/// dispatch ticket minted by `run_elevated_powershell` — the sole dispatch point, where every command
-/// has already passed validation — or NOTHING runs (`actions::HELPER_TICKET_REFUSED`, which the parent
-/// reads as "no command ran"; it was exit 3 before hardening slice 2). A hypothetical future confused-deputy
-/// bug handing this entry attacker-influenced hex has no matching ticket and executes zero
-/// PowerShell. The ticket is consumed (deleted) before the command runs, so a dispatch executes at
-/// most once. See `actions::mint_elevation_ticket` / `consume_elevation_ticket`.
-///
-/// A5 Part A: with a channel (`--pipe <name> --parent-pid <pid>`), the helper first connects to the app's
-/// pipe and checks that the app serves it (`fps_pipe::connect_to_parent`), BEFORE the ticket is consumed:
-/// a refused channel runs nothing (`actions::HELPER_CHANNEL_REFUSED`). PowerShell's output is then relayed
-/// to the app over that pipe; if the pipe breaks, the rest is read and discarded so PowerShell never blocks.
-pub fn run_elevated_helper(hex: &str, ticket_path: &str, channel: Option<(&str, u32)>) -> i32 {
-    let pipe = match channel {
-        Some((name, parent)) => match fps_pipe::connect_to_parent(name, parent) {
-            Ok(file) => Some(file),
-            Err(_) => return actions::HELPER_CHANNEL_REFUSED,
-        },
-        None => None,
-    };
-    if !actions::consume_elevation_ticket(hex, ticket_path) {
-        return actions::HELPER_TICKET_REFUSED;
-    }
-    let Some(bytes) = actions::from_hex(hex) else {
-        return 2;
-    };
-    let Ok(command) = String::from_utf8(bytes) else {
-        return 2;
-    };
-    let mut c = elevated_powershell_command(&command);
-    if pipe.is_some() {
-        c.stdout(std::process::Stdio::piped());
-    }
-    match c.spawn() {
-        Ok(mut child) => {
-            let relay = pipe.zip(child.stdout.take()).map(|(p, out)| std::thread::spawn(move || relay_output(out, p)));
-            let waited = child.wait();
-            if let Some(r) = relay {
-                let _ = r.join();
-            }
-            helper_exit_code(Started::Ran(waited))
-        }
-        Err(_) => helper_exit_code(Started::NeverStarted),
-    }
+/// A9: the typed elevated helper entry's argument name: the app launches `compy.exe` elevated with it
+/// (`actions::run_elevated_op` / `run_elevated_request_capture`), and main.rs routes it to
+/// [`run_elevated_op_argv`]. Defined once here, so the app and the entry can never spell it differently.
+pub const ELEVATED_OP_FLAG: &str = "--run-elevated-op";
+
+/// A9: the argument name of the DELETED generic entry (`--run-elevated <hex> <ticket>`, which ran whatever
+/// PowerShell its hex held). main.rs still recognises it, only to refuse it with
+/// [`refused_generic_elevated_entry`]: nothing is decoded, read or run, and the app's UI never starts elevated
+/// from it.
+pub const DELETED_GENERIC_ELEVATED_FLAG: &str = "--run-elevated";
+
+/// A9: what the deleted generic entry answers now: `HELPER_REQUEST_REFUSED` ("not one Compy can run, so no
+/// command ran"), whatever follows it. Pure; it looks at no argument.
+pub fn refused_generic_elevated_entry() -> i32 {
+    actions::HELPER_REQUEST_REFUSED
 }
 
-/// `compy.exe --run-elevated` argument forms (everything after the flag): `<hex> <ticket>`, or
-/// `<hex> <ticket> --pipe <name> --parent-pid <pid>` (A5 Part A). Anything else runs nothing and exits 2.
-pub fn run_elevated_helper_argv(rest: &[String]) -> i32 {
-    match rest {
-        [hex, ticket] => run_elevated_helper(hex, ticket, None),
-        [hex, ticket, p, name, q, pid] if p == "--pipe" && q == "--parent-pid" => match pid.parse::<u32>() {
-            Ok(pid) => run_elevated_helper(hex, ticket, Some((name, pid))),
-            Err(_) => 2,
-        },
-        _ => 2,
-    }
-}
-
-/// A8 (plan a5 v4 §4): the TYPED elevated helper entry (`compy.exe --run-elevated-op <hex JSON> [--pipe <name>
-/// --parent-pid <pid>]`): the request is parsed and checked whole, the helper-side reads run, and only then the one
-/// script composed from the closed set (`elevated_ops`) runs through [`run_helper_script`]. Compiled ONLY with the
-/// `elevated-op-entry` cargo feature until Slice 2 moves the callers; no normal, release or installer build
-/// enables it, so a default build has no such entry (pinned in elevated_ops.rs's tests).
-#[cfg(feature = "elevated-op-entry")]
+/// A8 (plan a5 v4 §4) / A9: the TYPED elevated helper entry (`compy.exe --run-elevated-op <hex JSON> [--pipe <name>
+/// --parent-pid <pid>]`), the ONLY elevated entry: the request is parsed and checked whole, the helper-side reads
+/// run, and only then the one script composed from the closed set (`elevated_ops`) runs through
+/// [`run_helper_script`].
 pub fn run_elevated_op_argv(rest: &[String]) -> i32 {
     elevated_ops::helper_argv(rest)
 }
 
-/// A8: the helper's PowerShell run for the typed entry: the same pieces as [`run_elevated_helper`]'s run (the
-/// cleared-environment `elevated_powershell_command`, the output relay, `helper_exit_code`), with no ticket (the
-/// typed entry composes its own script from a checked request). `run_elevated_helper` itself is unchanged.
-#[cfg_attr(not(feature = "elevated-op-entry"), allow(dead_code))]
+/// A8: the helper's PowerShell run for the typed entry: the cleared-environment `elevated_powershell_command`,
+/// the output relay, `helper_exit_code`, with no ticket (the typed entry composes its own script from a checked
+/// request).
 pub(crate) fn run_helper_script<W: std::io::Write + Send + 'static>(command: &str, pipe: Option<W>) -> i32 {
     let mut c = elevated_powershell_command(command);
     if pipe.is_some() {
@@ -193,11 +140,9 @@ pub(crate) fn run_helper_script<W: std::io::Write + Send + 'static>(command: &st
 /// A8 review r1 (hardening): a child that RAN and exited with one of the helper's own "nothing ran" codes is reported
 /// as 1 ("ran and failed"), so a script's exit code can never be misread as a refusal (the parent may drop staged
 /// contract entries on "nothing ran"). No closed-set script exits with one; this makes it structural.
-#[cfg_attr(not(feature = "elevated-op-entry"), allow(dead_code))]
 fn typed_child_code(code: i32) -> i32 {
-    const OWN: [i32; 5] = [
+    const OWN: [i32; 4] = [
         actions::HELPER_POWERSHELL_NOT_STARTED,
-        actions::HELPER_TICKET_REFUSED,
         actions::HELPER_CHANNEL_REFUSED,
         actions::HELPER_REQUEST_REFUSED,
         actions::HELPER_SAVED_VALUE_NO_MATCH,
@@ -2529,56 +2474,44 @@ mod safety_tests {
     use super::*;
     use serde_json::json;
 
-    // ── the `--run-elevated` helper's boundary lock, end-to-end through the real entry ──────
+    // ── A9: the deleted generic entry, and the typed entry end to end through the real lib entry ──────
 
+    /// A9 (plan v4 Slice 2 test "the forged hex entry is refused"): the generic `--run-elevated <hex> <ticket>`
+    /// entry is gone. What is left of it refuses as "nothing ran", and the typed entry refuses the same forged
+    /// script text (it is not a request): ZERO PowerShell runs, proven by a marker file that must not appear.
+    /// Break: route `--run-elevated` back to a decoder that runs its hex (or make `helper_argv` run a hex it cannot
+    /// parse) and this fails.
     #[test]
-    fn elevated_helper_runs_nothing_without_a_matching_ticket() {
-        // Foreign hex with no ticket: HELPER_TICKET_REFUSED and ZERO PowerShell executed — proven by a command
-        // whose side effect (a marker file) must not appear.
-        let scratch = crate::test_scratch::scratch("boundary-marker");
-        let marker = scratch.join("compy-boundary.txt");
+    fn a_forged_script_is_refused_by_both_names_and_runs_nothing() {
+        let scratch = crate::test_scratch::scratch("a9-forged-marker");
+        let marker = scratch.join("compy-forged.txt");
         let cmd = format!("Set-Content -Path '{}' -Value x", marker.display());
         let hex = actions::to_hex(cmd.as_bytes());
-        assert_eq!(run_elevated_helper(&hex, r"C:\__compy_qa_missing__\no.ticket", None), actions::HELPER_TICKET_REFUSED);
-        // A real ticket for OTHER hex in a ticket-shaped place: still refused, still nothing run.
-        let runtime = crate::test_scratch::scratch_child("boundary-other-ticket", "runtime");
-        let other = actions::mint_elevation_ticket_in(&runtime, &actions::to_hex(b"exit 0"), 1).expect("mint");
-        assert_eq!(run_elevated_helper(&hex, &other.to_string_lossy(), None), actions::HELPER_TICKET_REFUSED);
-        assert!(other.exists(), "a mismatch leaves the ticket");
-        assert!(!marker.exists(), "rejected hex must execute ZERO PowerShell");
-    }
-
-    #[test]
-    fn elevated_helper_runs_a_minted_dispatch_exactly_once() {
-        // The legitimate path: the same mint run_elevated_powershell performs (in a scratch `runtime`
-        // folder) → the helper runs the command (real, unelevated PowerShell here — a harmless no-op)
-        // and consumes the ticket through its handle. A replay of the SAME argv finds no ticket and
-        // runs nothing.
-        let hex = actions::to_hex(b"exit 0");
-        let runtime = crate::test_scratch::scratch_child("boundary-dispatch", "runtime");
-        let ticket = actions::mint_elevation_ticket_in(&runtime, &hex, 1).expect("mint");
-        let ticket_s = ticket.to_string_lossy().to_string();
-        assert_eq!(run_elevated_helper(&hex, &ticket_s, None), 0);
-        assert!(!ticket.exists(), "the verified dispatch consumes its ticket");
-        assert_eq!(run_elevated_helper(&hex, &ticket_s, None), actions::HELPER_TICKET_REFUSED, "replay must be refused");
+        assert_eq!(refused_generic_elevated_entry(), actions::HELPER_REQUEST_REFUSED);
+        assert_eq!(run_elevated_op_argv(&[hex.clone()]), actions::HELPER_REQUEST_REFUSED);
+        assert_eq!(
+            run_elevated_op_argv(&[hex, r"C:\__compy_qa_missing__\no.ticket".to_string()]),
+            actions::HELPER_REQUEST_REFUSED,
+            "the old two-argument form is not a typed form"
+        );
+        assert!(!marker.exists(), "a forged script must execute ZERO PowerShell");
+        let status = <std::process::ExitStatus as std::os::windows::process::ExitStatusExt>::from_raw(actions::HELPER_REQUEST_REFUSED as u32);
+        let err = actions::elevation_outcome(Ok(status)).unwrap_err();
+        assert!(actions::elevation_error_nothing_ran(&err), "{err}");
     }
 
     // ── A5 Part A: the helper's output channel ──────────────────────────────────────────────
 
+    /// A9: a well-formed typed request whose results pipe cannot be confirmed is refused BEFORE any read or run.
+    /// Break: connect the pipe after `run_request` and this fails.
     #[test]
-    fn a_refused_channel_runs_nothing_and_leaves_the_ticket() {
-        // No server behind this (well-formed) name: the helper refuses BEFORE consuming the ticket, and the
-        // command's marker never appears. The parent reads the code as "nothing ran".
-        let scratch = crate::test_scratch::scratch("channel-refused-marker");
-        let marker = scratch.join("compy-channel.txt");
-        let hex = actions::to_hex(format!("Set-Content -Path '{}' -Value x", marker.display()).as_bytes());
-        let runtime = crate::test_scratch::scratch_child("channel-refused", "runtime");
-        let ticket = actions::mint_elevation_ticket_in(&runtime, &hex, 1).expect("mint");
+    fn a_refused_channel_runs_nothing() {
+        let req = r#"{"v":1,"nonce":"0123456789abcdef0123456789abcdef","wrapper":"batch","items":[{"id":"adv-usb","ops":[{"op":"tcp-autotuning","disabled":false}]}]}"#;
+        let hex = actions::to_hex(req.as_bytes());
         let name = fps_pipe::pipe_name_from([7u8; 16]);
-        let code = run_elevated_helper(&hex, &ticket.to_string_lossy(), Some((&name, std::process::id())));
-        assert_eq!(code, actions::HELPER_CHANNEL_REFUSED);
-        assert!(ticket.exists(), "a refused channel must not consume the ticket");
-        assert!(!marker.exists(), "a refused channel must execute ZERO PowerShell");
+        let args = [hex, "--pipe".to_string(), name, "--parent-pid".to_string(), std::process::id().to_string()];
+        let code = run_elevated_op_argv(&args);
+        assert_eq!(code, actions::HELPER_CHANNEL_REFUSED, "refused before anything ran: {code:#x}");
         let status = <std::process::ExitStatus as std::os::windows::process::ExitStatusExt>::from_raw(code as u32);
         let err = actions::elevation_outcome(Ok(status)).unwrap_err();
         assert!(actions::elevation_error_nothing_ran(&err), "{err}");
@@ -2586,37 +2519,16 @@ mod safety_tests {
 
     #[test]
     fn the_helper_relays_its_output_to_the_app_that_serves_the_pipe() {
-        // End to end in one process (unelevated): this test serves the pipe, the helper connects (the server is
-        // this process, which is also the parent it is told about), runs PowerShell, and its output arrives.
+        // End to end in one process (unelevated): this test serves the pipe, the helper's run connects to it and
+        // runs PowerShell (a harmless Write-Output, through the typed entry's own runner), and its output arrives.
         let pipe = fps_pipe::ServerPipe::create().expect("pipe");
         let name = pipe.name.clone();
         let me = std::process::id();
         let reader = std::thread::spawn(move || pipe.collect_lines(&|| false, &|pid| pid == me, 64 * 1024));
-        let hex = actions::to_hex(b"Write-Output 'n0nce:a:ok'; Write-Output 'n0nce:end'");
-        let runtime = crate::test_scratch::scratch_child("channel-relay", "runtime");
-        let ticket = actions::mint_elevation_ticket_in(&runtime, &hex, 1).expect("mint");
-        assert_eq!(run_elevated_helper(&hex, &ticket.to_string_lossy(), Some((&name, me))), 0);
+        let out = fps_pipe::connect_to_parent(&name, me).expect("connect");
+        assert_eq!(run_helper_script("Write-Output 'n0nce:a:ok'; Write-Output 'n0nce:end'", Some(out)), 0);
         let (lines, _) = reader.join().unwrap();
         assert_eq!(lines, ["n0nce:a:ok", "n0nce:end"]);
-    }
-
-    #[test]
-    fn the_helper_accepts_only_its_two_argument_forms() {
-        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-        // Each malformed form exits 2 before anything (no ticket exists for these, and none is looked up).
-        for bad in [
-            s(&[]),
-            s(&["00"]),
-            s(&["00", "t", "--pipe"]),
-            s(&["00", "t", "--pipe", "n", "--parent-pid"]),
-            s(&["00", "t", "--pipe", "n", "--parent-pid", "x"]),
-            s(&["00", "t", "--pid", "n", "--parent-pid", "1"]),
-            s(&["00", "t", "extra"]),
-        ] {
-            assert_eq!(run_elevated_helper_argv(&bad), 2, "{bad:?}");
-        }
-        // The plain form reaches the ticket check (a missing ticket is refused, not run).
-        assert_eq!(run_elevated_helper_argv(&s(&["00", r"C:\__compy_qa_missing__\no.ticket"])), actions::HELPER_TICKET_REFUSED);
     }
 
     #[test]
@@ -3036,9 +2948,9 @@ mod elevated_helper_tests {
     /// from `typed_child_code` (or drop the wrap in `run_helper_script`) and this fails.
     #[test]
     fn a_child_exit_equal_to_a_helper_sentinel_reads_as_ran_and_failed() {
-        use crate::actions::{HELPER_CHANNEL_REFUSED, HELPER_REQUEST_REFUSED, HELPER_SAVED_VALUE_NO_MATCH, HELPER_TICKET_REFUSED};
+        use crate::actions::{HELPER_CHANNEL_REFUSED, HELPER_REQUEST_REFUSED, HELPER_SAVED_VALUE_NO_MATCH};
         use std::os::windows::process::ExitStatusExt;
-        for own in [HELPER_POWERSHELL_NOT_STARTED, HELPER_TICKET_REFUSED, HELPER_CHANNEL_REFUSED, HELPER_REQUEST_REFUSED, HELPER_SAVED_VALUE_NO_MATCH] {
+        for own in [HELPER_POWERSHELL_NOT_STARTED, HELPER_CHANNEL_REFUSED, HELPER_REQUEST_REFUSED, HELPER_SAVED_VALUE_NO_MATCH] {
             let code = super::typed_child_code(own);
             assert_eq!(code, 1, "{own:#x}");
             let err = elevation_outcome(Ok(std::process::ExitStatus::from_raw(code as u32))).unwrap_err();
@@ -3077,20 +2989,15 @@ mod elevated_helper_tests {
         assert!(!elevation_error_nothing_ran(&ran_failed), "{ran_failed}");
     }
 
-    /// Hardening slice 2 (review r1): a refused ticket is its own exit code, read as "no command ran",
-    /// never "approved, but the operation failed". The match is exact.
+    /// A9: the deleted ticket refusal's old code (0x4350_5333) is an ordinary "ran and failed" exit now: nothing in
+    /// the helper returns it, and the parent no longer reads it as "nothing ran". Break: put a 0x4350_5333 arm
+    /// back in `elevation_outcome` (or its message back in `elevation_error_nothing_ran`) and this fails.
     #[test]
-    fn a_refused_ticket_reads_as_nothing_ran() {
-        use crate::actions::{HELPER_TICKET_REFUSED, HELPER_TICKET_REFUSED_MSG};
+    fn the_deleted_ticket_code_is_an_ordinary_failure() {
         use std::os::windows::process::ExitStatusExt;
-        let err = elevation_outcome(Ok(std::process::ExitStatus::from_raw(HELPER_TICKET_REFUSED as u32))).unwrap_err();
-        assert_eq!(err, HELPER_TICKET_REFUSED_MSG);
-        assert!(!err.contains("You approved the elevation"), "{err}");
-        assert!(elevation_error_nothing_ran(&err));
-        assert!(!elevation_error_nothing_ran(&format!("{err} (extra)")), "near miss");
-        assert!(!elevation_error_nothing_ran(&err[..err.len() - 1]), "near miss");
-        assert_ne!(HELPER_TICKET_REFUSED, HELPER_POWERSHELL_NOT_STARTED);
-        // The old code 3 is now an ordinary failure again (nothing in the helper returns it).
+        let old = elevation_outcome(Ok(std::process::ExitStatus::from_raw(0x4350_5333))).unwrap_err();
+        assert!(old.contains("You approved the elevation"), "{old}");
+        assert!(!elevation_error_nothing_ran(&old), "{old}");
         let three = elevation_outcome(Ok(std::process::ExitStatus::from_raw(3))).unwrap_err();
         assert!(!elevation_error_nothing_ran(&three), "{three}");
     }
@@ -3108,7 +3015,7 @@ mod elevated_helper_tests {
         assert!(!elevation_error_nothing_ran(&err), "{err}");
         // And the helper only reports "not started" from the spawn's own failure, never from a wait.
         let src = include_str!("lib.rs").replace("\r\n", "\n");
-        let f = src.find("pub fn run_elevated_helper(").unwrap();
+        let f = src.find(concat!("pub(crate) fn run_helper_", "script<")).unwrap();
         let body = &src[f..f + src[f..].find("\n}\n").unwrap()];
         // A5 Part A: the wait is bound to a name so the output relay can be joined after it; the shape is the same.
         assert!(body.contains("match c.spawn() {\n        Ok(mut child) => {"));

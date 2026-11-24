@@ -107,7 +107,9 @@ export function mergeDeclared(rootDeclared, subDeclared) {
 // cries wolf gets muted rather than fixed. These five are writes to Windows state, or the
 // elevation helper itself - the actual mutation boundary described by LOCKED rule 3.
 export const MUTATION_MARKERS = [
-  "run_elevated_powershell",
+  // A9: the single elevated runner is now the typed `run_elevated_op(` (the script-text runner it replaced,
+  // `run_elevated_powershell`, is gone, so naming it here would match nothing).
+  "run_elevated_op(",
   "set_value",
   "set_raw_value",
   "create_subkey",

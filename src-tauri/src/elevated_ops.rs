@@ -7,12 +7,11 @@
 //! boundary), so the bytes that run are the ones the A8 goldens pin. The one new script is EEE's, which sets the
 //! ONE exact advanced-property object instead of matching adapter names (plan v4 §2, review C1).
 //!
-//! Slice 1: no caller moves and no surface is removed. The helper entry that reads a request (`helper_argv`) is
-//! reachable only from lib.rs's `run_elevated_op_argv` and main.rs's arm, which are compiled only with the
-//! `elevated-op-entry` cargo feature that no normal, release or installer build enables. This module itself is
-//! compiled in every build (so CI's `cargo test` runs its tests and the mutation-boundary guard scans it), and is
-//! unreachable without that feature: hence the dead-code allowance below, which Slice 2 removes with the feature.
-#![cfg_attr(not(feature = "elevated-op-entry"), allow(dead_code))]
+//! A9 (Slice 2): every elevated caller hands the helper an op of this set (actions.rs `run_elevated_op`,
+//! `run_elevated_undo_op`, `run_elevated_request_capture`), and the helper entry that reads a request
+//! (`helper_argv`, from lib.rs's `run_elevated_op_argv` and main.rs's `--run-elevated-op` arm) is the ONLY elevated
+//! entry: the generic hex entry, its decoder and its ticket are deleted, and so is the build flag that hid this
+//! entry in Slice 1.
 
 use serde::{Deserialize, Deserializer, Serialize};
 use std::io::Write as _;
@@ -235,9 +234,7 @@ pub(crate) enum PowerSetting {
 impl PowerSetting {
     /// The closed setting a saved `(subgroup, setting)` pair names (case-insensitive, as powercfg prints GUIDs).
     /// Any other pair: `NoMatch`, so the app refuses that row's undo with the plan's §5 sentence (the change stays
-    /// in the Trust Ledger) and never builds a request for it (Slice 2 caller; until then only tests call it,
-    /// hence the allowance in a feature build).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// in the Trust Ledger) and never builds a request for it (A9: actions.rs's power-setting apply and undo).
     pub(crate) fn from_ids(subgroup: &str, setting: &str) -> Result<Self, Refused> {
         [PowerSetting::UsbSelectiveSuspend, PowerSetting::PcieAspm]
             .into_iter()
@@ -751,6 +748,71 @@ impl ElevatedRequest {
     pub(crate) fn needs_pipe(&self) -> bool {
         self.wrapper == Wrapper::Batch || self.items.iter().flat_map(|i| &i.ops).any(ElevatedOp::needs_pipe)
     }
+
+    /// A9 (Slice 2, the app side): one op run alone, checked whole as the helper will check it. Malformed =
+    /// `Refused::Request`, and the app launches nothing.
+    pub(crate) fn single(op: ElevatedOp, nonce: &str) -> Result<Self, Refused> {
+        let req = Self {
+            v: REQUEST_VERSION,
+            nonce: Nonce::parse(nonce)?,
+            wrapper: Wrapper::Single,
+            items: vec![RequestItem { id: None, ops: vec![op] }],
+        };
+        req.validate()?;
+        Ok(req)
+    }
+
+    /// A9 (Slice 2, the app side): a batch of items, each its receipt id and the ops its apply parked, in
+    /// order, checked whole as the helper will check it. Malformed = `Refused::Request`, and the app launches
+    /// nothing.
+    pub(crate) fn batch(items: Vec<(String, Vec<ElevatedOp>)>, nonce: &str) -> Result<Self, Refused> {
+        let items = items
+            .into_iter()
+            .map(|(id, ops)| Ok(RequestItem { id: Some(ItemId::parse(&id)?), ops }))
+            .collect::<Result<Vec<_>, Refused>>()?;
+        let req = Self { v: REQUEST_VERSION, nonce: Nonce::parse(nonce)?, wrapper: Wrapper::Batch, items };
+        req.validate()?;
+        Ok(req)
+    }
+}
+
+/// Test-only (owner-present live QA through the direct-elevation seam, which elevates powershell.exe itself
+/// and has no helper): the script the helper would run for `req`, composed with the live reads. Never shipped.
+#[cfg(test)]
+pub(crate) fn compose_for_direct(req: &ElevatedRequest) -> Result<String, String> {
+    let fail = |_: Refused| "qa seam: the typed request could not be composed".to_string();
+    match req.wrapper {
+        Wrapper::Single => {
+            let op = req.items.first().and_then(|i| i.ops.first()).ok_or("qa seam: an empty request")?;
+            let script = op.script(&req.nonce, &mut LiveEffects).map_err(fail)?;
+            Ok(actions::with_error_action_stop(&script).into_owned())
+        }
+        Wrapper::Batch => {
+            let mut items = Vec::with_capacity(req.items.len());
+            for item in &req.items {
+                let mut scripts = Vec::with_capacity(item.ops.len());
+                for op in &item.ops {
+                    scripts.push(op.script(&req.nonce, &mut LiveEffects).map_err(fail)?);
+                }
+                items.push((item.id.as_ref().map(|i| i.as_str().to_string()).unwrap_or_default(), scripts));
+            }
+            actions::compose_batch_script(&items, req.nonce.as_str())
+        }
+    }
+}
+
+/// Test-only: the script an op composes when it needs no helper-side read (a read answers "did not finish",
+/// so an EEE or task op shows as refused). Lets a test that used to see the script text keep its assertion.
+#[cfg(test)]
+pub(crate) fn script_of(op: &ElevatedOp) -> String {
+    struct NoReads;
+    impl HelperReads for NoReads {
+        fn read(&mut self, _: ReadKind, _: &str) -> Option<std::process::Output> {
+            None
+        }
+    }
+    let nonce = Nonce::parse("0123456789abcdef0123456789abcdef").expect("a fixed nonce");
+    op.script(&nonce, &mut NoReads).unwrap_or_else(|r| format!("<refused: {r:?}>"))
 }
 
 /// PURE: the argv hex -> a validated request. Every failure is `Refused::Request`; never panics on any input.
@@ -1546,53 +1608,166 @@ mod tests {
 
     // ── pins ──
 
-    /// [v3r flag]: a default build has no typed entry. Break: put `elevated-op-entry` in `default = [...]` in
-    /// Cargo.toml (or drop the cfg line above main.rs's arm) and this fails.
-    #[test]
-    fn a_default_build_has_no_typed_entry() {
-        const CFG: &str = "#[cfg(feature = \"elevated-op-entry\")]";
-        let literal = concat!("\"--run-elevated", "-op\"");
-        let main = include_str!("main.rs").replace("\r\n", "\n");
-        let lines: Vec<&str> = main.lines().collect();
-        let at: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains(literal)).map(|(i, _)| i).collect();
-        assert_eq!(at.len(), 1, "main.rs holds the literal once");
-        assert_eq!(lines[at[0] - 1].trim(), CFG, "main.rs's arm is behind the feature");
-        let lib = include_str!("lib.rs").replace("\r\n", "\n");
-        let lib_lines: Vec<&str> = lib.lines().collect();
-        let entry = lib_lines.iter().position(|l| l.starts_with("pub fn run_elevated_op_argv(")).expect("the lib entry");
-        assert_eq!(lib_lines[entry - 1].trim(), CFG, "lib.rs's entry is behind the feature");
-        // No other Rust source holds the literal outside its tests.
+    /// A9: the production text of a Rust source: every `#[cfg(test)]` module (to its closing brace at its own
+    /// indent) and the `//` part of every line dropped.
+    fn shipped_text(src: &str) -> String {
+        let src = src.replace("\r\n", "\n");
+        let lines: Vec<&str> = src.lines().collect();
+        let mut out = String::new();
+        let mut i = 0;
+        while i < lines.len() {
+            let line = lines[i];
+            if line.trim() == "#[cfg(test)]" {
+                if let Some(next) = lines.get(i + 1) {
+                    let t = next.trim_start();
+                    if t.starts_with("mod ") && t.ends_with('{') {
+                        let close = format!("{}}}", &next[..next.len() - t.len()]);
+                        i += 2;
+                        while i < lines.len() && lines[i] != close {
+                            i += 1;
+                        }
+                        i += 1;
+                        continue;
+                    }
+                }
+            }
+            out.push_str(line.split("//").next().unwrap_or_default());
+            out.push('\n');
+            i += 1;
+        }
+        out
+    }
+
+    /// Every `.rs` file under `src`, with its production text.
+    fn shipped_sources() -> Vec<(String, String)> {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut stack = vec![dir];
+        let mut out = Vec::new();
         while let Some(d) = stack.pop() {
             for e in std::fs::read_dir(&d).expect("src dir").flatten() {
                 let p = e.path();
                 if p.is_dir() {
                     stack.push(p);
-                } else if p.extension().is_some_and(|x| x == "rs") && p.file_name().is_some_and(|n| n != "main.rs") {
-                    let text = std::fs::read_to_string(&p).expect("read").replace("\r\n", "\n");
-                    let shipped = text.split("#[cfg(test)]\nmod tests").next().unwrap_or_default();
-                    assert!(!shipped.contains(literal), "{} holds the typed entry's literal outside its tests", p.display());
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    let text = std::fs::read_to_string(&p).expect("read");
+                    out.push((p.file_name().unwrap_or_default().to_string_lossy().into_owned(), shipped_text(&text)));
                 }
             }
         }
-        // The feature exists, is off by default, and no build names it.
-        let cargo = include_str!("../Cargo.toml").replace("\r\n", "\n");
-        let code: Vec<&str> = cargo.lines().map(str::trim).filter(|l| !l.starts_with('#')).collect();
-        assert!(code.contains(&"default = []"), "no default feature");
-        assert!(code.contains(&"elevated-op-entry = []"));
-        assert_eq!(code.iter().filter(|l| l.contains("elevated-op-entry")).count(), 1, "nothing enables it");
+        out
+    }
+
+    /// A9 (plan v4 Slice 2, replaces the Slice 1 "a default build has no typed entry" pin): the typed entry is the
+    /// ONLY elevated entry, unconditional, and the generic hex entry is gone: main.rs routes `--run-elevated-op` to
+    /// `run_elevated_op_argv` with no build flag in front of it, and answers the old `--run-elevated` only with the
+    /// refusal; no shipped source spells either flag but lib.rs's two constants, and nothing of the hex entry, its
+    /// decoder-runner or its ticket is left. Break: put back a `--run-elevated` arm that runs its hex (e.g. main.rs
+    /// `position(|a| a == "--run-elevated")` -> a decoder), or a `#[cfg(feature = ...)]` in front of the typed arm,
+    /// and this fails.
+    #[test]
+    fn the_typed_entry_is_the_only_elevated_entry() {
+        let main = shipped_text(include_str!("main.rs"));
+        let lines: Vec<&str> = main.lines().map(str::trim).collect();
+        let typed: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("compy_lib::ELEVATED_OP_FLAG")).map(|(i, _)| i).collect();
+        assert_eq!(typed.len(), 1, "main.rs routes the typed flag once");
+        assert_eq!(lines[typed[0]], "if let Some(pos) = argv.iter().position(|a| a == compy_lib::ELEVATED_OP_FLAG) {");
+        assert_eq!(lines[typed[0] + 1], "std::process::exit(compy_lib::run_elevated_op_argv(&argv[pos + 1..]));");
+        assert!(!lines[typed[0] - 1].starts_with("#["), "no attribute (a build flag) in front of the typed arm");
+        let generic: Vec<usize> =
+            lines.iter().enumerate().filter(|(_, l)| l.contains("DELETED_GENERIC_ELEVATED_FLAG")).map(|(i, _)| i).collect();
+        assert_eq!(generic.len(), 1, "main.rs names the deleted entry once");
+        assert_eq!(lines[generic[0] + 1], "std::process::exit(compy_lib::refused_generic_elevated_entry());");
+        assert!(typed[0] < generic[0], "the typed flag is matched first");
+        let lib = shipped_text(include_str!("lib.rs"));
+        let at = lib.find("pub fn refused_generic_elevated_entry() -> i32 {").expect("the refusal");
+        let body = &lib[at..at + lib[at..].find("\n}\n").expect("end")];
+        assert_eq!(body.lines().nth(1).map(str::trim), Some("actions::HELPER_REQUEST_REFUSED"), "{body}");
+        assert_eq!(body.lines().count(), 2, "the refusal does nothing else: {body}");
+        let at = lib.find("pub fn run_elevated_op_argv(rest: &[String]) -> i32 {").expect("the typed entry");
+        assert!(!lib[..at].trim_end().ends_with(']'), "no attribute (a build flag) in front of the typed entry");
+        // Across every shipped source: the two flags are spelled once each (lib.rs's constants), and nothing of the
+        // hex entry, its script-text runners or its ticket is left.
+        let (mut typed_lit, mut generic_lit) = (0, 0);
+        for (name, text) in shipped_sources() {
+            typed_lit += text.matches(concat!("\"--run-elevated", "-op\"")).count();
+            generic_lit += text.matches(concat!("\"--run-", "elevated\"")).count();
+            for gone in [
+                concat!("fn run_elevated_", "powershell("),
+                concat!("fn run_elevated_", "capture("),
+                concat!("fn run_elevated_", "helper"),
+                concat!("elevation_", "ticket"),
+                concat!("HELPER_TICKET_", "REFUSED"),
+                concat!("elevated-op-", "entry"),
+            ] {
+                assert!(!text.contains(gone), "{name} still holds {gone}");
+            }
+        }
+        assert_eq!((typed_lit, generic_lit), (1, 1), "each flag is spelled once, in lib.rs");
+        assert_eq!(lib.matches(concat!("pub const ELEVATED_OP_FLAG: &str = \"--run-elevated", "-op\";")).count(), 1);
+        assert_eq!(lib.matches(concat!("pub const DELETED_GENERIC_ELEVATED_FLAG: &str = \"--run-", "elevated\";")).count(), 1);
+        // No build flag exists or is named by a build.
+        let cargo = include_str!("../Cargo.toml");
+        assert!(!cargo.contains("[features]") && !cargo.contains(concat!("elevated-op-", "entry")), "no build flag");
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        let mut builds = vec![root.join("package.json"), root.join("scripts").join("ship-reinstall.ps1"), root.join("src-tauri").join("tauri.conf.json")];
+        let mut builds = vec![
+            root.join("package.json"),
+            root.join("scripts").join("ship-reinstall.ps1"),
+            root.join("scripts").join("release.ps1"),
+            root.join("src-tauri").join("tauri.conf.json"),
+        ];
         if let Ok(wf) = std::fs::read_dir(root.join(".github").join("workflows")) {
             builds.extend(wf.flatten().map(|e| e.path()));
         }
         for f in builds {
             let text = std::fs::read_to_string(&f).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
-            for word in ["elevated-op-entry", "--features", "--all-features"] {
-                assert!(!text.contains(word), "{} names {word}", f.display());
-            }
+            assert!(!text.contains(concat!("elevated-op-", "entry")), "{} names the deleted build flag", f.display());
         }
+    }
+
+    /// A9 (plan v4 Slice 2 break "route one caller back to a string"): the app launches the typed entry from exactly
+    /// two places, each taking a typed value (an op, a request), never text. Break: add a `fn
+    /// run_elevated_script(command: &str)` that launches `crate::ELEVATED_OP_FLAG` with any hex (or give
+    /// `run_elevated_op` a `&str`) and this fails.
+    #[test]
+    fn the_app_launches_the_typed_entry_only_with_typed_values() {
+        let actions = shipped_text(include_str!("actions.rs"));
+        assert_eq!(actions.matches("crate::ELEVATED_OP_FLAG").count(), 2, "two launch sites");
+        for (sig, typed) in [
+            ("pub(crate) fn run_elevated_op(", "pub(crate) fn run_elevated_op(op: ElevatedOp) -> Result<(), String> {"),
+            ("pub(crate) fn run_elevated_request_capture(", "pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCapture {"),
+        ] {
+            let at = actions.find(sig).unwrap_or_else(|| panic!("{sig}"));
+            let body = &actions[at..at + actions[at..].find("\n}\n").expect("end")];
+            assert!(body.starts_with(typed), "{sig} takes a typed value: {}", body.lines().next().unwrap_or_default());
+            assert_eq!(body.matches("crate::ELEVATED_OP_FLAG").count(), 1, "{sig} launches once");
+            assert!(body.contains("typed_request_hex("), "{sig} sends the request's own JSON");
+        }
+        // Every other launch of compy.exe elevated in the app is gone: `elevate_and_wait` targets are the typed
+        // entry (the two above) and the direct powershell seam, which is test-only.
+        for other in [concat!("OsStr::new(\"--run-", "elevated\")"), concat!("to_hex(command", ".as_bytes())")] {
+            assert!(!actions.contains(other), "{other}");
+        }
+    }
+
+    /// A9: the app builds a batch the helper would refuse? It refuses it first, before any launch: an id outside the
+    /// closed union, a single-only op in a batch, more than 32 items. A good batch round-trips through the helper's
+    /// own parser. Break: drop `req.validate()?` from `ElevatedRequest::batch` (or the `ItemId::parse`) and this fails.
+    #[test]
+    fn the_app_side_request_is_checked_whole_before_any_launch() {
+        let hags = || vec![ElevatedOp::HagsEnable {}];
+        assert!(ElevatedRequest::batch(vec![("a".to_string(), hags())], N).is_err(), "an id outside the closed union");
+        assert!(ElevatedRequest::batch(vec![("adv-usb".to_string(), vec![ElevatedOp::UltimatePlanApply {}])], N).is_err());
+        let many: Vec<(String, Vec<ElevatedOp>)> = (0..=MAX_ITEMS).map(|i| (format!("r{i}"), hags())).collect();
+        assert!(ElevatedRequest::batch(many, N).is_err(), "33 items");
+        assert!(ElevatedRequest::batch(vec![("adv-usb".to_string(), hags())], "not-a-nonce").is_err());
+        assert!(ElevatedRequest::single(ElevatedOp::NagleDisable { interfaces: vec![] }, N).is_err(), "zero targets");
+        let good = ElevatedRequest::batch(vec![("adv-usb".to_string(), hags()), ("SysMain".to_string(), hags())], N).expect("good");
+        let hex = actions::to_hex(serde_json::to_string(&good).expect("json").as_bytes());
+        assert_eq!(parse_request_hex(&hex), Ok(good));
+        let single = ElevatedRequest::single(ElevatedOp::MemoryCompressionCombined {}, N).expect("single");
+        assert!(single.needs_pipe(), "the combined op reports over the pipe");
+        let hex = actions::to_hex(serde_json::to_string(&single).expect("json").as_bytes());
+        assert_eq!(parse_request_hex(&hex), Ok(single));
     }
 
     /// The closed set holds no script text: no `String` in the op enum or the structs it carries. Break: add a
@@ -1624,7 +1799,6 @@ mod tests {
     fn the_two_sentinels_are_distinct_and_read_as_nothing_ran() {
         let codes = [
             actions::HELPER_POWERSHELL_NOT_STARTED,
-            actions::HELPER_TICKET_REFUSED,
             actions::HELPER_CHANNEL_REFUSED,
             actions::HELPER_REQUEST_REFUSED,
             actions::HELPER_SAVED_VALUE_NO_MATCH,

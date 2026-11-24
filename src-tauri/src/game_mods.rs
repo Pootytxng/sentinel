@@ -3102,7 +3102,10 @@ mod tests {
         let lib = include_str!("lib.rs");
         let lines: Vec<&str> = lib.lines().filter(|l| l.contains("game_mods")).collect();
         assert!(!lines.is_empty() && lines.iter().all(|l| l.trim_start().starts_with("mod game_mods;")), "{lines:?}");
-        let body = fn_body(lib, "pub fn run_elevated_helper(");
+        // A9: the only elevated helper entry is the typed one (lib.rs's entry and elevated_ops.rs's shipped text).
+        let ops = include_str!("elevated_ops.rs");
+        let ops = ops.split("#[cfg(test)]\nmod tests").next().unwrap_or_default();
+        let body = format!("{}{}", fn_body(lib, "pub fn run_elevated_op_argv("), ops);
         assert!(!body.contains("game_mods"));
         assert!(!include_str!("main.rs").contains("game_mods"));
         for f in ["scan_game_folder", "scan_install_folder", "scan_for_process", "match_signatures"] {

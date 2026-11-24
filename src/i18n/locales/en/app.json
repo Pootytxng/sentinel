@@ -118,6 +118,7 @@
     "benchLedgerUnreadAfter": "Compy ran the apply, but couldn't re-read its change history to roll back what it applied automatically. Check Test → Applied & history and undo anything this run applied.",
     "powerSettingIdRefused": "This change's saved power plan setting isn't in the form Compy expects, so Compy didn't run the undo. The change stays in your Trust Ledger.",
     "powerPlanIdRefusedUndo": "This change's saved power plan isn't in the form Compy expects, so Compy didn't switch back to it. The change stays in your Trust Ledger.",
+    "storedRecordRefusedUndo": "Compy couldn't use this change's saved details for an administrator step, so it didn't run the undo. The change stays in your Trust Ledger.",
     "settingUnread": "Compy couldn't read this setting right now, so it can't say whether it is on or off.",
     "couldntCheckHeading": "Couldn't check right now",
     "gmBusy": "Compy is still finishing another change or a Gaming Mode start (if a Windows permission prompt is open, answer or cancel it) — give it a second and try again",

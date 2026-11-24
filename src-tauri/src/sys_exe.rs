@@ -3,7 +3,7 @@
 //! Why this exists (hardening slice 1). Rust's std on Windows resolves a bare program name
 //! (`Command::new("powershell.exe")`) in the directory of the RUNNING EXE first. Compy's install
 //! directory is writable by the user, so a `powershell.exe` planted beside `compy.exe` would be run
-//! instead of the real one - and inside the elevated helper (`compy.exe --run-elevated`, the elevated
+//! instead of the real one - and inside the elevated helper (`compy.exe --run-elevated-op`, the elevated
 //! FPS helper) that is code execution with administrator rights.
 //!
 //! The rule here: a system tool is named by the closed [`SysTool`] enum, never by a string; its path is
@@ -24,7 +24,7 @@
 //! (`HKCU\Environment`).
 //!
 //! NOT covered here (later slices): the install directory itself is still user-writable (a replaced
-//! `compy.exe` or a DLL beside it), the generic `--run-elevated` entry, and the FPS helper's file paths.
+//! `compy.exe` or a DLL beside it) and the FPS helper's file paths. (A9 deleted the generic `--run-elevated` entry.)
 //!
 //! Guard: `tests::no_bare_command_new_outside_the_resolver` fails on any `Command::new`, aliased
 //! `Command`, async process crate or process-creating Win32 call (`CreateProcess*`, `ShellExecute*`,

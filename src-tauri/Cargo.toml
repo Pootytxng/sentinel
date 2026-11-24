@@ -14,14 +14,6 @@ edition = "2021"
 name = "compy_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-[features]
-default = []
-# A8 (plan _train/a5-closed-elevated-set-plan-v4.md, Slice 1): compiles the typed elevated helper entry
-# (`--run-elevated-op` in main.rs, `run_elevated_op_argv` in lib.rs). OFF in every normal, release and
-# installer build (`npm run tauri build`, CI's cargo test/clippy name no feature) until Slice 2 moves the
-# callers and deletes the hex entry; never add it to `default` (pinned by elevated_ops.rs's tests).
-elevated-op-entry = []
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -4,21 +4,17 @@
 fn main() {
     let argv: Vec<String> = std::env::args().collect();
 
-    // Elevated command helper (Wave 0): `compy.exe --run-elevated <hex> <ticket>` runs ONE
-    // validated PowerShell command windowless (compy.exe is windows-subsystem in release → no
-    // console flash) and exits with its code, BEFORE any Tauri window. The hex must byte-match
-    // the one-time dispatch ticket minted by actions::run_elevated_powershell or nothing runs
-    // (the boundary-side second lock). A5 Part A: an optional `--pipe <name> --parent-pid <pid>`
-    // relays its output to the app. See compy_lib::run_elevated_helper / run_elevated_helper_argv.
-    if let Some(pos) = argv.iter().position(|a| a == "--run-elevated") {
-        std::process::exit(compy_lib::run_elevated_helper_argv(&argv[pos + 1..]));
-    }
-
-    // A8 (plan a5 v4, Slice 1): the typed elevated helper entry, compiled ONLY with the `elevated-op-entry`
-    // cargo feature (off in every normal build) until Slice 2 moves the callers. See compy_lib::run_elevated_op_argv.
-    #[cfg(feature = "elevated-op-entry")]
-    if let Some(pos) = argv.iter().position(|a| a == "--run-elevated-op") {
+    // A9 (plan a5 v4 Slice 2): the ONLY elevated command helper entry is the typed one: `compy.exe
+    // --run-elevated-op <hex JSON> [--pipe <name> --parent-pid <pid>]` checks a request of the closed set
+    // whole, composes its one script and runs it windowless (compy.exe is windows-subsystem in release, so no
+    // console flash), BEFORE any Tauri window. See compy_lib::run_elevated_op_argv.
+    if let Some(pos) = argv.iter().position(|a| a == compy_lib::ELEVATED_OP_FLAG) {
         std::process::exit(compy_lib::run_elevated_op_argv(&argv[pos + 1..]));
+    }
+    // The deleted generic entry (`--run-elevated <hex> <ticket>`, which ran any PowerShell): refused, nothing
+    // decoded or run, and never the app's window started elevated.
+    if argv.iter().any(|a| a == compy_lib::DELETED_GENERIC_ELEVATED_FLAG) {
+        std::process::exit(compy_lib::refused_generic_elevated_entry());
     }
 
     // Elevated helper mode: when launched with --fps-capture, run the ETW

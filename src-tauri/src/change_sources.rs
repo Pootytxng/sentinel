@@ -8,7 +8,7 @@
 //! outbound payload, and nothing is logged: program and game names are data about the user.
 //!
 //! RULES (each pinned by a test in this file):
-//! - Never runs in the elevated helper: `run_elevated_helper` must not reach this module.
+//! - Never runs in the elevated helper: `run_elevated_op_argv` / elevated_ops.rs must not reach this module.
 //! - Never spawns by bare name: child tools are started by absolute path under the Windows system
 //!   directory (`GetSystemDirectoryW`), so a planted `wevtutil.exe` beside compy.exe never runs.
 //! - Never feeds support evidence, the evidence-upload types, receipts or any outbound payload.
@@ -2726,9 +2726,13 @@ mod tests {
     #[test]
     fn the_elevated_helper_never_reaches_this_module() {
         let lib = include_str!("lib.rs");
-        let body = fn_body(lib, "pub fn run_elevated_helper(");
-        assert!(!body.contains("change_sources"), "run_elevated_helper must never call change_sources");
-        assert!(!body.contains("paramedic"), "run_elevated_helper must never call the paramedic");
+        // A9: the only elevated helper entry is the typed one: lib.rs's `run_elevated_op_argv` and everything
+        // elevated_ops.rs ships (its tests aside).
+        let ops = include_str!("elevated_ops.rs");
+        let ops = ops.split("#[cfg(test)]\nmod tests").next().unwrap_or_default();
+        let body = format!("{}{}", fn_body(lib, "pub fn run_elevated_op_argv("), ops);
+        assert!(!body.contains("change_sources"), "the elevated helper must never call change_sources");
+        assert!(!body.contains("paramedic"), "the elevated helper must never call the paramedic");
         assert!(!include_str!("main.rs").contains("change_sources"));
         assert!(!include_str!("main.rs").contains("paramedic"));
         // The elevated helper entry also never names this module's reader entry points.

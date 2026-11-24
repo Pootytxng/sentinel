@@ -118,6 +118,7 @@
     "benchLedgerUnreadAfter": "Compy 已执行应用，但无法重新读取更改历史，所以不能自动回滚这次应用的更改。请在「测试 → 已应用与历史记录」中查看，并撤销这次运行应用的更改。",
     "powerSettingIdRefused": "这项更改保存的电源计划设置不是 Compy 预期的格式，所以 Compy 没有执行撤销。这项更改仍保留在你的「信任台账」中。",
     "powerPlanIdRefusedUndo": "这项更改保存的电源计划不是 Compy 预期的格式，所以 Compy 没有切换回该计划。这项更改仍保留在你的「信任台账」中。",
+    "storedRecordRefusedUndo": "Compy 无法将这项更改保存的详细信息用于管理员步骤，所以没有执行撤销。这项更改仍保留在你的「信任台账」中。",
     "settingUnread": "Compy 现在无法读取这项设置，因此无法判断它是开启还是关闭。",
     "couldntCheckHeading": "现在无法检查",
     "gmBusy": "Compy 仍在完成另一项更改或游戏模式的启动（如果 Windows 权限提示已打开，请回应或取消它）——请稍等片刻再试",

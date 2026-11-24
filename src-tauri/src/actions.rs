@@ -18,6 +18,7 @@ use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_SET_VAL
 use winreg::RegKey;
 use wmi::{COMLibrary, WMIConnection};
 
+use crate::elevated_ops::{ElevatedOp, ElevatedRequest};
 use crate::history::AppliedChange;
 use crate::sys_exe::SysTool;
 // State probes stay in lib (least-wrong place until a cleaner seam); some
@@ -874,13 +875,13 @@ fn apply_visual_effects_with(reg: &mut dyn HkcuValues) -> Result<ApplyResult, St
 
 // ─── §4 one-elevation batching: the deferral sink (spec 2026-06-06-beta-feedback-3 §4) ───
 // Thread-local on purpose: arming it can only affect the ONE thread that armed it (the batch
-// orchestrator's command thread). While armed, `run_elevated_powershell` CAPTURES the command
-// instead of elevating. This is safe ONLY because every batchable apply_* performs reads before
-// its single elevated call and no mutation after it — deferring therefore causes no partial
-// mutation. The rollback path never runs under an armed sink (the orchestrator is the only
-// arm-er and it never rolls back).
+// orchestrator's command thread). While armed, `run_elevated_op` CAPTURES the typed op instead of
+// elevating (A9: an op, never script text; the helper composes the script). This is safe ONLY because every
+// batchable apply_* performs reads before its single elevated call and no mutation after it — deferring
+// therefore causes no partial mutation. The rollback path never runs under an armed sink (the orchestrator is
+// the only arm-er and it never rolls back).
 thread_local! {
-    static ELEVATION_SINK: std::cell::RefCell<Option<Vec<String>>> =
+    static ELEVATION_SINK: std::cell::RefCell<Option<Vec<ElevatedOp>>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -900,11 +901,11 @@ thread_local! {
     static ELEVATION_DISPATCH_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-// Test-only (A5 Part A review r1 D2): the next `run_elevated_capture` on this thread is answered by this
-// closure, given the composed command (so a test can read the dispatch's nonce from it), instead of
-// elevating. A whole batch or restore then runs with a chosen result and no UAC prompt. Never shipped.
+// Test-only (A5 Part A review r1 D2): the next `run_elevated_request_capture` on this thread is answered by
+// this closure, given the typed request (A9: so a test reads the dispatch's nonce and items from it), instead
+// of elevating. A whole batch or restore then runs with a chosen result and no UAC prompt. Never shipped.
 #[cfg(test)]
-type FakeCapture = Box<dyn FnOnce(&str) -> ElevatedCapture>;
+type FakeCapture = Box<dyn FnOnce(&ElevatedRequest) -> ElevatedCapture>;
 #[cfg(test)]
 thread_local! {
     static FAKE_CAPTURE: std::cell::RefCell<Option<FakeCapture>> = const { std::cell::RefCell::new(None) };
@@ -912,7 +913,7 @@ thread_local! {
 
 /// Answer the next capture on this thread with `f` (test-only; see `FAKE_CAPTURE`).
 #[cfg(test)]
-pub(crate) fn fake_next_capture(f: impl FnOnce(&str) -> ElevatedCapture + 'static) {
+pub(crate) fn fake_next_capture(f: impl FnOnce(&ElevatedRequest) -> ElevatedCapture + 'static) {
     FAKE_CAPTURE.with(|c| *c.borrow_mut() = Some(Box::new(f)));
 }
 
@@ -1007,8 +1008,8 @@ impl ElevationDeferral {
         ELEVATION_SINK.with(|s| s.borrow().as_ref().map(|v| v.len()).unwrap_or(0))
     }
 
-    /// Take every captured command and disarm the sink (consumes the guard).
-    pub(crate) fn take_deferred(self) -> Vec<String> {
+    /// Take every captured op and disarm the sink (consumes the guard).
+    pub(crate) fn take_deferred(self) -> Vec<ElevatedOp> {
         ELEVATION_SINK.with(|s| s.borrow_mut().take().unwrap_or_default())
     }
 }
@@ -1112,7 +1113,7 @@ pub(crate) fn parse_batch_receipts(text: &str, nonce: &str) -> std::collections:
 pub(crate) const ELEVATION_DECLINED_MSG: &str =
     "You didn't approve the elevation prompt — nothing was changed.";
 
-/// Exit code of the elevated command helper (`compy.exe --run-elevated`, lib.rs) when it was approved
+/// Exit code of the elevated command helper (`compy.exe --run-elevated-op`, lib.rs) when it was approved
 /// but Windows PowerShell itself could not be STARTED (missing, or the system directory unreadable
 /// so the resolver failed closed): no command ran. Hardening 1b. Chosen far from the small codes
 /// PowerShell and the system tools return (an elevated command may not contain `exit`).
@@ -1124,20 +1125,9 @@ pub(crate) const HELPER_POWERSHELL_NOT_STARTED: i32 = 0x4350_5334;
 pub(crate) const HELPER_POWERSHELL_NOT_STARTED_MSG: &str =
     "Windows PowerShell did not start in the administrator helper, so no command ran.";
 
-/// Exit code of the elevated command helper when it refused the dispatch because its one-time ticket
-/// did not check out (missing, not a plain single-link file at the planned place, or not this command):
-/// it refuses before running anything. Hardening slice 2 (review r1): this used to be exit 3, which the
-/// parent read as "you approved, but the operation itself failed". Chosen beside
-/// [`HELPER_POWERSHELL_NOT_STARTED`], far from the small codes PowerShell and the system tools return.
-pub(crate) const HELPER_TICKET_REFUSED: i32 = 0x4350_5333;
-
-/// What the parent says for [`HELPER_TICKET_REFUSED`]. Matched exactly by `elevation_error_nothing_ran`.
-pub(crate) const HELPER_TICKET_REFUSED_MSG: &str =
-    "The administrator helper could not confirm this command was the one Compy sent, so no command ran.";
-
 /// A5 Part A: exit code of the elevated command helper when it was given a results pipe (`--pipe`) and
-/// could not open it or confirm Compy serves it. It refuses BEFORE the ticket and before PowerShell, so no
-/// command ran.
+/// could not open it or confirm Compy serves it. It refuses BEFORE reading any request and before
+/// PowerShell, so no command ran. (A9: 0x4350_5333, the deleted ticket refusal, is not reused.)
 pub(crate) const HELPER_CHANNEL_REFUSED: i32 = 0x4350_5335;
 
 /// What the parent says for [`HELPER_CHANNEL_REFUSED`]. Matched exactly by `elevation_error_nothing_ran`.
@@ -1146,8 +1136,8 @@ pub(crate) const HELPER_CHANNEL_REFUSED_MSG: &str =
 
 /// A8 (plan a5 v4 §2): exit code of the TYPED elevated helper entry when the request itself is malformed (bad
 /// hex, not UTF-8, an unknown op or field, a value outside its grammar, a bad item count or shape). It refuses
-/// before any read and before PowerShell, so no command ran. Only the typed entry emits it, and that entry is
-/// compiled only behind the `elevated-op-entry` feature until Slice 2.
+/// before any read and before PowerShell, so no command ran. A9: main.rs's refusal of the deleted generic
+/// `--run-elevated` form exits with it too (nothing is decoded or run).
 pub(crate) const HELPER_REQUEST_REFUSED: i32 = 0x4350_5336;
 
 /// What the parent says for [`HELPER_REQUEST_REFUSED`]. Matched exactly by `elevation_error_nothing_ran`.
@@ -1177,25 +1167,27 @@ pub(crate) struct ElevatedCapture {
 /// The most output one elevated dispatch may relay (a 32-item batch writes about 2 KiB).
 const CAPTURE_MAX_BYTES: usize = 1024 * 1024;
 
-/// A5 Part A: run ONE elevated command whose output carries results (a batch's receipts, the memory-
-/// compression restore's prior). Same helper, same ticket, same argument name as
-/// [`run_elevated_powershell`]; in addition the app creates a pipe for this dispatch and the helper relays
-/// PowerShell's output into it. Nothing is written to, or read from, the data folder. Never captured by the
-/// deferral sink: a capture IS a batch's one elevation.
+/// A5 Part A / A9: run ONE typed elevated request whose output carries results (a batch's receipts, the
+/// memory-compression restore's prior) through the typed helper entry. The app creates a pipe for this
+/// dispatch and the helper relays PowerShell's output, and its own per-item `fail` lines, into it. Nothing is
+/// written to, or read from, the data folder. Never captured by the deferral sink: a capture IS a batch's one
+/// elevation. A9: the request is data (closed ops, checked again by the helper); no script text and no ticket.
 ///
-/// `run` follows `elevation_outcome` exactly; a pipe the app cannot create is a pre-launch refusal (nothing
-/// ran). The caller decides what missing lines mean (history.rs `elevated_item_outcome`, gaming
-/// `resolve_tier_elevation` / `resolve_restore_batch`, [`memcompress_outcome`]); a broken channel after launch
-/// is never one of the "nothing ran" errors.
-pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
+/// `run` follows `elevation_outcome` exactly; a pipe the app cannot create, or a request that would not fit,
+/// is a pre-launch refusal (nothing ran). The caller decides what missing lines mean (history.rs
+/// `elevated_item_outcome`, gaming `resolve_tier_elevation` / `resolve_restore_batch`, [`memcompress_outcome`]);
+/// a broken channel after launch is never one of the "nothing ran" errors.
+pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCapture {
     let none = |run: Result<(), String>| ElevatedCapture { run, text: String::new() };
-    let owned = with_error_action_stop(command);
-    let command: &str = &owned;
     // Test-only (owner-present QA harnesses): the direct-elevation seam elevates powershell.exe through
     // ShellExecute, which cannot hand back output, so the output goes to a temp file the test reads back.
-    // It dispatches through `run_elevated_powershell` (which counts it), so it comes before the count.
+    // `qa_elevate_direct` counts the dispatch itself, so this comes before the count.
     #[cfg(test)]
     if FORCE_DIRECT_ELEVATION.with(|f| *f.borrow()) {
+        let command = match crate::elevated_ops::compose_for_direct(req) {
+            Ok(c) => c,
+            Err(e) => return none(Err(e)),
+        };
         let out = std::env::temp_dir().join(format!("compy-qa-{}.out", std::process::id()));
         let _ = std::fs::remove_file(&out);
         // A6: the same five-quote escape as every other single-quoted value (test-only temp path).
@@ -1203,7 +1195,7 @@ pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
             Ok(l) => l,
             Err(e) => return none(Err(e)),
         };
-        let run = run_elevated_powershell(&format!("& {{ {command} }} | Out-File -LiteralPath '{lit}' -Encoding ascii"));
+        let run = qa_elevate_direct(&format!("& {{ {command} }} | Out-File -LiteralPath '{lit}' -Encoding ascii"));
         let text = std::fs::read_to_string(&out).unwrap_or_default();
         let _ = std::fs::remove_file(&out);
         return ElevatedCapture { run, text };
@@ -1212,7 +1204,7 @@ pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
     ELEVATION_DISPATCH_COUNT.with(|c| c.set(c.get() + 1));
     #[cfg(test)]
     if let Some(fake) = FAKE_CAPTURE.with(|f| f.borrow_mut().take()) {
-        return fake(command);
+        return fake(req);
     }
     #[cfg(test)]
     if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
@@ -1222,19 +1214,15 @@ pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
         Ok(e) => e,
         Err(e) => return none(Err(format!("cannot find own exe: {e}"))),
     };
-    let encoded = to_hex(command.as_bytes());
-    if encoded.len() > 30_000 {
-        return none(Err("elevated command is too long to dispatch".to_string()));
-    }
+    let encoded = match typed_request_hex(req) {
+        Ok(h) => h,
+        Err(e) => return none(Err(e)),
+    };
     let pipe = match crate::fps_pipe::ServerPipe::create() {
         Ok(p) => p,
         Err(e) => return none(Err(format!("{RESULTS_CHANNEL_NOT_CREATED}: {e}"))),
     };
     let name = pipe.name.clone();
-    let ticket = match mint_elevation_ticket(&encoded) {
-        Ok(t) => t,
-        Err(e) => return none(Err(e)),
-    };
     let launched = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let (l2, d2) = (launched.clone(), done.clone());
@@ -1254,9 +1242,8 @@ pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
     let res = elevate_and_wait_with(
         exe.as_os_str(),
         &[
-            std::ffi::OsStr::new("--run-elevated"),
+            std::ffi::OsStr::new(crate::ELEVATED_OP_FLAG),
             std::ffi::OsStr::new(&encoded),
-            ticket.as_os_str(),
             std::ffi::OsStr::new("--pipe"),
             std::ffi::OsStr::new(&name),
             std::ffi::OsStr::new("--parent-pid"),
@@ -1269,8 +1256,23 @@ pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
     finish();
     // The helper's exit closed its end of the pipe, so the reader is at end of file (or never accepted).
     let lines = reader.join().map(|(lines, _end)| lines).unwrap_or_default();
-    let _ = std::fs::remove_file(&ticket);
     ElevatedCapture { run: elevation_outcome(res), text: lines.join("\n") }
+}
+
+/// A9: the start of the pre-launch refusal when the app cannot put a typed request into the form the helper
+/// accepts (its results key could not be made, or the request fails the checks the helper will make). Nothing
+/// was launched; `elevation_error_nothing_ran` matches it.
+pub(crate) const TYPED_REQUEST_NOT_PREPARED: &str = "elevated request could not be prepared";
+
+/// A9: the typed request as its one argv value: the hex of its JSON, refused when it would not fit the helper's
+/// cap (the helper refuses the same length). The request was checked whole when it was built.
+fn typed_request_hex(req: &ElevatedRequest) -> Result<String, String> {
+    let json = serde_json::to_string(req).map_err(|e| format!("{TYPED_REQUEST_NOT_PREPARED}: {e}"))?;
+    let encoded = to_hex(json.as_bytes());
+    if encoded.len() > crate::elevated_ops::MAX_HEX_LEN {
+        return Err("elevated command is too long to dispatch".to_string());
+    }
+    Ok(encoded)
 }
 
 /// Quote one argument per the MSVC CommandLineToArgvW rules: bare if it has no space/tab/quote,
@@ -1491,7 +1493,6 @@ pub(crate) fn elevation_outcome(
         Err(e) if e.raw_os_error() == Some(ERROR_CANCELLED) => Err(ELEVATION_DECLINED_MSG.into()),
         Err(e) => Err(format!("could not launch elevated process: {}", e)),
         Ok(s) if s.code() == Some(HELPER_POWERSHELL_NOT_STARTED) => Err(HELPER_POWERSHELL_NOT_STARTED_MSG.into()),
-        Ok(s) if s.code() == Some(HELPER_TICKET_REFUSED) => Err(HELPER_TICKET_REFUSED_MSG.into()),
         Ok(s) if s.code() == Some(HELPER_CHANNEL_REFUSED) => Err(HELPER_CHANNEL_REFUSED_MSG.into()),
         Ok(s) if s.code() == Some(HELPER_REQUEST_REFUSED) => Err(HELPER_REQUEST_REFUSED_MSG.into()),
         Ok(s) if s.code() == Some(HELPER_SAVED_VALUE_NO_MATCH) => Err(HELPER_SAVED_VALUE_NO_MATCH_MSG.into()),
@@ -1515,15 +1516,15 @@ pub(crate) fn elevation_outcome(
 pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
     err == ELEVATION_DECLINED_MSG
         || err == HELPER_POWERSHELL_NOT_STARTED_MSG
-        || err == HELPER_TICKET_REFUSED_MSG
         || err == HELPER_CHANNEL_REFUSED_MSG
         || err == HELPER_REQUEST_REFUSED_MSG
         || err == HELPER_SAVED_VALUE_NO_MATCH_MSG
+        || err == STORED_RECORD_REFUSED_UNDO
+        || err.starts_with(TYPED_REQUEST_NOT_PREPARED)
         || err.starts_with(RESULTS_CHANNEL_NOT_CREATED)
         || err.starts_with("could not launch elevated process")
         || err.starts_with("cannot find own exe")
         || err.starts_with("elevated command is too long to dispatch")
-        || err.starts_with("elevated dispatch ticket could not be minted")
 }
 
 /// Promote non-terminating cmdlet errors to terminating ones for a SINGLE elevated command, so a
@@ -1541,105 +1542,125 @@ pub(crate) fn with_error_action_stop(command: &str) -> std::borrow::Cow<'_, str>
     }
 }
 
-pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
-    // §4 batching: an armed sink on THIS thread captures instead of elevating (see above).
-    let deferred = ELEVATION_SINK.with(|s| {
+/// A9 (plan a5 v4 Slice 2): run ONE typed elevated operation alone, through the typed helper entry
+/// (`compy.exe --run-elevated-op <hex JSON>`). The op is data from the closed set; the helper checks it again
+/// and composes the script from the same builders the A8 goldens pin. There is no script-text entry any more.
+///
+/// The op is checked first (its own shape: target counts, init <= max); a failure refuses before anything is
+/// parked or launched. Then, §4 batching: an armed sink on THIS thread captures the op instead of elevating.
+/// A single (non-batched) op is run with `$ErrorActionPreference='Stop'` by the helper (`with_error_action_stop`,
+/// the false-ledger guard), exactly as the old single path did.
+pub(crate) fn run_elevated_op(op: ElevatedOp) -> Result<(), String> {
+    op.validate()
+        .map_err(|_| format!("{TYPED_REQUEST_NOT_PREPARED}: the operation is not one the helper accepts"))?;
+    let parked = ELEVATION_SINK.with(|s| {
         if let Some(sink) = s.borrow_mut().as_mut() {
-            sink.push(command.to_string());
+            sink.push(op.clone());
             true
         } else {
             false
         }
     });
-    if deferred {
+    if parked {
         return Ok(());
     }
-    // A single (non-batched) elevated command must promote non-terminating cmdlet errors to
-    // terminating ones. Otherwise a cmdlet that "fails" without throwing (e.g.
-    // Set-WindowsReservedStorageState mid state-transition, or a policy/pending-reboot block) still
-    // exits 0, run_elevated_powershell returns Ok, and we'd record a mutation that never happened as
-    // a successful, rollback-eligible apply — a false ledger entry. The §4 batch path already does
-    // this in compose_batch_script; this is the same guard for the single-command path. Skip if the
-    // caller already set it (some apply builders embed it in a multi-statement script).
-    let owned = with_error_action_stop(command);
-    let command: &str = &owned;
-    // Test-only: count every invocation that gets PAST the sink — i.e. every call that would show
-    // a UAC prompt in production (the decline/direct seams below still count: they stand in for a
-    // real dispatch; the two pre-launch refusals further down count too — over-counting only makes
-    // the ≤1 guard stricter). This is the dispatch-layer evidence for the "≤1 elevation per
-    // gaming-session start" guard; a sink-captured call above is deliberately NOT counted.
+    // Test-only: count every invocation that gets PAST the sink — i.e. every call that would show a UAC
+    // prompt in production (the decline/direct seams below still count: they stand in for a real dispatch).
+    // This is the dispatch-layer evidence for the "≤1 elevation per gaming-session start" guard; a
+    // sink-captured call above is deliberately NOT counted.
     #[cfg(test)]
     ELEVATION_DISPATCH_COUNT.with(|c| c.set(c.get() + 1));
-    // Test-only seam: deterministically simulate a UAC DECLINE without a real elevation (which would
-    // pop a real Secure-Desktop prompt). Returns the same constant as a real decline so the
-    // simulated and real paths can't drift. `#[cfg(test)]` removes it from the shipped binary.
+    // Test-only seam: deterministically simulate a UAC DECLINE without a real elevation. Returns the same
+    // constant as a real decline so the simulated and real paths can't drift. Never shipped.
     #[cfg(test)]
     if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
         return Err(ELEVATION_DECLINED_MSG.to_string());
     }
-    // Test-only: elevate powershell DIRECTLY so live-QA elevated commands actually run under `cargo test`
-    // (the Wave-0 self-helper below re-launches the test binary → exit 101). #[cfg(test)] → never shipped.
+    let nonce = crate::fps_pipe::random_hex().map_err(|e| format!("{TYPED_REQUEST_NOT_PREPARED}: {e}"))?;
+    let req = ElevatedRequest::single(op, &nonce)
+        .map_err(|_| format!("{TYPED_REQUEST_NOT_PREPARED}: the operation is not one the helper accepts"))?;
+    // Test-only: elevate powershell DIRECTLY with the script the helper would compose, so live-QA elevated
+    // steps actually run under `cargo test` (the test binary has no helper entry). Never shipped.
     #[cfg(test)]
     if FORCE_DIRECT_ELEVATION.with(|f| *f.borrow()) {
-        // Write the command to a temp .ps1 and run it elevated via -File — sidesteps Windows
-        // command-line quoting for commands with spaces / quotes / backslashes (e.g. scheduled-task
-        // paths) that -Command mangles. Test-only; cleaned up after. (Production hex-encodes instead.)
-        let tmp = std::env::temp_dir().join(format!("compy-qa-{}.ps1", std::process::id()));
-        // A6 review r1: with a UTF-8 BOM, so Windows PowerShell 5.1 reads it as UTF-8, not ANSI (cp1252 would
-        // turn bytes 0x91/0x92 of a non-ASCII character into a quote, unlike the shipped -Command transport).
-        let bytes = [&[0xEFu8, 0xBB, 0xBF][..], command.as_bytes()].concat();
-        std::fs::write(&tmp, bytes).map_err(|e| format!("qa seam: temp write failed: {e}"))?;
-        let ps_exe = crate::sys_exe::sys_tool_path(SysTool::PowerShell);
-        let out = elevation_outcome(elevate_and_wait(
-            ps_exe.as_os_str(),
-            &[
-                std::ffi::OsStr::new("-NoProfile"),
-                std::ffi::OsStr::new("-ExecutionPolicy"),
-                std::ffi::OsStr::new("Bypass"),
-                std::ffi::OsStr::new("-File"),
-                tmp.as_os_str(),
-            ],
-        ));
-        let _ = std::fs::remove_file(&tmp);
-        return out;
+        let script = crate::elevated_ops::compose_for_direct(&req)?;
+        return qa_elevate_direct_uncounted(&script);
     }
-    // Wave 0 — silence the elevated console: route the command through a WINDOWLESS compy.exe
-    // self-helper instead of elevating powershell.exe directly. An elevated launch is recreated by
-    // the UAC broker (AppInfo) with its OWN window settings, so SW_HIDE can't stop a console-subsystem
-    // app (powershell.exe) from briefly flashing a console. compy.exe is windows-subsystem in release
-    // (no console EVER) and runs powershell via quiet_command (CREATE_NO_WINDOW) — so no console
-    // exists to flash. The helper exits with powershell's exit code, so elevation_outcome's attribution
-    // is preserved EXACTLY: a real UAC decline is still a LAUNCH error 1223 (the user dismissing the
-    // compy.exe prompt), a non-zero exit is still "approved but the operation failed", 0 is success.
-    // The command is hex-encoded into ONE argv (no temp file → no TOCTOU / cleanup); it was already
-    // validated by validate_command before reaching here. UAC consent stays OS-controlled + visible
-    // (the prompt now names compy.exe — consistent with how the FPS helper already elevates).
+    // Wave 0: route through a WINDOWLESS compy.exe self-helper (no console flash), which exits with
+    // PowerShell's exit code (or one of its own "nothing ran" codes), so `elevation_outcome`'s attribution is
+    // exact: a real UAC decline is a LAUNCH error 1223, a non-zero exit is "approved but the operation failed".
     let exe = std::env::current_exe().map_err(|e| format!("cannot find own exe: {e}"))?;
-    let encoded = to_hex(command.as_bytes());
-    // The frozen catalog never approaches this, but never silently truncate a command line (Windows
-    // caps it ~32k chars) — fail loud instead.
-    if encoded.len() > 30_000 {
-        return Err("elevated command is too long to dispatch".to_string());
-    }
-    // Boundary-side second lock: mint the one-time dispatch ticket the helper will demand (see
-    // mint_elevation_ticket). Mint failure is a third pre-launch refusal — nothing ran.
-    let ticket = mint_elevation_ticket(&encoded)?;
-    let outcome = elevation_outcome(elevate_and_wait(
+    let encoded = typed_request_hex(&req)?;
+    elevation_outcome(elevate_and_wait(
         exe.as_os_str(),
-        &[
-            std::ffi::OsStr::new("--run-elevated"),
-            std::ffi::OsStr::new(&encoded),
-            ticket.as_os_str(),
-        ],
-    ));
-    // The helper consumes the ticket on the success path; a UAC decline / launch failure leaves
-    // it behind — clean up either way (best-effort, idempotent).
-    let _ = std::fs::remove_file(&ticket);
-    outcome
+        &[std::ffi::OsStr::new(crate::ELEVATED_OP_FLAG), std::ffi::OsStr::new(&encoded)],
+    ))
 }
 
-/// Hex-encode bytes so an elevated command can ride as a single, quoting-safe argv to the
-/// `--run-elevated` helper (Wave 0). Pure; round-trips with `from_hex`. Lowercase, fixed 2 chars/byte.
+/// A9: an UNDO's typed op. A stored record that fails the stricter checks of the closed set (its own shape
+/// here, or the helper's saved-value check: the setting it names no longer matches this PC) refuses with the
+/// ONE fixed sentence [`STORED_RECORD_REFUSED_UNDO`]; nothing ran, and the Err leaves the ledger row listed.
+pub(crate) fn run_elevated_undo_op(op: ElevatedOp) -> Result<(), String> {
+    if op.validate().is_err() {
+        return Err(STORED_RECORD_REFUSED_UNDO.to_string());
+    }
+    run_elevated_op(op).map_err(|e| if e == HELPER_SAVED_VALUE_NO_MATCH_MSG { STORED_RECORD_REFUSED_UNDO.to_string() } else { e })
+}
+
+/// A9 (owner decision: one fixed sentence, the row stays listed): an undo refused because its stored record
+/// fails the stricter checks of the closed elevated set (a saved value outside the set's grammar, or a saved
+/// setting the administrator helper no longer finds on this PC). Nothing ran; the Err leaves the row listed,
+/// it is never dropped or closed. Mirrored byte-for-byte in `src/data/backend-error.ts`.
+pub(crate) const STORED_RECORD_REFUSED_UNDO: &str = "Compy couldn't use this change's saved details for an administrator step, so it didn't run the undo. The change stays in your Trust Ledger.";
+
+/// Test-only: the direct-elevation seam itself (powershell.exe elevated with a temp `.ps1`). Counts as one
+/// dispatch and honours the forced decline, like a real dispatch. Never shipped.
+#[cfg(test)]
+fn qa_elevate_direct(command: &str) -> Result<(), String> {
+    ELEVATION_DISPATCH_COUNT.with(|c| c.set(c.get() + 1));
+    if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
+        return Err(ELEVATION_DECLINED_MSG.to_string());
+    }
+    qa_elevate_direct_uncounted(&with_error_action_stop(command))
+}
+
+/// Test-only: elevate powershell.exe DIRECTLY on `command` (already counted by the caller).
+#[cfg(test)]
+fn qa_elevate_direct_uncounted(command: &str) -> Result<(), String> {
+    // Write the command to a temp .ps1 and run it elevated via -File — sidesteps Windows command-line quoting
+    // for commands with spaces / quotes / backslashes. Test-only; cleaned up after.
+    let tmp = std::env::temp_dir().join(format!("compy-qa-{}.ps1", std::process::id()));
+    // A6 review r1: with a UTF-8 BOM, so Windows PowerShell 5.1 reads it as UTF-8, not ANSI.
+    let bytes = [&[0xEFu8, 0xBB, 0xBF][..], command.as_bytes()].concat();
+    std::fs::write(&tmp, bytes).map_err(|e| format!("qa seam: temp write failed: {e}"))?;
+    let ps_exe = crate::sys_exe::sys_tool_path(SysTool::PowerShell);
+    let out = elevation_outcome(elevate_and_wait(
+        ps_exe.as_os_str(),
+        &[
+            std::ffi::OsStr::new("-NoProfile"),
+            std::ffi::OsStr::new("-ExecutionPolicy"),
+            std::ffi::OsStr::new("Bypass"),
+            std::ffi::OsStr::new("-File"),
+            tmp.as_os_str(),
+        ],
+    ));
+    let _ = std::fs::remove_file(&tmp);
+    out
+}
+
+/// Test-only (owner-present live-QA harnesses that seed or clean a machine state with their own script): run
+/// raw PowerShell elevated through the direct-elevation seam ONLY. Outside that seam it refuses; shipped code
+/// has no way to run script text elevated. Never shipped.
+#[cfg(test)]
+pub(crate) fn qa_run_elevated_script(command: &str) -> Result<(), String> {
+    if !FORCE_DIRECT_ELEVATION.with(|f| *f.borrow()) {
+        return Err("qa seam: a raw script runs only under ForceDirectElevation".to_string());
+    }
+    qa_elevate_direct(command)
+}
+
+/// Hex-encode bytes so an elevated request can ride as a single, quoting-safe argv to the
+/// `--run-elevated-op` helper (Wave 0; A9: the JSON of a typed request). Pure; round-trips with `from_hex`. Lowercase, fixed 2 chars/byte.
 pub(crate) fn to_hex(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
@@ -1667,138 +1688,10 @@ pub(crate) fn from_hex(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-// ─── Elevated-dispatch ticket — the boundary-side second lock (2026-07-15) ──────────────────────
-//
-// The `--run-elevated` helper entry used to run whatever hex it was handed; ALL validation lived
-// caller-side (typed dispatch + ps_safe in this file). Not a live hole — the entry grants no
-// privilege by itself (an external caller runs at its own IL behind its own UAC prompt) — but a
-// future confused-deputy bug could hand it attacker-influenced hex. The ticket is the second lock
-// AT the boundary: `run_elevated_powershell` (the ONLY dispatch point, where every command has
-// already passed validation) mints a one-time file whose content is the EXACT hex it is about to
-// dispatch; the helper refuses any hex that doesn't byte-match its ticket and consumes the ticket
-// before running, so a given dispatch executes at most once. Because the check is content-agnostic
-// exact-equality with what the parent just minted, it can never false-reject a legitimate apply —
-// every apply builder's output passes by construction, present and future.
-
-/// Mint the one-time dispatch ticket for one `--run-elevated` launch. Returns the ticket path to
-/// pass as the helper's second argument. A mint failure is a PRE-LAUNCH refusal (nothing ran) —
-/// the error string is classified by `elevation_error_nothing_ran`.
-pub(crate) fn mint_elevation_ticket(encoded: &str) -> Result<std::path::PathBuf, String> {
-    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let dir = crate::compy_data_dir().join("runtime");
-    mint_elevation_ticket_in(&dir, encoded, SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
-}
-
-/// The mint itself, in a given folder (tests use a scratch folder). Hardening slice 2 (F5): the folder
-/// is resolved to its FINAL path first (every junction on the way followed), so the path handed to the
-/// helper is the one the helper's handle check will see, and the file is created with `create_new`: an
-/// existing file, or a link planted under the name, is refused instead of written through.
-pub(crate) fn mint_elevation_ticket_in(dir: &std::path::Path, encoded: &str, seq: u64) -> Result<std::path::PathBuf, String> {
-    use std::io::Write;
-    let minted = |e: std::io::Error| format!("elevated dispatch ticket could not be minted: {e}");
-    std::fs::create_dir_all(dir).map_err(minted)?;
-    let dir = std::fs::canonicalize(dir).map_err(minted)?;
-    // pid + per-process sequence keeps concurrent dispatches (and processes) from colliding.
-    let path = dir.join(format!("elev-{}-{}.ticket", std::process::id(), seq));
-    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&path).map_err(minted)?;
-    if let Err(e) = f.write_all(encoded.as_bytes()) {
-        drop(f);
-        let _ = std::fs::remove_file(&path);
-        return Err(minted(e));
-    }
-    Ok(path)
-}
-
-/// PURE: the ticket's file name is exactly `elev-<digits>-<digits>.ticket` inside a folder named
-/// `runtime`. The helper refuses any other path before opening anything.
-pub(crate) fn is_ticket_path(path: &std::path::Path) -> bool {
-    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
-    let name_ok = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .and_then(|n| n.strip_prefix("elev-"))
-        .and_then(|n| n.strip_suffix(".ticket"))
-        .and_then(|n| n.split_once('-'))
-        .is_some_and(|(pid, seq)| digits(pid) && digits(seq));
-    let dir_ok = path
-        .parent()
-        .and_then(|p| p.file_name())
-        .and_then(|n| n.to_str())
-        .is_some_and(|n| n.eq_ignore_ascii_case("runtime"));
-    name_ok && dir_ok
-}
-
-/// Helper-side verify-and-consume. True ⇒ the ticket file byte-equals the received hex; it is
-/// deleted (consume-once) before the command runs. Any failure ⇒ false, and the helper runs NOTHING.
-/// The ticket path arrives via argv (rather than being re-derived helper-side) so a machine where UAC
-/// elevates as a different account — where %APPDATA% resolves differently in the child — can never
-/// false-reject.
-///
-/// Hardening slice 2 (F5): read and delete go through ONE handle. It used to read by path and then
-/// delete by path as admin; swapping the file between the two (an oplock makes the window wide) put the
-/// admin delete wherever the swap pointed. Now: one open with share mode 0 and
-/// FILE_FLAG_OPEN_REPARSE_POINT (a link is opened as the link, never followed); refuse a link, a folder,
-/// a file with a second hard link, or a file whose final path is not exactly the argv path (a junction
-/// on the way); read through the handle; compare; delete through the same handle. A rejected probe
-/// leaves the ticket in place (the legitimate dispatch still verifies). A failed delete after a match
-/// now refuses too: the ticket must be consumed for the command to run.
-pub(crate) fn consume_elevation_ticket(encoded: &str, ticket_path: &str) -> bool {
-    let path = std::path::Path::new(ticket_path);
-    is_ticket_path(path) && consume_ticket_by_handle(encoded.as_bytes(), path).is_ok()
-}
-
-#[cfg(windows)]
-fn consume_ticket_by_handle(expected: &[u8], path: &std::path::Path) -> Result<(), &'static str> {
-    use std::io::Read;
-    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
-    use std::os::windows::io::AsRawHandle;
-    const GENERIC_READ: u32 = 0x8000_0000;
-    const DELETE: u32 = 0x0001_0000;
-    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-    const ATTR_REPARSE_POINT: u32 = 0x400;
-    const ATTR_DIRECTORY: u32 = 0x10;
-    let mut file = std::fs::OpenOptions::new()
-        .access_mode(GENERIC_READ | DELETE)
-        .share_mode(0)
-        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path)
-        .map_err(|_| "open")?;
-    let attrs = file.metadata().map_err(|_| "metadata")?.file_attributes();
-    if attrs & (ATTR_REPARSE_POINT | ATTR_DIRECTORY) != 0 {
-        return Err("not a plain file");
-    }
-    if ticket_link_count(file.as_raw_handle()) != Some(1) {
-        return Err("hard link");
-    }
-    let final_path = crate::win_handle::final_path(file.as_raw_handle()).map_err(|_| "final path")?;
-    if crate::win_handle::normalize(&final_path) != crate::win_handle::normalize(&path.to_string_lossy()) {
-        return Err("moved");
-    }
-    let mut content = Vec::with_capacity(expected.len() + 1);
-    file.by_ref().take(expected.len() as u64 + 1).read_to_end(&mut content).map_err(|_| "read")?;
-    if content != expected {
-        return Err("mismatch");
-    }
-    crate::win_handle::delete_on_close(file.as_raw_handle()).map_err(|_| "delete")?;
-    Ok(())
-    // The handle closes here: the ticket is gone.
-}
-
-/// The open file's hard-link count, through data_root.rs's one hand declaration of
-/// GetFileInformationByHandle (a second declaration with another signature does not compile). None
-/// when it cannot be read.
-#[cfg(windows)]
-fn ticket_link_count(handle: std::os::windows::io::RawHandle) -> Option<u32> {
-    crate::data_root::link_count(handle)
-}
-
-#[cfg(not(windows))]
-fn consume_ticket_by_handle(expected: &[u8], path: &std::path::Path) -> Result<(), &'static str> {
-    match std::fs::read(path) {
-        Ok(content) if content == expected => std::fs::remove_file(path).map_err(|_| "delete"),
-        _ => Err("mismatch"),
-    }
-}
+// A9 (plan a5 v4 Slice 2): the generic `--run-elevated <hex> <ticket>` entry, its one-time dispatch ticket
+// (mint, consume-by-handle, `HELPER_TICKET_REFUSED`) and the script-text runner are gone. The only elevated
+// entry is the typed `--run-elevated-op` (elevated_ops.rs): a same-user program can no longer hand Compy's
+// helper script text; the most it can ask for is one op of the closed set with values inside its grammar.
 
 /// Defense-in-depth against elevated-command injection. Any value interpolated into a
 /// `run_elevated_powershell` command string must pass this first. Today every such token comes from
@@ -2055,8 +1948,7 @@ mod ps_injection_tests {
 #[cfg(test)]
 mod batch_elevation_tests {
     use super::{
-        compose_batch_script, from_hex, parse_batch_receipts, run_elevated_powershell, to_hex,
-        ElevationDeferral,
+        compose_batch_script, from_hex, parse_batch_receipts, run_elevated_op, to_hex, ElevationDeferral,
     };
 
     #[test]
@@ -2079,179 +1971,18 @@ mod batch_elevation_tests {
         assert_eq!(from_hex("6x"), None); // one bad nibble
     }
 
-    // ── the `--run-elevated` boundary-side second lock (dispatch ticket) ────────────────
-
-    #[test]
-    fn boundary_rejects_foreign_hex_both_ways() {
-        use super::{consume_elevation_ticket, mint_elevation_ticket};
-        let foreign = to_hex(b"Stop-Computer");
-        // No ticket at all — an external / confused-deputy caller handing the helper its own hex.
-        assert!(!consume_elevation_ticket(&foreign, r"C:\__compy_qa_missing__\no.ticket"));
-        // A REAL ticket exists, but for a DIFFERENT command — swapped hex is rejected too, and
-        // the failed probe must NOT burn the ticket (the legitimate dispatch still verifies).
-        let legit = to_hex(b"exit 0");
-        let ticket = mint_elevation_ticket(&legit).expect("mint");
-        let ticket_s = ticket.to_string_lossy().to_string();
-        assert!(!consume_elevation_ticket(&foreign, &ticket_s));
-        assert!(ticket.exists(), "a rejected probe must not consume the legit ticket");
-        assert!(consume_elevation_ticket(&legit, &ticket_s));
-        assert!(!ticket.exists(), "a verified dispatch consumes its ticket");
-    }
-
-    #[test]
-    fn boundary_accepts_every_dispatch_shape_and_consumes_once() {
-        use super::{consume_elevation_ticket, mint_elevation_ticket};
-        // The lock is exact-equality with what run_elevated_powershell just minted, so every
-        // apply builder's output passes BY CONSTRUCTION — no shape grammar to false-reject.
-        // Pinned with the gnarliest real payload (a composed §4 batch script: quote-escaped
-        // paths, receipts, multi-command items) plus the hex round-trip torture set.
-        let items = vec![
-            ("fast-startup-off".to_string(), vec!["cmdA1; ".to_string()]),
-            ("hags-enable".to_string(), vec!["cmdB1".to_string(), "cmdB2;".to_string()]),
-        ];
-        let batch = compose_batch_script(&items, "0123456789abcdef0123456789abcdef").expect("compose");
-        for cmd in [
-            batch.as_str(),
-            "powercfg /setactive 12345678-90ab-cdef-1234-567890abcdef",
-            "try { Set-ItemProperty 'X' -Value 0 } catch { 'fail' }; $x = \"q\"\n\t end",
-            "üñîçødé ⚡",
-        ] {
-            let encoded = to_hex(cmd.as_bytes());
-            let ticket = mint_elevation_ticket(&encoded).expect("mint");
-            let ticket_s = ticket.to_string_lossy().to_string();
-            assert!(consume_elevation_ticket(&encoded, &ticket_s), "must pass: {cmd:.60}");
-            // Consume-once: the same hex cannot ride the same ticket twice.
-            assert!(!consume_elevation_ticket(&encoded, &ticket_s));
-            assert!(!ticket.exists());
-        }
-    }
-
-    // ── hardening slice 2 (F5): the ticket is read and deleted through one handle ───────────────
-
-    /// A `runtime` folder in a fresh scratch folder, its final path, and a minted ticket in it.
-    fn scratch_ticket(label: &str, hex: &str) -> (crate::test_scratch::Scratch, std::path::PathBuf) {
-        let s = crate::test_scratch::scratch_child(label, "runtime");
-        let t = super::mint_elevation_ticket_in(&s, hex, 1).expect("mint");
-        (s, t)
-    }
-
-    #[test]
-    fn only_a_ticket_shaped_path_is_opened() {
-        use super::is_ticket_path;
-        use std::path::Path;
-        assert!(is_ticket_path(Path::new(r"\\?\C:\x\Compy\runtime\elev-12-3.ticket")));
-        assert!(is_ticket_path(Path::new(r"C:\x\Runtime\elev-1-0.ticket")));
-        for bad in [
-            r"C:\x\runtime\elev-12-3.ticket.txt",
-            r"C:\x\runtime\elev-12.ticket",
-            r"C:\x\runtime\elev--3.ticket",
-            r"C:\x\runtime\elev-a-3.ticket",
-            r"C:\x\other\elev-12-3.ticket",
-            r"C:\Windows\System32\config\SAM",
-            r"elev-12-3.ticket",
-        ] {
-            assert!(!is_ticket_path(Path::new(bad)), "{bad}");
-        }
-    }
-
-    #[test]
-    fn the_mint_refuses_an_existing_name_instead_of_writing_through_it() {
-        let s = crate::test_scratch::scratch_child("ticket-mint-exists", "runtime");
-        let first = super::mint_elevation_ticket_in(&s, "aa", 7).expect("first mint");
-        let again = super::mint_elevation_ticket_in(&s, "bb", 7);
-        assert!(again.is_err(), "the same name must be refused, not overwritten");
-        assert_eq!(std::fs::read_to_string(&first).unwrap(), "aa", "the existing file is untouched");
-        assert!(first.to_string_lossy().starts_with(r"\\?\"), "the minted path is the folder's final path");
-    }
-
-    #[test]
-    fn a_ticket_is_consumed_through_its_handle_and_a_mismatch_leaves_it() {
-        let (_s, t) = scratch_ticket("ticket-consume", "abcd");
-        let ts = t.to_string_lossy().to_string();
-        assert!(!super::consume_elevation_ticket("abce", &ts));
-        assert!(!super::consume_elevation_ticket("abcd00", &ts), "a longer hex is a mismatch");
-        assert!(!super::consume_elevation_ticket("ab", &ts), "a shorter hex is a mismatch");
-        assert!(t.exists(), "rejected probes leave the ticket");
-        assert!(super::consume_elevation_ticket("abcd", &ts));
-        assert!(!t.exists(), "consumed through the handle");
-    }
-
-    #[test]
-    fn a_ticket_with_a_second_hard_link_is_refused_and_both_names_stay() {
-        let (s, t) = scratch_ticket("ticket-hardlink", "abcd");
-        let other = s.join("elsewhere.dat");
-        std::fs::hard_link(&t, &other).expect("hard link");
-        assert!(!super::consume_elevation_ticket("abcd", &t.to_string_lossy()));
-        assert!(t.exists() && other.exists(), "nothing deleted");
-    }
-
-    #[test]
-    fn a_ticket_reached_through_a_junction_is_refused_and_the_target_stays() {
-        // The argv path goes through a junction (`<scratch>\via\runtime` -> `<scratch>\real\runtime`): the
-        // handle's final path is not the argv path, so nothing is read or deleted.
-        let s = crate::test_scratch::scratch("ticket-junction");
-        let real = s.join("real").join("runtime");
-        std::fs::create_dir_all(&real).unwrap();
-        let t = super::mint_elevation_ticket_in(&real, "abcd", 2).expect("mint");
-        std::fs::create_dir_all(s.join("via")).unwrap();
-        let link = s.join("via").join("runtime");
-        let out = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
-            .args(["/c", "mklink", "/J"])
-            .arg(&link)
-            .arg(&real)
-            .output()
-            .expect("mklink");
-        assert!(out.status.success(), "mklink failed: {}", String::from_utf8_lossy(&out.stdout));
-        let via = link.join(t.file_name().unwrap());
-        assert!(!super::consume_elevation_ticket("abcd", &via.to_string_lossy()));
-        assert!(t.exists(), "the junction's target is untouched");
-        assert!(super::consume_elevation_ticket("abcd", &t.to_string_lossy()), "the real path still verifies");
-    }
-
-    #[test]
-    fn a_ticket_name_that_is_a_folder_or_link_is_refused() {
-        let s = crate::test_scratch::scratch_child("ticket-folder", "runtime");
-        std::fs::create_dir_all(&*s).unwrap();
-        let dir = s.canonicalize().unwrap().join("elev-1-5.ticket");
-        std::fs::create_dir(&dir).unwrap();
-        assert!(!super::consume_elevation_ticket("", &dir.to_string_lossy()));
-        assert!(dir.is_dir(), "a folder under the name is left alone");
-        // A junction under the ticket name, pointing at a folder holding a file: refused, target kept.
-        let target = s.join("target");
-        std::fs::create_dir(&target).unwrap();
-        std::fs::write(target.join("keep.txt"), "x").unwrap();
-        let link = s.canonicalize().unwrap().join("elev-1-6.ticket");
-        let out = crate::sys_exe::sys_command(crate::sys_exe::SysTool::Cmd)
-            .args(["/c", "mklink", "/J"])
-            .arg(&link)
-            .arg(&target)
-            .output()
-            .expect("mklink");
-        assert!(out.status.success());
-        assert!(!super::consume_elevation_ticket("", &link.to_string_lossy()));
-        assert!(target.join("keep.txt").exists());
-    }
-
-    /// Source pin: the helper side never deletes the ticket by path again.
-    #[test]
-    fn the_ticket_consume_deletes_only_through_its_handle() {
-        let src = include_str!("actions.rs");
-        let start = src.find("fn consume_ticket_by_handle(").expect("fn");
-        let body = &src[start..start + src[start..].find("\n}\n").expect("end")];
-        assert!(!body.contains("remove_file"), "no delete by path");
-        assert!(body.contains("share_mode(0)") && body.contains("FILE_FLAG_OPEN_REPARSE_POINT"));
-        assert!(body.contains("delete_on_close(file.as_raw_handle())"));
-    }
-
+    // A9: the ticket tests went with the hex entry and its ticket (the typed entry has no ticket, plan v4 §3).
     #[test]
     fn sink_captures_instead_of_elevating_and_disarms_on_take() {
         let guard = ElevationDeferral::begin().expect("arm");
         // With the sink armed this CAPTURES — it must not launch anything (no UAC in tests).
-        run_elevated_powershell("Get-Date | Out-Null").expect("captured, not run");
-        run_elevated_powershell("Get-Item X").expect("captured, not run");
+        // A9: typed ops.
+        use crate::elevated_ops::ElevatedOp;
+        run_elevated_op(ElevatedOp::HagsEnable {}).expect("captured, not run");
+        run_elevated_op(ElevatedOp::TcpAutotuning { disabled: false }).expect("captured, not run");
         assert_eq!(guard.deferred_count(), 2);
         let cmds = guard.take_deferred();
-        assert_eq!(cmds, vec!["Get-Date | Out-Null".to_string(), "Get-Item X".to_string()]);
+        assert_eq!(cmds, vec![ElevatedOp::HagsEnable {}, ElevatedOp::TcpAutotuning { disabled: false }]);
         // Disarmed after take: a fresh guard arms cleanly (would Err if a sink leaked).
         let fresh = ElevationDeferral::begin().expect("sink must be disarmed after take");
         assert_eq!(fresh.deferred_count(), 0);
@@ -2414,12 +2145,13 @@ mod elevation_attribution_tests {
         // The three pre-launch refusals in run_elevated_powershell (checked before any spawn).
         assert!(elevation_error_nothing_ran("cannot find own exe: os error 2"));
         assert!(elevation_error_nothing_ran("elevated command is too long to dispatch"));
-        assert!(elevation_error_nothing_ran(
-            "elevated dispatch ticket could not be minted: os error 5"
-        ));
         // A5 Part A review r1 D3: a results pipe the app could not create is refused before any launch, so no
         // row may be recorded as "may have run" for it.
         assert!(elevation_error_nothing_ran(&format!("{}: os error 5", super::RESULTS_CHANNEL_NOT_CREATED)));
+        // A9: a typed request the app could not prepare, and an undo refused for its stored record, both
+        // refuse before any launch. Break: drop either arm from elevation_error_nothing_ran and this fails.
+        assert!(elevation_error_nothing_ran(&format!("{}: os error 5", super::TYPED_REQUEST_NOT_PREPARED)));
+        assert!(elevation_error_nothing_ran(super::STORED_RECORD_REFUSED_UNDO));
     }
 
     #[test]
@@ -2556,9 +2288,9 @@ mod elevation_attribution_tests {
         assert_eq!(
             whole.matches(concat!("elevate_and_", "wait_with(")).count(),
             3,
-            "its definition, elevate_and_wait and run_elevated_capture"
+            "its definition, elevate_and_wait and run_elevated_request_capture"
         );
-        let c = src.find(concat!("pub(crate) fn run_elevated_", "capture(")).expect("run_elevated_capture");
+        let c = src.find(concat!("pub(crate) fn run_elevated_", "request_capture(")).expect("run_elevated_request_capture");
         let cap = &src[c..c + src[c..].find("\n}\n").unwrap()];
         assert_eq!(cap.matches(concat!("elevate_and_", "wait_with(")).count(), 1);
         assert_eq!(mon.matches(concat!("crate::actions::elevate_and_", "wait_with(")).count(), 1);
@@ -2579,7 +2311,7 @@ mod elevation_attribution_tests {
     #[test]
     fn the_results_capture_accepts_only_the_helper_it_launched() {
         let src = include_str!("actions.rs");
-        let c = src.find(concat!("pub(crate) fn run_elevated_", "capture(")).expect("run_elevated_capture");
+        let c = src.find(concat!("pub(crate) fn run_elevated_", "request_capture(")).expect("run_elevated_request_capture");
         let cap = &src[c..c + src[c..].find("\n}\n").unwrap()];
         assert_eq!(
             cap.matches(concat!("let client_ok = |pid: u32| crate::fps_pipe::", "is_our_helper(pid, &l2);")).count(),
@@ -2621,6 +2353,9 @@ mod elevation_attribution_tests {
             ("actions.rs", include_str!("actions.rs")),
             ("history.rs", include_str!("history.rs")),
             ("gaming_orchestrator.rs", include_str!("gaming_orchestrator.rs")),
+            // A9: the helper composes every script from the closed set here (plan v4 Slice 2: the relay pin
+            // moves over every `script()`; the builders it calls are in actions.rs above).
+            ("elevated_ops.rs", include_str!("elevated_ops.rs")),
         ] {
             let shipped = production(src).to_ascii_lowercase();
             assert!(shipped.contains("run_elevated"), "{file}: the production text was kept");
@@ -3020,7 +2755,7 @@ pub(crate) fn apply_service_disable(service: KnownService) -> Result<ApplyResult
     // rollback_enable_scheduled_task_typed — because there the change is already made and must act.)
     let (prior_state, prior_start_mode) =
         require_service_prior(service.name(), service_info(service.name()), "disable")?;
-    run_elevated_powershell(&service_disable_script(&service))?;
+    run_elevated_op(ElevatedOp::ServiceDisable { service: service.clone() })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableKnownService {
             service: service.clone(),
@@ -3042,7 +2777,14 @@ pub(crate) fn rollback_service_disable_typed(
     ps_safe(service.name())?;
     let startup = ps_service_startup_for_mode(prior_start_mode);
     ps_safe(startup)?;
-    run_elevated_powershell(&service_restore_script(service, startup, prior_state == "Running"))?;
+    // A9: the startup word as the closed `StartupKind` (exactly the three words the mapping above produces).
+    let startup = match startup {
+        "Automatic" => crate::elevated_ops::StartupKind::Automatic,
+        "Manual" => crate::elevated_ops::StartupKind::Manual,
+        "Disabled" => crate::elevated_ops::StartupKind::Disabled,
+        _ => return Err(STORED_RECORD_REFUSED_UNDO.to_string()),
+    };
+    run_elevated_undo_op(ElevatedOp::ServiceRestore { service: service.clone(), startup, start: prior_state == "Running" })?;
     Ok(())
 }
 
@@ -3151,7 +2893,7 @@ pub(crate) fn apply_service_suspend(service: KnownService) -> Result<ApplyResult
     // rather than guessing Running/Auto (hardened before the gate was armed; the snapshot must be true).
     let (prior_state, prior_start_mode) =
         require_service_prior(service.name(), service_info(service.name()), "suspend")?;
-    run_elevated_powershell(&service_suspend_script(&service))?;
+    run_elevated_op(ElevatedOp::ServiceSuspend { service: service.clone() })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::SuspendKnownService {
             service: service.clone(),
@@ -3437,7 +3179,9 @@ pub(crate) fn apply_disable_scheduled_task(task: KnownBloatTask) -> Result<Apply
                     an unconfirmed prior state can't be reliably rolled back. Nothing was changed; try again."
             .to_string());
     }
-    run_elevated_powershell(&task_disable_script(path, &name))?;
+    // A9: the request carries only the task; the helper lists the constant folder itself and resolves the same
+    // name by the same rule (the read above stays: it refuses early with its own sentence and records the prior).
+    run_elevated_op(ElevatedOp::TaskDisable { task: task.clone() })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableScheduledTask { task: task.clone() },
         rollback_action: RollbackAction::EnableScheduledTask { task },
@@ -3455,7 +3199,7 @@ pub(crate) fn rollback_service_suspend_typed(
 ) -> Result<(), String> {
     ps_safe(service.name())?;
     if prior_state == "Running" {
-        run_elevated_powershell(&service_resume_script(service))?;
+        run_elevated_undo_op(ElevatedOp::ServiceResume { service: service.clone() })?;
     }
     Ok(())
 }
@@ -3478,13 +3222,15 @@ pub(crate) fn rollback_enable_scheduled_task_typed(
     // Resolve the real task name (build-drift safe) before the elevated re-enable.
     // D2b: an unfinished read is an Err with its own sentence (the ledger row stays active, so the
     // user can try again); only a FINISHED read that finds no task says it is gone.
-    let (path, name) = match resolved_task_target(task) {
-        Ok(TaskTarget::Found(path, name)) => (path, name),
+    match resolved_task_target(task) {
+        Ok(TaskTarget::Found(_, _)) => {}
         Ok(TaskTarget::Absent) => return Err(TASK_NOT_FOUND_UNDO.to_string()),
         Ok(TaskTarget::NameRefused) => return Err(TASK_NAME_REFUSED_UNDO.to_string()),
         Err(TaskUnreadable) => return Err(TASK_UNREADABLE_UNDO.to_string()),
-    };
-    run_elevated_powershell(&task_enable_script(path, &name))?;
+    }
+    // A9: the request carries only the task; the helper resolves the same name by the same rule itself (the
+    // read above stays: it refuses early with its own sentence).
+    run_elevated_undo_op(ElevatedOp::TaskEnable { task: task.clone() })?;
     Ok(())
 }
 
@@ -3914,16 +3660,16 @@ mod service_suspend_tests {
         struct Restore<'a>(&'a str);
         impl Drop for Restore<'_> {
             fn drop(&mut self) {
-                let _ = run_elevated_powershell(&format!("Stop-Service -Name {} -Force", self.0));
-                let _ = run_elevated_powershell(&format!("Set-Service -Name {} -StartupType Disabled", self.0));
+                let _ = qa_run_elevated_script(&format!("Stop-Service -Name {} -Force", self.0));
+                let _ = qa_run_elevated_script(&format!("Set-Service -Name {} -StartupType Disabled", self.0));
             }
         }
         let _restore = Restore(name);
 
         let _original = read("original");
         // Setup: enable + start so we exercise the running→suspend→restore path.
-        run_elevated_powershell(&format!("Set-Service -Name {name} -StartupType Manual")).expect("setup: enable");
-        run_elevated_powershell(&format!("Start-Service -Name {name}")).expect("setup: start");
+        qa_run_elevated_script(&format!("Set-Service -Name {name} -StartupType Manual")).expect("setup: enable");
+        qa_run_elevated_script(&format!("Start-Service -Name {name}")).expect("setup: start");
         let running_before = read("after-start");
 
         // Suspend (captures the live prior), then resume from that snapshot.
@@ -4168,7 +3914,7 @@ pub(crate) fn apply_power_ultimate() -> Result<ApplyResult, String> {
          Ultimate Performance rather than apply a change that could not be rolled back"
             .to_string()
     })?;
-    run_elevated_powershell(ULTIMATE_APPLY_SCRIPT)?;
+    run_elevated_op(ElevatedOp::UltimatePlanApply {})?;
     Ok(ApplyResult {
         applied_action: AppliedAction::SetUltimatePerformancePlan,
         rollback_action: RollbackAction::RestorePowerPlanFromSnapshot,
@@ -4194,7 +3940,8 @@ pub(crate) fn rollback_power_ultimate_typed(prior_guid: &str) -> Result<(), Stri
     // A7: one plain refusal for every shape problem.
     guid_exact(prior_guid).map_err(|_| POWER_PLAN_ID_REFUSED_UNDO.to_string())?;
     ps_safe(prior_guid)?; // implied by the GUID shape; kept as the guard every elevated token passes
-    run_elevated_powershell(&ultimate_undo_script(prior_guid))?;
+    let prior = crate::elevated_ops::PlanGuid::parse(prior_guid).map_err(|_| POWER_PLAN_ID_REFUSED_UNDO.to_string())?;
+    run_elevated_undo_op(ElevatedOp::UltimatePlanUndo { prior })?;
     Ok(())
 }
 
@@ -4214,7 +3961,7 @@ pub(crate) fn apply_reserved_storage_off() -> Result<ApplyResult, String> {
     // default-ON feature disabled instead of restoring the user's true Enabled state.
     let prior_enabled = reserved_storage_enabled_checked()
         .map_err(|e| format!("{e}; refusing to apply rather than record a guessed prior value"))?;
-    run_elevated_powershell(RESERVED_STORAGE_OFF_SCRIPT)?;
+    run_elevated_op(ElevatedOp::ReservedStorageOff {})?;
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableReservedStorage,
         rollback_action: RollbackAction::RestoreReservedStorageFromSnapshot,
@@ -4226,7 +3973,7 @@ pub(crate) fn apply_reserved_storage_off() -> Result<ApplyResult, String> {
 pub(crate) fn rollback_reserved_storage_off_typed(prior_enabled: bool) -> Result<(), String> {
     let state = if prior_enabled { "Enabled" } else { "Disabled" };
     ps_safe(state)?;
-    run_elevated_powershell(&reserved_storage_restore_script(prior_enabled))?;
+    run_elevated_undo_op(ElevatedOp::ReservedStorageRestore { enabled: prior_enabled })?;
     Ok(())
 }
 
@@ -4368,7 +4115,11 @@ pub(crate) fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Re
     // Apply AC = 0 only. DC stays untouched (laptop battery behavior preserved).
     ps_safe(subgroup)?;
     ps_safe(setting)?;
-    run_elevated_powershell(&power_setting_apply_script(&plan_guid, subgroup, setting, prior_ac_value))?;
+    // A9: the closed op names the setting (one of the two this apply writes) and the recorded plan.
+    let not_typed = || "could not determine the active power plan; refusing to apply a change that could not be rolled back".to_string();
+    let typed_setting = crate::elevated_ops::PowerSetting::from_ids(subgroup, setting).map_err(|_| not_typed())?;
+    let plan = crate::elevated_ops::PlanGuid::parse(&plan_guid).map_err(|_| not_typed())?;
+    run_elevated_op(ElevatedOp::PowerSettingOff { plan, setting: typed_setting, prior_ac: prior_ac_value })?;
 
     let applied_action = if setting == PWR_SETTING_USB_SELECTIVE_SUSPEND {
         AppliedAction::DisableUsbSelectiveSuspendOnAc
@@ -5235,6 +4986,11 @@ pub(crate) fn rollback_power_plan_setting_typed(
     ps_safe(plan_guid)?;
     ps_safe(subgroup_guid)?;
     ps_safe(setting_guid)?;
+    // A9 (checked before any read): the closed op writes only the two settings the apply writes; a saved pair that is neither is a
+    // stored record outside the closed set and refuses with the one fixed sentence (the row stays listed).
+    let setting = crate::elevated_ops::PowerSetting::from_ids(subgroup_guid, setting_guid)
+        .map_err(|_| STORED_RECORD_REFUSED_UNDO.to_string())?;
+    let plan = crate::elevated_ops::PlanGuid::parse(plan_guid).map_err(|_| POWER_SETTING_ID_REFUSED.to_string())?;
     // Restore AC/DC to the EXACT plan this was applied to. If that plan no
     // longer exists (deleted, or never captured), fail safe with a clear
     // message — we will NOT silently restore the value onto whatever plan
@@ -5260,15 +5016,13 @@ pub(crate) fn rollback_power_plan_setting_typed(
     // Re-commit live when the restored plan is the active one; an unread active plan re-commits
     // whichever plan is live (CR-plan-unread-rollbacks A), never skips the commit.
     let active = current_power_plan_guid();
-    let cmd = power_setting_restore_script(
-        plan_guid,
-        subgroup_guid,
-        setting_guid,
-        prior_ac_value,
-        prior_dc_value,
-        active.as_deref(),
-    );
-    run_elevated_powershell(&cmd)?;
+    // The same three re-commit cases `power_setting_restore_script` composes (pinned by the A8 goldens).
+    let recommit = match active.as_deref() {
+        Some(a) if a.trim().eq_ignore_ascii_case(plan_guid.trim()) => crate::elevated_ops::Recommit::Plan,
+        Some(_) => crate::elevated_ops::Recommit::No,
+        None => crate::elevated_ops::Recommit::Current,
+    };
+    run_elevated_undo_op(ElevatedOp::PowerSettingRestore { plan, setting, ac: prior_ac_value, dc: prior_dc_value, recommit })?;
     Ok(())
 }
 
@@ -5548,12 +5302,26 @@ pub(crate) fn apply_eee_disable() -> Result<ApplyResult, String> {
         })
         .collect();
 
-    let ps = build_eee_apply_script(&targets).map_err(|_| EEE_VALUE_REFUSED_APPLY.to_string())?;
+    // A6 (kept as a pre-check under A9): the live strings must be composable at all.
+    build_eee_apply_script(&targets).map_err(|_| EEE_VALUE_REFUSED_APPLY.to_string())?;
     // A6, rollback first: the undo puts the prior values (not in the apply script) into the same kind of
     // literal. If the undo could not be composed from this snapshot, the change would have no working undo,
     // so the apply refuses before anything is elevated.
     build_eee_rollback_script(&adapters).map_err(|_| EEE_VALUE_REFUSED_APPLY.to_string())?;
-    run_elevated_powershell(&ps)
+    // A9 (plan v4 §2, EEE under the closed grammar): the request carries the (adapter, property) pairs this
+    // apply recorded, as DATA; the helper reads every adapter itself, matches each pair in Rust by byte-equal
+    // names and a closed keyword list, picks the disabled value in Rust, and sets the ONE exact property
+    // object. Its undo carries the same strings, so they must also fit the saved-text grammar (rollback first).
+    let text = |s: &str| crate::elevated_ops::SavedText::parse(s).map_err(|_| EEE_VALUE_REFUSED_APPLY.to_string());
+    let mut eee_targets = Vec::with_capacity(adapters.len());
+    for a in &adapters {
+        text(&a.prior_value)?;
+        eee_targets.push(crate::elevated_ops::EeeTarget {
+            adapter: text(&a.adapter_name)?,
+            property: text(&a.property_display_name)?,
+        });
+    }
+    run_elevated_op(ElevatedOp::EeeDisable { targets: eee_targets })
         .map_err(|e| format!("Couldn't change Energy Efficient Ethernet — {}", e))?;
 
     Ok(ApplyResult {
@@ -5605,16 +5373,29 @@ pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<
     }
     // A6: saved details Compy won't put into a command refuse the undo before anything is elevated; the Err
     // leaves the ledger row as it is.
-    let ps = build_eee_rollback_script(adapters).map_err(|_| EEE_VALUE_REFUSED_UNDO.to_string())?;
-    run_elevated_powershell(&ps)
+    build_eee_rollback_script(adapters).map_err(|_| EEE_VALUE_REFUSED_UNDO.to_string())?;
+    // A9 (plan v4 §2 / §5, [v2r M3]): the saved strings travel as DATA and are matched in Rust by the helper
+    // (byte-equal names, a closed keyword list, the prior looked up in the driver's own list). A saved string
+    // outside the saved-text grammar, or more targets than one op carries, is a stored record outside the
+    // closed set: the one fixed sentence, and the row stays listed. So is the helper's "no longer matches".
+    let text = |s: &str| crate::elevated_ops::SavedText::parse(s).map_err(|_| STORED_RECORD_REFUSED_UNDO.to_string());
+    let mut saved = Vec::with_capacity(adapters.len());
+    for a in adapters {
+        saved.push(crate::elevated_ops::EeeSaved {
+            adapter: text(&a.adapter_name)?,
+            property: text(&a.property_display_name)?,
+            prior: text(&a.prior_value)?,
+        });
+    }
+    run_elevated_undo_op(ElevatedOp::EeeRestore { targets: saved })
         .map_err(|e| format!("Couldn't restore Energy Efficient Ethernet — {}", e))?;
     Ok(())
 }
 
 // ─── A8 (plan a5 v4 §2, v3 review C1): EEE under the closed grammar ─────────────────────────────────────
 //
-// Used only by the typed elevated set (elevated_ops.rs) behind the `elevated-op-entry` feature until Slice 2
-// moves the EEE callers; today's two builders above stay as they are. The helper reads every adapter and every
+// Used by the typed elevated set (elevated_ops.rs), which every EEE apply and undo goes through since A9 (Slice 2);
+// today's two builders above stay only as the A6 pre-check of the strings (and keep their goldens). The helper reads every adapter and every
 // advanced property with ONE constant script (no `-Name`, no `-DisplayName`: nothing is ever a wildcard), picks
 // the one property in Rust by byte-equal strings, and sets it through the ONE exact advanced-property object,
 // re-selected by an exact (`-ceq`) comparison on its InstanceID. No adapter or driver string enters a script.
@@ -6033,7 +5814,7 @@ pub(crate) fn apply_fast_startup_off() -> Result<ApplyResult, String> {
     // Fast Startup on a rig that had it explicitly off. A genuinely-absent value stays Ok(None) and
     // rollback-delete remains the faithful inverse. Mirrors the power-setting refuse discipline.
     let prior_hiberboot = fast_startup_state_checked()?;
-    run_elevated_powershell(FAST_STARTUP_OFF_SCRIPT)?;
+    run_elevated_op(ElevatedOp::FastStartupOff {})?;
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableFastStartup,
         rollback_action: RollbackAction::RestoreFastStartupFromSnapshot,
@@ -6047,7 +5828,7 @@ pub(crate) const FAST_STARTUP_OFF_SCRIPT: &str =
     "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value 0 -Type DWord";
 
 pub(crate) fn rollback_fast_startup_off_typed(prior_hiberboot: Option<u32>) -> Result<(), String> {
-    run_elevated_powershell(&fast_startup_restore_script(prior_hiberboot))?;
+    run_elevated_undo_op(ElevatedOp::FastStartupRestore { prior: prior_hiberboot })?;
     Ok(())
 }
 
@@ -6139,7 +5920,7 @@ pub(crate) fn apply_hags_enable() -> Result<ApplyResult, String> {
     // (e.g. HAGS deliberately off) and let the driver default take over. A genuinely-absent value
     // stays Ok(None) and rollback-delete remains faithful. Mirrors apply_fast_startup_off.
     let prior = hags_state_checked()?;
-    run_elevated_powershell(HAGS_ENABLE_SCRIPT)?;
+    run_elevated_op(ElevatedOp::HagsEnable {})?;
     Ok(ApplyResult {
         applied_action: AppliedAction::EnableHardwareGpuScheduling,
         rollback_action: RollbackAction::RestoreHwSchModeFromSnapshot,
@@ -6153,7 +5934,7 @@ pub(crate) const HAGS_ENABLE_SCRIPT: &str =
     "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 2 -Type DWord";
 
 pub(crate) fn rollback_hags_enable_typed(prior: Option<u32>) -> Result<(), String> {
-    run_elevated_powershell(&hags_restore_script(prior))?;
+    run_elevated_undo_op(ElevatedOp::HagsRestore { prior })?;
     Ok(())
 }
 
@@ -6432,7 +6213,7 @@ pub(crate) fn restore_memory_compression_with(prior: Option<bool>) -> Result<App
     };
     // State-aware: MMAgent cmdlets are non-idempotent (live QA 2026-07-16 — Disable throws
     // ERROR_SERVICE_DISABLED when compression is already off; guard both directions uniformly).
-    run_elevated_powershell(MEMCOMPRESS_ENABLE_SCRIPT)?;
+    run_elevated_op(ElevatedOp::MemoryCompression { enabled: true })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreMemoryCompressionDefault,
         rollback_action: RollbackAction::RestoreMemoryCompressionFromSnapshot,
@@ -6512,7 +6293,11 @@ pub(crate) fn memcompress_outcome(
 fn restore_memory_compression_elevated_read() -> Result<(ApplyResult, ResultReceived), String> {
     // A5 Part A: the prior and the confirmation come back over the dispatch's pipe with its nonce.
     let nonce = crate::fps_pipe::random_hex().map_err(|e| format!("{RESULTS_CHANNEL_NOT_CREATED}: {e}"))?;
-    let capture = run_elevated_capture(&memcompress_combined_restore_script(&nonce)?);
+    // A9: the combined op, run alone over the pipe; the helper composes `memcompress_combined_restore_script`
+    // with this request's nonce, so the lines read below carry it.
+    let request = ElevatedRequest::single(ElevatedOp::MemoryCompressionCombined {}, &nonce)
+        .map_err(|_| format!("{TYPED_REQUEST_NOT_PREPARED}: the operation is not one the helper accepts"))?;
+    let capture = run_elevated_request_capture(&request);
     let (prior, received) = memcompress_outcome(&capture.run, parse_memcompress_restore_result(&capture.text, &nonce))?;
     let result = ApplyResult {
         applied_action: AppliedAction::RestoreMemoryCompressionDefault,
@@ -6550,8 +6335,8 @@ pub(crate) fn rollback_memory_compression_typed(prior_enabled: Option<bool>) -> 
         // Idempotent-by-check: Disable-MMAgent throws ERROR_SERVICE_DISABLED when compression is
         // already off (live QA 2026-07-16), so a drifted rig must not fail its own rollback —
         // "already at prior" is success, verified in-elevation.
-        Some(true) => run_elevated_powershell(MEMCOMPRESS_ENABLE_SCRIPT),
-        Some(false) => run_elevated_powershell(MEMCOMPRESS_DISABLE_SCRIPT),
+        Some(true) => run_elevated_undo_op(ElevatedOp::MemoryCompression { enabled: true }),
+        Some(false) => run_elevated_undo_op(ElevatedOp::MemoryCompression { enabled: false }),
         // Unreachable for entries this code writes (the apply refuses a None prior) — but a
         // hand-edited/corrupt entry must fail LOUD, never guess a security-of-state direction.
         None => Err("This entry has no recorded prior state — cannot roll back blind.".to_string()),
@@ -6567,7 +6352,7 @@ pub(crate) const MEMCOMPRESS_DISABLE_SCRIPT: &str =
 
 pub(crate) fn restore_mmcss_defaults() -> Result<ApplyResult, String> {
     let (sr, nti) = read_mmcss_priors()?; // refuses on an unreadable key
-    run_elevated_powershell(&mmcss_apply_script(sr))?;
+    run_elevated_op(ElevatedOp::MmcssDefaults { prior_sr: sr })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreMmcssDefaults,
         rollback_action: RollbackAction::RestoreMmcssFromSnapshot,
@@ -6580,12 +6365,12 @@ pub(crate) fn restore_mmcss_defaults() -> Result<ApplyResult, String> {
 }
 
 pub(crate) fn rollback_mmcss_typed(sr: Option<u32>, nti: Option<u32>) -> Result<(), String> {
-    run_elevated_powershell(&mmcss_rollback_script(sr, nti))
+    run_elevated_undo_op(ElevatedOp::MmcssRestore { sr, nti })
 }
 
 pub(crate) fn restore_priority_separation() -> Result<ApplyResult, String> {
     let prior = read_priority_separation_prior()?; // refuses on an unreadable key
-    run_elevated_powershell(&priority_separation_restore_script())?;
+    run_elevated_op(ElevatedOp::PrioritySeparationDefault {})?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestorePrioritySeparationDefault,
         rollback_action: RollbackAction::RestorePrioritySeparationFromSnapshot,
@@ -6595,7 +6380,7 @@ pub(crate) fn restore_priority_separation() -> Result<ApplyResult, String> {
 }
 
 pub(crate) fn rollback_priority_separation_typed(prior: Option<u32>) -> Result<(), String> {
-    run_elevated_powershell(&priority_separation_rollback_script(prior))
+    run_elevated_undo_op(ElevatedOp::PrioritySeparationRestore { prior })
 }
 
 // ─── Leftovers v2 wave 2 (2026-06-11; armed with R2-5 2026-07-16) — MPO / core-parking / TCP autotuning ─────────
@@ -6693,7 +6478,7 @@ pub(crate) fn tcp_autotuning_script(disabled: bool) -> &'static str {
 // ── MPO: restore default-on by removing OverlayTestMode ──
 pub(crate) fn restore_mpo_default() -> Result<ApplyResult, String> {
     let prior = read_mpo_prior()?;
-    run_elevated_powershell(&set_or_remove_dword(DWM_PATH, "OverlayTestMode", None))?;
+    run_elevated_op(ElevatedOp::Mpo { value: None })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreMpoDefault,
         rollback_action: RollbackAction::RestoreMpoFromSnapshot,
@@ -6702,7 +6487,7 @@ pub(crate) fn restore_mpo_default() -> Result<ApplyResult, String> {
     })
 }
 pub(crate) fn rollback_mpo_typed(prior: Option<u32>) -> Result<(), String> {
-    run_elevated_powershell(&mpo_rollback_script(prior))
+    run_elevated_undo_op(ElevatedOp::Mpo { value: prior })
 }
 
 /// The restore apply script (AC 0, DC 0, setactive), all-or-nothing (issue 617): each powercfg
@@ -6728,7 +6513,7 @@ pub(crate) fn core_parking_apply_script(plan_guid: &str, prior_ac: u32, prior_dc
 
 // ── Core parking: re-allow parking (min unparked → 0% AC+DC) so the override is lifted ──
 pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
-    restore_core_parking_default_with(&current_power_plan_guid, &read_core_parking_priors, &run_elevated_powershell)
+    restore_core_parking_default_with(&current_power_plan_guid, &read_core_parking_priors, &run_elevated_op)
 }
 
 /// [`restore_core_parking_default`] with its machine reads and the elevated run passed in (tests pass
@@ -6736,7 +6521,7 @@ pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
 pub(crate) fn restore_core_parking_default_with(
     active_plan: &dyn Fn() -> Option<String>,
     read_priors: &dyn Fn() -> Result<(Option<u32>, Option<u32>), String>,
-    run_elevated: &dyn Fn(&str) -> Result<(), String>,
+    run_elevated: &dyn Fn(ElevatedOp) -> Result<(), String>,
 ) -> Result<ApplyResult, String> {
     // CR-core-parking-plan-guid: the plan SCHEME_CURRENT names right now, recorded with the priors
     // (and, CR-plan-write-recorded-guid, the plan the apply's writes target).
@@ -6757,7 +6542,12 @@ pub(crate) fn restore_core_parking_default_with(
     }
     let (ac, dc) = read_priors()?;
     let prior_ac = ac.ok_or("could not parse the core-parking AC index — refusing to restore blind")?;
-    run_elevated(&core_parking_apply_script(&plan, prior_ac, dc))?;
+    // A9: the closed op (a whole plan GUID, percents 0..=100); anything else refuses before anything runs.
+    let blind = || "could not parse the core-parking AC index — refusing to restore blind".to_string();
+    let typed_plan = crate::elevated_ops::PlanGuid::parse(&plan).map_err(|_| blind())?;
+    let typed_ac = crate::elevated_ops::Percent::parse(prior_ac).map_err(|_| blind())?;
+    let typed_dc = dc.map(crate::elevated_ops::Percent::parse).transpose().map_err(|_| blind())?;
+    run_elevated(ElevatedOp::CoreParkingDefault { plan: typed_plan, prior_ac: typed_ac, prior_dc: typed_dc })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreCoreParkingDefault,
         rollback_action: RollbackAction::RestoreCoreParkingFromSnapshot,
@@ -6777,7 +6567,7 @@ mod core_parking_restore_tests {
     #[test]
     fn an_unread_plan_stops_the_core_parking_apply_before_anything_runs() {
         let ran = Cell::new(0);
-        let run = |_: &str| -> Result<(), String> {
+        let run = |_: ElevatedOp| -> Result<(), String> {
             ran.set(ran.get() + 1);
             Ok(())
         };
@@ -6812,8 +6602,9 @@ mod core_parking_restore_tests {
         use std::cell::RefCell;
         let plan = "11111111-2222-3333-4444-555555555555";
         let seen = RefCell::new(Vec::<String>::new());
-        let run = |s: &str| -> Result<(), String> {
-            seen.borrow_mut().push(s.to_string());
+        // A9: the op as the script the helper composes from it (same builders, pinned by the goldens).
+        let run = |op: ElevatedOp| -> Result<(), String> {
+            seen.borrow_mut().push(crate::elevated_ops::script_of(&op));
             Ok(())
         };
         let priors = || -> Result<(Option<u32>, Option<u32>), String> { Ok((Some(100), Some(90))) };
@@ -6849,7 +6640,7 @@ pub(crate) struct CoreParkingEffects<'a> {
     /// CR-core-parking-hidden-plan: a direct query of the plan (`None` = couldn't run or read).
     pub(crate) plan_queried: &'a dyn Fn(&str) -> Option<bool>,
     pub(crate) active_plan: &'a dyn Fn() -> Option<String>,
-    pub(crate) run_elevated: &'a dyn Fn(&str) -> Result<(), String>,
+    pub(crate) run_elevated: &'a dyn Fn(ElevatedOp) -> Result<(), String>,
 }
 
 impl CoreParkingEffects<'static> {
@@ -6857,7 +6648,7 @@ impl CoreParkingEffects<'static> {
         plan_listed: &power_plan_listed,
         plan_queried: &power_plan_queried,
         active_plan: &current_power_plan_guid,
-        run_elevated: &run_elevated_powershell,
+        run_elevated: &run_elevated_undo_op,
     };
 }
 
@@ -6869,7 +6660,7 @@ pub(crate) fn rollback_core_parking_with(
     fx: &CoreParkingEffects,
 ) -> Result<UndoDone, String> {
     match core_parking_undo_step(ac, dc, plan_guid, fx.plan_listed, fx.plan_queried, fx.active_plan)? {
-        CoreParkingUndo::Run(script) => (fx.run_elevated)(&script).map(|()| UndoDone::Restored),
+        CoreParkingUndo::Run(op) => (fx.run_elevated)(op).map(|()| UndoDone::Restored),
         CoreParkingUndo::PlanGone { plan_guid } => Ok(UndoDone::NothingToRestore(NothingRestored::plan_gone(plan_guid))),
     }
 }
@@ -6878,8 +6669,8 @@ pub(crate) fn rollback_core_parking_with(
 /// the active plan, and when needed the plan itself).
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CoreParkingUndo {
-    /// Run this elevated script.
-    Run(String),
+    /// Run this typed elevated op (A9: the closed set's core-parking undo, never script text).
+    Run(ElevatedOp),
     /// CR-core-parking-plan-gone: the plan the apply wrote to no longer exists, so there is no plan
     /// left for Compy to put the value back on (and never another one); nothing runs.
     PlanGone { plan_guid: String },
@@ -6908,7 +6699,7 @@ pub(crate) fn core_parking_undo_step(
     let d = dc.unwrap_or(a);
     let Some(plan) = plan_guid else {
         // A row written before the plan was recorded undoes as it always did.
-        return Ok(CoreParkingUndo::Run(core_parking_script(a, d)));
+        return Ok(CoreParkingUndo::Run(core_parking_restore_op(a, d, None)?));
     };
     // CR-core-parking-plan-guid: back to the plan the apply wrote to, never onto whatever plan is
     // active now. The GUID comes from the user-writable history, so it is checked before it can
@@ -6938,7 +6729,7 @@ pub(crate) fn core_parking_undo_step(
         // holds the changed value, so ask for the plan itself. It exists: restore onto it. The
         // query couldn't run or be read: stop with nothing changed, as for an unreadable list.
         match plan_queried(plan) {
-            Some(true) => return Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, false))),
+            Some(true) => return Ok(CoreParkingUndo::Run(core_parking_restore_op(a, d, Some((plan, false)))?)),
             None => {
                 return Err("Compy couldn't confirm with Windows whether this power plan still exists, so \
                             Compy stopped before undoing anything. Nothing was changed; try again in a moment."
@@ -6952,7 +6743,7 @@ pub(crate) fn core_parking_undo_step(
         // forever; the row closes as nothing to restore instead, with that reason on its receipt.
         return Ok(CoreParkingUndo::PlanGone { plan_guid: plan.to_ascii_lowercase() });
     }
-    Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, is_active)))
+    Ok(CoreParkingUndo::Run(core_parking_restore_op(a, d, Some((plan, is_active)))?))
 }
 
 /// How an undo that succeeded ended (CR-core-parking-plan-gone).
@@ -6981,6 +6772,19 @@ impl NothingRestored {
     pub(crate) fn plan_gone(plan_guid: String) -> Self {
         Self { reason: Self::PLAN_GONE.to_string(), plan_guid: Some(plan_guid) }
     }
+}
+
+/// A9: the typed core-parking undo: `target` None = the legacy SCHEME_CURRENT undo ([`core_parking_script`]),
+/// Some((plan, reactivate)) = the recorded plan ([`core_parking_plan_script`]). A stored percent above 100 or a
+/// plan that is not a whole GUID is a record outside the closed set: the one fixed sentence (the row stays).
+fn core_parking_restore_op(ac: u32, dc: u32, target: Option<(&str, bool)>) -> Result<ElevatedOp, String> {
+    use crate::elevated_ops::{CoreParkingTarget, Percent, PlanGuid};
+    let refused = |_| STORED_RECORD_REFUSED_UNDO.to_string();
+    let target = match target {
+        None => CoreParkingTarget::Current {},
+        Some((plan, reactivate)) => CoreParkingTarget::Plan { plan: PlanGuid::parse(plan).map_err(refused)?, reactivate },
+    };
+    Ok(ElevatedOp::CoreParkingRestore { ac: Percent::parse(ac).map_err(refused)?, dc: Percent::parse(dc).map_err(refused)?, target })
 }
 
 /// Pure (CR-core-parking-plan-guid): the core-parking undo against the stored plan GUID, as
@@ -7079,7 +6883,15 @@ fn read_pagingfiles() -> Result<Vec<String>, String> {
 /// unreadable state refuse BEFORE any elevation (never mutate what can't be exactly reversed).
 pub(crate) fn restore_pagefile_automatic_with(entries: Vec<String>) -> Result<ApplyResult, String> {
     let (letter, init_mb, max_mb) = parse_manual_pagefile_entry(&entries)?;
-    run_elevated_powershell(PAGEFILE_RESTORE_SCRIPT)?;
+    // A9, rollback first: the undo's closed op takes sizes of 1..=1 TiB with init <= max. A layout outside
+    // that could never be undone, so it is refused here like any other unusual layout, before anything runs.
+    let undo_fits = crate::elevated_ops::PagefileMb::parse(init_mb).is_ok()
+        && crate::elevated_ops::PagefileMb::parse(max_mb).is_ok()
+        && init_mb <= max_mb;
+    if !undo_fits {
+        return Err("This PC's pagefile layout is unusual — left as-is (no automatic restore is offered for it).".to_string());
+    }
+    run_elevated_op(ElevatedOp::PagefileAutomatic {})?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestorePagefileAutomatic,
         rollback_action: RollbackAction::RestorePagefileFromSnapshot,
@@ -7097,13 +6909,23 @@ pub(crate) fn restore_pagefile_automatic() -> Result<ApplyResult, String> {
 }
 
 pub(crate) fn rollback_pagefile_typed(letter: char, init_mb: u32, max_mb: u32) -> Result<(), String> {
-    run_elevated_powershell(&pagefile_rollback_script(letter, init_mb, max_mb)?)
+    // Today's refusal for a layout that was never valid stays first (its own words).
+    pagefile_rollback_script(letter, init_mb, max_mb)?;
+    // A9: the closed op (one ASCII letter, 1..=1 TiB sizes with init <= max). A record outside it is the one
+    // fixed sentence; the row stays listed.
+    use crate::elevated_ops::{DriveLetter, PagefileMb};
+    let refused = |_| STORED_RECORD_REFUSED_UNDO.to_string();
+    run_elevated_undo_op(ElevatedOp::PagefileRestore {
+        letter: DriveLetter::parse(letter).map_err(refused)?,
+        init_mb: PagefileMb::parse(init_mb).map_err(refused)?,
+        max_mb: PagefileMb::parse(max_mb).map_err(refused)?,
+    })
 }
 
 // ── TCP receive-window auto-tuning: restore "normal" ──
 pub(crate) fn restore_tcp_autotuning_default() -> Result<ApplyResult, String> {
     let prior_disabled = read_tcp_autotuning_disabled()?;
-    run_elevated_powershell(tcp_autotuning_script(false))?;
+    run_elevated_op(ElevatedOp::TcpAutotuning { disabled: false })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreTcpAutotuningDefault,
         rollback_action: RollbackAction::RestoreTcpAutotuningFromSnapshot,
@@ -7112,7 +6934,7 @@ pub(crate) fn restore_tcp_autotuning_default() -> Result<ApplyResult, String> {
     })
 }
 pub(crate) fn rollback_tcp_autotuning_typed(prior_disabled: bool) -> Result<(), String> {
-    run_elevated_powershell(tcp_autotuning_script(prior_disabled))
+    run_elevated_undo_op(ElevatedOp::TcpAutotuning { disabled: prior_disabled })
 }
 
 // ─── Mouse acceleration off (HKCU, no admin) ─────────────────────────────
@@ -7265,7 +7087,14 @@ pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
     let keys: Vec<&str> = nic_snapshots.iter().map(|s| s.interface.as_str()).collect();
     let ps = nagle_apply_script(&keys)?;
     if !ps.is_empty() {
-        run_elevated_powershell(&ps)?;
+        // A9: the closed op carries each interface key as a braced GUID (and its undo the same keys, so a key
+        // outside that shape would leave a change without a working undo: refused before anything runs).
+        let interfaces = keys
+            .iter()
+            .map(|k| crate::elevated_ops::NicKey::parse(k))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| format!("{TYPED_REQUEST_NOT_PREPARED}: a network interface key is not a braced GUID"))?;
+        run_elevated_op(ElevatedOp::NagleDisable { interfaces })?;
     }
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableNagleOnActiveNics,
@@ -7280,7 +7109,21 @@ pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
 pub(crate) fn rollback_nagle_disable_typed(
     interfaces: &[NagleInterfaceSnapshot],
 ) -> Result<(), String> {
-    run_elevated_powershell(&nagle_rollback_script(interfaces)?)?;
+    // Today's refusals (an empty or unsafe snapshot) stay first, in their own words.
+    nagle_rollback_script(interfaces)?;
+    // A9 (plan v4 §2 NicKey, [v2r S1]): each saved key as a braced GUID. A key outside that shape is a stored
+    // record outside the closed set: the one fixed sentence, and the row stays listed.
+    let saved = interfaces
+        .iter()
+        .map(|n| {
+            Ok(crate::elevated_ops::NagleSaved {
+                key: crate::elevated_ops::NicKey::parse(&n.interface).map_err(|_| STORED_RECORD_REFUSED_UNDO.to_string())?,
+                ack: n.prior_ack,
+                nodelay: n.prior_nodelay,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    run_elevated_undo_op(ElevatedOp::NagleRestore { interfaces: saved })?;
     Ok(())
 }
 
@@ -9601,14 +9444,25 @@ mod elevated_goldens {
 
     // ── capture helpers ─────────────────────────────────────────────────────────────────────────────
 
-    /// Run `f` with the deferral sink armed and return what it would have elevated; nothing is dispatched.
-    pub(super) fn sunk(f: impl FnOnce() -> Result<(), String>) -> Vec<String> {
+    /// Run `f` with the deferral sink armed and return the typed ops it would have elevated; nothing is dispatched.
+    pub(super) fn sunk_ops(f: impl FnOnce() -> Result<(), String>) -> Vec<crate::elevated_ops::ElevatedOp> {
         reset_elevation_dispatch_count();
         let guard = ElevationDeferral::begin().expect("sink");
         f().expect("captured by the sink, not run");
         let got = guard.take_deferred();
         assert_eq!(elevation_dispatch_count(), 0, "the sink dispatched nothing");
         got
+    }
+
+    /// A9: [`sunk_ops`], each op composed as the helper composes it (the task read answered with the drifted
+    /// listing of `DriftedTaskReads`): since Slice 2 the caller hands over an op, so these goldens now prove the
+    /// caller's op AND its composed bytes equal today's script.
+    pub(super) fn sunk(f: impl FnOnce() -> Result<(), String>) -> Vec<String> {
+        let nonce = crate::elevated_ops::Nonce::parse(NONCE).expect("nonce");
+        sunk_ops(f)
+            .iter()
+            .map(|op| op.script(&nonce, &mut DriftedTaskReads).unwrap_or_else(|e| panic!("{op:?}: {e:?}")))
+            .collect()
     }
 
     /// This file's source above the golden module (so a golden's own text is never found).
@@ -9766,12 +9620,25 @@ mod elevated_goldens {
 
     // ── rows 11-15 ──
 
-    /// Break: change a field order in `build_eee_rollback_script` and this fails.
+    /// Break: change a field order in `build_eee_rollback_script` (or, A9, map a saved string onto the wrong field
+    /// of the typed undo) and this fails.
     #[test]
     fn golden_eee_today_through_the_builders_and_the_sink() {
         use super::eee_script_tests::{golden_snapshots, golden_targets, GOLDEN_APPLY, GOLDEN_ROLLBACK};
+        use crate::elevated_ops::{EeeSaved, ElevatedOp, SavedText};
         assert_eq!(build_eee_apply_script(&golden_targets()).as_deref(), Ok(GOLDEN_APPLY));
-        assert_eq!(sunk(|| rollback_eee_disable_typed(&golden_snapshots())), vec![GOLDEN_ROLLBACK.to_string()]);
+        // Today's undo builder keeps its golden (it stays the A6 pre-check of the saved strings).
+        assert_eq!(build_eee_rollback_script(&golden_snapshots()).as_deref(), Ok(GOLDEN_ROLLBACK));
+        // A9 (plan v4 §2, the one deliberate exception): what the undo hands the helper is the typed op with the
+        // saved strings as DATA; the helper's script is the new -InputObject one (its goldens: elevated_ops tests).
+        let t = |s: &str| SavedText::parse(s).expect("saved text");
+        let saved = |a: &str, p: &str, v: &str| EeeSaved { adapter: t(a), property: t(p), prior: t(v) };
+        assert_eq!(
+            sunk_ops(|| rollback_eee_disable_typed(&golden_snapshots())),
+            vec![ElevatedOp::EeeRestore {
+                targets: vec![saved("Ethernet", "Energy Efficient Ethernet", "Enabled"), saved("Bob's NIC", "Green Ethernet", "On")]
+            }]
+        );
     }
 
     /// Break: change "-Value 0 -Type DWord" in the Fast Startup apply, or the HAGS value 2, and this fails.

@@ -2458,7 +2458,7 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
     // (HKCU) and are receipted right after this block, exactly like a single apply. Elevated recs
     // perform their READS and park their one PS command (no partial mutation — see the sink's
     // safety note).
-    let all_cmds: Vec<String> = {
+    let all_cmds: Vec<crate::elevated_ops::ElevatedOp> = {
         let guard = ElevationDeferral::begin()?;
         let mut cursor = 0usize;
         for it in &items {
@@ -2512,19 +2512,23 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         // Checked (never indexed) command attribution: by construction every staged range lies
         // inside all_cmds, but a panic HERE would poison HISTORY_LOCK for the whole session — so
         // an impossible mismatch aborts the batch BEFORE elevation instead.
-        let mut script_items: Vec<(String, Vec<String>)> = Vec::with_capacity(staged.len());
+        let mut request_items: Vec<(String, Vec<crate::elevated_ops::ElevatedOp>)> = Vec::with_capacity(staged.len());
         for d in &staged {
             let cmds = all_cmds.get(d.cmds.clone()).ok_or_else(|| {
                 "internal error: deferred-command attribution mismatch — the elevated batch was aborted before anything ran".to_string()
             })?;
-            script_items.push((d.rec_id.clone(), cmds.to_vec()));
+            request_items.push((d.rec_id.clone(), cmds.to_vec()));
         }
-        let script = compose_batch_script(&script_items, &nonce)?;
+        // A9: the batch is a typed request (each item its receipt id and its closed ops); the helper checks it
+        // again and composes the one script. A request the helper would refuse is refused here, before launch.
+        let request = crate::elevated_ops::ElevatedRequest::batch(request_items, &nonce).map_err(|_| {
+            "The admin step was not started: Compy could not put this batch into the form its administrator helper accepts. Nothing else was changed.".to_string()
+        })?;
         elevation_prompts = 1;
         // A declined UAC ran nothing, so every item is skipped and the phase-1 items stand on their
         // own receipts. Any other error means the script may have run and stopped part-way: the relayed
         // lines are the only evidence of which items finished, so they are read either way (#616).
-        let crate::actions::ElevatedCapture { run, text } = crate::actions::run_elevated_capture(&script);
+        let crate::actions::ElevatedCapture { run, text } = crate::actions::run_elevated_request_capture(&request);
         let receipts = parse_batch_receipts(&text, &nonce);
         let mut made_elevated: Vec<Made> = Vec::new();
         let first_admin_outcome = outcomes.len();
@@ -3940,9 +3944,11 @@ mod batch_apply_tests {
         let _force = ForceElevationError::begin();
         let before: std::collections::HashSet<String> =
             load_history().expect("test ledger readable").iter().map(|c| c.id.clone()).collect();
-        crate::actions::fake_next_capture(|cmd| {
-            let at = cmd.find(":fast-startup-off:ok").expect("the composed batch carries a receipt line");
-            let nonce = &cmd[at - 32..at];
+        crate::actions::fake_next_capture(|req| {
+            // A9: the request is typed; its nonce and item ids are data.
+            let ids: Vec<&str> = req.items.iter().filter_map(|i| i.id.as_ref().map(|id| id.as_str())).collect();
+            assert_eq!(ids, ["fast-startup-off", "hags-enable"], "one typed item per staged rec, in order");
+            let nonce = req.nonce.as_str();
             crate::actions::ElevatedCapture { run: Ok(()), text: format!("{nonce}:fast-startup-off:ok\n{nonce}:end\n") }
         });
         let report = apply_recommendations_batch(vec![item("fast-startup-off"), item("hags-enable")]);
@@ -4558,8 +4564,9 @@ mod receipt_commit_tests {
         let plan_listed = |_: &str| listed;
         let plan_queried = |_: &str| queried;
         let active_plan = || active.map(str::to_string);
-        let run_elevated = |script: &str| {
-            ran.borrow_mut().push(script.to_string());
+        // A9: the op as the script the helper composes from it (same builders, pinned by the goldens).
+        let run_elevated = |op: crate::elevated_ops::ElevatedOp| {
+            ran.borrow_mut().push(crate::elevated_ops::script_of(&op));
             Ok(())
         };
         let fx = CoreParkingEffects {
@@ -4640,7 +4647,8 @@ mod receipt_commit_tests {
             &|_| panic!("an active plan is never queried"),
             &|| Some(PLAN_A.to_uppercase()),
         );
-        let Ok(CoreParkingUndo::Run(script)) = step else { panic!("{step:?}") };
+        let Ok(CoreParkingUndo::Run(op)) = step else { panic!("{step:?}") };
+        let script = crate::elevated_ops::script_of(&op);
         assert!(script.contains(PLAN_A) && script.contains("-setactive"), "restored and re-committed live: {script}");
     }
 
@@ -5396,7 +5404,7 @@ mod manual_restore_qa {
         let before_len = load_history().expect("ledger readable").len();
 
         println!("\nUAC PROMPT 1/4 — SEED the rotted fixture (Win32PrioritySeparation = 0x26). Click YES.");
-        run_elevated_powershell(W32PS_SEED).expect("seed write (did the prompt get a YES?)");
+        crate::actions::qa_run_elevated_script(W32PS_SEED).expect("seed write (did the prompt get a YES?)");
         assert_eq!(read_w32ps(), Some(0x26), "fixture seeded");
 
         let ids = flagged_ids();
@@ -5436,7 +5444,7 @@ mod manual_restore_qa {
         );
 
         println!("\nUAC PROMPT 4/4 — CLEANUP to Windows stock (2). Click YES.");
-        run_elevated_powershell(W32PS_CLEANUP).expect("cleanup write (did the prompt get a YES?)");
+        crate::actions::qa_run_elevated_script(W32PS_CLEANUP).expect("cleanup write (did the prompt get a YES?)");
         assert_eq!(read_w32ps(), Some(2), "left at Windows stock 2");
         println!(
             "W32PS LOOP PASS: seed 0x26 → flagged → restore (receipt prior=38) → rollback 0x26 exact → stock 2. Rig started at {original:?}."
@@ -5460,7 +5468,7 @@ mod manual_restore_qa {
         let before_len = load_history().expect("ledger readable").len();
 
         println!("\nUAC PROMPT 1/4 — SEED the rotted fixture (OverlayTestMode = 5). Click YES.");
-        run_elevated_powershell(MPO_SEED).expect("seed write (did the prompt get a YES?)");
+        crate::actions::qa_run_elevated_script(MPO_SEED).expect("seed write (did the prompt get a YES?)");
         assert_eq!(read_overlay_test_mode(), Some(5), "fixture seeded");
 
         let ids = flagged_ids();
@@ -5500,7 +5508,7 @@ mod manual_restore_qa {
         );
 
         println!("\nUAC PROMPT 4/4 — CLEANUP (delete the value — Windows stock). Click YES.");
-        run_elevated_powershell(MPO_CLEANUP).expect("cleanup write (did the prompt get a YES?)");
+        crate::actions::qa_run_elevated_script(MPO_CLEANUP).expect("cleanup write (did the prompt get a YES?)");
         assert_eq!(read_overlay_test_mode(), None, "left at Windows stock (value absent)");
         println!(
             "MPO LOOP PASS: seed 5 → flagged → restore-delete (receipt prior=5) → rollback 5 exact → absent."
@@ -5534,7 +5542,7 @@ mod manual_restore_qa {
                 "$rf='{}'; Add-Content -LiteralPath $rf -Value \"state:$((Get-MMAgent).MemoryCompression)\"",
                 path.to_string_lossy().replace('\'', "''")
             );
-            run_elevated_powershell(&script).expect("read-back (did the prompt get a YES?)");
+            crate::actions::qa_run_elevated_script(&script).expect("read-back (did the prompt get a YES?)");
             let text = std::fs::read_to_string(&path).unwrap_or_default();
             let _ = std::fs::remove_file(&path);
             match text.trim() {
@@ -5545,7 +5553,7 @@ mod manual_restore_qa {
         };
 
         println!("\nUAC PROMPT 1/6 — SEED the rotted fixture (Disable-MMAgent). Click YES.");
-        run_elevated_powershell("if ((Get-MMAgent).MemoryCompression) { Disable-MMAgent -MemoryCompression }")
+        crate::actions::qa_run_elevated_script("if ((Get-MMAgent).MemoryCompression) { Disable-MMAgent -MemoryCompression }")
             .expect("seed (did the prompt get a YES?)");
 
         // Detection stays HONEST about the admin-only read: the detector must report
@@ -5587,7 +5595,7 @@ mod manual_restore_qa {
         assert!(!read_back("post-rollback"), "rollback restored the rotted OFF exactly");
 
         println!("\nUAC PROMPT 6/6 — CLEANUP to Windows stock (Enable-MMAgent). Click YES.");
-        run_elevated_powershell("if (-not (Get-MMAgent).MemoryCompression) { Enable-MMAgent -MemoryCompression }")
+        crate::actions::qa_run_elevated_script("if (-not (Get-MMAgent).MemoryCompression) { Enable-MMAgent -MemoryCompression }")
             .expect("cleanup (did the prompt get a YES?)");
         println!(
             "MEMCOMPRESS LOOP PASS: seed OFF → needs-admin honest → restore (receipt prior=false, banked in-elevation) → ON → rollback → OFF → stock ON."
@@ -5772,9 +5780,10 @@ mod leftover_restore_tests {
         let _force = ForceElevationError::begin();
         let before: std::collections::HashSet<String> =
             load_history().expect("readable").iter().map(|c| c.id.clone()).collect();
-        crate::actions::fake_next_capture(|cmd| {
-            let at = cmd.find(":prior:$p").expect("the restore script reports its prior");
-            let nonce = &cmd[at - 32..at];
+        crate::actions::fake_next_capture(|req| {
+            // A9: the combined op, alone; its nonce is the request's.
+            assert_eq!(req.items[0].ops, [crate::elevated_ops::ElevatedOp::MemoryCompressionCombined {}]);
+            let nonce = req.nonce.as_str();
             crate::actions::ElevatedCapture { run: Ok(()), text: format!("{nonce}:prior:False\n") }
         });
         let outcome = restore_leftover("memory-compression-off", "QA seam test");

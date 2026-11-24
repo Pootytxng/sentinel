@@ -671,7 +671,7 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
     // commands never ran) and nothing staged into the contract — the caller then restores the
     // UAC-free core only. Same no-partial outcome as the pre-T6 sequential path, minus its
     // prompts-then-restore-prompts churn.
-    let all_cmds: Vec<String> = {
+    let all_cmds: Vec<crate::elevated_ops::ElevatedOp> = {
         let guard = actions::ElevationDeferral::begin()?;
         let mut cursor = 0usize;
         for item in items {
@@ -708,19 +708,23 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
 
     // Checked (never indexed) command attribution — by construction every range lies inside
     // all_cmds, but an impossible mismatch aborts BEFORE anything is recorded or elevated.
-    let mut script_items: Vec<(String, Vec<String>)> = Vec::with_capacity(staged.len());
+    let mut request_items: Vec<(String, Vec<crate::elevated_ops::ElevatedOp>)> = Vec::with_capacity(staged.len());
     for s in &staged {
         let cmds = all_cmds.get(s.cmds.clone()).ok_or_else(|| {
             "internal error: deferred-command attribution mismatch — the elevated batch was aborted before anything ran".to_string()
         })?;
-        script_items.push((s.id.to_string(), cmds.to_vec()));
+        request_items.push((s.id.to_string(), cmds.to_vec()));
     }
     // A5 Part A: the receipts come back over the dispatch's own pipe, each line carrying this random
     // nonce, so every receipt read afterwards is this run's (this replaces the A3a "clear the file
     // first" rule: there is no file). A nonce or compose failure refuses before anything is staged.
     let nonce = crate::fps_pipe::random_hex()
         .map_err(|e| format!("the elevated step was not started: its results key could not be made ({e})"))?;
-    let script = actions::compose_batch_script(&script_items, &nonce)?;
+    // A9: a typed batch request (each item its id and its closed ops); refused here, before anything is
+    // staged or launched, when the helper would refuse it.
+    let request = crate::elevated_ops::ElevatedRequest::batch(request_items, &nonce).map_err(|_| {
+        "the elevated step was not started: it could not be put into the form the administrator helper accepts".to_string()
+    })?;
 
     // Crash-safe fail-safe ordering: the contract carries every staged change BEFORE the one
     // elevation runs. Dying mid-elevation leaves an over-complete contract; recovery restores
@@ -750,7 +754,7 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
     // Read on every outcome (A2b): a receipt carrying this run's nonce was written by THIS run, and an
     // `ok` one must keep its change in the contract even when the elevation reported "nothing ran"
     // (resolve_tier_elevation).
-    let actions::ElevatedCapture { run: elevation, text: receipts_text } = actions::run_elevated_capture(&script);
+    let actions::ElevatedCapture { run: elevation, text: receipts_text } = actions::run_elevated_request_capture(&request);
     match resolve_tier_elevation(elevation, &receipts_text, &nonce, &id_labels) {
         TierDecision::Confirmed => Ok(()),
         TierDecision::DropStaged(msg) => {
@@ -1135,7 +1139,7 @@ fn restore_elevated_run<'a>(
         }
     };
     let mut staged: Vec<Staged> = Vec::new();
-    let all_cmds: Vec<String> = {
+    let all_cmds: Vec<crate::elevated_ops::ElevatedOp> = {
         let guard = match actions::ElevationDeferral::begin() {
             Ok(g) => g,
             Err(_) => {
@@ -1172,7 +1176,7 @@ fn restore_elevated_run<'a>(
     }
 
     // Checked (never indexed) command attribution — same invariant as the apply tier.
-    let mut script_items: Vec<(String, Vec<String>)> = Vec::with_capacity(staged.len());
+    let mut request_items: Vec<(String, Vec<crate::elevated_ops::ElevatedOp>)> = Vec::with_capacity(staged.len());
     let mut id_labels: Vec<(String, String)> = Vec::with_capacity(staged.len());
     for (i, s) in staged.iter().enumerate() {
         let Some(cmds) = all_cmds.get(s.cmds.clone()) else {
@@ -1180,7 +1184,7 @@ fn restore_elevated_run<'a>(
             return staged_fallback(&staged, errs);
         };
         let id = format!("r{i}"); // ps_safe-shaped by construction
-        script_items.push((id.clone(), cmds.to_vec()));
+        request_items.push((id.clone(), cmds.to_vec()));
         id_labels.push((id, s.change.label.clone()));
     }
 
@@ -1193,14 +1197,16 @@ fn restore_elevated_run<'a>(
     let Ok(nonce) = crate::fps_pipe::random_hex() else {
         return staged_fallback(&staged, errs);
     };
-    let script = match actions::compose_batch_script(&script_items, &nonce) {
-        Ok(s) => s,
+    // A9: a typed batch request; one the helper would refuse (more than 32 items, an op that cannot ride a
+    // batch) takes the per-item path, as a compose refusal did.
+    let request = match crate::elevated_ops::ElevatedRequest::batch(request_items, &nonce) {
+        Ok(r) => r,
         Err(_) => return staged_fallback(&staged, errs),
     };
 
     // Phase 2 — the ONE elevation. Its outcome is final for this attempt: no per-item
     // fallback past this point (a decline must never be followed by more prompts).
-    let actions::ElevatedCapture { run: elevation, text: receipts_text } = actions::run_elevated_capture(&script);
+    let actions::ElevatedCapture { run: elevation, text: receipts_text } = actions::run_elevated_request_capture(&request);
     // resolve_restore_batch answers one outcome per item, in `id_labels` order, which is `staged`
     // order: zip so each outcome lands on its own change (CR-gm-restore-partial), never by label.
     let outcomes = resolve_restore_batch(elevation, &receipts_text, &nonce, &id_labels);
@@ -1933,7 +1939,8 @@ mod elevation_batch_tests {
             id,
             label: format!("Synthetic {id}"),
             apply: Box::new(move || {
-                actions::run_elevated_powershell(&format!("Write-Output {id}"))?;
+                // A9: a typed op (parked by the sink; the forced decline means it never runs).
+                actions::run_elevated_op(crate::elevated_ops::ElevatedOp::HagsEnable {})?;
                 Ok(ApplyResult {
                     applied_action: AppliedAction::SuspendKnownService {
                         service: KnownService::WSearch,
@@ -1988,7 +1995,8 @@ mod elevation_batch_tests {
             let _decline = ForceElevationError::begin();
             apply_elevated_tier(
                 &mut file,
-                vec![synthetic("a"), synthetic("b"), synthetic("c"), synthetic("d")],
+                // A9: real item ids (a typed batch request takes only the closed set of ids).
+                vec![synthetic("adv-usb"), synthetic("adv-pcie"), synthetic("SysMain"), synthetic("WSearch")],
             )
         };
         assert_eq!(
@@ -2098,8 +2106,8 @@ mod elevation_batch_tests {
             assert!(!body.contains("std::fs::"), "{f}: no file access around the elevation");
             assert!(!body.contains("run_elevated_powershell("), "{f}: the batch elevation is a capture");
             let nonce = body.find("crate::fps_pipe::random_hex()").expect("a fresh nonce per dispatch");
-            let compose = body.find("actions::compose_batch_script(&script_items, &nonce)").expect("composed with it");
-            let capture = body.find("actions::run_elevated_capture(&script)").expect("one capture");
+            let compose = body.find("crate::elevated_ops::ElevatedRequest::batch(request_items, &nonce)").expect("a typed request with it");
+            let capture = body.find("actions::run_elevated_request_capture(&request)").expect("one capture");
             assert!(nonce < compose && compose < capture, "{f}");
         }
         let at = src.find("fn apply_elevated_tier(").unwrap();

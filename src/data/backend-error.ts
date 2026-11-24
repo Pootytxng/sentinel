@@ -310,6 +310,13 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "This change's saved power plan isn't in the form Compy expects, so Compy didn't switch back to it. The change stays in your Trust Ledger.",
     key: "app.backendErrors.powerPlanIdRefusedUndo",
   },
+  // A9 (owner decision): the ONE fixed sentence for an undo whose stored record fails the closed elevated set's
+  // stricter checks (actions::run_elevated_undo_op). Nothing ran; the row stays listed.
+  {
+    rust: "STORED_RECORD_REFUSED_UNDO",
+    text: "Compy couldn't use this change's saved details for an administrator step, so it didn't run the undo. The change stays in your Trust Ledger.",
+    key: "app.backendErrors.storedRecordRefusedUndo",
+  },
   // C6: the fixed refusals an undo meets in front of the audited one (experiment::rollback_change →
   // gaming_orchestrator::plain_change_gate), so a stopped undo walk can say why in the user's language.
   // Consts in gaming_orchestrator.rs. C8: the Trial/benchmark plan-class refusal is now three fixed sentences
