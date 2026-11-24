@@ -2994,6 +2994,24 @@ mod elevated_helper_tests {
         elevation_error_nothing_ran, elevation_outcome, HELPER_POWERSHELL_NOT_STARTED, HELPER_POWERSHELL_NOT_STARTED_MSG,
     };
 
+    /// A8 review r1 must-fix 4: `run_helper_script` is the typed entry's ONE mutating elevated spawn. It must run the
+    /// real PowerShell with the cleared, pinned environment (`elevated_powershell_command`) and report through
+    /// `helper_exit_code`, never a user-shaped environment (a user PSModulePath in an elevated child is code
+    /// execution). Break: build the command with `actions::quiet_command(sys_exe::SysTool::PowerShell)` and this fails.
+    #[test]
+    fn the_typed_entrys_run_uses_the_cleared_environment_and_the_exit_mapping() {
+        let src = include_str!("lib.rs").replace("\r\n", "\n");
+        let f = src.find(concat!("pub(crate) fn run_helper_", "script<")).expect("run_helper_script");
+        let body = &src[f..f + src[f..].find("\n}\n").expect("end")];
+        assert!(body.contains("let mut c = elevated_powershell_command(command);"), "{body}");
+        assert!(body.contains("helper_exit_code(Started::Ran(waited))"), "{body}");
+        assert!(body.contains("Err(_) => helper_exit_code(Started::NeverStarted),"), "{body}");
+        assert_eq!(body.matches("Started::NeverStarted").count(), 1, "only the spawn's own failure: {body}");
+        for banned in ["quiet_command", "sys_command", "Command::new", ".status()"] {
+            assert!(!body.contains(banned), "{banned} in {body}");
+        }
+    }
+
     /// Hardening 1b: PowerShell that cannot be STARTED (NotFound: what a missing powershell.exe or the
     /// fail-closed resolver gives, see sys_exe::tests::when_the_api_fails_every_spawn_fails_closed) is
     /// its own exit code, and the parent reads that code as "nothing ran, nothing was changed", never
