@@ -115,6 +115,12 @@ pub(crate) struct Recommendation {
     /// "off". The card says Compy couldn't read the setting instead of implying it is off.
     #[serde(default)]
     state_unread: bool,
+    /// D2c: the rec's LIVE state read did not finish, whatever its eligibility (`state_unread` above
+    /// drops this for a rec held back for a detected hardware reason, so it stays in "not for this
+    /// rig"). A user who overrides that rec back into the list must still see "couldn't read", never a
+    /// not-applied switch that reads as "off".
+    #[serde(default)]
+    live_read_unread: bool,
 }
 
 fn default_eligible() -> bool {
@@ -462,6 +468,7 @@ pub(crate) fn evaluate_rule_spec(
         ineligible_reason,
         risk_dimensions: None,
         state_unread,
+        live_read_unread: state_read_unread,
     })
 }
 
@@ -509,6 +516,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         ineligible_reason: None,
         risk_dimensions: None,
         state_unread: false,
+        live_read_unread: false,
     });
 
     // game-mode is now defined in src-tauri/resources/baseline-rules-v1.json
@@ -555,6 +563,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             ineligible_reason: None,
             risk_dimensions: None,
             state_unread: false,
+            live_read_unread: false,
         });
     }
 
@@ -578,6 +587,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         ineligible_reason: None,
         risk_dimensions: None,
         state_unread: false,
+        live_read_unread: false,
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
@@ -599,6 +609,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             ineligible_reason: None,
             risk_dimensions: None,
             state_unread: false,
+            live_read_unread: false,
         });
 
         recs.push(Recommendation {
@@ -617,6 +628,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             ineligible_reason: None,
             risk_dimensions: None,
             state_unread: false,
+            live_read_unread: false,
         });
     }
 
@@ -637,6 +649,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             ineligible_reason: None,
             risk_dimensions: None,
             state_unread: false,
+            live_read_unread: false,
         });
     }
 
@@ -660,6 +673,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             ineligible_reason: None,
             risk_dimensions: None,
             state_unread: false,
+            live_read_unread: false,
         });
     }
 
@@ -686,6 +700,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 ineligible_reason: None,
                 risk_dimensions: None,
                 state_unread: false,
+                live_read_unread: false,
             });
             break;
         }
@@ -719,6 +734,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             ineligible_reason: None,
             risk_dimensions: None,
             state_unread: false,
+            live_read_unread: false,
         });
     }
 
@@ -748,6 +764,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 ineligible_reason: None,
                 risk_dimensions: None,
                 state_unread: false,
+                live_read_unread: false,
             });
         }
     }
@@ -780,6 +797,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 ineligible_reason: None,
                 risk_dimensions: None,
                 state_unread: false,
+                live_read_unread: false,
             });
         }
     }
@@ -806,6 +824,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             ineligible_reason: None,
             risk_dimensions: None,
             state_unread: false,
+            live_read_unread: false,
         });
     }
 
@@ -827,6 +846,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             ineligible_reason: None,
             risk_dimensions: None,
             state_unread: false,
+            live_read_unread: false,
         });
     }
 
@@ -1327,6 +1347,27 @@ mod rec_tests {
         assert!(live.eligible);
         assert!(live.state_unread, "an eligible rec whose live read failed says it couldn't read");
         assert!(!live.currently_applied);
+    }
+
+    // D2c: a rec held back for a detected reason keeps its bucket (state_unread false) but still carries
+    // its failed live read, so an override that brings it back never shows a not-applied switch as "off".
+    #[test]
+    fn a_held_back_rec_still_carries_its_failed_live_read_for_an_override() {
+        let _eee = crate::actions::ForceEeeRead::begin(None);
+        let portless = HardwareInfo { has_wired_ethernet_port: false, ..Default::default() };
+        let held = build_recommendations(&portless).into_iter().find(|r| r.id == "eee-disable").expect("kept");
+        assert!(!held.eligible && !held.state_unread, "the bucket is unchanged (F2b)");
+        assert!(held.live_read_unread, "the failed live read is still carried");
+        drop(_eee);
+        // A live read that finished carries no flag.
+        use std::os::windows::process::ExitStatusExt;
+        let _eee = crate::actions::ForceEeeRead::begin(Some(std::process::Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        }));
+        let read = build_recommendations(&portless).into_iter().find(|r| r.id == "eee-disable").expect("kept");
+        assert!(!read.live_read_unread);
     }
 
     // D2b: an EEE read that did not finish gives the card its own reason, never "no switch".

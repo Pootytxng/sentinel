@@ -3621,7 +3621,7 @@ mod export_tests {
         ("Drift", "noticed_at unreadable_now last_ready_at applied_at", "", "id label detail value_now last_ready_value titles recs"),
         ("DiagnosticSection", "entries", "", "name"),
         ("DiagnosticEntry", "", "", "label value note"),
-        ("Recommendation", "id category severity applies_to currently_applied provenance eligible risk_dimensions state_unread", "", "title description impact downside ineligible_reason"),
+        ("Recommendation", "id category severity applies_to currently_applied provenance eligible risk_dimensions state_unread live_read_unread", "", "title description impact downside ineligible_reason"),
         ("RiskDimensions", "reversibility stability compatibility security", "", ""),
         ("HardwareInfo",
          "cpu_cores_logical cpu_cores_physical cpu_frequency_mhz ram_total_bytes ram_used_bytes swap_total_bytes disks gpus physical_disks disk_health display memory_modules windows_version bios_info virtualization usb cpu_arch has_active_wired_ethernet has_wired_ethernet_port eee_switch_exposed eee_switch_unread network_adapters wifi_link network_pills game_storage monitors",

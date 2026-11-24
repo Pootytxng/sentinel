@@ -508,6 +508,8 @@ export type Recommendation = {
   ineligible_reason?: string | null;
   /** D2b: the live state read did not finish, so `currently_applied: false` means "can't tell". */
   state_unread?: boolean;
+  /** D2c: the live state read did not finish, whatever the eligibility. */
+  live_read_unread?: boolean;
 };
 
 // Cross-session comparison result (mirrors comparison.rs serde).

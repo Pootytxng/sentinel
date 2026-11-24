@@ -120,13 +120,25 @@ type Rec = {
   severity?: "safe" | "moderate" | "advanced"; // §4 "Apply all" targets SAFE-tier only
   // D2b: the live state read did not finish, so "not applied" means "can't tell", never "off".
   state_unread?: boolean;
+  // D2c: the live read failed whatever the eligibility (a held-back rec the user overrode back in).
+  live_read_unread?: boolean;
 };
 
 // D2b: said on a rec whose live state couldn't be read, so its switch is never read as "off".
-export function StateUnreadLine({ rec }: { rec: Pick<Rec, "state_unread"> }) {
+// D2c: also on a rec the user overrode back into the list whose live read failed.
+// `inline` renders a <span> for a place that may not hold a block (the slim row's always-visible meta,
+// which sits inside its toggle button).
+export function StateUnreadLine({
+  rec,
+  inline = false,
+}: {
+  rec: Pick<Rec, "state_unread" | "live_read_unread">;
+  inline?: boolean;
+}) {
   const { t } = useTranslation();
-  if (!rec.state_unread) return null;
-  return <p className="fix-row-unread">{t("app.backendErrors.settingUnread")}</p>;
+  if (!rec.state_unread && !rec.live_read_unread) return null;
+  const text = t("app.backendErrors.settingUnread");
+  return inline ? <span className="fix-row-unread">{text}</span> : <p className="fix-row-unread">{text}</p>;
 }
 
 type IneligibleRec = Pick<Rec, "id" | "title" | "ineligible_reason" | "state_unread">;
@@ -407,7 +419,13 @@ export function SlimFixRow({
     <SlimRecRow
       title={<RecTitle id={rec.id} title={rec.title} />}
       proof={slimProofLine(rec)}
-      meta={<ExpertTargetLine id={rec.id} />}
+      meta={
+        <>
+          <ExpertTargetLine id={rec.id} />
+          {/* D2c: always visible, never only inside the collapsed detail. */}
+          <StateUnreadLine rec={rec} inline />
+        </>
+      }
       badge={rec.severity === "safe" ? "recommended" : "optional"}
       status={applied ? "ready" : rec.severity === "safe" ? "attention" : "neutral"}
       control={
@@ -422,7 +440,6 @@ export function SlimFixRow({
         />
       }
     >
-      <StateUnreadLine rec={rec} />
       {why && <SlimDetailRow k={t("optimize.fix.whyItMatters")} v={why} />}
       <SlimDetailRow
         k={t("optimize.fix.evidence")}

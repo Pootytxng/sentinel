@@ -248,6 +248,7 @@ type Recommendation = {
   eligible?: boolean;
   ineligible_reason?: string | null;
   state_unread?: boolean; // D2b: the live state read did not finish ("can't tell", never "off")
+  live_read_unread?: boolean; // D2c: the same, whatever the eligibility (an overridden held-back rec)
 };
 
 type AppliedChange = {
