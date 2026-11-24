@@ -155,6 +155,16 @@ describe("B11: an error that carries several sentences shows all of them, in ord
     expect(shown).not.toContain("Access");
   });
 
+  it("a refused conclude on sessions that aren't comparable says which condition differs (F5)", () => {
+    for (const reason of ["DIFFERENT_GAMES_REASON", "DIFFERENT_GPUS_REASON", "NO_COMMON_METRIC_REASON"]) {
+      const err = `experiment not concluded — ${s("TREATMENT_NOT_COMPARABLE").text} (${s(reason).text})`;
+      expect(backendMessages(err, t)).toBe(`T(${s("TREATMENT_NOT_COMPARABLE").key}) T(${s(reason).key})`);
+    }
+    // No game or GPU name is part of the mapped reason (nothing parsed out of English text).
+    expect(s("DIFFERENT_GAMES_REASON").text).toBe("These are different games, and Compy compares a game only against itself.");
+    expect((zh.backendErrors as Record<string, string>).differentGames).toBe("这是两个不同的游戏，而 Compy 只会拿一个游戏与它自己比较。");
+  });
+
   it("no known sentence -> null (the screen's own line)", () => {
     expect(backendMessages("access denied (os error 5)", t)).toBeNull();
     expect(backendMessages(undefined, t)).toBeNull();

@@ -103,6 +103,16 @@ fn differs<T: PartialEq>(a: Option<&T>, b: Option<&T>) -> Option<bool> {
     }
 }
 
+/// B11: the three NotComparable reasons, fixed sentences so a Trial's refused conclude can say which condition
+/// differs (mapped in backend-error.ts, en + zh; pinned byte-equal by backend-error.test.ts). No game or GPU name
+/// is part of them.
+pub(crate) const DIFFERENT_GAMES_REASON: &str =
+    "These are different games, and Compy compares a game only against itself.";
+pub(crate) const DIFFERENT_GPUS_REASON: &str =
+    "These sessions ran on different GPUs — that's not an apples-to-apples comparison.";
+pub(crate) const NO_COMMON_METRIC_REASON: &str = "These sessions were captured by different methods with no metric \
+     in common — there's nothing that can be compared directly.";
+
 /// Derive the comparability of two sessions. Pure and deterministic: identical inputs → identical
 /// output, no clock, no randomness, no I/O. `a` is the baseline (earlier) session, `b` the current
 /// (later) one; order affects only wording, never the verdict.
@@ -118,16 +128,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
     let b_game = non_empty(&b.process_name);
     match (a_game, b_game) {
         (Some(ga), Some(gb)) if !ga.eq_ignore_ascii_case(gb) => {
-            return not_comparable(
-                format!(
-                    "These are different games ({} vs {}) — Compy compares a game against itself, so their \
-                     frame numbers aren't comparable.",
-                    crate::intelligence::pretty_game_name(ga),
-                    crate::intelligence::pretty_game_name(gb),
-                ),
-                Vec::new(),
-                shared_metrics_of(a, b),
-            );
+            return not_comparable(DIFFERENT_GAMES_REASON.into(), Vec::new(), shared_metrics_of(a, b));
         }
         (Some(_), Some(_)) => {} // same game — proceed
         _ => missing.push((
@@ -168,10 +169,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                      tuning result.",
                     fa.gpu, fb.gpu
                 ));
-                reasons.push(
-                    "These sessions ran on different GPUs — that's not an apples-to-apples comparison."
-                        .into(),
-                );
+                reasons.push(DIFFERENT_GPUS_REASON.into());
                 lower(Comparability::NotComparable, &mut verdict);
             }
             // RAM change → real but not basis-invalidating: Partial + candidate cause.
@@ -433,11 +431,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                     ),
                 ));
                 if shared_metrics.is_empty() {
-                    reasons.push(
-                        "These sessions were captured by different methods with no metric in common — \
-                         there's nothing that can be compared directly."
-                            .into(),
-                    );
+                    reasons.push(NO_COMMON_METRIC_REASON.into());
                     lower(Comparability::NotComparable, &mut verdict);
                 } else {
                     reasons.push(

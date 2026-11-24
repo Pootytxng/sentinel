@@ -184,6 +184,23 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "The two sessions aren't comparable: a recorded condition differs between them. Play a session of this game under the same conditions as the baseline, or restore the Trial.",
     key: "app.backendErrors.treatmentNotComparable",
   },
+  // B11 r1 F5: the condition that differs, from comparability::derive's NotComparable reasons (comparability.rs),
+  // written in ( ) after TREATMENT_NOT_COMPARABLE and shown after it by backendMessages.
+  {
+    rust: "DIFFERENT_GAMES_REASON",
+    text: "These are different games, and Compy compares a game only against itself.",
+    key: "app.backendErrors.differentGames",
+  },
+  {
+    rust: "DIFFERENT_GPUS_REASON",
+    text: "These sessions ran on different GPUs — that's not an apples-to-apples comparison.",
+    key: "app.backendErrors.differentGpus",
+  },
+  {
+    rust: "NO_COMMON_METRIC_REASON",
+    text: "These sessions were captured by different methods with no metric in common — there's nothing that can be compared directly.",
+    key: "app.backendErrors.noCommonMetric",
+  },
   {
     rust: "TREATMENT_COMPARABILITY_UNKNOWN",
     text: "The two sessions don't share any recorded rig or conditions, so Compy can't check they're comparable. Restore the Trial and start a new one.",

@@ -7435,7 +7435,8 @@ mod experiment_tests {
         let mut other_game = session(TREAT_ID, 180.0);
         other_game.process_name = "valorant.exe".into();
         let why = treatment_err(&running(), &[base.clone(), other_game], TREAT_ID);
-        assert!(why.contains("aren't comparable") && why.contains("different games"), "{why}");
+        assert!(why.starts_with(TREATMENT_NOT_COMPARABLE), "{why}");
+        assert!(why.contains(crate::comparability::DIFFERENT_GAMES_REASON), "B11 r1 F5: the mapped reason rides in ( ): {why}");
 
         let mut other_gpu = session(TREAT_ID, 180.0);
         other_gpu.hw_fingerprint.as_mut().unwrap().gpu = "GeForce RTX 5080".into();
