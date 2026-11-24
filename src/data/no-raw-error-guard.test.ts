@@ -9,7 +9,7 @@ import en from "../i18n/locales/en/app.json";
 import zh from "../i18n/locales/zh-CN/app.json";
 import { BACKEND_SENTENCES, backendMessages, backendSentenceKey } from "./backend-error";
 import { STACK_APPLY_PREFIX, TRIAL_APPLY_PREFIX, trialErrorText } from "../surfaces/bench-error";
-import { NOT_CONCLUDED_PREFIX, NOT_STARTED_PREFIX, trialWriteText } from "../surfaces/trial-error";
+import { NOT_CONCLUDED_PREFIX, NOT_STARTED_PREFIX, sayableReason, trialWriteText } from "../surfaces/trial-error";
 import enLab from "../i18n/locales/en/lab.json";
 import zhLab from "../i18n/locales/zh-CN/lab.json";
 
@@ -40,6 +40,35 @@ describe("B11: these screens never show the backend's raw text", () => {
     expect(src("surfaces/Benchmark.tsx")).toContain('backendMessage(e, t) ?? t("gaming.benchmark.errors.baselineFailed")');
     expect(src("surfaces/Benchmark.tsx")).toContain("trialErrorText(trial.error, t)");
     expect(src("surfaces/TrustMoment.tsx")).toContain('backendMessage(e, t) ?? t("home.trustMoment.errors.applyFailed")');
+  });
+});
+
+// B11 r1: GuidedJourney (the main Trial flow) keeps the backend's text in its phases (the remedies read it) but says
+// a reason only through sayableReason. Break check: put `{ reason: p.reason }` / `{ reason: p.refused }` back in
+// any t() call, or drop sayableReason -> fails.
+describe("B11 r1: GuidedJourney never says the backend's raw text", () => {
+  const text = src("surfaces/GuidedJourney.tsx");
+  const t = ((k: string) => `T(${k})`) as never;
+
+  it("no phase reason goes into a line unmapped", () => {
+    expect(/reason:\s*p\.(?:reason|refused)\b/.test(text)).toBe(false);
+    // Rendered as a child; `reason={p.reason}` (ChangedOutsideRemedy, which only reads it) is allowed.
+    expect(/[^=]\{\s*p\.(?:reason|refused)\s*\}/.test(text)).toBe(false);
+    expect(text).toContain("const sayable = (reason: string) => sayableReason(reason, t, own);");
+    for (const key of ["notStarted", "restoredError", "restoreFailed", "reuseRefused"]) {
+      expect(text, key).toContain(`t(\`\${k}.${key}\`, {`);
+      expect(text, `${key}Plain`).toContain(`\${k}.${key}Plain\``);
+    }
+    expect(text).toContain('t("lab.experimentBench.journey.realPlay.failedPlain"');
+  });
+
+  it("sayableReason: the journey's own line as it is, else the mapped sentences, else null", () => {
+    const own = ["Compy couldn't start measuring."];
+    const missing = BACKEND_SENTENCES.find((x) => x.rust === "BASELINE_MISSING")!;
+    expect(sayableReason(own[0], t, own)).toBe(own[0]);
+    expect(sayableReason(`${NOT_STARTED_PREFIX}${missing.text}`, t, own)).toBe(`T(${missing.key})`);
+    expect(sayableReason("helper did not launch", t, own)).toBeNull();
+    expect(sayableReason("", t, [""])).toBeNull();
   });
 });
 

@@ -26,3 +26,12 @@ export function trialFallback(err: unknown, t: TFunction): string {
 export function trialWriteText(err: unknown, t: TFunction): string {
   return backendMessages(err, t) ?? trialFallback(err, t);
 }
+
+/** GuidedJourney (B11 r1): a reason the journey carries, as the screen may say it. One of the journey's own lines
+ *  (`own`: already in the user's language, e.g. its "couldn't start measuring") is said as it is; otherwise every
+ *  sentence backend-error.ts knows in it; otherwise null, and the caller says its own line without a reason. The
+ *  raw reason itself is never returned. */
+export function sayableReason(reason: string, t: TFunction, own: readonly string[]): string | null {
+  if (reason && own.includes(reason)) return reason;
+  return backendMessages(reason, t);
+}

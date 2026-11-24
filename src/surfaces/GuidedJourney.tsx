@@ -77,6 +77,7 @@ import type { SessionSummary } from "../types";
 import { allBackground, usableReading } from "../lib/session-metrics";
 import { writeLedger } from "../data/ledger-write";
 import { ChangedOutsideRemedy } from "./ChangedOutsideRemedy";
+import { NOT_STARTED_PREFIX, sayableReason } from "./trial-error";
 import { prettyGameName } from "./game-name";
 import { fullAfterSessionsFirst, gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
@@ -194,7 +195,9 @@ export type JourneyPhase =
   | { kind: "result"; exp: JourneyExperiment; asIs: string | null }
   | { kind: "too-short"; samples: number | null; behind?: boolean }
   | { kind: "wrong-game"; played: string; planned: string }
-  | { kind: "not-started"; reason: string }
+  /** `reason` is kept as it came (the remedies below read it); the screen says it only through `sayableReason`.
+   *  `before`: the journey itself knows no start was asked for yet (a refusal or failure before the start). */
+  | { kind: "not-started"; reason: string; before?: boolean }
   /** `asked`: the owner tapped "Restore now" on a real-play Trial. */
   | { kind: "restored"; change: string; why: "no-reading" | "behind" | "error" | "asked"; reason: string }
   | { kind: "restore-failed"; change: string; reason: string }
@@ -535,10 +538,11 @@ export function abortJourney() {
 
 /** After a failure: if the journey's change is still on (its Trial is still running), restore it
  *  through restore_experiment and say so; a Trial that already ended says how it ended. */
-async function recover(args: RunArgs, say: (p: JourneyPhase) => void, expId: string | null, err: unknown) {
+async function recover(args: RunArgs, say: (p: JourneyPhase) => void, expId: string | null, err: unknown, before = false) {
   const reason = String(err instanceof Error ? err.message : err);
   const change = args.change.title;
-  if (expId == null) return say({ kind: "not-started", reason });
+  // `before`: the failure came before the start was asked for (B11 r1), so the screen may say nothing changed.
+  if (expId == null) return say({ kind: "not-started", reason, before });
   const xs = await invoke<JourneyExperiment[]>("get_experiments").catch(() => null);
   const exp = xs?.find((x) => x.id === expId) ?? null;
   // Unknown (the read failed) is treated as still running: the restore refuses harmlessly if it isn't.
@@ -589,7 +593,7 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
     // CR-refuse-early: a refusal known now is said now, not after the as-is sessions.
     const early = await refusedUpFront(change.id);
     if (left()) return;
-    if (early) return say({ kind: "not-started", reason: early });
+    if (early) return say({ kind: "not-started", reason: early, before: true });
     // P5-continue: a next journey starts from the last as-is session when it can be reused.
     let baseline: SessionSummary | null = reuseId ? await reusableSession(reuseId, game) : null;
     let reused = baseline != null;
@@ -708,7 +712,8 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
   } catch (e) {
     if (left()) return;
     await stopCapture(run);
-    await recover(args, say, expId, e);
+    // expId is set only after a start that succeeded (a failed start returns through recover above).
+    await recover(args, say, expId, e, expId == null);
     tagRunning(null);
   } finally {
     if (current === run) current = null;
@@ -782,7 +787,7 @@ async function runRealPlay(args: RunArgs, game: string, progress: RealPlayProgre
       // CR-refuse-early: before any as-is session (or the start) is asked for.
       const early = await refusedUpFront(change.id);
       if (left()) return;
-      if (early) return say({ kind: "not-started", reason: early });
+      if (early) return say({ kind: "not-started", reason: early, before: true });
       let now = progress;
       let startOnly = false;
       if (now.phase === "collecting-before") {
@@ -794,7 +799,7 @@ async function runRealPlay(args: RunArgs, game: string, progress: RealPlayProgre
         const read = await readRealPlay(game);
         if (left()) return;
         await args.refresh().catch(() => {});
-        if (!read.progress) return say({ kind: "not-started", reason: read.error ?? noProgress });
+        if (!read.progress) return say({ kind: "not-started", reason: read.error ?? noProgress, before: true });
         if (read.progress.phase !== "ready-to-start") {
           setRealPlayNote(noteFor(s, { before: now.before, after: read.progress.before }, null, now.min_readings, { game, expId: null }, since));
           return say({ kind: "rp-before", game, change, progress: read.progress, costAcknowledged: args.costAcknowledged ?? false });
@@ -803,7 +808,7 @@ async function runRealPlay(args: RunArgs, game: string, progress: RealPlayProgre
         now = read.progress;
         startOnly = true;
       }
-      if (now.phase !== "ready-to-start" || !now.anchor_session_id) return say({ kind: "not-started", reason: noProgress });
+      if (now.phase !== "ready-to-start" || !now.anchor_session_id) return say({ kind: "not-started", reason: noProgress, before: true });
       // ── The change goes on once, through the audited start, and stays on while the owner plays ──
       try {
         const started = await writeLedger<JourneyExperiment>(
@@ -851,7 +856,7 @@ async function runRealPlay(args: RunArgs, game: string, progress: RealPlayProgre
     const reason = String(e instanceof Error ? e.message : e);
     // Nothing is put back behind the owner's back: the change staying on IS the test, and the panel
     // offers to put it back. Before anything went on, nothing was changed.
-    say(expId ? { kind: "rp-failed", change: change.title, reason } : { kind: "not-started", reason });
+    say(expId ? { kind: "rp-failed", change: change.title, reason } : { kind: "not-started", reason, before: true });
   } finally {
     if (current === run) current = null;
     window.removeEventListener("pagehide", abortJourney);
@@ -1308,13 +1313,20 @@ export function GuidedJourney({
   const live = playing ? recorded : null;
   const unsettled = live != null && enoughState(live, mode).kind === "unsettled";
   const finished = !playing && p.kind !== "reading" && p.kind !== "judging" && p.kind !== "uneven" && p.kind !== "rp-working";
+  // B11 r1 (the owner's "no String(e) in the face" law): a reason the journey carries is said only as a mapped
+  // sentence or one of the journey's own lines (trial-error.ts `sayableReason`); anything else gets the line's
+  // own wording without a reason. The raw text stays in the phase for the remedies and the console.
+  const own = [t(`${k}.captureFailed`), t("lab.experimentBench.journey.realPlay.noProgress")];
+  const sayable = (reason: string) => sayableReason(reason, t, own);
   let line: string;
   switch (p.kind) {
-    case "as-is":
+    case "as-is": {
       if (p.again && p.game) line = t(`${k}.asIsAgain`, { game: gameName(p.game) });
       else line = p.game ? t(`${k}.asIs`, { game: gameName(p.game) }) : t(`${k}.asIsNoGame`);
-      if (p.refused) line = `${t(`${k}.reuseRefused`, { reason: p.refused })} ${line}`;
+      const refused = p.refused ? sayable(p.refused) : null;
+      if (p.refused) line = `${refused ? t(`${k}.reuseRefused`, { reason: refused }) : t(`${k}.reuseRefusedPlain`)} ${line}`;
       break;
+    }
     case "uneven": {
       const why =
         p.grade.kind === "uneven"
@@ -1348,10 +1360,18 @@ export function GuidedJourney({
     case "wrong-game":
       line = t(`${k}.wrongGame`, { played: gameName(p.played), planned: gameName(p.planned) });
       break;
-    case "not-started":
-      line = t(`${k}.notStarted`, { reason: p.reason });
+    case "not-started": {
+      // "Nothing was changed" only where it is known: a failure before the start was asked for, or the start's
+      // own refusal (NOT_STARTED_PREFIX: returned before anything was recorded or applied). A start that stopped
+      // after its apply ("experiment aborted …") says its own sentences, which tell what happened to the change.
+      const said = sayable(p.reason);
+      const before = p.before || p.reason.startsWith(NOT_STARTED_PREFIX) || (said != null && own.includes(said));
+      if (before) line = said ? t(`${k}.notStarted`, { reason: said }) : t(`${k}.notStartedPlain`);
+      else line = said ?? t("lab.experimentBench.errors.writeFailed");
       break;
-    case "restored":
+    }
+    case "restored": {
+      const said = p.why === "error" ? sayable(p.reason) : null;
       line =
         p.why === "asked"
           ? t("lab.experimentBench.journey.realPlay.putBackDone", { change: p.change })
@@ -1359,11 +1379,18 @@ export function GuidedJourney({
           ? t(`${k}.restoredNoReading`, { change: p.change })
           : p.why === "behind"
             ? t(`${k}.restoredBehind`, { change: p.change })
-            : t(`${k}.restoredError`, { change: p.change, reason: p.reason });
+            : said
+              ? t(`${k}.restoredError`, { change: p.change, reason: said })
+              : t(`${k}.restoredErrorPlain`, { change: p.change });
       break;
-    case "restore-failed":
-      line = t(`${k}.restoreFailed`, { change: p.change, reason: p.reason });
+    }
+    case "restore-failed": {
+      const said = sayable(p.reason);
+      line = said
+        ? t(`${k}.restoreFailed`, { change: p.change, reason: said })
+        : t(`${k}.restoreFailedPlain`, { change: p.change });
       break;
+    }
     case "rp-playing":
       line = p.on
         ? t("lab.experimentBench.journey.realPlay.playingOn", { change: p.change, game: gameName(p.game) })
@@ -1378,9 +1405,13 @@ export function GuidedJourney({
           ? t("lab.experimentBench.journey.realPlay.judging")
           : t("lab.experimentBench.journey.realPlay.puttingBack", { change: p.change });
       break;
-    case "rp-failed":
-      line = t("lab.experimentBench.journey.realPlay.failed", { change: p.change, reason: p.reason });
+    case "rp-failed": {
+      const said = sayable(p.reason);
+      line = said
+        ? t("lab.experimentBench.journey.realPlay.failed", { change: p.change, reason: said })
+        : t("lab.experimentBench.journey.realPlay.failedPlain", { change: p.change });
       break;
+    }
   }
   const lineEl = (
     <p className="exp-note" data-testid="journey-line" role={finished ? "status" : undefined}>

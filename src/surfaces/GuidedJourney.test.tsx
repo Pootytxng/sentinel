@@ -263,7 +263,9 @@ describe("CR-refuse-early: a start refusal known now is said before any session"
     render(<ExperimentBench />);
     await press();
     const line = await finalLine();
-    expect(line).toBe(`Compy didn't start the test, and nothing was changed: ${SYNEZ_REFUSAL}`);
+    // B11 r1: the refusal carries a count, so it isn't a mapped sentence: the line says its own words, never the
+    // backend's text; the remedy (undo / record it as changed outside Compy) is offered below it.
+    expect(line).toBe("Compy didn't start the test, and nothing was changed.");
     expect(calls("trial_start_precheck")).toEqual([{ recId: "hags" }]);
     expect(calls("start_fps_capture")).toHaveLength(0);
     expect(calls("start_experiment")).toHaveLength(0);
@@ -285,9 +287,8 @@ describe("CR-refuse-early: a start refusal known now is said before any session"
     state.refuse = { trial_start_precheck: "Compy couldn't read its change history (history.json is locked)" };
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe(
-      "Compy didn't start the test, and nothing was changed: Compy couldn't read its change history (history.json is locked)",
-    );
+    // B11 r1: a check that couldn't run is said in the journey's own words, never the backend's text.
+    expect(await finalLine()).toBe("Compy didn't start the test, and nothing was changed.");
     expect(calls("start_fps_capture")).toHaveLength(0);
     expect(calls("start_experiment")).toHaveLength(0);
   });
@@ -667,7 +668,8 @@ describe("P5-guided: one button runs the whole Trial", () => {
     state.failSecondCapture = true;
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toMatch(/Something went wrong, so Compy put HAGS back.*helper did not launch/);
+    // B11 r1: the capture helper's own text is not a mapped sentence, so it is not said.
+    expect(await finalLine()).toBe("Something went wrong, so Compy put HAGS back the way it was. Nothing was kept.");
     expect(calls("restore_experiment")).toHaveLength(1);
     expect(calls("conclude_experiment")).toHaveLength(0);
   });
@@ -676,7 +678,9 @@ describe("P5-guided: one button runs the whole Trial", () => {
     state.refuse = { conclude_experiment: "boom", restore_experiment: "restore failed: key locked" };
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toMatch(/couldn't confirm HAGS was put back.*restore failed: key locked/);
+    expect(await finalLine()).toBe(
+      "Something went wrong, and Compy couldn't confirm HAGS was put back. Check it in Test → Applied & history and undo it there.",
+    );
   });
 
   it("never keeps a change the verdict didn't call Better", async () => {
@@ -1107,7 +1111,8 @@ describe("P5-realplay: the change stays on while you play", () => {
     state.sessions = [OLD, AS_IS[0]];
     render(<ExperimentBench />);
     fireEvent.click(await enabled("Test it while I play normally"));
-    await waitFor(() => expect(screen.getByTestId("journey-line").textContent).toBe(`Compy didn't start the test, and nothing was changed: ${why}`), {
+    // B11 r1: a refusal with a count isn't a mapped sentence, so the line says its own words, never the text.
+    await waitFor(() => expect(screen.getByTestId("journey-line").textContent).toBe("Compy didn't start the test, and nothing was changed."), {
       timeout: 3000,
     });
     expect(calls("trial_start_precheck")).toEqual([{ recId: "hags" }]);
@@ -1388,7 +1393,9 @@ describe("P5-realplay: the change stays on while you play", () => {
 
   // Rust review fix: a start that can't pin its as-is sessions says why (e.g. older than 14 days); the
   // journey shows the backend's words as they are, and nothing was changed.
-  it("a refused real-play start shows the backend's reason as it is, and nothing goes on", async () => {
+  // B11 r1: the backend's reason is said only when it is a mapped sentence; this one (it names the game) isn't,
+  // so the journey says its own line. A refusal with the start's prefix returned before anything changed.
+  it("a refused real-play start says it didn't start, never the backend's text, and nothing goes on", async () => {
     const why =
       "experiment not started — real play can't pin the as-is sessions of Valorant: the newest one is older than 14 days, so play a new one, then start";
     state.rpProgress = backendLike();
@@ -1396,11 +1403,33 @@ describe("P5-realplay: the change stays on while you play", () => {
     state.refuse = { start_experiment: why };
     render(<ExperimentBench />);
     fireEvent.click(await enabled("Test it while I play normally"));
-    expect(await finalLine()).toBe(`Compy didn't start the test, and nothing was changed: ${why}`);
+    expect(await finalLine()).toBe("Compy didn't start the test, and nothing was changed.");
     expect(calls("start_fps_capture")).toHaveLength(0);
     expect(calls("restore_experiment")).toHaveLength(0);
     // Review 2026-11-02 (fix 2): the generic OK sits in a row of its own, 9px under the line.
     expect(screen.getByRole("button", { name: "OK" }).parentElement).toHaveClass("exp-running-actions");
+  });
+
+  // B11 r1: a mapped refusal is said in the journey's frame; a start that stopped after its apply says its own
+  // sentences (what happened to the change), never "nothing was changed", and never the OS text.
+  it.each([
+    [
+      "a mapped refusal",
+      "experiment not started — The baseline session isn't in your session history any more. Play a monitored session, then try again.",
+      "Compy didn't start the test, and nothing was changed: The baseline session isn't in your session history any more. Play a monitored session, then try again.",
+    ],
+    [
+      "a start that stopped after its apply and couldn't put it back",
+      "experiment aborted before measuring — The setting did not read as changed after the apply, so there was nothing to measure. Compy tried to put the change back, but the restore did not complete, so Compy can't confirm the change was undone. Check it in Test → Applied & history and undo it there. (Access is denied.)",
+      "The setting did not read as changed after the apply, so there was nothing to measure. Compy tried to put the change back, but the restore did not complete, so Compy can't confirm the change was undone. Check it in Test → Applied & history and undo it there.",
+    ],
+  ])("a failed real-play start: %s", async (_what, why, said) => {
+    state.rpProgress = backendLike();
+    state.sessions = [OLD, ...AS_IS];
+    state.refuse = { start_experiment: why };
+    render(<ExperimentBench />);
+    fireEvent.click(await enabled("Test it while I play normally"));
+    expect(await finalLine()).toBe(said);
   });
 
   // Rust review fix: a long session with no frame-rate reading is not counted ("no-reading"). The
@@ -1429,7 +1458,7 @@ describe("P5-realplay: the change stays on while you play", () => {
     render(<ExperimentBench />);
     fireEvent.click(await enabled("Measure my next session"));
     expect(await finalLine()).toBe(
-      "Compy couldn't finish that step, so nothing was judged. HAGS is still on until you close the test or put it back. (helper did not launch)",
+      "Compy couldn't finish that step, so nothing was judged. HAGS is still on until you close the test or put it back.",
     );
     expect(calls("restore_experiment")).toHaveLength(0);
     expect(state.experiments[0]).toMatchObject({ status: "running" });
