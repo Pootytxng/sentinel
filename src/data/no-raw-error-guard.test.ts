@@ -101,7 +101,7 @@ describe("B11: the benchmark's apply-failed lines", () => {
     expect(literalErrors.length, "a bare English literal is written to the trial card's error").toBe(0);
     // D7 r1 gap: a formatted error must lead with a mapped const ("{BENCH_…} ({e})") or one of the two apply prefixes
     // trialErrorText knows. Break check: write `s.error = Some(format!("New sentence: {e}"))` -> fails. (An error built
-    // in a variable first, `Some(msg)`, is not seen here: follow-up.)
+    // in a variable first, `Some(msg)`, is not seen here: D8's case below reads it.)
     const formatted = [...code.matchAll(/s\.error = Some\(\s*format!\(\s*"([^"]*)"/g)].map((m) => m[1]);
     expect(formatted.length).toBeGreaterThan(0);
     expect(
@@ -122,6 +122,66 @@ describe("B11: the benchmark's apply-failed lines", () => {
     expect(bench).toContain("s.error = Some(BENCH_RUN_CANCELLED.into())");
     expect(bench).not.toMatch(/s\.error = Some\(\s*"/);
     expect(BACKEND_SENTENCES.some((s) => s.rust === "BENCH_RUN_CANCELLED")).toBe(true);
+  });
+
+  // D8: the D7 check above reads only `s.error = Some("…")` and `Some(format!("…"))`. This one reads EVERY write to an
+  // `error` field in the non-test code of benchmark_trial.rs and benchmark.rs, whatever its receiver or shape
+  // (`x.error = …`, `error: …` in a struct literal), and fails on any value it can't trace to a MAPPED const (one in
+  // BACKEND_SENTENCES, alone or at the head of a format!) or to an apply prefix trialErrorText knows. A variable
+  // (`Some(msg)`) is traced to its nearest `let` before the write, whose value must itself be one of those.
+  // Break checks: in record_stack_rollback_outcome write `let mut msg = format!("Some rollbacks failed ({}", …)` -> fails;
+  // write `s.error = Some(e)` or `s.error = Some(e.to_string())` anywhere -> fails; lead a format! with a const that is
+  // not in BACKEND_SENTENCES -> fails.
+  it("D8: every error written to the trial or run card, through a variable too, is mapped", () => {
+    const MAPPED = new Set(BACKEND_SENTENCES.map((s) => s.rust));
+    const nonTest = (file: string) => {
+      const all = readFileSync(join("src-tauri", "src", file), "utf8").replace(/\r\n/g, "\n");
+      const cut = all.search(/#\[cfg\(test\)\]\s*\nmod /);
+      return (cut >= 0 ? all.slice(0, cut) : all).replace(/^\s*\/\/.*$/gm, "");
+    };
+    // `v` is the text right after `Some(`.
+    const mappedHead = (v: string): boolean => {
+      const k = /^\s*([A-Z][A-Z0-9_]*)\.(?:into|to_string)\(\)/.exec(v);
+      if (k) return MAPPED.has(k[1]);
+      const f = /^\s*format!\(\s*"([^"]*)"/.exec(v);
+      if (!f) return false;
+      const head = /^\{([A-Z][A-Z0-9_]*)\}/.exec(f[1]);
+      if (head) return MAPPED.has(head[1]);
+      return f[1].startsWith(TRIAL_APPLY_PREFIX) || f[1].startsWith(STACK_APPLY_PREFIX);
+    };
+    const traced: string[] = [];
+    const bad: string[] = [];
+    let writes = 0;
+    for (const file of ["benchmark_trial.rs", "benchmark.rs"]) {
+      const code = nonTest(file);
+      for (const m of code.matchAll(/(\.error\s*=(?!=)|\berror\s*:(?!:)(?!\s*Option<))\s*/g)) {
+        writes++;
+        const at = m.index! + m[0].length;
+        const v = code.slice(at, at + 400);
+        if (/^None\b/.test(v)) continue;
+        const some = /^Some\(/.exec(v);
+        if (!some) {
+          bad.push(`${file}: ${v.slice(0, 60)}`);
+          continue;
+        }
+        const inner = v.slice(some[0].length);
+        if (mappedHead(inner)) continue;
+        const id = /^\s*([a-z_][a-z0-9_]*)\s*\)/.exec(inner);
+        if (id) {
+          const lets = [...code.slice(0, m.index!).matchAll(new RegExp(`\\blet\\s+(?:mut\\s+)?${id[1]}\\s*(?::[^=]*)?=\\s*`, "g"))];
+          const last = lets[lets.length - 1];
+          if (last && mappedHead(code.slice(last.index! + last[0].length, last.index! + last[0].length + 400))) {
+            traced.push(id[1]);
+            continue;
+          }
+        }
+        bad.push(`${file}: ${v.slice(0, 60)}`);
+      }
+    }
+    expect(bad, "an error reaches the card that is not a mapped const or an apply prefix").toEqual([]);
+    // The stack rollback's `Some(msg)` (record_stack_rollback_outcome) is one of the writes read, and traced.
+    expect(traced).toContain("msg");
+    expect(writes).toBeGreaterThanOrEqual(18);
   });
 
   it("a rollback / change-history outcome shows its mapped sentence, never the detail after it", () => {
