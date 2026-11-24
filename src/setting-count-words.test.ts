@@ -125,6 +125,33 @@ describe("a count of settings says settings (D7)", () => {
     expect(debrief).toContain('t("monitor.sessionDebrief.changesActive", { count: s.compy_changes_active })');
   });
 
+  // D7 r2: the same count's "not recorded" and zero lines. "0 changes active — you played on stock settings" was false
+  // (settings changed outside Compy are not counted), and "During this session" named the wrong time.
+  // Break checks: restore en monitor.sessionDebrief.zeroChangesActive to "...you played on stock settings..." -> fails;
+  // restore zh monitor.sessionDebrief.changesActiveUnknown to "本次会话中：..." -> fails; restore en
+  // monitor.monitorConsole.changesUnknown to "Compy changes on — not recorded" -> fails.
+  it.each([
+    [
+      "monitor.monitorConsole.changesUnknown",
+      "Compy-changed settings on or unconfirmed at start — not recorded",
+      "会话开始时由 Compy 更改且已开启或无法确认的设置数量 — 未记录",
+    ],
+    [
+      "monitor.sessionDebrief.changesActiveUnknown",
+      "At session start: Compy-changed settings on or unconfirmed — not recorded",
+      "会话开始时：由 Compy 更改且已开启或无法确认的设置数量 — 未记录",
+    ],
+    [
+      "monitor.sessionDebrief.zeroChangesActive",
+      "At session start, no Compy-changed setting was on or unconfirmed. Settings changed outside Compy aren't counted.",
+      "会话开始时，没有由 Compy 更改的设置处于开启状态或无法确认。Compy 以外更改的设置不计入。",
+    ],
+  ])("%s says what the session-start count covers, en and zh", (key, enText, zhText) => {
+    expect(locale("en").get(key)).toBe(enText);
+    expect(locale("zh-CN").get(key)).toBe(zhText);
+    expect(enText).not.toMatch(/stock|During this session|\bchanges?\b/i);
+  });
+
   it("each key is still reached by the surface named above (the list is not stale)", () => {
     const src = (p: string) => readFileSync(join("src", ...p.split("/")), "utf8");
     expect(src("surfaces/HomeConsole.tsx")).toContain('t("home.homeConsole.inEffect.unconfirmed", { count: inEffect.unknown })');
