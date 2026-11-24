@@ -21,6 +21,9 @@ import { Toggle } from "../design/Toggle";
 import { BackButton, ForwardButton } from "../design/BackButton";
 import { readMotionPref, setMotionPref, type MotionPref } from "../design/use-motion";
 import { readExpertView, setExpertView } from "../design/use-expert-view";
+import { setTuningTools, useTuningTools } from "../data/tuning-tools";
+import { tuningToolsOffRefusal, type TurnOffRefusal } from "../data/tuning-tools-refusal";
+import { useJourneyPhase } from "./GuidedJourney";
 import { APP_LANGUAGES, readLanguage, applyLanguage, type AppLanguage } from "../i18n/language";
 import {
   autoUpdateChecks,
@@ -34,6 +37,16 @@ import { FeedbackExport } from "./FeedbackExport";
 import { SupportEvidence } from "./SupportEvidence";
 import { YourData } from "./YourData";
 import "./Settings.css";
+
+// D6: each turn-off refusal's sentence, spelled out so every key is a literal the orphan-key guard can see.
+const TOOLS_REFUSAL_KEY: Record<TurnOffRefusal, string> = {
+  trial: "settings.behavior.tuningTools.refusal.trial",
+  trialUnread: "settings.behavior.tuningTools.refusal.trialUnread",
+  bench: "settings.behavior.tuningTools.refusal.bench",
+  benchUnread: "settings.behavior.tuningTools.refusal.benchUnread",
+  gaming: "settings.behavior.tuningTools.refusal.gaming",
+  gamingUnread: "settings.behavior.tuningTools.refusal.gamingUnread",
+};
 
 // Settings / Appearance surface (spec 2026-06-06-settings-and-icon §A). Frontend + localStorage only;
 // every control changes pixels or a UI preference — NONE of it touches what Compy measures. Calm,
@@ -139,6 +152,24 @@ export default function Settings({
   const changeExpertView = (v: boolean) => {
     setExpertViewState(v);
     setExpertView(v); // persists + notifies mounted surfaces live
+  };
+
+  // D6 Tuning tools. ON is immediate. OFF first reads, at the click, whether a Trial, a benchmark run or a
+  // Gaming Mode session is still holding something (their Restore now / Cancel / Stop live with the tools);
+  // any of those, or a read that fails, keeps the tools on and says why.
+  const tools = useTuningTools();
+  const journey = useJourneyPhase();
+  const [toolsRefusal, setToolsRefusal] = useState<TurnOffRefusal | null>(null);
+  const changeTuningTools = (v: boolean) => {
+    setToolsRefusal(null);
+    if (v) {
+      setTuningTools(true);
+      return;
+    }
+    void tuningToolsOffRefusal(journey.kind === "idle").then((why) => {
+      if (why) setToolsRefusal(why);
+      else setTuningTools(false);
+    });
   };
 
   // THE HOME INTERVIEW (design foundation ③, issue #177) — Home's primary button and the question
@@ -326,6 +357,25 @@ export default function Settings({
               on={expertView}
               onChange={changeExpertView}
               ariaLabel={t("settings.behavior.expertView.title")}
+            />
+          </div>
+          {/* D6 (owner decision 2026-11-24, §38 layer 3 opt-in): Test's tuning tools. Turning them OFF is refused
+              while something they hold is still running (data/tuning-tools-refusal.ts); turning them ON reads
+              nothing. Either way nothing on the PC changes. */}
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">{t("settings.behavior.tuningTools.title")}</div>
+              <div className="set-row-sub">{t("settings.behavior.tuningTools.sub")}</div>
+              {toolsRefusal && (
+                <div className="set-row-sub" role="status" data-testid="tuning-tools-refusal">
+                  {t(TOOLS_REFUSAL_KEY[toolsRefusal])}
+                </div>
+              )}
+            </div>
+            <Toggle
+              on={tools}
+              onChange={changeTuningTools}
+              ariaLabel={t("settings.behavior.tuningTools.title")}
             />
           </div>
           <div className="set-row">

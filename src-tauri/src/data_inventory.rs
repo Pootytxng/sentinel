@@ -1123,6 +1123,7 @@ pub(crate) static WEBVIEW_KEYS: &[WebviewKey] = &[
     WebviewKey { key: "compy_lang", kind: Local, category: Choices, personal: &[], holds: "display language" },
     WebviewKey { key: "compy_motion", kind: Local, category: Choices, personal: &[], holds: "reduced-motion preference" },
     WebviewKey { key: "compy_expert_view", kind: Local, category: Choices, personal: &[], holds: "expert-view switch" },
+    WebviewKey { key: "compy_tuning_tools", kind: Local, category: Choices, personal: &[], holds: "tuning-tools switch" },
     WebviewKey { key: "compy_close_to_tray", kind: Local, category: Choices, personal: &[], holds: "close-to-tray switch" },
     WebviewKey { key: "compy_update_autocheck", kind: Local, category: Choices, personal: &[], holds: "automatic update-check switch" },
     WebviewKey { key: "compy_use_profile_v1", kind: Local, category: Choices, personal: &[], holds: "what the user mostly does with the PC (gaming, streaming, creation, idle)" },

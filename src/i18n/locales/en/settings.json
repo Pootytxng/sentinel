@@ -40,6 +40,18 @@
       "title": "Expert view",
       "sub": "For tinkerers: shows every tweak's technical name and the exact registry key, service, or setting it touches, opens the \"deliberately refused\" list with full reasoning, and swaps rounded stats for raw measured values. Same tweaks, same limits — nothing new becomes appliable."
     },
+    "tuningTools": {
+      "title": "Tuning tools",
+      "sub": "Shows Test's tuning tools: the Optimize switches, Trials, Benchmark, Latency and Tuning, and their results. Turning this on or off changes nothing on your PC; it only shows or hides those tools. Compy's changes and their undo, Diagnostics and Crash & Freeze Rescue stay in Test either way.",
+      "refusal": {
+        "trial": "A Trial is in progress, so the tuning tools stay on. Conclude it or tap Restore now in the Trial first.",
+        "trialUnread": "Compy couldn't read whether a Trial is in progress, so the tuning tools stay on. Try again in a moment.",
+        "bench": "Benchmark is running (a run, a calibration or a change being measured), so the tuning tools stay on. Let it finish or cancel it in Benchmark first.",
+        "benchUnread": "Compy couldn't read whether Benchmark is running, so the tuning tools stay on. Try again in a moment.",
+        "gaming": "A Gaming Mode session is on or waiting to be finished, so the tuning tools stay on. Stop it or finish it in Gaming Mode first.",
+        "gamingUnread": "Compy couldn't read Gaming Mode's session, so the tuning tools stay on. Try again in a moment."
+      }
+    },
     "overlayDensity": {
       "title": "In-game overlay density",
       "sub": "What the in-game overlay shows: just FPS · + 1%/temp/GPU · + a frametime line.",
