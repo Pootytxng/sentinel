@@ -10080,9 +10080,20 @@ mod a9_stored_record_tests {
             ("eee property backtick", "Ethernet 2", "Energy `Efficient"),
             ("eee empty adapter", "", "Energy Efficient Ethernet"),
             ("eee empty property", "Ethernet 2", ""),
+            // Review r3 R3-1b: a bracket range, two pairs, an unclosed bracket, a range inside one pair.
+            ("eee adapter any-character range", "[ -~]", "Energy Efficient Ethernet"),
+            ("eee adapter two bracket pairs", "Ethernet [2] [3]", "Energy Efficient Ethernet"),
+            ("eee adapter unclosed bracket", "Ethernet [2", "Energy Efficient Ethernet"),
+            ("eee adapter range inside one pair", "Ethernet [1-9]", "Energy Efficient Ethernet"),
         ] {
             let row = eee_row(a, p);
             refused_before_any_dispatch(why, || rollback_eee_disable_typed(&row));
+        }
+        {
+            // R3-1b: one bracket pair without a range ("Ethernet [2]") still undoes (parks its one op).
+            let guard = ElevationDeferral::begin().expect("sink");
+            rollback_eee_disable_typed(&eee_row("Ethernet [2]", "Energy Efficient Ethernet")).expect("Ethernet [2] parks");
+            assert_eq!(guard.take_deferred().len(), 1, "Ethernet [2] is one parked undo");
         }
         // Review r2 R2-2: at the cap the undo parks one op; one over refuses before anything runs.
         let eee_n = |n: usize| -> Vec<EeeNicSnapshot> {

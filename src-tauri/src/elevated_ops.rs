@@ -1668,6 +1668,44 @@ mod tests {
         assert_eq!(connects.get(), 0, "the pipe is not touched");
     }
 
+    /// Review r3 R3-1b: an EEE undo adapter holds at most ONE bracket pair, in order, with no `-` inside it, so a
+    /// forged adapter value can no longer be a bracket range that matches every adapter (`[ -~]`). "Ethernet [2]"
+    /// stays accepted. Each refused shape is refused by `validate` and, as a forged request, WHOLE by the helper
+    /// before any read, pipe or run. Break: allow two pairs, an unclosed bracket, or a `-` inside the pair in
+    /// `adapter_brackets_ok` and this fails.
+    #[test]
+    fn an_eee_undo_adapter_holds_at_most_one_bracket_pair_without_a_range() {
+        let target = |a: &str| EeeSaved {
+            adapter: SavedText::parse(a).expect("a"),
+            property: SavedText::parse("Energy Efficient Ethernet").expect("p"),
+            prior: SavedText::parse("Enabled").expect("v"),
+        };
+        for ok in ["Ethernet [2]", "Ethernet 2", "Wi-Fi", "Wi-Fi [3]", "Bob's NIC [x]"] {
+            assert_eq!(ElevatedOp::EeeRestore { targets: vec![target(ok)] }.validate(), Ok(()), "{ok}");
+        }
+        for (why, bad) in [
+            ("the any-character range", "[ -~]"),
+            ("a range inside one pair", "Ethernet [1-9]"),
+            ("two pairs", "Ethernet [2] [3]"),
+            ("two opens in one pair", "Ethernet [[2]"),
+            ("an unclosed bracket", "Ethernet [2"),
+            ("a lone close", "Ethernet 2]"),
+            ("a close before the open", "Ethernet ]2["),
+        ] {
+            assert_eq!(ElevatedOp::EeeRestore { targets: vec![target(bad)] }.validate(), Err(Refused::Request), "{why}");
+            let op = serde_json::to_string(&ElevatedOp::EeeRestore { targets: vec![target(bad)] }).expect("json");
+            let mut fx = Fake::default();
+            let connects = std::cell::Cell::new(0);
+            let code = helper_argv_with(&[hex(&request_json("single", &format!(r#"{{"ops":[{op}]}}"#)))], &mut fx, &|_, _| {
+                connects.set(connects.get() + 1);
+                Ok(Box::new(SharedBuf::default()) as PipeOut)
+            });
+            assert_eq!(code, actions::HELPER_REQUEST_REFUSED, "{why}: the helper refuses it whole");
+            assert!(fx.events.is_empty(), "{why}: nothing read or run, got {:?}", fx.events);
+            assert_eq!(connects.get(), 0, "{why}: the pipe is not touched");
+        }
+    }
+
     /// Review r2 R2-2: an EEE undo restores at most MAX_EEE_RESTORE (128) targets and a Nagle undo at most
     /// MAX_NAGLE_RESTORE (64) interfaces; at the cap it is accepted, one over is refused whole by the helper
     /// before anything runs. Break: change either cap (or drop the upper bound) in `validate` and this fails.
