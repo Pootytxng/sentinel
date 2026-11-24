@@ -3958,7 +3958,11 @@ mod recovery_f3 {
     }
 
     fn record(applied: &str, undone: Option<&str>) -> super::super::extras::CompyRecord {
-        super::super::extras::CompyRecord { applied: utc(applied), title: "Enable Game Mode".into(), undone: undone.map(utc) }
+        record_of("game-mode", applied, undone)
+    }
+
+    fn record_of(rec_id: &str, applied: &str, undone: Option<&str>) -> super::super::extras::CompyRecord {
+        super::super::extras::CompyRecord { applied: utc(applied), rec_id: rec_id.into(), title: "Enable Game Mode".into(), undone: undone.map(utc) }
     }
 
     fn one_undone() -> Vec<super::super::extras::CompyRecord> {
@@ -4035,16 +4039,63 @@ mod recovery_f3 {
         assert!(d.findings.iter().all(|f| f.confidence == Certainty::Possible), "nothing above Possible");
     }
 
-    /// Two clear sessions: no line; the recovery's own compy row answers. The undo is counted at most once across the
-    /// two. Break check: emit compy-undone-clear-once for two clear sessions too -> fails.
+    /// Two clear sessions: no line; the recovery's own compy row answers, so the undo is counted at most once. Pinned
+    /// the way `independent()` would see it: the finding's certainty and its place in play are the same with and
+    /// without the undo record (the record adds nothing on top of the recovery). Break checks: emit
+    /// compy-undone-clear-once for two clear sessions too -> the line check fails; set a support flag (`r`) from the
+    /// undo -> the with/without comparison fails.
     #[test]
     fn b10b_two_clear_sessions_are_the_recoverys_answer_and_the_undo_counts_once() {
-        let d = undo_case(vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3)], one_undone());
+        let after = || vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3)];
+        let d = undo_case(after(), one_undone());
         assert!(undone_lines(&d).is_empty());
-        let f = finding_of(&d, "compy-change");
-        let from_undo = f.evidence.iter().filter(|e| e.code.starts_with("compy-undone-") && !e.against).count()
-            + f.now_evidence.iter().filter(|e| e.code == "recovered-compy-back").count();
-        assert!(from_undo <= 1, "{:?} / {:?}", f.evidence, f.now_evidence);
+        let without = undo_case(after(), Vec::new());
+        let (a, b) = (finding_of(&d, "compy-change"), finding_of(&without, "compy-change"));
+        assert_eq!((a.confidence, a.in_play), (b.confidence, b.in_play), "the undo record changed the finding");
+        assert!(d.findings.iter().all(|f| f.confidence == Certainty::Possible), "nothing above Possible");
+    }
+
+    /// Two rough sessions since: the line is dated by the FIRST, with the count. Break check: date it by the newest
+    /// (or report count 1) -> fails.
+    #[test]
+    fn b10b_two_rough_sessions_are_dated_by_the_first() {
+        let d = undo_case(vec![day_count(10, 30.0, 3), day_count(11, 30.0, 3)], one_undone());
+        let lines = undone_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-rough"], "{lines:?}");
+        assert_eq!(lines[0].args["at"], at_day(10, 10));
+        assert_eq!(lines[0].args["count"], "2");
+    }
+
+    /// Review r1 FIX 1: once the same setting (same rec_id) was applied again after the undo, later sessions were played
+    /// with the change back on and say nothing about the undo. Break check: pass `None` instead of the re-apply time ->
+    /// the first case gives compy-undone-rough, fails.
+    #[test]
+    fn b10b_sessions_after_a_reapply_of_the_same_setting_are_not_since_the_undo() {
+        let reapplied = |id: &str, at: &str| vec![record("2026-10-06T12:00:00Z", Some(B10B_UNDONE)), record_of(id, at, None)];
+        // Re-applied before the rough session: no line.
+        let d = undo_case(vec![day_count(10, 30.0, 3)], reapplied("game-mode", &at_day(10, 0)));
+        assert!(undone_lines(&d).is_empty(), "{:?}", undone_lines(&d));
+        // A session between the undo and the re-apply still counts; the one after the re-apply does not (count 1).
+        let d = undo_case(vec![day_count(10, 30.0, 3), day_count(11, 30.0, 3)], reapplied("game-mode", &at_day(11, 0)));
+        let lines = undone_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-rough"], "{lines:?}");
+        assert_eq!(lines[0].args["count"], "1");
+        // A later apply of a DIFFERENT setting does not end it.
+        let d = undo_case(vec![day_count(10, 30.0, 3)], reapplied("hags", &at_day(10, 0)));
+        assert_eq!(undone_lines(&d).iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-rough"]);
+    }
+
+    /// The window is [win_start, win_end), as the card's offer: a record exactly at the window's start is in it, one
+    /// exactly at its end is not. Break check: make the end inclusive (`<=`) -> the end case gives a line, fails.
+    #[test]
+    fn b10b_a_record_on_the_window_boundary() {
+        let rough = || vec![day_count(10, 30.0, 3)];
+        let base = undo_case(rough(), Vec::new());
+        let When::ObservedBetween { from, to } = finding_of(&base, "compy-change").since_when.clone() else { panic!("no window") };
+        let d = undo_case(rough(), vec![record(&from, Some(B10B_UNDONE))]);
+        assert_eq!(undone_lines(&d).iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-rough"], "at the start: in");
+        let d = undo_case(rough(), vec![record(&to, Some(B10B_UNDONE))]);
+        assert!(undone_lines(&d).is_empty(), "at the end: out");
     }
 
     /// No line unless exactly one record sits in the window and it was undone after the window, with a readable time.

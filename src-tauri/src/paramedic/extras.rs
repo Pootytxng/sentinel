@@ -281,6 +281,8 @@ pub(crate) fn compy_applies_from(read: Result<Vec<crate::history::LedgerStamp>, 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CompyRecord {
     pub applied: DateTime<Utc>,
+    /// Which setting: a later apply of the same `rec_id` ends "since the undo" (titles can repeat).
+    pub rec_id: String,
     pub title: String,
     pub undone: Option<DateTime<Utc>>,
 }
@@ -294,7 +296,7 @@ pub(crate) fn compy_records_from(read: &Result<Vec<crate::history::LedgerStamp>,
         .filter_map(|s| {
             let applied = ts(&s.applied_at)?;
             let undone = if s.status == "rolled_back" { s.rolled_back_at.as_deref().and_then(ts) } else { None };
-            Some(CompyRecord { applied, title: s.title.clone(), undone })
+            Some(CompyRecord { applied, rec_id: s.rec_id.clone(), title: s.title.clone(), undone })
         })
         .collect()
 }

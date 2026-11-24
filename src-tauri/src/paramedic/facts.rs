@@ -633,7 +633,7 @@ mod tests {
     }
 
     fn stamp(title: &str, at: &str, status: &str, undone: Option<&str>) -> LedgerStamp {
-        LedgerStamp { title: title.into(), applied_at: at.into(), rolled_back_at: undone.map(str::to_string), status: status.into() }
+        LedgerStamp { rec_id: title.into(), title: title.into(), applied_at: at.into(), rolled_back_at: undone.map(str::to_string), status: status.into() }
     }
 
     fn with_history(h: HistoryRead, since: Since) -> FirstLook {

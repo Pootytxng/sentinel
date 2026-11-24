@@ -204,17 +204,26 @@ describe("B10: Undo this Compy change on the card", () => {
   };
   const undoneRec = () => rec({ status: "rolled_back", rolled_back_at: UNDONE, active_check: null });
 
-  // Break check: drop the compy-undone-rough case from evidenceLine -> the line is missing, fails.
+  // Review r1 FIX 3: every line but rough carries B10's own next step, word for word (rough needs none: the change is
+  // off and the game is still rough). Break checks: drop the compy-undone-rough case from evidenceLine -> the line is
+  // missing, fails; drop the next step from compyUndoneBetween -> fails.
+  const NEXT = " Play Game A once the way you usually do, then press Something's wrong again.";
   it.each([
     ["compy-undone-rough", "measured", { at: AT, count: "1" }, true, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A still ran rough on ${day(AT)}.`],
     ["compy-undone-rough", "measured", { at: AT, count: "2" }, true, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A still ran rough in 2 sessions since, the first on ${day(AT)}.`],
-    ["compy-undone-clear-once", "measured", { at: AT }, false, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A's session on ${day(AT)} ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`],
-    ["compy-undone-unread", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 1 Game A session has been recorded since, but it was too short or only partly measured, so Compy has no reading it can judge.`],
-    ["compy-undone-between", "unknown", {}, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.`],
+    ["compy-undone-clear-once", "measured", { at: AT }, false, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A's session on ${day(AT)} ran in its usual range. One session so far; Compy says a game is back in its usual range after two.${NEXT}`],
+    ["compy-undone-unread", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 1 Game A session has been recorded since, but it was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge.${NEXT}`],
+    ["compy-undone-unread", "unknown", { count: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 2 Game A sessions have been recorded since, but each was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge.${NEXT}`],
+    ["compy-undone-between", "unknown", {}, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
   ] as const)("%s says what was read since the undo, dated from the ledger", async (code, kind, args, against, text) => {
     await show([withLine(code, kind, args, against)], [undoneRec()]);
     expect(document.body.textContent).toContain(text);
     expect(document.body.textContent).not.toMatch(/\b(fixed|caused|probably|safe|worked)\b/i);
+  });
+
+  it("a rough line after the undo carries no 'play once' step", async () => {
+    await show([withLine("compy-undone-rough", "measured", { at: AT, count: "1" }, true)], [undoneRec()]);
+    expect(document.body.textContent).not.toContain("then press Something's wrong again");
   });
 
   // Decided: once a session was read after the undo, the evidence line says when it was undone and what was read, so
@@ -240,7 +249,7 @@ describe("B10: Undo this Compy change on the card", () => {
       await i18n.changeLanguage("en");
       await show([withLine("compy-undone-unread", "unknown", { count: "2" })], [undoneRec()]);
       await i18n.changeLanguage("zh-CN");
-      await waitFor(() => expect(document.body.textContent).toContain(`“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后记录到 2 次 Game A 的游戏，但时间太短或只测量了一部分，所以 Compy 没有可以判断的读数。`));
+      await waitFor(() => expect(document.body.textContent).toContain(`“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后记录到 2 次 Game A 的游戏，但时间太短，或 Compy 没能测量到足够的部分，所以 Compy 没有可以判断的读数。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`));
     } finally {
       await i18n.changeLanguage("en");
     }

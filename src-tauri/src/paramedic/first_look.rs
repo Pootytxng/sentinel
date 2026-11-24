@@ -1991,7 +1991,7 @@ mod tests {
     // ---- review r1 -------------------------------------------------------------------------------
 
     fn compy_stamp(title: &str, at: &str) -> crate::history::LedgerStamp {
-        crate::history::LedgerStamp { title: title.into(), applied_at: at.into(), rolled_back_at: None, status: "applied".into() }
+        crate::history::LedgerStamp { rec_id: title.into(), title: title.into(), applied_at: at.into(), rolled_back_at: None, status: "applied".into() }
     }
 
     /// The crash line's "before the earliest dated change" names the earliest REAL dated change, Compy's own included.

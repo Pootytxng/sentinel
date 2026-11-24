@@ -2563,6 +2563,8 @@ pub(crate) fn rec_id_of_change(change_id: &str) -> Result<Option<String>, String
 /// What the first look shows of one change Compy made: its title and when. Strings as the ledger holds them.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LedgerStamp {
+    /// Which setting (B10b: a later apply of the same setting ends "since the undo"; titles can repeat).
+    pub rec_id: String,
     pub title: String,
     pub applied_at: String,
     pub rolled_back_at: Option<String>,
@@ -2590,7 +2592,7 @@ fn read_ledger_stamps_for(root: &crate::data_root::DataRootDecision) -> Result<V
 pub(crate) fn read_ledger_stamps_at(path: &Path) -> Result<Vec<LedgerStamp>, String> {
     Ok(read_history_unlocked(path)?
         .into_iter()
-        .map(|c| LedgerStamp { title: c.rec_title, applied_at: c.applied_at, rolled_back_at: c.rolled_back_at, status: c.status })
+        .map(|c| LedgerStamp { rec_id: c.rec_id, title: c.rec_title, applied_at: c.applied_at, rolled_back_at: c.rolled_back_at, status: c.status })
         .collect())
 }
 

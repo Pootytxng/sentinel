@@ -2962,6 +2962,7 @@ fn detect_compy_changes(c: &Ctx, out: &mut Out) {
 /// gives no line). Sessions are on the "after" side by their START (`recovery::since_restore`, as B4 does): one that
 /// started before the undo and ended after it is not after it. Dated facts only, never "the reason", never that the
 /// undo worked:
+/// "Since" ends at the earliest later apply of the same setting (`rec_id`), when there is one.
 /// - no session since: no line;
 /// - `compy-undone-unread` (Unknown): sessions since, none judgeable. Never a number;
 /// - `compy-undone-rough` (Measured, AGAINST, sets C1 like B4's `driver-back-rough`): at least one rough session since;
@@ -2979,7 +2980,10 @@ fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
     let undone = rec.undone.filter(|u| *u >= c.win_end)?;
     let base = [("title", rec.title.clone()), ("undone", iso(undone))];
     let with = |more: &[(&'static str, String)]| -> Vec<(&'static str, String)> { base.iter().cloned().chain(more.iter().cloned()).collect() };
-    match recovery::since_restore(c, undone, None) {
+    // Review r1 FIX 1: a later apply of the same setting (same `rec_id`) puts the change back on, so sessions that
+    // started at or after it say nothing about the undo: "since" ends there (exclusive), as drift ends at off_again_at.
+    let reapplied = c.inp.compy_records.iter().filter(|r| r.rec_id == rec.rec_id && r.applied > undone).map(|r| r.applied).min();
+    match recovery::since_restore(c, undone, reapplied) {
         recovery::Since::Nothing => None,
         recovery::Since::Unjudged { count } => {
             Some(ev(EvidenceKind::Unknown, "compy-undone-unread", "sessions", false, &with(&[("count", count.to_string())])))
