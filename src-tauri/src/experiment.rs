@@ -2609,7 +2609,9 @@ pub(crate) fn resolve_treatment<'a>(
         Comparability::NotComparable => {
             return Err(format!("{TREATMENT_NOT_COMPARABLE} ({})", pairing.reasons.join(" ")));
         }
-        Comparability::Unknown => return Err(TREATMENT_COMPARABILITY_UNKNOWN.into()),
+        Comparability::Unknown => {
+            return Err(TREATMENT_COMPARABILITY_UNKNOWN.into());
+        }
         Comparability::Comparable | Comparability::Partial => {}
     }
     Ok((treatment, pairing))
@@ -4756,8 +4758,12 @@ pub(crate) fn start_experiment(
     match target {
         Some(true) => {}
         // B11: fixed, mapped sentences.
-        Some(false) => return Err(abort_start(&mut store, idx, ABORT_NOT_CHANGED)),
-        None => return Err(abort_start(&mut store, idx, ABORT_UNREADABLE)),
+        Some(false) => {
+            return Err(abort_start(&mut store, idx, ABORT_NOT_CHANGED));
+        }
+        None => {
+            return Err(abort_start(&mut store, idx, ABORT_UNREADABLE));
+        }
     }
 
     // Watermark AFTER our apply so a LATER external change trips the confound guard, not our own. An
