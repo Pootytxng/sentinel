@@ -1501,6 +1501,31 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).not.toMatch(/in these sessions/);
   });
 
+  // B9: "never reached 90% full" is a level against the rule's own line, not a comparison with the normal sessions, so
+  // it sits under "Measured, but not a lead by Compy's rule:", never under "Unchanged since your normal sessions:".
+  // Break check: drop "memory-pressure" from the not-a-lead ids (it is back under "Unchanged").
+  it("B9: memory that never reached the line is listed as measured but not a lead, in en and zh", async () => {
+    await ask(answerOf([background()], { not_it: [{ id: "hardware-change", args: {} }, { id: "memory-pressure", args: { percent: "90", count: "3" } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    const group = screen.getByTestId("paramedic-not-a-lead").textContent ?? "";
+    expect(group).toBe("Measured, but not a lead by Compy's rule:Memory: never reached 90% full in the rough sessions.");
+    expect(checked()).toContain("Unchanged since your normal sessions:Graphics card and memory size: the same.");
+    cleanup();
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      answer.value = answerOf([background()], { not_it: [{ id: "memory-pressure", args: { percent: "90", count: "1" } }] });
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      expect(screen.getByTestId("paramedic-not-a-lead").textContent).toBe("测到了，但按 Compy 的规则不算线索：内存：在出问题的那次游戏中从未达到 90% 满。");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   // B8 (panel 2026-11-23: 30.4 of 31.4 GB read as "fine" under "Unchanged"; review r1): memory nearly full in a rough
   // session while the normal sessions were already high says the measurement and Compy's rule, under its own heading
   // right after the unchanged list, never under "Unchanged since your normal sessions:".
@@ -2801,8 +2826,73 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
     );
     expect(text).toContain(`Compy has no memory reading for your Game A session on ${d}.`);
     const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8")).evidence as Record<string, string>;
-    for (const k of ["ramSince", "ramSinceFull", "ramSinceLowerClear", "ramSinceFullClear", "ramSinceUnread"]) {
+    for (const k of [
+      "ramSince",
+      "ramSinceSingle",
+      "ramSinceTotals",
+      "ramSinceTotalsSingle",
+      "ramSinceFull",
+      "ramSinceLowerClear",
+      "ramSinceLowerClearSingle",
+      "ramSinceLowerClearTotals",
+      "ramSinceLowerClearTotalsSingle",
+      "ramSinceFullClear",
+      "ramSinceUnread",
+    ]) {
       expect(en[k], k).not.toMatch(/\b(caused|fixed|probably|safe|freed|helped|likely)\b/i);
+    }
+  });
+
+  // B9: a different usable total on the rough side is said beside its peak, and one rough session is said as one.
+  // Break checks: ignore roughTotalGb (the totals sentences are missing); ignore roughCount (the singular ones are).
+  it("B9: the rough side's own total when it differs, and one rough session in the singular, en and zh", async () => {
+    const when = "2026-11-22T10:00:00Z";
+    const line = (code: string, extra: Record<string, string>) =>
+      ({ kind: "measured", code, args: { date: when, peakGb: "20.0", totalGb: "63.9", roughGb: "30.4", ...extra }, against: false, source: "sessions" }) as F["evidence"][number];
+    const mem = (lines: F["evidence"]) => find("memory-pressure", { evidence: lines, fix: steps("memory-pressure") });
+    const show = async (lines: F["evidence"], button: string) => {
+      answer.value = { ...base, why_first: null, findings: [mem(lines)] };
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: button }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      return screen.getByTestId("paramedic").textContent ?? "";
+    };
+    const d = day(when);
+    let text = await show(
+      [
+        line("ram-since", { roughTotalGb: "31.4", roughCount: "1" }),
+        line("ram-since-lower-clear", { roughTotalGb: "31.4", roughCount: "3" }),
+      ],
+      "Something's wrong",
+    );
+    expect(text).toContain(`Memory peaked at 20.0 of 63.9 GB usable in your Game A session on ${d}; the rough session peaked at 30.4 of 31.4 GB usable.`);
+    expect(text).toContain(
+      `Memory peaked at 20.0 of 63.9 GB usable in your Game A session on ${d}, against a highest peak of 30.4 of 31.4 GB usable in the rough sessions, and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`,
+    );
+    cleanup();
+    text = await show([line("ram-since", { roughCount: "3" }), line("ram-since-lower-clear", { roughCount: "1" })], "Something's wrong");
+    expect(text).toContain(`Memory peaked at 20.0 of 63.9 GB usable in your Game A session on ${d}; the highest peak in the rough sessions was 30.4 GB.`);
+    expect(text).toContain(
+      `Memory peaked at 20.0 of 63.9 GB usable in your Game A session on ${d}, against 30.4 GB in the rough session, and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`,
+    );
+    expect(text).not.toContain("the rough sessions was 30.4 GB usable");
+    cleanup();
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      text = await show(
+        [line("ram-since", { roughTotalGb: "31.4", roughCount: "1" }), line("ram-since-lower-clear", { roughCount: "1" })],
+        "出问题了",
+      );
+      // The date is in the zh date format; the sentence around it is literal.
+      expect(text).toMatch(/\S+ 那次 Game A 游戏内存最高用到 20\.0 GB（可用 63\.9 GB）；卡顿的那一次最高为 30\.4 GB（可用 31\.4 GB）。/);
+      expect(text).toMatch(
+        /\S+ 那次 Game A 游戏内存最高用到 20\.0 GB（可用 63\.9 GB），卡顿的那一次最高为 30\.4 GB，\S+ 那次表现在平时的范围内。目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。/,
+      );
+      expect(text).not.toContain("卡顿的那几次");
+    } finally {
+      await i18n.changeLanguage("en");
     }
   });
 

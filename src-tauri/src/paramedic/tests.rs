@@ -3784,9 +3784,41 @@ mod recovery_f3 {
         let lines = ram_since_lines(&d);
         assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["ram-since-lower-clear"], "{lines:?}");
         assert_eq!(lines[0].args["roughGb"], "32.0");
+        // B9: how many rough sessions there were, the unread one included (one is said in the singular). Break check:
+        // count only the rough sessions with a reading (2).
+        assert_eq!(lines[0].args["roughCount"], "3");
         let m = finding_of(&d, "memory-pressure");
         assert_eq!(m.evidence.iter().find(|e| e.code == "ram-unrecorded").map(|e| e.args["count"].as_str()), Some("1"));
         assert!(m.evidence.iter().flat_map(|e| e.args.values()).all(|v| v != "0.0"), "{:?}", m.evidence);
+    }
+
+    // B9: GB are never compared across different usable totals unsaid. The rough side's own total is sent only when it
+    // differs from the newest session's (as printed); one rough session is counted as one.
+    // Break checks: always send roughTotalGb (the equal case fails); never send it (the 63.9 GB case fails).
+    #[test]
+    fn b9_the_rough_total_is_said_only_when_it_differs_and_one_rough_session_is_one() {
+        let d = ram_then(vec![later(10, true, Some(20.0))]);
+        let l = ram_since_lines(&d)[0].clone();
+        assert_eq!(l.code, "ram-since-lower-clear");
+        assert_eq!(l.args["roughCount"], "1");
+        assert!(!l.args.contains_key("roughTotalGb"), "same total: today's shorter sentence: {:?}", l.args);
+        // The newest session ran with 63.9 GB usable; the rough one had 33.7.
+        let mut bigger = later(10, true, Some(20.0));
+        bigger.ram_total_bytes = gb_of(63.9);
+        let d = ram_then(vec![bigger]);
+        let l = ram_since_lines(&d)[0].clone();
+        assert_eq!(
+            (l.code, l.args["peakGb"].as_str(), l.args["totalGb"].as_str(), l.args["roughGb"].as_str(), l.args["roughTotalGb"].as_str()),
+            ("ram-since-lower-clear", "20.0", "63.9", "31.0", "33.7"),
+            "{:?}",
+            l.args
+        );
+        // The same on an unjudged newest session (ram-since).
+        let mut short = later(10, false, Some(20.0));
+        short.ram_total_bytes = gb_of(63.9);
+        let d = ram_then(vec![short]);
+        let l = ram_since_lines(&d)[0].clone();
+        assert_eq!((l.code, l.args["roughTotalGb"].as_str()), ("ram-since", "33.7"));
     }
 
     /// A session on `day`: clear (600 s, ratio 0.5) or a 2-minute one (not judgeable), peaking `peak` of 33.7 GB

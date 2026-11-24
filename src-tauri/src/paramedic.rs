@@ -2829,8 +2829,15 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
     }
     // B8: what the newest session after the rough ones recorded about memory, dated, against the highest peak of
     // every rough session with a memory reading (the line says "the highest peak in the rough sessions").
-    let rough_max = c.affected.iter().copied().filter(|s| s.ram_fraction().is_some()).map(peak).max().unwrap_or(0);
-    if let Some(line) = memory_since(c, gb(rough_max)) {
+    // B9: with that session's own usable total (said when it differs from the newest session's) and how many rough
+    // sessions there were (one is said in the singular).
+    let rough_top = c.affected.iter().copied().filter(|s| s.ram_fraction().is_some()).max_by_key(|s| peak(s)).unwrap_or(worst);
+    let rough = RoughPeak {
+        gb: gb(peak(rough_top)),
+        total_gb: gb(rough_top.ram_total_bytes.unwrap_or(0)),
+        count: c.affected.len(),
+    };
+    if let Some(line) = memory_since(c, &rough) {
         evidence.push(line);
     }
     out.cands.push(Cand {
@@ -2849,7 +2856,7 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
 }
 
 /// B8 (memory follow-through): what the newest session of this game after the newest rough one recorded about memory,
-/// dated, against `rough_gb` (the highest peak of the rough sessions that have a memory reading). Memory is a size,
+/// dated, against `rough.gb` (the highest peak of the rough sessions that have a memory reading). Memory is a size,
 /// not a timing: no line is support or `against`, none changes a candidate flag (so memory stays at most Possible),
 /// and none says that freeing memory helped. Nothing new is read or stored: every session row already carries its
 /// memory peak and total.
@@ -2859,7 +2866,20 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
 /// - `ram-since-full-clear` / `ram-since-lower-clear`: exactly one session after it, it ran clear (one session is
 ///   said, never support), at or above / below `RAM_FULL_FRACTION` of what is usable.
 /// - `ram-since-full` / `ram-since`: any other newest session (unjudged, or after a clear one), with its numbers.
-fn memory_since(c: &Ctx, rough_gb: String) -> Option<Evidence> {
+///
+/// B9: the lines that name the rough peak (`ram-since`, `ram-since-lower-clear`) carry `roughCount` (how many rough
+/// sessions; one is said in the singular) and, only when the rough session's usable total differs from the newest
+/// session's (as printed, GiB to one decimal), `roughTotalGb`: GB are never compared across different totals unsaid.
+struct RoughPeak {
+    /// The highest peak of the rough sessions that have a memory reading.
+    gb: String,
+    /// That session's own usable total.
+    total_gb: String,
+    /// How many rough sessions there were.
+    count: usize,
+}
+
+fn memory_since(c: &Ctx, rough: &RoughPeak) -> Option<Evidence> {
     let n = c.sess.len();
     let last_rough = (0..n).rev().find(|&i| c.judged[i].verdict == Verdict::Fired)?;
     let first_after = last_rough + 1;
@@ -2882,13 +2902,13 @@ fn memory_since(c: &Ctx, rough_gb: String) -> Option<Evidence> {
         (false, true) => "ram-since-full",
         (false, false) => "ram-since",
     };
-    Some(ev(
-        EvidenceKind::Measured,
-        code,
-        "sessions",
-        false,
-        &[("date", date), ("peakGb", gb(peak)), ("totalGb", gb(total)), ("roughGb", rough_gb)],
-    ))
+    let total_gb = gb(total);
+    let mut args = vec![("date", date), ("peakGb", gb(peak)), ("roughGb", rough.gb.clone()), ("roughCount", rough.count.to_string())];
+    if rough.total_gb != total_gb {
+        args.push(("roughTotalGb", rough.total_gb.clone()));
+    }
+    args.push(("totalGb", total_gb));
+    Some(ev(EvidenceKind::Measured, code, "sessions", false, &args))
 }
 
 fn detect_compy_changes(c: &Ctx, out: &mut Out) {

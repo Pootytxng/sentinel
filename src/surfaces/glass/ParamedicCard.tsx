@@ -431,12 +431,24 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.ramLower", { peakGb: a.peakGb });
     // B8: the newest session after the rough ones, its memory reading, dated. A size, never the reason; one clear
     // session is said as one session; no reading is "no memory reading", never 0 GB.
-    case "ram-since":
-      return t("paramedic.evidence.ramSince", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb });
+    // B9: the rough side gets its own usable total when it differs (`roughTotalGb` is sent only then), and one rough
+    // session is said in the singular. Literal keys only (zh has no plural forms, so the singular is its own key).
+    case "ram-since": {
+      const v = { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb, roughTotalGb: a.roughTotalGb };
+      const single = a.roughCount === "1";
+      if (a.roughTotalGb) return single ? t("paramedic.evidence.ramSinceTotalsSingle", v) : t("paramedic.evidence.ramSinceTotals", v);
+      return single ? t("paramedic.evidence.ramSinceSingle", v) : t("paramedic.evidence.ramSince", v);
+    }
     case "ram-since-full":
       return t("paramedic.evidence.ramSinceFull", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb });
-    case "ram-since-lower-clear":
-      return t("paramedic.evidence.ramSinceLowerClear", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb });
+    case "ram-since-lower-clear": {
+      const v = { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb, roughTotalGb: a.roughTotalGb };
+      const single = a.roughCount === "1";
+      if (a.roughTotalGb) {
+        return single ? t("paramedic.evidence.ramSinceLowerClearTotalsSingle", v) : t("paramedic.evidence.ramSinceLowerClearTotals", v);
+      }
+      return single ? t("paramedic.evidence.ramSinceLowerClearSingle", v) : t("paramedic.evidence.ramSinceLowerClear", v);
+    }
     case "ram-since-full-clear":
       return t("paramedic.evidence.ramSinceFullClear", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb });
     case "ram-since-unread":
@@ -1307,7 +1319,9 @@ function Checked({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t } = ctx;
   // B8 review r1: a line that is measured but kept out by Compy's own rule (memory nearly full in a rough session while
   // the normal sessions were already high) is not "unchanged": it gets its own group right after the unchanged list.
-  const notALeadIds = ["memory-as-full"];
+  // B9: "Memory: never reached 90% full in the rough sessions" is a level measured in the rough sessions against the
+  // rule's own line, not a comparison with the normal sessions, so it is not "unchanged" either: same group.
+  const notALeadIds = ["memory-as-full", "memory-pressure"];
   const ruled = present(d.not_it.filter((n) => !notALeadIds.includes(n.id)).map((n) => ruledOutLine(n, ctx)));
   const notALead = present(d.not_it.filter((n) => notALeadIds.includes(n.id)).map((n) => ruledOutLine(n, ctx)));
   const seen = present(d.seen.map((s) => seenLine(s, ctx)));
