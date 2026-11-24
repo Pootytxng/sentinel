@@ -1562,20 +1562,102 @@ mod rec_tests {
         let finished = LiveReads::with_listings(no_tasks, services_read).with_scheme_read(ultimate_scheme);
         assert_eq!(check_state_kind("service-not-running", &svc, &hw, &finished), Some(false));
         assert_eq!(check_state_kind("power-plan-ultimate", &None, &hw, &finished), Some(true));
-        // The registry kinds have no read seam (a real key Compy can't open can't be staged here): their
-        // arms read the CHECKED forms, and the code-built registry recs read the ledger's probe, which
-        // reads the same checked forms (history::probe_rec_target_with).
-        let src = include_str!("recommendations.rs").replace("\r\n", "\n");
-        for arm in [
-            "\"hags-on\" => return hags_state_checked().ok().map(|v| v == Some(2)),",
-            "\"fast-startup-disabled\" => return fast_startup_state_checked().ok().map(|v| v == Some(0)),",
-            "\"reserved-storage-disabled\" => return reserved_storage_enabled_checked().ok().map(|on| !on),",
-            "\"nagle-disabled-any-nic\" => return nagle_disabled_on_any_nic_checked(),",
-            "live_state(\"reserved-storage-off\", reads)",
-            "live_state(\"fast-startup-off\", reads)",
-            "live_state(\"hags-enable\", reads)",
-        ] {
-            assert!(src.contains(arm), "missing: {arm}");
+        // D4 r1 (FIX 5): the registry kinds are covered by behaviour, through `ForceRegistryRead`, in
+        // `d4r1_a_failed_registry_read_says_couldnt_read_never_off` below (the source-text asserts that
+        // stood here are gone).
+    }
+
+    // ── D4 r1 (FIX 5): the four checked registry reads, forced through `crate::ForceRegistryRead` ──
+    fn c_drive_tight() -> DiskInfo {
+        DiskInfo { mount_point: "C:\\".into(), total_bytes: 100, available_bytes: 10, file_system: "NTFS".into() }
+    }
+    /// A rig on which hags-enable (modern GPU), reserved-storage-off (C: under 25% free),
+    /// fast-startup-off and nagle-disable (both unconditional) are all built.
+    fn registry_rig() -> HardwareInfo {
+        HardwareInfo {
+            gpus: vec![gpu("NVIDIA GeForce RTX 4080")],
+            disks: vec![c_drive_tight()],
+            ..Default::default()
+        }
+    }
+    fn force_all(value: Option<u32>) -> [crate::ForceRegistryRead; 4] {
+        use crate::{ForceRegistryRead as F, RegistryRead as R};
+        [
+            F::begin(R::Hags, value),
+            F::begin(R::FastStartup, value),
+            F::begin(R::ReservedStorage, value),
+            F::begin(R::Nagle, value),
+        ]
+    }
+    const REGISTRY_RECS: [&str; 4] = ["hags-enable", "fast-startup-off", "reserved-storage-off", "nagle-disable"];
+
+    // Every one of the four reads FAILS: each rec is not applied and says it couldn't read (both
+    // flags), and the applies_to lines say "couldn't read", never a definite "Off" / "not configured".
+    // The rule kinds answer None too.
+    // Break check: put any one read back to a folded form, e.g. in history.rs
+    // `"hags-enable" => read(Some(hags_state_checked().ok().flatten() == Some(2)))`, or in this file
+    // `"nagle-disabled-any-nic" => nagle_disabled_on_any_nic_checked().unwrap_or(false)`: that rec's
+    // flags go false (a not-applied switch that reads "off") and this test fails.
+    #[test]
+    fn d4r1_a_failed_registry_read_says_couldnt_read_never_off() {
+        let reads = LiveReads::with_listings(no_tasks, services_read).with_scheme_read(ultimate_scheme);
+        let _forced = force_all(None);
+        let recs = build_recommendations_with(&registry_rig(), &reads);
+        let get = |id: &str| recs.iter().find(|r| r.id == id).unwrap_or_else(|| panic!("{id} built"));
+        for id in REGISTRY_RECS {
+            let r = get(id);
+            assert!(r.eligible, "{id}");
+            assert!(!r.currently_applied, "{id}: not applied");
+            assert!(r.state_unread && r.live_read_unread, "{id}: couldn't read, never a definite off");
+        }
+        assert_eq!(get("fast-startup-off").applies_to, "Couldn't read the current setting");
+        assert_eq!(get("hags-enable").applies_to, "Modern GPU detected — couldn't read the current HAGS setting");
+        let hw = HardwareInfo::default();
+        for kind in ["hags-on", "fast-startup-disabled", "reserved-storage-disabled", "nagle-disabled-any-nic"] {
+            assert_eq!(check_state_kind(kind, &None, &hw, &reads), None, "{kind}: a failed read has no answer");
+        }
+    }
+
+    // The same four reads FINISH: no flag, and the state follows the value read (a definite off is
+    // shown only when it was read). HwSchMode 2 = on, HiberbootEnabled 0 = Fast Startup off,
+    // BaseHardReserveSize 0 = reserved storage off, Nagle nonzero = disabled on an adapter.
+    // Break check: in `live_read` map `ActiveCheck::Off` to `None` (a definite off folded into
+    // "couldn't read"), or make `applied_and_unread(Some(Some(on)))` return `(on, true)`: the
+    // not-applied half (or both halves) carries a flag and this test fails.
+    #[test]
+    fn d4r1_a_finished_registry_read_carries_no_flag_and_follows_the_value() {
+        let reads = LiveReads::with_listings(no_tasks, services_read).with_scheme_read(ultimate_scheme);
+        use crate::{ForceRegistryRead as F, RegistryRead as R};
+        let applied = [F::begin(R::Hags, Some(2)), F::begin(R::FastStartup, Some(0)), F::begin(R::ReservedStorage, Some(0)), F::begin(R::Nagle, Some(1))];
+        let recs = build_recommendations_with(&registry_rig(), &reads);
+        for id in REGISTRY_RECS {
+            let r = recs.iter().find(|r| r.id == id).unwrap_or_else(|| panic!("{id} built"));
+            assert!(r.currently_applied && !r.state_unread && !r.live_read_unread, "{id}: read, and in the target state");
+        }
+        drop(applied);
+        let _not = [F::begin(R::Hags, Some(1)), F::begin(R::FastStartup, Some(1)), F::begin(R::ReservedStorage, Some(7)), F::begin(R::Nagle, Some(0))];
+        let recs = build_recommendations_with(&registry_rig(), &reads);
+        for id in REGISTRY_RECS {
+            let r = recs.iter().find(|r| r.id == id).unwrap_or_else(|| panic!("{id} built"));
+            assert!(!r.currently_applied && !r.state_unread && !r.live_read_unread, "{id}: read, and not in the target state");
+        }
+    }
+
+    // FIX 2: the ledger's live check (history::probe_rec_target_with, what an applied row shows) and
+    // the catalog's state kind read Nagle through the SAME checked read, so a failed read is
+    // Unreadable on the row and "couldn't read" on the card, never "changed outside Compy" on one side.
+    // Break check: revert history.rs's arm to fold the failure, e.g.
+    // `"nagle-disable" => read(Some(nagle_disabled_on_any_nic_checked().unwrap_or(false))),`: the
+    // ledger reads Off and this test fails.
+    #[test]
+    fn d4r1_nagle_ledger_check_and_catalog_agree_on_a_failed_read() {
+        use crate::{ForceRegistryRead as F, RegistryRead as R};
+        let reads = LiveReads::with_listings(no_tasks, services_read).with_scheme_read(ultimate_scheme);
+        let hw = HardwareInfo::default();
+        for (value, ledger, card) in [(None, ActiveCheck::Unreadable, None), (Some(0), ActiveCheck::Off, Some(false)), (Some(1), ActiveCheck::On, Some(true))] {
+            let _nagle = F::begin(R::Nagle, value);
+            assert_eq!(probe_rec_target_with("nagle-disable", &reads), ledger, "{value:?}");
+            assert_eq!(check_state_kind("nagle-disabled-any-nic", &None, &hw, &reads), card, "{value:?}");
         }
     }
 

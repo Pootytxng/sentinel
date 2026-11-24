@@ -526,12 +526,72 @@ pub(crate) fn reserved_storage_enabled() -> bool {
         .unwrap_or(false)
 }
 
+// ── D4 r1: test-only seam for the four checked registry reads, modelled on `actions::ForceEeeRead` ──
+// A real key Compy can't open can't be staged in a test, so a test names the read and what it answers
+// on this thread. Compiled out of the app (`cfg(test)`); with no guard alive the real read runs.
+
+/// Which checked registry read a [`ForceRegistryRead`] stands in for (test-only).
+#[cfg(test)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum RegistryRead {
+    /// `hags_state_checked` (HwSchMode).
+    Hags,
+    /// `fast_startup_state_checked` (HiberbootEnabled).
+    FastStartup,
+    /// `reserved_storage_enabled_checked` (BaseHardReserveSize).
+    ReservedStorage,
+    /// `nagle_disabled_on_any_nic_checked` (any adapter with TcpAckFrequency = TCPNoDelay = 1).
+    Nagle,
+}
+
+#[cfg(test)]
+thread_local! {
+    static FORCE_REGISTRY_READ: std::cell::RefCell<Vec<(RegistryRead, Option<u32>)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// RAII guard (test-only): on this thread, for the guard's lifetime, the named checked read answers
+/// `value`: `None` = the read FAILED (a key that would not open), `Some(v)` = it read `v` (HwSchMode /
+/// HiberbootEnabled / BaseHardReserveSize as stored; for Nagle, nonzero = an adapter has it disabled).
+#[cfg(test)]
+pub(crate) struct ForceRegistryRead(RegistryRead);
+
+#[cfg(test)]
+impl ForceRegistryRead {
+    pub(crate) fn begin(read: RegistryRead, value: Option<u32>) -> Self {
+        FORCE_REGISTRY_READ.with(|f| {
+            let mut forced = f.borrow_mut();
+            forced.retain(|(r, _)| *r != read);
+            forced.push((read, value));
+        });
+        ForceRegistryRead(read)
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForceRegistryRead {
+    fn drop(&mut self) {
+        let read = self.0;
+        FORCE_REGISTRY_READ.with(|f| f.borrow_mut().retain(|(r, _)| *r != read));
+    }
+}
+
+/// The forced answer for `read` on this thread, if a [`ForceRegistryRead`] is alive (test-only).
+#[cfg(test)]
+fn forced_registry_read(read: RegistryRead) -> Option<Option<u32>> {
+    FORCE_REGISTRY_READ.with(|f| f.borrow().iter().find(|(r, _)| *r == read).map(|(_, v)| *v))
+}
+
 /// Like `reserved_storage_enabled` but distinguishes a genuinely-absent key/value
 /// (`Ok(false)` — a faithful "off" prior) from an UNREADABLE one (`Err` — the apply
 /// refuses rather than snapshotting a guess). Used only by the mutating apply path so a
 /// transient/ACL read failure can't fabricate `prior_enabled=false` and have rollback
 /// leave a default-ON feature disabled. Mirrors `read_priority_separation_prior`.
 pub(crate) fn reserved_storage_enabled_checked() -> Result<bool, String> {
+    #[cfg(test)]
+    if let Some(forced) = forced_registry_read(RegistryRead::ReservedStorage) {
+        return forced.map(|v| v > 0).ok_or_else(|| "forced: reserved-storage read failed".to_string());
+    }
     use std::io::ErrorKind;
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     match hklm.open_subkey("Software\\Microsoft\\ReserveManager") {
@@ -559,6 +619,10 @@ pub(crate) fn fast_startup_state() -> Option<u32> {
 /// UNREADABLE key (`Err` — the apply refuses rather than snapshotting a guess). Used only by
 /// the mutating apply path. Mirrors `read_priority_separation_prior`.
 pub(crate) fn fast_startup_state_checked() -> Result<Option<u32>, String> {
+    #[cfg(test)]
+    if let Some(forced) = forced_registry_read(RegistryRead::FastStartup) {
+        return forced.map(Some).ok_or_else(|| "forced: Fast Startup read failed".to_string());
+    }
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power") {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -637,6 +701,10 @@ pub(crate) fn hags_state() -> Option<u32> {
 /// fabricate `None` and have rollback DELETE a user's explicit HwSchMode. Mirrors
 /// `read_priority_separation_prior` / `fast_startup_state_checked`.
 pub(crate) fn hags_state_checked() -> Result<Option<u32>, String> {
+    #[cfg(test)]
+    if let Some(forced) = forced_registry_read(RegistryRead::Hags) {
+        return forced.map(Some).ok_or_else(|| "forced: HAGS read failed".to_string());
+    }
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers") {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -861,6 +929,10 @@ pub(crate) fn mouse_accel_disabled() -> bool {
 /// (`history::probe_rec_target_with`) both read it, so they cannot disagree on a failed read. The
 /// unchecked `nagle_disabled_on_any_nic` (a failed read was "not disabled") had no caller left.
 pub(crate) fn nagle_disabled_on_any_nic_checked() -> Option<bool> {
+    #[cfg(test)]
+    if let Some(forced) = forced_registry_read(RegistryRead::Nagle) {
+        return forced.map(|v| v != 0);
+    }
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let interfaces = match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces") {
         Ok(k) => k,
