@@ -59,24 +59,53 @@ export function useTuningTools(): boolean {
  *  (readSessionSlot folds a failed read into "none"; the decision must not, so App keeps the raw result.) */
 export type SlotRead = "empty" | "present" | "unread";
 
+/** The reads the first-run decision rests on, each null while not answered (or, for the counts, failed). */
+export type TuningToolsFacts = {
+  /** get_applied_changes once it has ANSWERED. Called before the first answer, App's initial [] would persist
+   *  "off" for everyone, so null is "undecided". It never fails: a corrupt or locked history answers [] too,
+   *  which is why `ledgerComplete` is needed before an empty list counts as empty. */
+  ledger: readonly AppliedChange[] | null;
+  /** get_ledger_health: true only when the backend vouches the ledger is complete; false = known incomplete;
+   *  null = not answered or the probe failed. */
+  ledgerComplete: boolean | null;
+  /** get_gaming_session_state, raw. */
+  slot: SlotRead | null;
+  /** How many records get_experiments returned (any status); null = not answered or failed. */
+  experiments: number | null;
+};
+
 /**
- * PURE: the one-time first-run decision, from reads App ALREADY makes (nothing new is read).
- * - `ledger`: App's get_applied_changes result once it has ANSWERED (null = not answered yet or failed).
- *   Called before the first answer, the initial [] would persist "off" for everyone; so null is "undecided".
- * - `slot`: App's get_gaming_session_state result.
- * Any ledger row (applied or undone; every Trial start and benchmark-station apply writes one) or a Gaming
- * Mode session file → "on". An empty ledger and an empty slot → "off" (a new install). A failed read →
- * "undecided": the tools show this run and nothing is stored. A past Gaming Mode user whose last session
- * stopped cleanly and who has no ledger row, and a benchmark-only user, start "off" (owner decision 4).
+ * PURE: the one-time first-run decision. Any ledger row (applied or undone; every Trial start and
+ * benchmark-station apply writes one), any Trial record, or a Gaming Mode session file → "on". "Off" (a new
+ * install) needs ALL of: an empty ledger the backend vouches is complete, no Trial record, an empty slot.
+ * Anything not answered, failed or not vouched → "undecided": the tools show this run and nothing is stored.
+ * A past Gaming Mode user whose last session stopped cleanly and who has no ledger row or Trial record, and a
+ * benchmark-only user, start "off" (owner decision 4).
  */
-export function decideTuningTools(
-  ledger: readonly AppliedChange[] | null,
-  slot: SlotRead | null,
-): "on" | "off" | "undecided" {
-  if (ledger !== null && ledger.length > 0) return "on";
-  if (slot === "present") return "on";
-  if (ledger === null || slot === null || slot === "unread") return "undecided";
+export function decideTuningTools(f: TuningToolsFacts): "on" | "off" | "undecided" {
+  if (f.ledger !== null && f.ledger.length > 0) return "on";
+  if (f.experiments !== null && f.experiments > 0) return "on";
+  if (f.slot === "present") return "on";
+  if (f.ledger === null || f.ledgerComplete !== true || f.experiments === null) return "undecided";
+  if (f.slot === null || f.slot === "unread") return "undecided";
   return "off";
+}
+
+/**
+ * PURE: whether a Trial or a benchmark run is holding something right now, from the same three reads the
+ * Settings refusal makes. A failed or missing read counts as running (F2: Restore now and Cancel are never
+ * hidden on a guess). `trial` is trialInProgress's answer; `bench`/`tweak` are the states' `running` flags,
+ * null when the read failed.
+ */
+export function tuningRunInProgress(
+  trial: "none" | "running" | "unknown" | null,
+  bench: boolean | null,
+  tweak: boolean | null,
+): { trial: boolean; bench: boolean } {
+  return {
+    trial: trial !== "none",
+    bench: bench !== false || tweak !== false,
+  };
 }
 
 /** Test's measure stations that are tuning tools (hidden with the tools off). Diagnostics and Crash & Freeze

@@ -711,27 +711,43 @@ function App() {
     invoke<boolean>("gaming_mode_enabled").then(setGamingEnabled).catch(() => {});
   }, []);
   // D6 Tuning tools (owner decision 2026-11-24, §38 layer 3 opt-in): decided ONCE, when no choice is stored,
-  // from reads App already makes: the ledger (only after it has ANSWERED: the initial [] is not an answer) and
-  // the Gaming Mode session slot, kept RAW (readSessionSlot folds a failed read into "none"; here a failed
-  // read is "undecided"). Any ledger row or a session file → on; both empty → off; a failed read → nothing
-  // stored, the tools show this run, decided again next launch. Never re-decided once stored.
+  // from read-only commands: the ledger (only after it has ANSWERED: the initial [] is not an answer), its
+  // health (get_applied_changes answers [] for a corrupt or locked history too, so an empty list counts only
+  // when the backend vouches the ledger is complete; review r1 F1), the Trial records, and the Gaming Mode
+  // session slot, kept RAW (readSessionSlot folds a failed read into "none"). Any ledger row, Trial record or
+  // session file → on; all read, vouched and empty → off; anything else → nothing stored, the tools show
+  // this run, decided again next launch. Never re-decided once stored.
   const tuningTools = useTuningTools();
   // Owner decision 2026-11-24 (Nagle tuning-only): every surface outside Test's Optimize switches lists the
   // catalog without the tuning-only recs (Home's fast path and trust loop, Live). An existing ledger row for
   // one keeps its undo and its "turn it back on" (those read the ledger, not this list).
   const homeRecs = useMemo(() => layerOneRecs(recs), [recs]);
   const [slotForDecision, setSlotForDecision] = useState<SlotRead | null>(null);
+  const [ledgerCompleteForDecision, setLedgerCompleteForDecision] = useState<boolean | null>(null);
+  const [experimentsForDecision, setExperimentsForDecision] = useState<number | null>(null);
   useEffect(() => {
     if (readTuningToolsChoice() !== null) return;
     invoke<unknown>("get_gaming_session_state")
       .then((s) => setSlotForDecision(s == null ? "empty" : "present"))
       .catch(() => setSlotForDecision("unread"));
+    // Only `complete: true` vouches; a failed probe or an empty answer stays null (= not vouched).
+    invoke<{ complete?: boolean } | null>("get_ledger_health")
+      .then((h) => setLedgerCompleteForDecision(h && typeof h.complete === "boolean" ? h.complete : null))
+      .catch(() => setLedgerCompleteForDecision(null));
+    invoke<unknown>("get_experiments")
+      .then((xs) => setExperimentsForDecision(Array.isArray(xs) ? xs.length : null))
+      .catch(() => setExperimentsForDecision(null));
   }, []);
   useEffect(() => {
     if (readTuningToolsChoice() !== null) return;
-    const decision = decideTuningTools(changesRead ? changes : null, slotForDecision);
+    const decision = decideTuningTools({
+      ledger: changesRead ? changes : null,
+      ledgerComplete: ledgerCompleteForDecision,
+      slot: slotForDecision,
+      experiments: experimentsForDecision,
+    });
     if (decision !== "undecided") setTuningTools(decision === "on");
-  }, [changesRead, changes, slotForDecision]);
+  }, [changesRead, changes, ledgerCompleteForDecision, slotForDecision, experimentsForDecision]);
   // Sync the persisted close-to-tray preference to the backend on startup, so the close handler
   // knows it before the user ever closes the window (default OFF = §1 clean exit until opt-in).
   useEffect(() => {

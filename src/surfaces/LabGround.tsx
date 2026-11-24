@@ -18,6 +18,8 @@ import type { Recommendation } from "../types";
 import { MACHINE_MODEL_PROBE_KEY, readMachineModel } from "../data/machine-model";
 import { invalidateProbe } from "../data/probe-cache";
 import { useTuningTools } from "../data/tuning-tools";
+import { useTuningRun } from "../data/tuning-tools-refusal";
+import { useJourneyPhase } from "./GuidedJourney";
 import "./lab-v2.css";
 
 // LabGround — the Lab as ONE cohesive PROVING GROUND (spec 2026-07-08-lab-proving-ground, ★ PRIMARY
@@ -57,6 +59,10 @@ export function LabGround(props: LabFastPathProps & {
   const reduced = useReducedMotion();
   const hud = useHudFlag();
   const tools = useTuningTools();
+  // D6 review r1 F2: with "off" stored, a Trial or benchmark found running keeps its own tool on screen
+  // (Restore now in the Trials bench, Cancel in Benchmark); a failed read counts as running.
+  const journey = useJourneyPhase();
+  const run = useTuningRun(!tools, journey.kind === "idle");
 
   // The fixes-state verdict still drives the LED (a real room state) — but under the HUD the
   // HEADER carries a title only (owner title-header law 2026-07-10 round 2: "the header just
@@ -138,21 +144,25 @@ export function LabGround(props: LabFastPathProps & {
         )
       }
       classicFixLabel={tools ? classicFixLabel : undefined}
+      /* D6 review r1 F2: the Benchmark station stays while a benchmark run or tweak trial is running. */
+      tuningRunBench={!tools && run.bench}
       /* D6 (owner decision 2026-11-24): the GPU profile captures and the Trials bench are tuning tools; with
-         the Tuning tools off they stand down. Turning the tools off is refused while a Trial runs, so a
-         Trial's Restore now is never hidden (data/tuning-tools.ts tuningToolsOffRefusal). */
+         the Tuning tools off they stand down, EXCEPT the Trials bench while a Trial is running (or can't be
+         read): its Restore now is never hidden (review r1 F2). */
       below={
-        !tools ? undefined : <>
-          {/* C-14 — the GPU profile surface, ADVISORY ONLY. It can never be anything but advisory:
-              LOCKED rule 6 makes GPU-profile APPLY structurally impossible, because AMD profile
-              state is not user-mode readable and so rollback-first cannot be satisfied. Nothing
-              here writes to the machine. */}
-          <GpuProfile currentSnapshot={gpuSnapshot} readNow={readGpuNow} />
-          {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator.
-              ARMED 2026-07-17 (owner-signed); still fails dark (renders NOTHING) if the gate ever
-              reads false. */}
-          <ExperimentBench onChanged={rest.onChanged} ledgerBusy={rest.busyId !== null} />
-        </>
+        !tools && !run.trial ? undefined : (
+          <>
+            {/* C-14 — the GPU profile surface, ADVISORY ONLY. It can never be anything but advisory:
+                LOCKED rule 6 makes GPU-profile APPLY structurally impossible, because AMD profile
+                state is not user-mode readable and so rollback-first cannot be satisfied. Nothing
+                here writes to the machine. */}
+            {tools && <GpuProfile currentSnapshot={gpuSnapshot} readNow={readGpuNow} />}
+            {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator.
+                ARMED 2026-07-17 (owner-signed); still fails dark (renders NOTHING) if the gate ever
+                reads false. */}
+            <ExperimentBench onChanged={rest.onChanged} ledgerBusy={rest.busyId !== null} />
+          </>
+        )
       }
     />
   );

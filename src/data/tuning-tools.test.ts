@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AppliedChange } from "../types";
+import type { TuningToolsFacts } from "./tuning-tools";
 
 // D6 "Tuning tools" (owner decision 2026-11-24: Test's tools behind an opt-in; Nagle tuning-only).
 // Plan: _train/d6-test-room-opt-in-plan-v2.md. Each block names its break check: the one-line edit to the
@@ -18,6 +19,7 @@ const {
   setTuningTools,
   TUNING_ONLY_REC_IDS,
   TUNING_STATIONS,
+  tuningRunInProgress,
 } = await import("./tuning-tools");
 const { tuningToolsOffRefusal } = await import("./tuning-tools-refusal");
 
@@ -28,6 +30,8 @@ beforeEach(() => {
   localStorage.clear();
   for (const k of Object.keys(calls)) delete calls[k];
 });
+// setTuningTools(false) below must not leak "off" into a later test.
+afterEach(() => localStorage.removeItem(KEY));
 
 describe("the stored preference", () => {
   // Break check: make readTuningTools return `readTuningToolsChoice() === "on"` and the first case fails.
@@ -59,39 +63,80 @@ describe("the stored preference", () => {
   });
 });
 
-describe("the first-run decision (review item 4)", () => {
-  // Break check: delete the `ledger === null` clause and the first case returns "off" — the trap where App's
-  // initial `changes = []` (before get_applied_changes answers) persisted "off" for every user.
+describe("the first-run decision (review item 4, review r1 F1)", () => {
+  /** A new install: every read answered, the ledger vouched complete, nothing anywhere. */
+  const fresh: TuningToolsFacts = { ledger: [], ledgerComplete: true, slot: "empty", experiments: 0 };
+
+  // Control for every "undecided"/"on" case below.
+  it("all reads answered, the ledger vouched complete and everything empty -> off (a new install)", () => {
+    expect(decideTuningTools(fresh)).toBe("off");
+  });
+
+  // Break check: delete the `f.ledger === null` clause and this returns "off" — the trap where App's initial
+  // `changes = []` (before get_applied_changes answers) persisted "off" for every user.
   it("waits for the ledger's first answer: no answer yet is undecided, never off", () => {
-    expect(decideTuningTools(null, "empty")).toBe("undecided");
-    expect(decideTuningTools(null, null)).toBe("undecided");
+    expect(decideTuningTools({ ...fresh, ledger: null })).toBe("undecided");
   });
 
-  // Break check: delete the `slot === "unread"` clause and the unread case returns "off".
-  it("an unreadable Gaming Mode slot is undecided (readSessionSlot would have said none)", () => {
-    expect(decideTuningTools([], "unread")).toBe("undecided");
-    expect(decideTuningTools([], null)).toBe("undecided");
+  // Break check (F1): delete `f.ledgerComplete !== true` and both cases return "off". get_applied_changes
+  // answers [] for a corrupt or AV-locked history, so [] alone proves nothing.
+  it.each([
+    ["known incomplete (quarantined or unreadable)", false],
+    ["unknown (the health probe failed or answered nothing)", null],
+  ])("an empty ledger whose health is %s is undecided", (_name, complete) => {
+    expect(decideTuningTools({ ...fresh, ledgerComplete: complete as boolean | null })).toBe("undecided");
   });
 
-  it("an empty ledger and an empty slot, both read, start off (a new install)", () => {
-    expect(decideTuningTools([], "empty")).toBe("off");
+  // Break check (F1): delete the `f.experiments > 0` line and this returns "off".
+  it("an empty ledger with a Trial record (any status, e.g. running) is on", () => {
+    expect(decideTuningTools({ ...fresh, experiments: 1 })).toBe("on");
+    expect(decideTuningTools({ ...fresh, ledgerComplete: null, experiments: 2 })).toBe("on");
   });
 
-  // Break check: change `ledger.length > 0` to `ledger.some(c => c.status === "applied")` and the
+  // Break check: delete `f.experiments === null` and this returns "off".
+  it("a failed Trial-records read is undecided", () => {
+    expect(decideTuningTools({ ...fresh, experiments: null })).toBe("undecided");
+  });
+
+  // Break check: delete the `f.slot === "unread"` clause and the unread case returns "off".
+  it("an unreadable or unanswered Gaming Mode slot is undecided (readSessionSlot would have said none)", () => {
+    expect(decideTuningTools({ ...fresh, slot: "unread" })).toBe("undecided");
+    expect(decideTuningTools({ ...fresh, slot: null })).toBe("undecided");
+  });
+
+  // Break check: change `f.ledger.length > 0` to `f.ledger.some(c => c.status === "applied")` and the
   // rolled-back row case fails.
-  it("any ledger row, applied or undone, starts on", () => {
-    expect(decideTuningTools([row], "empty")).toBe("on");
-    expect(decideTuningTools([row], "unread")).toBe("on");
+  it("any ledger row, applied or undone, starts on, whatever else is unknown", () => {
+    expect(decideTuningTools({ ledger: [row], ledgerComplete: null, slot: "unread", experiments: null })).toBe("on");
   });
 
-  // Break check: delete the `slot === "present"` line and this returns "off".
+  // Break check: delete the `f.slot === "present"` line and this returns "off".
   it("a Gaming Mode session file starts on, even with an empty ledger", () => {
-    expect(decideTuningTools([], "present")).toBe("on");
+    expect(decideTuningTools({ ...fresh, slot: "present" })).toBe("on");
   });
 
-  it("owner decision 4: a benchmark-only user and a clean-stop Gaming Mode user (no row, empty slot) start off", () => {
-    // Neither leaves a ledger row nor a slot file, so they are the empty/empty case by construction.
-    expect(decideTuningTools([], "empty")).toBe("off");
+  it("owner decision 4: a benchmark-only user and a clean-stop Gaming Mode user start off", () => {
+    // Neither leaves a ledger row, a Trial record or a slot file, so both are the fresh case by construction.
+    expect(decideTuningTools(fresh)).toBe("off");
+  });
+});
+
+describe("what keeps a tool on screen with the tools off (review r1 F2)", () => {
+  // Break check: make `trial` `=== "running"` and the unknown case hides the Trials bench.
+  it("a running or unreadable Trial keeps the Trials bench", () => {
+    expect(tuningRunInProgress("running", false, false).trial).toBe(true);
+    expect(tuningRunInProgress("unknown", false, false).trial).toBe(true);
+    expect(tuningRunInProgress(null, false, false).trial).toBe(true);
+    expect(tuningRunInProgress("none", false, false).trial).toBe(false);
+  });
+
+  // Break check: make `bench` `bench === true || tweak === true` and the failed-read cases hide Benchmark.
+  it("a running or unreadable benchmark run or tweak trial keeps the Benchmark station", () => {
+    expect(tuningRunInProgress("none", true, false).bench).toBe(true);
+    expect(tuningRunInProgress("none", false, true).bench).toBe(true);
+    expect(tuningRunInProgress("none", null, false).bench).toBe(true);
+    expect(tuningRunInProgress("none", false, null).bench).toBe(true);
+    expect(tuningRunInProgress("none", false, false).bench).toBe(false);
   });
 });
 

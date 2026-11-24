@@ -120,6 +120,7 @@ export function LabConsole({
   classicVerdict,
   classicFixLabel,
   below,
+  tuningRunBench = false,
 }: {
   // The fast-path prop bundle — the SAME audited apply handlers the OptimizeV2 room gets (zero new
   // IPC, zero new mutation primitive). Threaded straight into the Optimize panel.
@@ -156,6 +157,9 @@ export function LabConsole({
   classicFixLabel?: string;
   // Full-width content under both columns — the GPU profile surface and the experiments bench.
   below?: ReactNode;
+  // D6 review r1 F2: with the Tuning tools off, LabGround's read that a benchmark run or tweak trial is
+  // running (or can't be read). Keeps the Benchmark station listed so its Cancel stays reachable.
+  tuningRunBench?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
@@ -278,8 +282,9 @@ export function LabConsole({
     (k) =>
       (k !== "tuning" || !!tuningGuide) &&
       (k !== "diagnostics" || !!diagnostics) &&
-      // D6: with the Tuning tools off only the read-only stations stay (owner decision 1).
-      (tools || !TUNING_STATIONS.has(k)),
+      // D6: with the Tuning tools off only the read-only stations stay (owner decision 1), except Benchmark
+      // while a benchmark run or tweak trial is running (its Cancel is never hidden; review r1 F2).
+      (tools || !TUNING_STATIONS.has(k) || (k === "benchmark" && tuningRunBench)),
   );
 
   const facts: LabStationFacts = {
