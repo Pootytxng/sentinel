@@ -7,7 +7,7 @@ import { Card, StatusPill, SectionHeader } from "../design";
 import i18n from "../i18n";
 import { humanizeWhen } from "../data/humanize-when";
 import { backendMessage } from "../data/backend-error";
-import { trialErrorText } from "./bench-error";
+import { trialErrorText, trialStatusText } from "./bench-error";
 import { Term } from "../design/Term";
 import { WhatsThis } from "../design/WhatsThis";
 import { Picker } from "../design/Picker";
@@ -391,7 +391,10 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
           </button>
         )}
         {err && <span className="bench-err">{err}</span>}
-        {!err && state?.error && <span className="bench-err">{state.error}</span>}
+        {/* D7: benchmark.rs writes one fixed error (BENCH_RUN_CANCELLED), mapped; anything else is one fixed line. */}
+        {!err && state?.error && (
+          <span className="bench-err">{backendMessage(state.error, t) ?? t("gaming.benchmark.errors.runUnmapped")}</span>
+        )}
       </div>
 
       {/* Two Futures SUBSUMES the efficacy card when the flag is on (self-review catch: same
@@ -491,7 +494,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
         {trial?.running ? (
           <>
             <p className="bench-stat">
-              {trial.status}
+              {trialStatusText(trial.status, trial.kind, t)}
               {trial.target ? ` · ${trial.collected}/${trial.target}` : ""}
             </p>
             <button className="bench-btn bench-btn-ghost" onClick={cancelTrial}>

@@ -87,8 +87,33 @@ describe("B11: the benchmark's apply-failed lines", () => {
     expect(trialErrorText(`${TRIAL_APPLY_PREFIX}${bench.text}`, t)).toBe(`T(${bench.key})`);
     expect(trialErrorText(`${TRIAL_APPLY_PREFIX}access denied (os error 5)`, t)).toBe("T(gaming.benchmark.errors.trialApplyFailed)");
     expect(trialErrorText(`${STACK_APPLY_PREFIX}access denied (os error 5)`, t)).toBe("T(gaming.benchmark.errors.stackApplyFailed)");
-    // Any other trial error is one of benchmark_trial.rs's own sentences and stays as it is.
-    expect(trialErrorText("Couldn't collect frames with the change on.", t)).toBe("Couldn't collect frames with the change on.");
+    // D7: the card's other fixed errors are mapped consts now (they reached zh-CN in English); anything unmapped is the
+    // card's fixed line, never its English. Break check: put `return error;` back as trialErrorText's last line -> fails.
+    expect(trialErrorText("Couldn't collect frames with the change on.", t)).toBe("T(app.backendErrors.benchChangeOnNoFrames)");
+    expect(trialErrorText("some sentence a later build adds", t)).toBe("T(gaming.benchmark.errors.trialUnmapped)");
+  });
+
+  it("D7: every fixed error benchmark_trial.rs writes to the trial card is a mapped const, none a bare literal", () => {
+    // Break check: write `s.error = Some("Couldn't collect frames with the stack on.".into())` back in
+    // benchmark_trial.rs (a literal, not BENCH_STACK_ON_NO_FRAMES) -> the literal check fails.
+    const code = rust.replace(/\r\n/g, "\n");
+    const literalErrors = [...code.matchAll(/s\.error = Some\(\s*"/g)];
+    expect(literalErrors.length, "a bare English literal is written to the trial card's error").toBe(0);
+    for (const name of [
+      "BENCH_CALIBRATION_NO_FRAMES",
+      "BENCH_BASELINE_NO_FRAMES",
+      "BENCH_CHANGE_ON_NO_FRAMES",
+      "BENCH_STACK_ON_NO_FRAMES",
+      "BENCH_STACK_NOTHING_APPLIABLE",
+      "BENCH_STACK_NOTHING_APPLIED",
+    ]) {
+      expect(BACKEND_SENTENCES.some((s) => s.rust === name), name).toBe(true);
+      expect(code, name).toContain(`s.error = Some(${name}.into())`);
+    }
+    const bench = readFileSync(join("src-tauri", "src", "benchmark.rs"), "utf8");
+    expect(bench).toContain("s.error = Some(BENCH_RUN_CANCELLED.into())");
+    expect(bench).not.toMatch(/s\.error = Some\(\s*"/);
+    expect(BACKEND_SENTENCES.some((s) => s.rust === "BENCH_RUN_CANCELLED")).toBe(true);
   });
 
   it("a rollback / change-history outcome shows its mapped sentence, never the detail after it", () => {

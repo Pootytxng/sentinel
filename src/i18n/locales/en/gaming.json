@@ -109,7 +109,23 @@
       "startFailed": "Compy couldn't start the benchmark just now. Try again in a moment.",
       "baselineFailed": "Compy couldn't save this as your baseline just now. Try again in a moment.",
       "trialApplyFailed": "Compy couldn't apply the change, so it measured nothing with it on. Check Test → Applied & history to see what is on now.",
-      "stackApplyFailed": "Compy couldn't apply the changes, so it measured nothing with them on. Check Test → Applied & history to see what is on now."
+      "stackApplyFailed": "Compy couldn't apply the changes, so it measured nothing with them on. Check Test → Applied & history to see what is on now.",
+      "trialUnmapped": "Compy couldn't finish this measurement as planned. Check Test → Applied & history to see what is on now.",
+      "runUnmapped": "This benchmark run didn't finish."
+    },
+    "trialStatus": {
+      "starting": "Starting…",
+      "calibrating": "Calibrating…",
+      "baselineChangeOff": "Measuring the baseline (change off)…",
+      "baselineStackOff": "Measuring the baseline (stack off)…",
+      "applyingChange": "Applying the change…",
+      "applyingStack": "Applying the starter stack…",
+      "settling": "Letting it settle…",
+      "measuringChangeOn": "Measuring with the change on…",
+      "measuringStackOn": "Measuring with the stack on…",
+      "rollingBackChange": "Rolling the change back…",
+      "rollingBackStack": "Rolling the stack back…",
+      "working": "Working…"
     },
     "baselineLabel": "Baseline",
     "latestRunLabel": "Latest run",

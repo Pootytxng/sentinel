@@ -106,7 +106,23 @@
       "startFailed": "Compy 暂时无法启动基准测试。请稍后再试。",
       "baselineFailed": "Compy 暂时无法把它保存为你的基准。请稍后再试。",
       "trialApplyFailed": "Compy 没能应用这项更改，所以没有测量更改开启时的表现。请在「测试 → 已应用与历史记录」中查看现在哪些更改仍然生效。",
-      "stackApplyFailed": "Compy 没能应用这些更改，所以没有测量更改开启时的表现。请在「测试 → 已应用与历史记录」中查看现在哪些更改仍然生效。"
+      "stackApplyFailed": "Compy 没能应用这些更改，所以没有测量更改开启时的表现。请在「测试 → 已应用与历史记录」中查看现在哪些更改仍然生效。",
+      "trialUnmapped": "Compy 没能按计划完成这次测量。请在「测试 → 已应用与历史记录」中查看现在哪些更改仍然生效。",
+      "runUnmapped": "这次基准测试运行没有完成。"
+    },
+    "trialStatus": {
+      "starting": "正在开始…",
+      "calibrating": "正在校准…",
+      "baselineChangeOff": "正在测量基准（更改关闭）…",
+      "baselineStackOff": "正在测量基准（这组更改关闭）…",
+      "applyingChange": "正在应用这项更改…",
+      "applyingStack": "正在应用这组入门更改…",
+      "settling": "正在等待稳定…",
+      "measuringChangeOn": "正在测量更改开启时的表现…",
+      "measuringStackOn": "正在测量这组更改开启时的表现…",
+      "rollingBackChange": "正在回滚这项更改…",
+      "rollingBackStack": "正在回滚这组更改…",
+      "working": "处理中…"
     },
     "baselineLabel": "基准",
     "latestRunLabel": "最近一次测量",

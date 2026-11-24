@@ -363,6 +363,43 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "An earlier Trial start on the power plan or one of its settings was interrupted and isn't resolved yet. This action writes to the same power plan, so Compy won't run it now. Check Test → Applied & history, then try again. Nothing was changed.",
     key: "app.backendErrors.planTrialInterrupted",
   },
+  // D7: the Benchmark card's remaining fixed errors (benchmark_trial.rs BENCH_*_NO_FRAMES / BENCH_STACK_NOTHING_*,
+  // benchmark.rs BENCH_RUN_CANCELLED). They reached a zh-CN screen in English; now each has an en + zh key.
+  {
+    rust: "BENCH_CALIBRATION_NO_FRAMES",
+    text: "Couldn't collect enough game frames. Turn on FPS monitoring with a game running.",
+    key: "app.backendErrors.benchCalibrationNoFrames",
+  },
+  {
+    rust: "BENCH_BASELINE_NO_FRAMES",
+    text: "Couldn't collect baseline frames. Turn on FPS monitoring with a game running.",
+    key: "app.backendErrors.benchBaselineNoFrames",
+  },
+  {
+    rust: "BENCH_CHANGE_ON_NO_FRAMES",
+    text: "Couldn't collect frames with the change on.",
+    key: "app.backendErrors.benchChangeOnNoFrames",
+  },
+  {
+    rust: "BENCH_STACK_ON_NO_FRAMES",
+    text: "Couldn't collect frames with the stack on.",
+    key: "app.backendErrors.benchStackOnNoFrames",
+  },
+  {
+    rust: "BENCH_STACK_NOTHING_APPLIABLE",
+    text: "No appliable starter tweaks to measure as a stack.",
+    key: "app.backendErrors.benchStackNothingAppliable",
+  },
+  {
+    rust: "BENCH_STACK_NOTHING_APPLIED",
+    text: "The stack didn't apply — nothing was changed, so there's nothing to measure.",
+    key: "app.backendErrors.benchStackNothingApplied",
+  },
+  {
+    rust: "BENCH_RUN_CANCELLED",
+    text: "Run cancelled.",
+    key: "app.backendErrors.benchRunCancelled",
+  },
 ];
 
 /** The i18n key for a backend error/reason that carries one of the sentences above, else null. */

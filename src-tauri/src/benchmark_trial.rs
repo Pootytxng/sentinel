@@ -183,6 +183,25 @@ pub(crate) const BENCH_LEDGER_UNREAD_BEFORE: &str = "Compy couldn't read its cha
 pub(crate) const BENCH_LEDGER_UNREAD_AFTER: &str = "Compy ran the apply, but couldn't re-read its change history to \
      roll back what it applied automatically. Check Test → Applied & history and undo anything this run applied.";
 
+// D7: the trial card's other errors, FIXED sentences mapped in `src/data/backend-error.ts` so a zh-CN screen shows
+// them in Chinese (they used to reach the card as English through bench-error.ts's fall-through). The calibration
+// one no longer names a "Monitoring tab" (no such tab in the app today; the card itself offers Start monitoring).
+/// Calibration collected too few windows.
+pub(crate) const BENCH_CALIBRATION_NO_FRAMES: &str =
+    "Couldn't collect enough game frames. Turn on FPS monitoring with a game running.";
+/// A tweak or stack trial collected too few baseline windows (nothing was applied yet).
+pub(crate) const BENCH_BASELINE_NO_FRAMES: &str =
+    "Couldn't collect baseline frames. Turn on FPS monitoring with a game running.";
+/// A tweak trial collected too few windows with the change on (the guard still rolls it back).
+pub(crate) const BENCH_CHANGE_ON_NO_FRAMES: &str = "Couldn't collect frames with the change on.";
+/// A stack trial collected too few windows with the stack on (the guard still rolls it back).
+pub(crate) const BENCH_STACK_ON_NO_FRAMES: &str = "Couldn't collect frames with the stack on.";
+/// The stack trial found nothing it can apply.
+pub(crate) const BENCH_STACK_NOTHING_APPLIABLE: &str = "No appliable starter tweaks to measure as a stack.";
+/// The stack batch ran but no new ledger entry appeared.
+pub(crate) const BENCH_STACK_NOTHING_APPLIED: &str =
+    "The stack didn't apply — nothing was changed, so there's nothing to measure.";
+
 /// CR-plan-held-refusal (opus r1), PURE: only the plan-class half of [`bench_held_refusal`], for the undo
 /// and the core-parking restore: a change to the plan class while the benchmark measures the other
 /// half. An undo of the held setting itself keeps today's behaviour.
@@ -230,11 +249,7 @@ pub(crate) fn start_calibration() {
                 set(|s| {
                     s.running = false;
                     s.status = "No frames.".into();
-                    s.error = Some(
-                        "Couldn't collect enough game frames. Turn on FPS monitoring (Monitoring \
-                         tab) and make sure a game is running and presenting."
-                            .into(),
-                    );
+                    s.error = Some(BENCH_CALIBRATION_NO_FRAMES.into());
                 });
                 return;
             }
@@ -352,10 +367,7 @@ pub(crate) fn start_tweak_trial(rec_id: String, rec_title: String) {
                 set(|s| {
                     s.running = false;
                     s.status = "No frames.".into();
-                    s.error = Some(
-                        "Couldn't collect baseline frames. Turn on FPS monitoring with a game running."
-                            .into(),
-                    );
+                    s.error = Some(BENCH_BASELINE_NO_FRAMES.into());
                 });
                 return;
             }
@@ -393,7 +405,7 @@ pub(crate) fn start_tweak_trial(rec_id: String, rec_title: String) {
                 set(|s| {
                     // `running` stays true until _guard's drop finishes the rollback (see RollbackGuard).
                     s.status = "No frames.".into();
-                    s.error = Some("Couldn't collect frames with the change on.".into());
+                    s.error = Some(BENCH_CHANGE_ON_NO_FRAMES.into());
                 });
                 return; // _guard rolls back
             }
@@ -523,7 +535,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
     if items.is_empty() {
         set(|s| {
             s.running = false;
-            s.error = Some("No appliable starter tweaks to measure as a stack.".into());
+            s.error = Some(BENCH_STACK_NOTHING_APPLIABLE.into());
             s.status = "Nothing to apply.".into();
         });
         return;
@@ -561,10 +573,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
                 set(|s| {
                     s.running = false;
                     s.status = "No frames.".into();
-                    s.error = Some(
-                        "Couldn't collect baseline frames. Turn on FPS monitoring with a game running."
-                            .into(),
-                    );
+                    s.error = Some(BENCH_BASELINE_NO_FRAMES.into());
                 });
                 return;
             }
@@ -621,10 +630,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
                 set(|s| {
                     s.running = false;
                     s.status = "Nothing applied.".into();
-                    s.error = Some(
-                        "The stack didn't apply — nothing was changed, so there's nothing to measure."
-                            .into(),
-                    );
+                    s.error = Some(BENCH_STACK_NOTHING_APPLIED.into());
                 });
                 return;
             }
@@ -644,7 +650,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
                 set(|s| {
                     // `running` stays true until _guard's drop finishes the rollback (see StackRollbackGuard).
                     s.status = "No frames.".into();
-                    s.error = Some("Couldn't collect frames with the stack on.".into());
+                    s.error = Some(BENCH_STACK_ON_NO_FRAMES.into());
                 });
                 return; // _guard rolls back
             }

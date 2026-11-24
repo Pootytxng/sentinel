@@ -959,6 +959,10 @@ fn cancel_flag() -> &'static AtomicBool {
     C.get_or_init(|| AtomicBool::new(false))
 }
 
+/// D7: the only `error` this module writes (grep `s.error = Some`), a FIXED sentence mapped in `src/data/backend-error.ts` so a
+/// zh-CN Benchmark card shows it in Chinese (it used to be printed raw).
+pub(crate) const BENCH_RUN_CANCELLED: &str = "Run cancelled.";
+
 /// Kick off a benchmark run on a background thread (no-op if one is already running).
 /// The lock is NOT held during the multi-second run, so `benchmark_state` stays responsive.
 pub(crate) fn start_benchmark() {
@@ -980,7 +984,7 @@ pub(crate) fn start_benchmark() {
                 s.running = false;
                 if cancelled {
                     // Don't store a partial/aborted run as a real result.
-                    s.error = Some("Run cancelled.".into());
+                    s.error = Some(BENCH_RUN_CANCELLED.into());
                 } else {
                     s.latest = Some(report);
                     s.latest_at = Some(chrono::Utc::now().to_rfc3339());

@@ -14,8 +14,9 @@ const rust = ["actions.rs", "recommendations.rs", "gaming_orchestrator.rs", "exp
   .map((f) => readFileSync(join("src-tauri", "src", f), "utf8"))
   .join("\n")
   .replace(/\\\r?\n\s*/g, "");
-// B11: the same-setting refusals live in experiment.rs and benchmark_trial.rs (read the same way).
-const rustMore = ["experiment.rs", "benchmark_trial.rs", "comparability.rs"]
+// B11: the same-setting refusals live in experiment.rs and benchmark_trial.rs (read the same way). D7: benchmark.rs
+// holds BENCH_RUN_CANCELLED.
+const rustMore = ["experiment.rs", "benchmark_trial.rs", "comparability.rs", "benchmark.rs"]
   .map((f) => readFileSync(join("src-tauri", "src", f), "utf8"))
   .join("\n")
   .replace(/\\\r?\n\s*/g, "");
