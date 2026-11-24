@@ -1600,6 +1600,93 @@ mod tests {
         assert!(serde_json::from_str::<ElevatedOp>(forged).is_err());
     }
 
+    /// Review r2 R2-1, the no-read fallback: an EEE undo target can never be a wildcard. A property with any of
+    /// `*` `?` `[` `]` or the backtick, an adapter with `*` or `?`, or an empty adapter or property is refused by
+    /// `validate`, and a forged request carrying one is refused WHOLE by the helper before any read, pipe or run
+    /// (the `-Name '*' -DisplayName '*'` forgery). An adapter with square brackets ("Ethernet [2]") and an empty
+    /// prior stay allowed. Break: drop any one check from `eee_restore_target_ok` and this fails.
+    #[test]
+    fn an_eee_undo_target_is_never_a_wildcard() {
+        let t = |a: &str, p: &str, v: &str| EeeSaved {
+            adapter: SavedText::parse(a).expect("a"),
+            property: SavedText::parse(p).expect("p"),
+            prior: SavedText::parse(v).expect("v"),
+        };
+        let one = |s: EeeSaved| ElevatedOp::EeeRestore { targets: vec![s] };
+        for (why, s) in [
+            ("adapter star", t("*", "Energy Efficient Ethernet", "Enabled")),
+            ("adapter question mark", t("Ethernet ?", "Energy Efficient Ethernet", "Enabled")),
+            ("property star", t("Ethernet", "*", "Enabled")),
+            ("property question mark", t("Ethernet", "Energy Efficient Ethernet?", "Enabled")),
+            ("property open bracket", t("Ethernet", "Energy [Efficient", "Enabled")),
+            ("property close bracket", t("Ethernet", "Energy Efficient] Ethernet", "Enabled")),
+            ("property backtick", t("Ethernet", "Energy `Efficient", "Enabled")),
+            ("empty adapter", t("", "Energy Efficient Ethernet", "Enabled")),
+            ("empty property", t("Ethernet", "", "Enabled")),
+        ] {
+            assert_eq!(one(s.clone()).validate(), Err(Refused::Request), "{why}");
+            // One refused target refuses the whole op, wherever it sits.
+            let ok = t("Ethernet", "Energy Efficient Ethernet", "Enabled");
+            let mixed = ElevatedOp::EeeRestore { targets: vec![ok.clone(), s, ok] };
+            assert_eq!(mixed.validate(), Err(Refused::Request), "{why}: the whole op");
+        }
+        for (why, s) in [
+            ("brackets in the adapter", t("Ethernet [2]", "Energy Efficient Ethernet", "Enabled")),
+            ("an empty prior", t("Ethernet", "Energy Efficient Ethernet", "")),
+            ("a quote in the adapter", t("Bob's NIC", "Green Ethernet", "On")),
+            ("wildcard text in the prior", t("Ethernet", "Energy Efficient Ethernet", "*")),
+        ] {
+            assert_eq!(one(s).validate(), Ok(()), "{why}");
+        }
+        // The helper refuses the forged wide undo whole: nothing read, no pipe, nothing run.
+        let forged = r#"{"ops":[{"op":"eee-restore","targets":[{"adapter":"*","property":"*","prior":"Disabled"}]}]}"#;
+        let mut fx = Fake::default();
+        let connects = std::cell::Cell::new(0);
+        let code = helper_argv_with(&[hex(&request_json("single", forged))], &mut fx, &|_, _| {
+            connects.set(connects.get() + 1);
+            Ok(Box::new(SharedBuf::default()) as PipeOut)
+        });
+        assert_eq!(code, actions::HELPER_REQUEST_REFUSED, "the forged wide undo");
+        assert!(fx.events.is_empty(), "nothing read or run, got {:?}", fx.events);
+        assert_eq!(connects.get(), 0, "the pipe is not touched");
+    }
+
+    /// Review r2 R2-2: an EEE undo restores at most MAX_EEE_RESTORE (128) targets and a Nagle undo at most
+    /// MAX_NAGLE_RESTORE (64) interfaces; at the cap it is accepted, one over is refused whole by the helper
+    /// before anything runs. Break: change either cap (or drop the upper bound) in `validate` and this fails.
+    #[test]
+    fn the_eee_and_nagle_undos_are_capped() {
+        assert_eq!((MAX_EEE_RESTORE, MAX_NAGLE_RESTORE), (128, 64), "the caps the review set");
+        let eee = |n: usize| ElevatedOp::EeeRestore { targets: (0..n).map(|i| saved(&format!("Ethernet {i}"), "Enabled")).collect() };
+        let nagle = |n: usize| ElevatedOp::NagleRestore {
+            interfaces: (0..n).map(|_| NagleSaved { key: NicKey::parse(GUID_A).expect("key"), ack: Some(1), nodelay: None }).collect(),
+        };
+        assert_eq!(eee(MAX_EEE_RESTORE).validate(), Ok(()), "128 EEE targets");
+        assert_eq!(eee(MAX_EEE_RESTORE + 1).validate(), Err(Refused::Request), "129 EEE targets");
+        assert_eq!(eee(0).validate(), Err(Refused::Request), "no EEE target");
+        assert_eq!(nagle(MAX_NAGLE_RESTORE).validate(), Ok(()), "64 interfaces");
+        assert_eq!(nagle(MAX_NAGLE_RESTORE + 1).validate(), Err(Refused::Request), "65 interfaces");
+        assert_eq!(nagle(0).validate(), Err(Refused::Request), "no interface");
+        for (why, op, accepted) in [
+            ("128 EEE targets", eee(MAX_EEE_RESTORE), true),
+            ("129 EEE targets", eee(MAX_EEE_RESTORE + 1), false),
+            ("64 interfaces", nagle(MAX_NAGLE_RESTORE), true),
+            ("65 interfaces", nagle(MAX_NAGLE_RESTORE + 1), false),
+        ] {
+            let item = format!(r#"{{"ops":[{}]}}"#, serde_json::to_string(&op).expect("json"));
+            let args = vec![hex(&request_json("single", &item))];
+            assert!(args[0].len() <= MAX_HEX_LEN, "{why}: fits the argv cap, so only the count decides");
+            let mut fx = Fake::default();
+            let code = helper_argv_with(&args, &mut fx, &|_, _| Ok(Box::new(SharedBuf::default()) as PipeOut));
+            if accepted {
+                assert_ne!(code, actions::HELPER_REQUEST_REFUSED, "{why}: accepted");
+            } else {
+                assert_eq!(code, actions::HELPER_REQUEST_REFUSED, "{why}: refused whole");
+                assert!(fx.events.is_empty(), "{why}: nothing read or run, got {:?}", fx.events);
+            }
+        }
+    }
+
     /// The EEE set script, written out, and its builder's refusals. Break: drop the `EEE_KEYWORDS` check in
     /// `build_eee_set_by_instance_script` and this fails.
     #[test]

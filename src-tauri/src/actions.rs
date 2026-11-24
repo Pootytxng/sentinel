@@ -3069,6 +3069,32 @@ impl Drop for ForceTaskRead {
     }
 }
 
+// Test-only (A9 review r2 R2-4(a)): stands in for the task STATE read (`scheduled_task_state_at`) on this thread,
+// so the caller-level pin of the task apply never depends on this machine. Never compiled into the shipped binary.
+#[cfg(test)]
+thread_local! {
+    static FORCE_TASK_STATE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// RAII guard: the task state read answers `state` on this thread for the guard's lifetime (test-only).
+#[cfg(test)]
+pub(crate) struct ForceTaskState;
+
+#[cfg(test)]
+impl ForceTaskState {
+    pub(crate) fn begin(state: &str) -> Self {
+        FORCE_TASK_STATE.with(|f| *f.borrow_mut() = Some(state.to_string()));
+        ForceTaskState
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForceTaskState {
+    fn drop(&mut self) {
+        FORCE_TASK_STATE.with(|f| *f.borrow_mut() = None);
+    }
+}
+
 /// Apply refused because the task read did not finish. Mirrored byte-for-byte in
 /// `src/data/backend-error.ts` (pinned by `backend-error.test.ts`), which shows it in the user's language.
 pub(crate) const TASK_UNREADABLE_APPLY: &str = "Compy couldn't check this Windows task right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.";
@@ -3139,6 +3165,10 @@ pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
 /// The state read for an already-resolved, already-guarded `(path, name)` (D2b r1: the apply passes the
 /// name it resolved, so it does not list the folder twice).
 fn scheduled_task_state_at(path: &str, name: &str) -> String {
+    #[cfg(test)]
+    if let Some(state) = FORCE_TASK_STATE.with(|f| f.borrow().clone()) {
+        return state;
+    }
     let mut cmd = quiet_command(SysTool::PowerShell);
     cmd.args([
         "-NoProfile",
@@ -10034,6 +10064,47 @@ mod a9_stored_record_tests {
             build_eee_rollback_script(&many).expect("main's template"),
             "nine targets and an empty value compose main's template"
         );
+        // Review r2 R2-1: a stored EEE target that main's template would match as a wildcard, or an empty name,
+        // refuses the WHOLE undo (other targets included) with the one sentence; the row stays listed (Err).
+        let eee_row = |a: &str, p: &str| {
+            vec![
+                EeeNicSnapshot { adapter_name: "Ethernet".into(), property_display_name: "Energy Efficient Ethernet".into(), prior_value: "Enabled".into() },
+                EeeNicSnapshot { adapter_name: a.into(), property_display_name: p.into(), prior_value: "Disabled".into() },
+            ]
+        };
+        for (why, a, p) in [
+            ("eee adapter star", "*", "Energy Efficient Ethernet"),
+            ("eee adapter question mark", "Ethernet?", "Energy Efficient Ethernet"),
+            ("eee property star", "Ethernet 2", "*"),
+            ("eee property bracket", "Ethernet 2", "Energy [Efficient] Ethernet"),
+            ("eee property backtick", "Ethernet 2", "Energy `Efficient"),
+            ("eee empty adapter", "", "Energy Efficient Ethernet"),
+            ("eee empty property", "Ethernet 2", ""),
+        ] {
+            let row = eee_row(a, p);
+            refused_before_any_dispatch(why, || rollback_eee_disable_typed(&row));
+        }
+        // Review r2 R2-2: at the cap the undo parks one op; one over refuses before anything runs.
+        let eee_n = |n: usize| -> Vec<EeeNicSnapshot> {
+            (0..n)
+                .map(|i| EeeNicSnapshot { adapter_name: format!("Ethernet {i}"), property_display_name: "Energy Efficient Ethernet".into(), prior_value: "Enabled".into() })
+                .collect()
+        };
+        let nagle_n = |n: usize| -> Vec<NagleInterfaceSnapshot> {
+            (0..n)
+                .map(|_| NagleInterfaceSnapshot { interface: "{2a737441-1930-4402-8d77-b2bebba308a3}".into(), prior_ack: Some(1), prior_nodelay: None })
+                .collect()
+        };
+        {
+            let guard = ElevationDeferral::begin().expect("sink");
+            rollback_eee_disable_typed(&eee_n(crate::elevated_ops::MAX_EEE_RESTORE)).expect("128 EEE targets park");
+            rollback_nagle_disable_typed(&nagle_n(crate::elevated_ops::MAX_NAGLE_RESTORE)).expect("64 interfaces park");
+            assert_eq!(guard.take_deferred().len(), 2, "one op each at the cap");
+        }
+        let eee_over = eee_n(crate::elevated_ops::MAX_EEE_RESTORE + 1);
+        refused_before_any_dispatch("eee over the cap", || rollback_eee_disable_typed(&eee_over));
+        let nagle_over = nagle_n(crate::elevated_ops::MAX_NAGLE_RESTORE + 1);
+        refused_before_any_dispatch("nagle over the cap", || rollback_nagle_disable_typed(&nagle_over));
         // A power-plan setting pair that is neither of the two the apply writes (refused before any read).
         refused_before_any_dispatch("power setting", || {
             rollback_power_plan_setting_typed("11111111-2222-3333-4444-555555555555", SUB_PROCESSOR_GUID, CPMINCORES_GUID, 1, 1)
@@ -10083,7 +10154,21 @@ mod a9_exe_identity_tests {
             let check = body.find(concat!("refuse_if_exe_", "replaced(&exe)")).unwrap_or_else(|| panic!("{f} checks the exe"));
             let launch = body.find(concat!("elevate_and_", "wait")).unwrap_or_else(|| panic!("{f} launches"));
             assert!(check < launch, "{f}: the check comes before the launch");
+            assert_eq!(body.matches(concat!("refuse_if_exe_", "replaced(")).count(), 1, "{f}: checked once");
         }
+        // Review r2 R2-5: in the capture the check is the last step before the launch (after the pipe and its
+        // reader are set up), and a refusal stops the reader and launches nothing. Break: move the check back
+        // above `ServerPipe::create` and this fails.
+        let cap = src.find(concat!("pub(crate) fn run_elevated_", "request_capture(")).expect("capture");
+        let cap_body = &src[cap..cap + src[cap..].find("\n}\n").expect("end")];
+        assert!(
+            cap_body.contains(concat!(
+                "    if let Err(e) = refuse_if_exe_",
+                "replaced(&exe) {\n        finish();\n        let _ = reader.join();\n        return none(Err(e));\n    }\n    let res = elevate_and_",
+                "wait_with("
+            )),
+            "R2-5: the capture's exe check sits right before its launch"
+        );
         let lib = include_str!("lib.rs").replace("\r\n", "\n");
         let run = lib.find(concat!("pub fn ", "run() {")).expect("run");
         let first = lib[run..].lines().skip(1).find(|l| !l.trim_start().starts_with("//")).unwrap_or_default();
@@ -10117,9 +10202,22 @@ mod a9_caller_tests {
             Err(e) => {
                 assert!(ops.is_empty(), "{label}: a refused apply parks nothing ({e})");
                 eprintln!("{label}: this machine's read refused the apply, op not checked here: {e}");
+                SKIPPED.with(|s| s.borrow_mut().push(label.to_string()));
                 None
             }
         }
+    }
+
+    thread_local! {
+        /// A9 review r2 R2-4(a): the sites whose op this machine's reads kept these tests from checking.
+        static SKIPPED: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    /// Prints the skipped sites as ONE line (`A9 CALLER PINS SKIPPED: [..]`), shown in the build log when the
+    /// tests run with `--show-output` (the build step does), and clears the list.
+    fn report_skipped(test: &str) {
+        let skipped = SKIPPED.with(|s| std::mem::take(&mut *s.borrow_mut()));
+        println!("A9 CALLER PINS SKIPPED ({test}): {skipped:?}");
     }
 
     /// Break: hand any of these applies another op or another value (e.g. `ServiceDisable { service:
@@ -10134,7 +10232,18 @@ mod a9_caller_tests {
         };
         one("service disable", &|| apply_service_disable(KnownService::SysMain), &|_| ElevatedOp::ServiceDisable { service: KnownService::SysMain });
         one("service suspend", &|| apply_service_suspend(KnownService::WSearch), &|_| ElevatedOp::ServiceSuspend { service: KnownService::WSearch });
-        one("task disable", &|| apply_disable_scheduled_task(KnownBloatTask::CeipUsb), &|_| ElevatedOp::TaskDisable { task: KnownBloatTask::CeipUsb });
+        {
+            // R2-4(a): the task apply's two reads are forced, so this site is never skipped.
+            let _read = ForceTaskRead::begin(Some(std::process::Output {
+                status: <std::process::ExitStatus as std::os::windows::process::ExitStatusExt>::from_raw(0),
+                stdout: b"UsbCeip\r\n".to_vec(),
+                stderr: Vec::new(),
+            }));
+            let _state = ForceTaskState::begin("Ready");
+            let (a, ops) = parked("task disable", || apply_disable_scheduled_task(KnownBloatTask::CeipUsb)).expect("the forced reads always apply");
+            assert_eq!(ops, vec![ElevatedOp::TaskDisable { task: KnownBloatTask::CeipUsb }], "task disable");
+            assert!(matches!(&a.snapshot, Snapshot::ScheduledTask { prior_state } if prior_state == "Ready"), "task disable records the read state");
+        }
         one("ultimate", &apply_power_ultimate, &|_| ElevatedOp::UltimatePlanApply {});
         one("reserved storage", &apply_reserved_storage_off, &|_| ElevatedOp::ReservedStorageOff {});
         for (sub, set, which) in [
@@ -10165,6 +10274,7 @@ mod a9_caller_tests {
             },
             other => panic!("{other:?}"),
         });
+        report_skipped("each_apply_hands_the_helper_its_own_op_and_values");
     }
 
     /// Deterministic through the EEE read seam: the apply hands over exactly the (adapter, property) pairs it

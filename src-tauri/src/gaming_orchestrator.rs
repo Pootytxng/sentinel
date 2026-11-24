@@ -2021,6 +2021,58 @@ mod elevation_batch_tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// A9 review r2 R2-4(b): the restore side hands the helper ONE typed batch whose items are `r0`, `r1` in
+    /// restore order, each with exactly the op its change's undo parked (HAGS back to its recorded value, TCP
+    /// auto-tuning back to disabled). A full reply restores both; a reply with only `r0` keeps `r1` failed (its
+    /// change is retained). In test builds `mutation_root()` is the test root. Break: give the restore's request
+    /// items ids that are not `r{i}` in staged order (or swap two items' ops) and this fails.
+    #[test]
+    fn the_restore_request_carries_r0_r1_and_their_ops() {
+        use crate::elevated_ops::{ElevatedOp, Wrapper};
+        let run = vec![
+            SessionChange {
+                label: "Hardware GPU scheduling".into(),
+                rollback_action: RollbackAction::RestoreHwSchModeFromSnapshot,
+                snapshot: Snapshot::HwSchMode { prior: Some(1) },
+                elevated_restore: true,
+            },
+            SessionChange {
+                label: "TCP auto-tuning".into(),
+                rollback_action: RollbackAction::RestoreTcpAutotuningFromSnapshot,
+                snapshot: Snapshot::TcpAutotuning { prior_disabled: true },
+                elevated_restore: true,
+            },
+        ];
+        for partial in [false, true] {
+            actions::fake_next_capture(move |req| {
+                assert_eq!(req.wrapper, Wrapper::Batch);
+                let items: Vec<(&str, &Vec<ElevatedOp>)> =
+                    req.items.iter().map(|i| (i.id.as_ref().map(|id| id.as_str()).unwrap_or_default(), &i.ops)).collect();
+                assert_eq!(
+                    items,
+                    vec![
+                        ("r0", &vec![ElevatedOp::HagsRestore { prior: Some(1) }]),
+                        ("r1", &vec![ElevatedOp::TcpAutotuning { disabled: true }]),
+                    ],
+                    "ids, order and ops"
+                );
+                let n = req.nonce.as_str();
+                let text = if partial { format!("{n}:r0:ok\n{n}:end\n") } else { format!("{n}:r0:ok\n{n}:r1:ok\n{n}:end\n") };
+                actions::ElevatedCapture { run: Ok(()), text }
+            });
+            let mut errs = RestoreErrs::default();
+            restore_elevated_run(&run, "gm-1700000000000", &mut errs);
+            assert!(!actions::unused_fake_capture(), "partial={partial}: the restore's one elevation reached the capture");
+            if partial {
+                assert_eq!(errs.failed.len(), 1, "only r1 failed");
+                assert!(std::ptr::eq(errs.failed[0], &run[1]), "the TCP change is the one retained");
+                assert!(errs.first.as_deref().is_some_and(|e| e.starts_with("TCP auto-tuning: ")), "{:?}", errs.first);
+            } else {
+                assert!(errs.failed.is_empty() && errs.first.is_none(), "both restored: {:?}", errs.first);
+            }
+        }
+    }
+
     // THE T6 PIN: a full advanced tier (4 items) rides EXACTLY ONE elevation, counted at the
     // dispatch layer in run_elevated_powershell (the forced decline stands in for the real
     // prompt; sink-captured calls are deliberately not counted).
