@@ -455,6 +455,35 @@ describe("Your data: clear everything", () => {
     }
   });
 
+  // F3 (review r2): a refusal after a record was undone in this run shows only the "Couldn't undo" line: the mapped
+  // sentence ends "Nothing was changed.", which is false then. (A refusal at the first record shows it: the test
+  // above.) Break check: drop the noneUndone condition in undoAllFirst -> the Gaming Mode sentence appears, fails.
+  it("'Undo them first' shows no refusal sentence once a record was undone in the run", async () => {
+    const GM = BACKEND_SENTENCES.find((s) => s.rust === "GM_HOLDS_SETTING_REFUSAL")!;
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: () => REFUSED,
+      get_applied_changes: () => [
+        { id: "g1", rec_id: "game-mode", rec_title: "Game mode", status: "applied", applied_at: "2026-11-01T00:00:00Z" },
+        { id: "h1", rec_id: "hags", rec_title: "HAGS", status: "applied", applied_at: "2026-11-02T00:00:00Z" },
+      ],
+      rollback_change: (args) => {
+        if (args?.changeId === "g1") throw GM.text; // newest first: h1 is undone, then g1 is refused
+        return null;
+      },
+    });
+    render(<YourData />);
+    await openEverything();
+    await screen.findByTestId("your-data-refused");
+    fireEvent.click(screen.getByRole("button", { name: "Undo them first" }));
+    await waitFor(() => expect(screen.getByTestId("your-data-undo-results").textContent).toContain("Press Check again"));
+    const text = screen.getByTestId("your-data-undo-results").textContent ?? "";
+    expect(text).toContain("Undone: HAGS");
+    expect(text).toContain("Couldn't undo: Game mode.");
+    expect(text).not.toContain(GM.text);
+    expect(text).not.toContain("Nothing was changed");
+  });
+
   // C5a. Break checks: render one line per record (applied_changes) instead of per setting -> the list has 4 lines
   // and this fails; show progress per record (no grouping) -> "2 of 3 records undone" is missing, fails.
   it("lists each setting once with its record count, says the totals, and reports the undo per setting", async () => {

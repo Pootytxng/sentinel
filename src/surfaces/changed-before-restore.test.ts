@@ -230,6 +230,24 @@ describe("runSettingWalk / walkStopMessage (C6)", () => {
     expect(line).not.toContain("access is denied");
   });
 
+  // F3 (review r2): the mapped refusals end "Nothing was changed.", true only when no record was undone in this run.
+  // Refusal at record 1 -> the reason shows (u9); at record 2 -> only the partial stop line.
+  // Break check: drop the `r.done === 0` condition in walkStopMessage -> the Gaming Mode line appears, fails.
+  it("a refusal after a record was undone shows no reason line (it would say 'Nothing was changed')", async () => {
+    const GM = BACKEND_SENTENCES.find((s) => s.rust === "GM_HOLDS_SETTING_REFUSAL")!;
+    const first = await runSettingWalk(rows, async (id) => {
+      if (id === "g3") throw GM.text;
+    });
+    expect(walkStopMessage(first, "Game Mode", t)).toContain("app.backendErrors.gmHoldsSetting");
+    const second = await runSettingWalk(rows, async (id) => {
+      if (id === "g2") throw GM.text;
+    });
+    expect([second.done, second.stop?.outcome]).toEqual([1, "failed"]);
+    expect(walkStopMessage(second, "Game Mode", t)).toBe(
+      `app.errors.undoPartialFailed${JSON.stringify({ title: "Game Mode", done: 1, total: 3 })}`,
+    );
+  });
+
   // u13. Break check: drop the dispatch -> no event after an unrecorded run, fails.
   it("announces a ledger change after a run in which a record ran but no write announced it", async () => {
     let events = 0;

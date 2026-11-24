@@ -211,7 +211,9 @@ export function walkStopMessage(r: WalkResult, title: string, t: TFunction): str
   const head = t("app.errors.undoPartialFailed", { title, done: r.done, total: r.total });
   // The owner's "no String(e) in the face" law: the backend's own text is never shown. A reason line appears only
   // when backend-error.ts knows the sentence (a fixed refusal pinned to its Rust const), in the user's language.
-  const known = backendMessage(r.stop.reason, t);
+  // C6 review F3: the mapped refusals end "Nothing was changed.", which is true only when no record was undone in
+  // this run; after one was, only the partial stop line shows.
+  const known = r.done === 0 ? backendMessage(r.stop.reason, t) : null;
   return known ? `${head} ${known}` : head;
 }
 

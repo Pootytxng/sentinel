@@ -166,10 +166,13 @@ export function YourData() {
       if (s) {
         // Named by its setting's line (the group's title), so it matches the progress line above it.
         const title = groups.find((x) => x.rec_id === s.recId)?.title ?? s.title;
+        // C6 review F3: the mapped refusals end "Nothing was changed.", true only when no record was undone in this
+        // run; after one was, only the "Couldn't undo" stop line shows.
+        const noneUndone = !out.some((r) => r.outcome === "undone");
         stop =
           s.outcome === "unrecorded"
             ? { title, kind: "unrecorded", ...(s.liveRead ? { liveRead: s.liveRead } : {}) }
-            : { title, kind: "failed", reasonKey: backendSentenceKey(s.reason) };
+            : { title, kind: "failed", reasonKey: noneUndone ? backendSentenceKey(s.reason) : null };
       }
     }
     setUndo({ running: false, groups, stop, readFailed, noneListed });
