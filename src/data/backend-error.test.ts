@@ -14,8 +14,13 @@ const rust = ["actions.rs", "recommendations.rs", "gaming_orchestrator.rs", "exp
   .map((f) => readFileSync(join("src-tauri", "src", f), "utf8"))
   .join("\n")
   .replace(/\\\r?\n\s*/g, "");
+// B11: the same-setting refusals live in experiment.rs and benchmark_trial.rs (read the same way).
+const rustMore = ["experiment.rs", "benchmark_trial.rs"]
+  .map((f) => readFileSync(join("src-tauri", "src", f), "utf8"))
+  .join("\n")
+  .replace(/\\\r?\n\s*/g, "");
 const rustConst = (name: string): string | null => {
-  const m = rust.match(new RegExp(`const ${name}: &str =\\s*"((?:[^"\\\\]|\\\\.)*)";`));
+  const m = `${rust}\n${rustMore}`.match(new RegExp(`const ${name}: &str =\\s*"((?:[^"\\\\]|\\\\.)*)";`));
   return m ? m[1].replace(/\\"/g, '"') : null;
 };
 

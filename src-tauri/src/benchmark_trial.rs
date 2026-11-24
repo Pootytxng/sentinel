@@ -144,18 +144,21 @@ pub(crate) fn bench_held_refusal<'a>(
     held: Option<&(String, String)>,
     rec_ids: impl Iterator<Item = &'a str>,
 ) -> Option<String> {
-    let (id, title) = held?;
+    let (id, _title) = held?;
     let ids: Vec<&str> = rec_ids.collect();
     // CR-plan-held-refusal: the plan and a setting of it are one class while the benchmark holds either.
     if !ids.contains(&id.as_str()) {
         return bench_plan_class_refusal(held, ids.into_iter());
     }
-    Some(format!(
-        "\u{201c}{title}\u{201d} is being measured by the benchmark right now, so Compy won't apply it \
-         again on top of the measurement. Wait for it to finish and roll back, or cancel it. Nothing \
-         was changed."
-    ))
+    Some(BENCH_HOLDS_SETTING_REFUSAL.to_string())
 }
+
+/// B11: [`bench_held_refusal`]'s direct-hold sentence is FIXED (no setting title), so `src/data/backend-error.ts`
+/// maps it byte-equal to words in the user's language; an unmapped refusal is never shown. It refuses an apply or a
+/// batch before anything runs, so "Nothing was changed." is true of every caller.
+pub(crate) const BENCH_HOLDS_SETTING_REFUSAL: &str = "A setting this action changes is being measured by the \
+     benchmark right now, so Compy won't run it on top of the measurement. Wait until the benchmark finishes \
+     and puts its change back, or cancel it. Nothing was changed.";
 
 /// CR-plan-held-refusal (opus r1), PURE: only the plan-class half of [`bench_held_refusal`], for the undo
 /// and the core-parking restore: a change to the plan class while the benchmark measures the other
@@ -780,7 +783,7 @@ mod trial_tests {
         assert_eq!(bench_held_refusal(Some(&usb), std::iter::once("pcie-aspm-off")), None, "two plan settings don't clash");
         assert_eq!(bench_held_refusal(Some(&plan), std::iter::once("hags-on")), None, "outside the class applies");
         // The direct hold keeps its own wording.
-        assert!(bench_held_refusal(Some(&plan), std::iter::once("power-ultimate")).unwrap().contains("measured by the benchmark right now, so Compy won't apply it"));
+        assert_eq!(bench_held_refusal(Some(&plan), std::iter::once("power-ultimate")).unwrap(), BENCH_HOLDS_SETTING_REFUSAL);
     }
 
     #[test]
@@ -789,7 +792,11 @@ mod trial_tests {
         // trial's applied state and keep reading "applied" after the trial rolls it back.
         let held = ("game-mode-on".to_string(), "Turn on Game Mode".to_string());
         let refused = bench_held_refusal(Some(&held), std::iter::once("game-mode-on")).expect("refused");
-        assert!(refused.contains("Turn on Game Mode") && refused.contains("Nothing was changed"), "{refused}");
+        // B11: a fixed sentence with no setting title, so backend-error.ts can map it (and pins it byte-equal).
+        // Break check: put the held setting's title back into the sentence -> these fail.
+        assert_eq!(refused, BENCH_HOLDS_SETTING_REFUSAL);
+        assert!(!refused.contains("Turn on Game Mode") && !refused.contains('\u{201c}'), "{refused}");
+        assert!(refused.contains("this action") && refused.contains("won't run it") && refused.ends_with("Nothing was changed."), "{refused}");
         assert!(bench_held_refusal(Some(&held), ["hags-on", "game-mode-on"].into_iter()).is_some(), "a batch naming it");
         assert_eq!(bench_held_refusal(Some(&held), ["hags-on"].into_iter()), None, "another setting applies");
         assert_eq!(bench_held_refusal(None, std::iter::once("game-mode-on")), None, "nothing held");

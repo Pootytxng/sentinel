@@ -4026,6 +4026,19 @@ pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> R
     })
 }
 
+/// B11: the same-setting refusals are FIXED sentences (no setting title), so `src/data/backend-error.ts` can map
+/// each one, byte-equal, to words in the user's language: an unmapped refusal is never shown (the "no String(e)
+/// in the face" rule), and the titled `format!` these replace could not be mapped. [`held_by_trial_refusal`]
+/// refuses a plain apply or a batch before anything runs, so "Nothing was changed." is true of every caller.
+/// "A setting this action changes" covers the one-click apply and a batch alike (a batch naming it is refused whole).
+pub(crate) const TRIAL_HOLDS_SETTING_REFUSAL: &str = "A setting this action changes is being tested by a Trial \
+     right now, so Compy won't run it on top of the test. Let the Trial finish, or end it with Restore now in \
+     Test, first. Nothing was changed.";
+/// [`TRIAL_HOLDS_SETTING_REFUSAL`] when the Trial's start was interrupted (a Pending record).
+pub(crate) const TRIAL_START_INTERRUPTED_REFUSAL: &str = "An earlier Trial start of a setting this action \
+     changes was interrupted and isn't resolved yet, so Compy won't run it now. Check Test → Applied & history, \
+     then try again. Nothing was changed.";
+
 /// CR-rp-same-setting-row: the refusal for a plain apply of a setting a Trial is testing right now.
 /// A second ledger row for that setting would snapshot the Trial's own applied state, and when the
 /// Trial puts its change back (a confounded or not-kept result restores the Trial's pre-test
@@ -4053,17 +4066,9 @@ pub(crate) fn held_by_trial_refusal<'a>(
         None => return plan_class_trial_refusal(records, ids.iter().copied()),
     };
     Some(if held.status == ExperimentStatus::Pending {
-        format!(
-            "An earlier Trial start of \u{201c}{}\u{201d} was interrupted and isn't resolved yet, so Compy won't \
-             apply it again. Check Test \u{2192} Applied & history, then try again. Nothing was changed.",
-            held.rec_title
-        )
+        TRIAL_START_INTERRUPTED_REFUSAL.to_string()
     } else {
-        format!(
-            "\u{201c}{}\u{201d} is being tested by a Trial right now, so Compy won't apply it again on top of \
-             the test. Finish the Trial or put it back first. Nothing was changed.",
-            held.rec_title
-        )
+        TRIAL_HOLDS_SETTING_REFUSAL.to_string()
     })
 }
 
@@ -6719,6 +6724,17 @@ mod experiment_tests {
         let refused = held_by_trial_refusal(&store, std::iter::once("hags-on")).expect("the Pending one holds it too");
         assert!(refused.contains("was interrupted") && refused.contains("Nothing was changed"), "{refused}");
         assert!(held_by_trial_refusal(&store, std::iter::once("game-mode-on")).expect("running").contains("being tested"));
+        // B11: fixed sentences with no setting title, so backend-error.ts can map them (and pins them byte-equal).
+        // Break check: put the held setting's title back into either sentence -> these fail.
+        assert_eq!(refused, TRIAL_START_INTERRUPTED_REFUSAL);
+        assert_eq!(held_by_trial_refusal(&store, std::iter::once("game-mode-on")).unwrap(), TRIAL_HOLDS_SETTING_REFUSAL);
+        for s in [TRIAL_HOLDS_SETTING_REFUSAL, TRIAL_START_INTERRUPTED_REFUSAL] {
+            assert!(!s.contains('\u{201c}') && s.ends_with("Nothing was changed."), "{s}");
+            assert!(s.contains("this action") && s.contains("won't run it"), "{s}");
+            assert!(!s.contains("won't apply it") && !s.contains("this change"), "{s}");
+        }
+        // A running Trial can be ended from Test with its Restore now button; the sentence names that way out.
+        assert!(TRIAL_HOLDS_SETTING_REFUSAL.contains("Let the Trial finish, or end it with Restore now in Test, first."));
     }
 
     #[test]

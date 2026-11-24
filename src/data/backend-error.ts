@@ -78,6 +78,24 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "Compy found this change's saved adapter details, but they contain characters Compy won't put into a Windows command, so it didn't run the undo. The change stays in your Trust Ledger.",
     key: "app.backendErrors.eeeValueRefusedUndo",
   },
+  // B11: the same-setting refusals of an apply (or a batch) while a Trial tests, or the benchmark measures, that
+  // setting (experiment::held_by_trial_refusal, benchmark_trial::bench_held_refusal). Fixed, title-free consts in
+  // experiment.rs and benchmark_trial.rs; each refuses before anything runs.
+  {
+    rust: "TRIAL_HOLDS_SETTING_REFUSAL",
+    text: "A setting this action changes is being tested by a Trial right now, so Compy won't run it on top of the test. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
+    key: "app.backendErrors.trialHoldsSetting",
+  },
+  {
+    rust: "TRIAL_START_INTERRUPTED_REFUSAL",
+    text: "An earlier Trial start of a setting this action changes was interrupted and isn't resolved yet, so Compy won't run it now. Check Test → Applied & history, then try again. Nothing was changed.",
+    key: "app.backendErrors.trialStartInterrupted",
+  },
+  {
+    rust: "BENCH_HOLDS_SETTING_REFUSAL",
+    text: "A setting this action changes is being measured by the benchmark right now, so Compy won't run it on top of the measurement. Wait until the benchmark finishes and puts its change back, or cancel it. Nothing was changed.",
+    key: "app.backendErrors.benchHoldsSetting",
+  },
   // A7: the two power GUID refusals (fixed words, never the saved value).
   {
     rust: "POWER_SETTING_ID_REFUSED",
