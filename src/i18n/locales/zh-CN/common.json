@@ -118,6 +118,11 @@
   "term": {
     "moreInBlackbook": "在历史(History)中查看更多 →"
   },
+  "provenance": {
+    "verified": "已验证",
+    "measuredSignal": "别处实测",
+    "expectedImpact": "预期"
+  },
   "trustSwitch": {
     "working": "处理中…",
     "previousSetting": "你之前的设置",

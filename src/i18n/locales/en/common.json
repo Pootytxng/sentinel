@@ -124,6 +124,11 @@
   "term": {
     "moreInBlackbook": "More in History →"
   },
+  "provenance": {
+    "verified": "Verified",
+    "measuredSignal": "Measured elsewhere",
+    "expectedImpact": "Expected"
+  },
   "trustSwitch": {
     "working": "Working…",
     "previousSetting": "your previous setting",

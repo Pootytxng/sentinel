@@ -220,10 +220,11 @@ function humanizeWhen(iso: string, t: TFunction): string {
 
 // Labels come from the shared provenance source of truth so they can't drift from the
 // Home limiter / action-details wording; the CSS class stays local to this surface.
-const EVIDENCE: Record<Rec["provenance"], { label: string; cls: string }> = {
-  verified: { label: PROVENANCE_LABEL.verified, cls: "verified" },
-  "measured-signal": { label: PROVENANCE_LABEL["measured-signal"], cls: "measured" },
-  "expected-impact": { label: PROVENANCE_LABEL["expected-impact"], cls: "expected" },
+// D4: the label is read at render (PROVENANCE_LABEL is in the current language), never stored here.
+const EVIDENCE_CLASS: Record<Rec["provenance"], string> = {
+  verified: "verified",
+  "measured-signal": "measured",
+  "expected-impact": "expected",
 };
 
 // The refuse-pile (spec §2 v1 trio). Calm one-liners consistent with tweaks.json verdicts; each
@@ -272,8 +273,8 @@ function ShieldOff() {
 }
 
 function EvidenceChip({ p }: { p: Rec["provenance"] }) {
-  const e = EVIDENCE[p];
-  return <span className={`fix-evidence fix-evidence-${e.cls}`}>{e.label}</span>;
+  useTranslation(); // re-render on a language change: the label below is read in the current language
+  return <span className={`fix-evidence fix-evidence-${EVIDENCE_CLASS[p]}`}>{PROVENANCE_LABEL[p]}</span>;
 }
 
 // Honest Game Mode heads-up (one copy source — classic FixRow + the slim detail both render it).

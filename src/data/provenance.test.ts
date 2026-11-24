@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import i18n from "../i18n";
 import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "./provenance";
 
 // Guard for the honesty-doctrine breach the 1.0 audit caught: the ActionDrawer used to label the
@@ -9,6 +10,18 @@ describe("provenance wording (honesty doctrine)", () => {
     expect(PROVENANCE_LABEL.verified).toBe("Verified");
     expect(PROVENANCE_LABEL["measured-signal"]).toBe("Measured elsewhere");
     expect(PROVENANCE_LABEL["expected-impact"]).toBe("Expected");
+  });
+
+  // D4: the chip label is an i18n key, so a zh-CN screen shows Chinese, and switching back is English.
+  it("the chip label follows the app's language", async () => {
+    const tiers = ["verified", "measured-signal", "expected-impact"] as const;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      for (const p of tiers) expect(PROVENANCE_LABEL[p], p).toMatch(/^[一-鿿]+$/);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+    expect(tiers.map((p) => PROVENANCE_LABEL[p])).toEqual(["Verified", "Measured elsewhere", "Expected"]);
   });
 
   it("the Verified note never claims an unmeasured performance gain", () => {
