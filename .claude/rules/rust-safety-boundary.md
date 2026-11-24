@@ -18,7 +18,7 @@ Line counts are rough. **Mutation/rollback + gate-relevant modules are starred �
 mutation-gate change against these first.**
 
 **Core wiring & entry**
-- `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); `--run-elevated-op <hex JSON>` (only with the `elevated-op-entry` cargo feature, off in every normal build) → the typed helper (`elevated_ops.rs`); else `run()`. Runs BEFORE any window.
+- `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); `--run-elevated-op <hex JSON>` (only with the `elevated-op-entry` cargo feature, off in every normal build) → the typed helper (the elevated_ops module, below); else `run()`. Runs BEFORE any window.
 - ★ `lib.rs` (~1870) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:558`), `safety_tests`. ★ for the command surface only — the `set_startup_entry_enabled` exception closed 2026-08-03; it lives in `history.rs` and mutates through `actions::apply_startup_entry_enabled` like every other apply.
 
 **★ Mutation, rollback & gates (the safety boundary)**
