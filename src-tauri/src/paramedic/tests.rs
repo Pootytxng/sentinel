@@ -4125,6 +4125,27 @@ mod recovery_f3 {
         }
     }
 
+    /// b12 review r1 F1: a session under another frame cap after the undo is CapChanged: measured well enough to read,
+    /// never judged normal or rough. since_restore counts it among the judged ones, so the between line (count 1) shows,
+    /// which is why the text says "measured well enough to read" and not "that Compy could judge". Uncapped baseline
+    /// and rough session, then one capped session (as a_frame_cap_change_is_never_a_recovery). Break check: count
+    /// CapChanged as unjudged in since_restore (`verdict != Unjudged` -> `!matches!(verdict, Unjudged | CapChanged)`)
+    /// -> the line becomes compy-undone-unread, fails.
+    #[test]
+    fn b12_a_session_under_another_frame_cap_since_the_undo_is_a_between_line_of_one() {
+        let mut capped = day_count(10, 50.0, 3);
+        capped.cap = CapState::Capped { at_fps: 60.0 };
+        let mut inp = undo_inputs(vec![capped], one_undone());
+        for s in inp.sessions.iter_mut().filter(|s| matches!(s.cap, CapState::Unknown)) {
+            s.cap = CapState::Uncapped;
+        }
+        let d = diagnose(&inp, Complaint::Slow, Some("g"));
+        assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::FrameCapChanged }, "the capped session is CapChanged");
+        let lines = undone_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-between"], "{lines:?}");
+        assert_eq!(lines[0].args["count"], "1");
+    }
+
     /// Review r1 FIX 1: once the same setting (same rec_id) was applied again after the undo, later sessions were played
     /// with the change back on and say nothing about the undo. Break check: pass `None` instead of the re-apply time ->
     /// the first case gives compy-undone-rough, fails.

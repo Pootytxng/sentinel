@@ -221,7 +221,7 @@ describe("B10: Undo this Compy change on the card", () => {
     ["compy-undone-between", "unknown", {}, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
     // b12 item 3: one judged session since: singular. Break check: drop compyUndoneBetween_one (or stop passing
     // `count`) -> the plural "sessions since weren't" shows, fails.
-    ["compy-undone-between", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The one Game A session since that Compy could judge wasn't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
+    ["compy-undone-between", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. One Game A session since was measured well enough to read, and it wasn't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
     ["compy-undone-between", "unknown", { count: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
   ] as const)("%s says what was read since the undo, dated from the ledger", async (code, kind, args, against, text) => {
     await show([withLine(code, kind, args, against)], [undoneRec()]);
@@ -276,7 +276,7 @@ describe("B10: Undo this Compy change on the card", () => {
       await i18n.changeLanguage("zh-CN");
       await waitFor(() =>
         expect(document.body.textContent).toContain(
-          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后 Game A 有可判断读数的游戏并不明确在平时的范围内，所以 Compy 暂时还无法判断。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`,
+          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后 Game A 测量充分的游戏并不明确在平时的范围内，所以 Compy 暂时还无法判断。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`,
         ),
       );
     } finally {
