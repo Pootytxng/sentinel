@@ -71,6 +71,7 @@
     "eeeNoAdapter": "No connected wired network adapter on this PC offers an Energy-Efficient Ethernet setting, so there is nothing to change.",
     "eeeNoSwitch": "Your adapter's driver has an Energy-Efficient Ethernet setting, but no value Compy recognizes as off, so Compy left it as it is rather than guess.",
     "eeeUnreadReason": "Couldn't check Energy-Efficient Ethernet on your wired adapter right now.",
+    "drivesUnreadReason": "Only for HDD-only systems — Compy couldn't read this rig's drives.",
     "eeeValueRefused": "Compy found your adapter's Energy-Efficient Ethernet setting, but its details contain characters Compy won't put into a Windows command, so nothing was changed.",
     "eeeValueRefusedUndo": "Compy found this change's saved adapter details, but they contain characters Compy won't put into a Windows command, so it didn't run the undo. The change stays in your Trust Ledger.",
     "powerSettingIdRefused": "This change's saved power plan setting isn't in the form Compy expects, so Compy didn't run the undo. The change stays in your Trust Ledger.",

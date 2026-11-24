@@ -205,6 +205,16 @@ pub(crate) enum Condition {
 /// `src/data/backend-error.ts` (pinned by `backend-error.test.ts`), which shows it in the user's language.
 pub(crate) const EEE_UNREAD_REASON: &str = "Couldn't check Energy-Efficient Ethernet on your wired adapter right now.";
 
+/// D4: the all-HDD gate's reason when the drive list came back EMPTY (the read found no drive), so the
+/// card never says "this rig has an SSD/NVMe" on no evidence. Routed like [`EEE_UNREAD_REASON`]: the
+/// rec is "couldn't check", not "not for this rig". Mirrored byte-for-byte in `src/data/backend-error.ts`.
+pub(crate) const DRIVES_UNREAD_REASON: &str = "Only for HDD-only systems — Compy couldn't read this rig's drives.";
+
+/// D4: a held-back reason that means the hardware gate's read did not finish (not a detected fact).
+fn is_gate_unread_reason(reason: Option<&str>) -> bool {
+    matches!(reason, Some(r) if r == EEE_UNREAD_REASON || r == DRIVES_UNREAD_REASON)
+}
+
 // A FAILED condition either means "this rig's hardware can't use the rec" (→ show it in "Not for this
 // rig" with this reason) or "not relevant right now" (→ omit it, as before). Only genuine hardware-
 // capability gates return a reason; relevance gates return None.
@@ -219,6 +229,8 @@ pub(crate) fn hardware_ineligibility_reason(cond: &Condition, hw: &HardwareInfo)
             "No connected wired adapter exposes an Energy-Efficient-Ethernet switch Compy can flip — either the cable isn't plugged in right now, or this adapter's driver doesn't offer the setting.".into(),
         ),
         Condition::DisplayHdrCapable => Some("Your display isn't HDR-capable.".into()),
+        // D4: an empty drive list is a read that found nothing, never "this rig has an SSD/NVMe".
+        Condition::AllHdd if hw.physical_disks.is_empty() => Some(DRIVES_UNREAD_REASON.into()),
         Condition::AllHdd => Some("Only for HDD-only systems — this rig has an SSD/NVMe.".into()),
         Condition::HasModernDiscreteGpu => Some("Needs a modern discrete GPU.".into()),
         Condition::GpuVendor { vendor } => {
@@ -467,7 +479,7 @@ pub(crate) fn evaluate_rule_spec(
     // not "not for this rig": the card leaves that group and shows no override.
     // D2b r2 (F2b): a rec held back for a DETECTED hardware reason stays "not for this rig" (with its
     // override) even when its live state read also failed; only an eligible rec carries the live read's flag.
-    let gate_unread = ineligible_reason.as_deref() == Some(EEE_UNREAD_REASON);
+    let gate_unread = is_gate_unread_reason(ineligible_reason.as_deref());
     let state_unread = if eligible { state_read_unread } else { gate_unread };
 
     Some(Recommendation {
@@ -1536,5 +1548,24 @@ mod rec_tests {
         ] {
             assert!(src.contains(arm), "missing: {arm}");
         }
+    }
+
+    // D4: an EMPTY drive list is a read that found no drive: the all-HDD rec is "couldn't check" (no
+    // override), never "this rig has an SSD/NVMe". A detected SSD keeps the detected reason.
+    #[test]
+    fn d4_an_empty_drive_list_is_couldnt_check_not_an_ssd() {
+        let reads = LiveReads::with_listings(no_tasks, services_read).with_scheme_read(ultimate_scheme);
+        let search = |hw: &HardwareInfo| {
+            build_recommendations_with(hw, &reads).into_iter().find(|r| r.id == "windows-search-disable").expect("kept")
+        };
+        let unread = search(&HardwareInfo::default());
+        assert!(!unread.eligible);
+        assert_eq!(unread.ineligible_reason.as_deref(), Some(DRIVES_UNREAD_REASON));
+        assert!(unread.state_unread, "the couldn't-check bucket, not not-for-this-rig");
+        let ssd = search(&HardwareInfo { physical_disks: vec![pdisk("SSD", "NVMe")], ..Default::default() });
+        assert!(!ssd.eligible && !ssd.state_unread);
+        assert_eq!(ssd.ineligible_reason.as_deref(), Some("Only for HDD-only systems — this rig has an SSD/NVMe."));
+        assert!(is_gate_unread_reason(Some(EEE_UNREAD_REASON)) && is_gate_unread_reason(Some(DRIVES_UNREAD_REASON)));
+        assert!(!is_gate_unread_reason(ssd.ineligible_reason.as_deref()));
     }
 }
