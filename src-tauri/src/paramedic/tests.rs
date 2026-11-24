@@ -429,6 +429,19 @@ fn needs_more_play_counts_the_sessions_that_dont_count() {
     assert!(matches!(d.state, DiagnosisState::NeedsMorePlay { not_counted: 0, .. }), "{:?}", d.state);
 }
 
+// B7 review r1: a full-length session whose 1%-low FPS Compy couldn't read (NaN, so `ratio()` is None) is not
+// judgeable and must be counted in `not_counted`: the card's reason ("Compy couldn't measure enough of it")
+// has to cover it. Break check (e): leave ratio-None sessions out of the count; this fails.
+#[test]
+fn needs_more_play_counts_a_session_with_an_unread_one_percent_low() {
+    // One normal session, a 10-minute one with no 1% low, then a normal one (judged: one normal before it).
+    let mut sess = steady(1);
+    sess.push(facts("2026-10-02T10:00:00Z", 600, 600, 100.0, f64::NAN));
+    sess.push(facts("2026-10-03T10:00:00Z", 600, 600, 100.0, 50.0));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert_eq!(d.state, DiagnosisState::NeedsMorePlay { sessions_needed: 2, have: 1, not_counted: 1 });
+}
+
 #[test]
 fn healthy_is_nothing_wrong() {
     let d = diagnose(&inputs(steady(5)), Complaint::Slow, Some("g"));

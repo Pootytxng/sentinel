@@ -677,9 +677,9 @@
   },
   "cantTell": {
     "title": "Compy can't tell yet",
-    "needsMore": "To judge your newest {{game}} session, Compy needs {{total}} normal sessions of it before that one, to know what normal is. It has {{have}}.",
-    "needsMoreNotCounted_one": "{{count}} other {{game}} session Compy recorded was too short or only partly measured, so it doesn't count.",
-    "needsMoreNotCounted_other": "{{count}} other {{game}} sessions Compy recorded were too short or only partly measured, so they don't count.",
+    "needsMore": "To judge your newest {{game}} session that was long enough and measured enough, Compy compares it with {{total}} earlier well-measured sessions of {{game}}, to know what usual looks like. It has {{have}}.",
+    "needsMoreNotCounted_one": "{{count}} other {{game}} session Compy recorded was too short, or Compy couldn't measure enough of it, so it doesn't count.",
+    "needsMoreNotCounted_other": "{{count}} other {{game}} sessions Compy recorded were too short, or Compy couldn't measure enough of them, so they don't count.",
     "needsMoreWithout": "With fewer than {{total}}, Compy can't say whether {{game}} runs worse than usual.",
     "partial": "Compy only measured part of your last {{game}} session ({{percent}}%), so it won't judge it. Play once more with Compy running.",
     "crash": "Crashes have their own page for now. Open Problems to see what Windows recorded.",

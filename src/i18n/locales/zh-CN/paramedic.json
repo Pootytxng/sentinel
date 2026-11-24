@@ -677,9 +677,9 @@
   },
   "cantTell": {
     "title": "Compy 暂时还无法判断",
-    "needsMore": "要判断你最近一次 {{game}} 游戏，Compy 需要在那之前有 {{total}} 次正常的游戏记录，才知道它平时是什么样。现在有 {{have}} 次。",
-    "needsMoreNotCounted_other": "Compy 记录的另外 {{count}} 次 {{game}} 游戏时间太短或只测量了一部分，所以不计入。",
-    "needsMoreWithout": "不足 {{total}} 次时，Compy 无法判断 {{game}} 是否比平时更卡。",
+    "needsMore": "要判断你最近一次时长和测量都足够的 {{game}} 游戏，Compy 要把它与之前 {{total}} 次测量充分的 {{game}} 游戏记录比较，才知道平时是什么样。现在有 {{have}} 次。",
+    "needsMoreNotCounted_other": "Compy 记录的另外 {{count}} 次 {{game}} 游戏时间太短，或 Compy 没能测量到足够的部分，所以不计入。",
+    "needsMoreWithout": "不足 {{total}} 次时，Compy 无法判断 {{game}} 是否运行得比平时差。",
     "partial": "Compy 只测量了你最近一次 {{game}} 游戏的一部分（{{percent}}%），所以不会据此判断。请在 Compy 运行的情况下再玩一次。",
     "crash": "崩溃问题目前有单独的页面。请打开“问题”查看 Windows 的记录。",
     "noGame": "Compy 还没有记录 {{game}}。Compy 可以在你玩游戏时进行测量，同一款游戏大约需要 3 场记录才能比较。请在“实时”里开始捕获，照常游玩，之后回到这里再按“再查一次”。",

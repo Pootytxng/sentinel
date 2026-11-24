@@ -348,8 +348,9 @@ pub(crate) enum DiagnosisState {
     /// does. `Diagnosis::recovery` carries the numbers and what the recovery says about each candidate.
     Recovered,
     /// `have`: the normal sessions before the newest judgeable one (the one being judged). B7 `not_counted`:
-    /// the game's other sessions that count toward neither, every one too short or only partly measured
-    /// (not judgeable, or judged on under `BASELINE_COVERAGE` of its time); wire-only.
+    /// the game's other sessions that count toward neither, every one too short or one Compy couldn't measure
+    /// enough of (not judgeable, including an unread average or 1%-low FPS, or judged on under
+    /// `BASELINE_COVERAGE` of its time); wire-only.
     NeedsMorePlay { sessions_needed: u8, have: u8, not_counted: u8 },
 }
 
