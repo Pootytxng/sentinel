@@ -126,3 +126,14 @@ export function backendMessage(err: unknown, t: TFunction): string | null {
 export function localizeBackendText(text: string, t: TFunction): string {
   return backendMessage(text, t) ?? text;
 }
+
+/** D3a: an error for a surface that shows the backend's words. A known sentence comes back in the
+ *  user's language; anything else is MARKED as untranslated detail ("Compy couldn't finish this.
+ *  Details: <English>" / zh-CN the same frame), so English never reads as half of a Chinese sentence.
+ *  Never empty: an error with no text still says Compy couldn't finish. */
+export function backendDetail(err: unknown, t: TFunction): string {
+  const known = backendMessage(err, t);
+  if (known) return known;
+  const raw = (err instanceof Error ? err.message : err === null || err === undefined ? "" : String(err)).trim();
+  return raw ? t("app.backendErrors.unmapped", { detail: raw }) : t("app.backendErrors.unmappedNoDetail");
+}

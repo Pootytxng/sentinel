@@ -80,7 +80,9 @@
     "gmHoldsPlan": "Gaming Mode is on and has switched your power plan for its session, and this setting belongs to the power plan. Stop Gaming Mode first, then change it. Nothing was changed.",
     "gmLeftoverHoldsPlan": "A Gaming Mode session that didn't finish putting its changes back still holds your power plan, and this setting belongs to the power plan. Finish that session first in Gaming Mode (\"Finish the last Gaming Mode session\"). Nothing was changed.",
     "gmLeftoverHoldsSetting": "A Gaming Mode session that didn't finish putting its changes back holds this setting, and puts it back when it's finished. Finish it first in Gaming Mode (\"Finish the last Gaming Mode session\"). Nothing was changed.",
-    "gmRestoreInFlight": "Gaming Mode is putting its changes back right now (if a Windows permission prompt is open, answer or cancel it). Try again when it has finished. Nothing was changed."
+    "gmRestoreInFlight": "Gaming Mode is putting its changes back right now (if a Windows permission prompt is open, answer or cancel it). Try again when it has finished. Nothing was changed.",
+    "unmapped": "Compy couldn't finish this. Details: {{detail}}",
+    "unmappedNoDetail": "Compy couldn't finish this."
   },
   "status": {
     "rulesRemote": "Rules: Remote (signed)",
