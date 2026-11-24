@@ -79,6 +79,22 @@ describe("B10 offer rules (each break: drop that rule -> the button comes back, 
   ] as const)("the in-window record %s: nothing is offered or named", (_why, at) => {
     expect(compyUndoOffer(W, [rec({ status: "rolled_back", rolled_back_at: at, active_check: null })], NONE)).toEqual({ kind: "none" });
   });
+  // Diff read: an undone record is never listed. Break check: build the titles from every in-window record (drop the
+  // status filter) -> "several" with the undone setting listed, fails.
+  it("several records in the window, all undone: nothing is offered or named", () => {
+    const list = [
+      rec({ status: "rolled_back", rolled_back_at: "2026-11-22T00:00:00Z", active_check: null }),
+      rec({ id: "v-1", rec_id: "visual-effects", rec_title: "Visual effects", applied_at: "2026-11-19T11:00:00Z", status: "rolled_back", rolled_back_at: "2026-11-22T00:00:00Z", active_check: null }),
+    ];
+    expect(compyUndoOffer(W, list, NONE)).toEqual({ kind: "none" });
+  });
+  it("two settings in the window, one fully undone: only the open one is named, with no button", () => {
+    const list = [
+      rec(),
+      rec({ id: "v-1", rec_id: "visual-effects", rec_title: "Visual effects", applied_at: "2026-11-19T11:00:00Z", status: "rolled_back", rolled_back_at: "2026-11-22T00:00:00Z", active_check: null }),
+    ];
+    expect(compyUndoOffer(W, list, NONE)).toEqual({ kind: "noUndoHere", title: "Game Mode" });
+  });
   // Review r1 F4: the count is of settings, never records. Break check: count records -> 3, fails.
   it("several counts the settings it lists", () => {
     const list = [

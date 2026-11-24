@@ -87,9 +87,11 @@ export function compyUndoOffer(w: CompyChangeWindow, list: readonly AppliedChang
   const applied = list.filter((c) => inside(c.applied_at));
   if (applied.length === 0) return { kind: "none" };
   if (applied.length > 1) {
-    // B10 review r1 F4: the count is of settings (the titles listed), never records.
-    const titles = [...new Set(applied.map((c) => c.rec_title))];
-    // Several records of ONE setting in the window: one setting, named, not offered here (exactly one apply only).
+    // B10 review r1 F4: the count is of settings (the titles listed), never records. Diff read: only records still
+    // open are listed (an undone one is never "to undo"): none open, nothing; one setting open, named, not offered
+    // here (exactly one apply only); more, listed.
+    const titles = [...new Set(applied.filter((c) => c.status !== "rolled_back").map((c) => c.rec_title))];
+    if (titles.length === 0) return { kind: "none" };
     if (titles.length === 1) return { kind: "noUndoHere", title: titles[0] };
     return { kind: "several", count: titles.length, titles };
   }
