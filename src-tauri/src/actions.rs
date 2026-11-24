@@ -1136,12 +1136,13 @@ pub(crate) const HELPER_CHANNEL_REFUSED_MSG: &str =
 
 /// A8 (plan a5 v4 §2): exit code of the TYPED elevated helper entry when the request itself is malformed (bad
 /// hex, not UTF-8, an unknown op or field, a value outside its grammar, a bad item count or shape). It refuses
-/// before any read and before PowerShell, so no command ran. Mirrored in `src/data/backend-error.ts` (A9 review r1 F4).
+/// before any read and before PowerShell, so it changed nothing. Mirrored in `src/data/backend-error.ts` (A9 review r1
+/// F4; reworded by review r2 R2-3).
 pub(crate) const HELPER_REQUEST_REFUSED: i32 = 0x4350_5336;
 
 /// What the parent says for [`HELPER_REQUEST_REFUSED`]. Matched exactly by `elevation_error_nothing_ran`.
 pub(crate) const HELPER_REQUEST_REFUSED_MSG: &str =
-    "The administrator helper refused this request because it is not one Compy can run, so no command ran.";
+    "The administrator helper refused this request because it is not one Compy can run, so it changed nothing.";
 
 /// A8 (plan a5 v4 §2, review C3): exit code of the typed helper entry when a well-formed single request's target
 /// no longer matches this PC (the saved adapter setting or task is not there, or its value is outside what the
@@ -1220,9 +1221,6 @@ pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCap
         Ok(h) => h,
         Err(e) => return none(Err(e)),
     };
-    if let Err(e) = refuse_if_exe_replaced(&exe) {
-        return none(Err(e));
-    }
     let pipe = match crate::fps_pipe::ServerPipe::create() {
         Ok(p) => p,
         Err(e) => return none(Err(format!("{RESULTS_CHANNEL_NOT_CREATED}: {e}"))),
@@ -1244,6 +1242,14 @@ pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCap
             crate::fps_pipe::wake(&name);
         }
     };
+    // A9 review r2 R2-5: the exe identity is checked as the last step before the launch (the pipe and its reader
+    // are set up first), so the window between the check and the launch holds no other work. A refusal stops the
+    // reader's wait and launches nothing.
+    if let Err(e) = refuse_if_exe_replaced(&exe) {
+        finish();
+        let _ = reader.join();
+        return none(Err(e));
+    }
     let res = elevate_and_wait_with(
         exe.as_os_str(),
         &[
@@ -1289,10 +1295,11 @@ fn typed_request_hex(req: &ElevatedRequest) -> Result<String, String> {
 }
 
 /// A9 review r1 (b)(2): the pre-launch refusal when the compy.exe at this app's own path is no longer the file
-/// this app was started from (an update replaced it while Compy ran). Nothing is launched. Mirrored in
-/// `src/data/backend-error.ts`; `elevation_error_nothing_ran` matches it.
+/// this app was started from (an update replaced it while Compy ran), or the file at the path can't be read now. Nothing is
+/// launched. Mirrored in `src/data/backend-error.ts`; `elevation_error_nothing_ran` matches it. Review r2 R2-3: the
+/// sentence names both causes (changed, or couldn't be checked), not only an update.
 pub(crate) const EXE_REPLACED_REFUSED: &str =
-    "Compy was updated while it was running, so it didn't start this administrator step. Restart Compy, then try again.";
+    "The Compy program file changed, or couldn't be checked, since Compy started, so it didn't start this administrator step. Restart Compy, then try again.";
 
 /// The identity of the file this app was started from: its NTFS volume serial number and 64-bit file index
 /// (`GetFileInformationByHandle`), read once at startup (`record_running_exe_identity`, first thing in `run()`).

@@ -36,6 +36,10 @@ pub(crate) const MAX_ITEMS: usize = 32;
 pub(crate) const MAX_OPS_PER_ITEM: usize = 8;
 /// The most targets inside one EEE or Nagle op.
 pub(crate) const MAX_TARGETS: usize = 8;
+/// The most targets one EEE undo may restore (A9 review r2 R2-2; about 127 rows of main's script fit the argv cap).
+pub(crate) const MAX_EEE_RESTORE: usize = 128;
+/// The most interfaces one Nagle undo may restore (A9 review r2 R2-2; about 44 rows fit the argv cap).
+pub(crate) const MAX_NAGLE_RESTORE: usize = 64;
 /// The longest hex argument (the app's own 30,000-character argv cap), so at most 15,000 bytes of JSON.
 pub(crate) const MAX_HEX_LEN: usize = 30_000;
 /// The Gaming Mode elevated-tier item ids that are not service names (gaming_orchestrator.rs `ElevatedItem`).
@@ -82,6 +86,20 @@ fn item_id_ok(s: &str) -> bool {
 /// DisplayValue left a row main can undo (`-DisplayValue ''`), and every such row must stay undoable.
 fn saved_text_ok(s: &str) -> bool {
     s.chars().count() <= 256 && !s.chars().any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}'))
+}
+
+/// A9 review r2 R2-1, the no-read fallback: main's undo template passes the adapter to `-Name` and the property
+/// to `-DisplayName`, and both are wildcard patterns there, so a forged `*` would widen one undo to every adapter
+/// or property. The adapter and the property must be non-empty; the property may hold none of `*` `?` `[` `]` or
+/// the backtick; the adapter may hold neither `*` nor `?` (square brackets stay allowed: Windows names adapters
+/// "Ethernet [2]"; such a name is still matched as a pattern, a recorded open item). The prior may be empty.
+fn eee_restore_target_ok(t: &EeeSaved) -> bool {
+    let adapter = t.adapter.as_str();
+    let property = t.property.as_str();
+    !adapter.is_empty()
+        && !property.is_empty()
+        && !adapter.contains(['*', '?'])
+        && !property.contains(['*', '?', '[', ']', '`'])
 }
 
 macro_rules! checked_string {
@@ -391,12 +409,14 @@ impl ElevatedOp {
         let count_ok = |n: usize| (1..=MAX_TARGETS).contains(&n);
         let ok = match self {
             ElevatedOp::EeeDisable { targets } => count_ok(targets.len()),
-            // A9 review r1 F1: no upper count for the undo (main had none); the 30,000-character argv cap bounds
-            // it, and a row main could dispatch always fits (its script per target is longer than this JSON).
-            ElevatedOp::EeeRestore { targets } => !targets.is_empty(),
+            // A9 review r2 R2-2: the undo is capped at MAX_EEE_RESTORE (main's 30,000-character argv fits about
+            // 127 rows of main's EEE script). R2-1: every target must be an exact name (eee_restore_target_ok).
+            ElevatedOp::EeeRestore { targets } => {
+                (1..=MAX_EEE_RESTORE).contains(&targets.len()) && targets.iter().all(eee_restore_target_ok)
+            }
             ElevatedOp::NagleDisable { interfaces } => count_ok(interfaces.len()),
-            // Same for the Nagle undo: every row main can undo stays undoable (review r1 F1's rule).
-            ElevatedOp::NagleRestore { interfaces } => !interfaces.is_empty(),
+            // R2-2: the Nagle undo is capped at MAX_NAGLE_RESTORE (about 44 rows fit main's argv cap).
+            ElevatedOp::NagleRestore { interfaces } => (1..=MAX_NAGLE_RESTORE).contains(&interfaces.len()),
             ElevatedOp::PagefileRestore { init_mb, max_mb, .. } => init_mb.get() <= max_mb.get(),
             _ => true,
         };

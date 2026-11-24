@@ -321,7 +321,7 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   // is returned only when nothing was launched or the helper refused before its one mutating run.
   {
     rust: "HELPER_REQUEST_REFUSED_MSG",
-    text: "The administrator helper refused this request because it is not one Compy can run, so no command ran.",
+    text: "The administrator helper refused this request because it is not one Compy can run, so it changed nothing.",
     key: "app.backendErrors.helperRequestRefused",
   },
   {
@@ -341,7 +341,7 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   },
   {
     rust: "EXE_REPLACED_REFUSED",
-    text: "Compy was updated while it was running, so it didn't start this administrator step. Restart Compy, then try again.",
+    text: "The Compy program file changed, or couldn't be checked, since Compy started, so it didn't start this administrator step. Restart Compy, then try again.",
     key: "app.backendErrors.exeReplacedRestart",
   },
   // C6: the fixed refusals an undo meets in front of the audited one (experiment::rollback_change →
