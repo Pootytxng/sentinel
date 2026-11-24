@@ -2984,8 +2984,8 @@ fn detect_compy_changes(c: &Ctx, out: &mut Out) {
 /// - `compy-undone-clear-unjudged` (Measured, b12): two or more clear sessions, then sessions Compy couldn't judge.
 ///   The recovery is "can't tell" then, so this row says it (as B4's `driver-back-clear-unjudged`); never a support;
 /// - `compy-undone-between` (Unknown): judgeable sessions since, none rough, not all clear;
-/// - `compy-undone-reapplied` (Known, b12 r2): the same setting was applied again after the undo and no line above
-///   stands (clear lines once a judged session followed the re-apply; unread / between once any session did).
+/// - `compy-undone-reapplied` (Known, b12 r2/r3): the same setting was applied again after the undo; said in place of
+///   every line above except rough (whose dated contradiction stands).
 fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
     let mut inside = c.inp.compy_records.iter().filter(|r| c.compy_in_window(r.applied));
     let rec = inside.next()?;
@@ -2998,28 +2998,20 @@ fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
     // Review r1 FIX 1: a later apply of the same setting (same `rec_id`) puts the change back on, so sessions that
     // started at or after it say nothing about the undo: "since" ends there (exclusive), as drift ends at off_again_at.
     let reapplied = c.inp.compy_records.iter().filter(|r| r.rec_id == rec.rec_id && r.applied > undone).map(|r| r.applied).min();
-    // b12 review r1 F2: "since the undo" stops at the re-apply, but the recovery outcome reads EVERY session of the game
-    // (recovery::outcome_within via recovery_answer), the re-applied ones too. Once a judged session started at or after
-    // the re-apply, the card can be Recovered (its two newest judged sessions clear) while clear-once says "One session
-    // so far" or clear-unjudged says "can't say it is back yet". Those two lines are said only while no judged session
-    // of this game started at or after the re-apply.
-    let judged_after_reapply = reapplied.is_some_and(|u| {
-        (0..c.sess.len()).any(|i| c.judged[i].verdict != Verdict::Unjudged && c.sess[i].start().is_some_and(|t| t >= u))
-    });
-    // b12 review r2 (R2-1): unread and between end in "Play once, then press again"; once any session of this game
-    // started at or after the re-apply, that next session is played with the change back on and can no longer give a
-    // reading about the undo, so those lines give way to compy-undone-reapplied (below). Rough stays: a dated rough
-    // session with the change off, true whatever came later, and it counts against.
-    let any_after_reapply = reapplied.is_some_and(|u| c.sess.iter().any(|s| s.start().is_some_and(|t| t >= u)));
     let follow = match recovery::since_restore(c, undone, reapplied) {
-        recovery::Since::Clear { .. } if judged_after_reapply => None,
-        recovery::Since::Unjudged { .. } | recovery::Since::Between { .. } if any_after_reapply => None,
+        // Rough keeps its line whatever came later: a dated rough session with the change off counts against, and it
+        // carries no "play once" step.
+        recovery::Since::Rough { at, count } => {
+            Some(ev(EvidenceKind::Measured, "compy-undone-rough", "sessions", true, &with(&[("at", at), ("count", count.to_string())])))
+        }
+        // b12 review r3 (R3-1): once the same setting was applied again, every other line would end in "Play {game}
+        // once ..., then press again", and that next session starts after the re-apply, so it can never be read as
+        // following the undo (and the recovery outcome reads the re-applied sessions too: r1 F2). The re-apply line
+        // (below) is said instead.
+        _ if reapplied.is_some() => None,
         recovery::Since::Nothing => None,
         recovery::Since::Unjudged { count } => {
             Some(ev(EvidenceKind::Unknown, "compy-undone-unread", "sessions", false, &with(&[("count", count.to_string())])))
-        }
-        recovery::Since::Rough { at, count } => {
-            Some(ev(EvidenceKind::Measured, "compy-undone-rough", "sessions", true, &with(&[("at", at), ("count", count.to_string())])))
         }
         recovery::Since::Clear { at, count: 1 } => Some(ev(EvidenceKind::Measured, "compy-undone-clear-once", "sessions", false, &with(&[("at", at)]))),
         // b12: two or more clear sessions, then sessions Compy couldn't judge (every session after the newest judged

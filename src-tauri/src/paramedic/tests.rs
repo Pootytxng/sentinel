@@ -4128,8 +4128,8 @@ mod recovery_f3 {
     /// one unjudged, re-apply of the same setting, two clear: the card is Recovered (its two newest judged sessions are
     /// clear), so "can't say it is back yet" would contradict it, and so would clear-once's "One session so far" (undo,
     /// one clear, re-apply, one clear). Neither line is said once a judged session started at or after the re-apply.
-    /// Break check: drop the `Since::Clear { .. } if judged_after_reapply => None` arm -> both sequences give a line,
-    /// fails. Control: with only an UNJUDGED session after the re-apply the clear-unjudged line still shows.
+    /// r3 (R3-1): any re-apply gives the re-apply line in place of these. Break check: drop the
+    /// `_ if reapplied.is_some() => None` arm -> both sequences give a clear line, fails.
     #[test]
     fn b12_no_clear_follow_through_line_once_a_judged_session_follows_a_reapply() {
         let short = |day: u32| {
@@ -4148,23 +4148,20 @@ mod recovery_f3 {
         let d = undo_case(vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3)], reapplied(&at_day(11, 0)));
         assert_eq!(d.state, DiagnosisState::Recovered);
         assert_eq!(codes(&d), ["compy-undone-reapplied"]);
-        // Control: only an unjudged session after the re-apply: the clear-unjudged line stands (later = 1, the one
-        // before the re-apply).
+        // r3 (R3-1): only an unjudged session after the re-apply: the re-apply line too (the clear-unjudged "play once"
+        // step would ask for a session after the re-apply).
         let after = vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3), short(12), short(13)];
         let d = undo_case(after, reapplied(&at_day(12, 12)));
-        let lines = undone_lines(&d);
-        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-clear-unjudged"], "{lines:?}");
-        assert_eq!(lines[0].args["later"], "1");
+        assert_eq!(codes(&d), ["compy-undone-reapplied"]);
     }
 
     /// b12 review r2 (R2-1): after a re-apply of the same setting, a line whose "play once" can no longer give a reading
     /// about the undo gives way to compy-undone-reapplied, dated from the ledger (args title, undone, reapplied; Known,
     /// never against). Cases: the non-Recovered path (undo, one clear, re-apply, one judged session not clear); unread
     /// then a session after the re-apply; between then a session after the re-apply. Controls: a re-apply with NO
-    /// session after it keeps the original line (clear-once, unread, between). Break checks: drop the
-    /// `Unjudged | Between if any_after_reapply` arm -> the unread / between cases keep their old line, fails; drop the
-    /// `or_else` re-apply line -> the non-Recovered case gives no line, fails; count only judged sessions in
-    /// `any_after_reapply` -> the unread case (an unjudged session after the re-apply) keeps unread, fails.
+    /// session after it: r3 (R3-1) gives the re-apply line there too; rough after a re-apply keeps its line. Break
+    /// checks: drop the `_ if reapplied.is_some() => None` arm -> the old lines come back, fails; drop the `or_else`
+    /// re-apply line -> no line, fails; put that arm before rough -> the rough case gives the re-apply line, fails.
     #[test]
     fn b12_after_a_reapply_a_line_that_cannot_follow_the_undo_gives_way_to_the_reapplied_line() {
         let short = |day: u32| {
@@ -4191,10 +4188,13 @@ mod recovery_f3 {
         assert_eq!(codes(&undo_case(vec![short(10), short(11)], reapplied(&at_day(11, 0)))), ["compy-undone-reapplied"]);
         // Between, then a session after the re-apply.
         assert_eq!(codes(&undo_case(vec![day_count(10, 42.0, 3), short(11)], reapplied(&at_day(11, 0)))), ["compy-undone-reapplied"]);
-        // Controls: re-applied, but no session of the game started at or after it: the original lines stand.
-        assert_eq!(codes(&undo_case(vec![day_count(10, 50.0, 3)], reapplied(&at_day(12, 0)))), ["compy-undone-clear-once"]);
-        assert_eq!(codes(&undo_case(vec![short(10)], reapplied(&at_day(12, 0)))), ["compy-undone-unread"]);
-        assert_eq!(codes(&undo_case(vec![day_count(10, 42.0, 3)], reapplied(&at_day(12, 0)))), ["compy-undone-between"]);
+        // r3 (R3-1): re-applied with NO session after it: the line still gives way, because its "play once" step would ask
+        // for a session that starts after the re-apply.
+        assert_eq!(codes(&undo_case(vec![day_count(10, 50.0, 3)], reapplied(&at_day(12, 0)))), ["compy-undone-reapplied"]);
+        assert_eq!(codes(&undo_case(vec![short(10)], reapplied(&at_day(12, 0)))), ["compy-undone-reapplied"]);
+        assert_eq!(codes(&undo_case(vec![day_count(10, 42.0, 3)], reapplied(&at_day(12, 0)))), ["compy-undone-reapplied"]);
+        // Rough is the one line that stands after a re-apply (a dated contradiction, no "play once").
+        assert_eq!(codes(&undo_case(vec![day_count(10, 30.0, 3), short(12)], reapplied(&at_day(11, 0)))), ["compy-undone-rough"]);
     }
 
     /// b12 review r1 gap: a row that may hold two games (`mixed`) is dropped by `game_rows` before judging, so after
