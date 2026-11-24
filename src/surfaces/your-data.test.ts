@@ -344,6 +344,26 @@ describe("your-data C2b: clear everything", () => {
     expect(zh.playHistorySub).not.toContain("不再生效");
   });
 
+  // C5d: a record counts until it is undone, even when its setting reads off now (changed outside Compy). So no
+  // Your data line about the change history may say a change is "still in place" / "still applied" (zh: 仍然生效 /
+  // 不再生效 / 处于生效状态): the screen says "not undone". The keys below are the six this pin was written for, plus
+  // a sweep of every yourData string. Break check: restore any one of the six old sentences -> fails.
+  it("no Your data line says a change is still in place or applied when it means 'not undone'", () => {
+    const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "settings.json"), "utf8")).yourData;
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "settings.json"), "utf8")).yourData;
+    const six = (l: typeof en) => [l.refusal.changes_applied, l.kept.trials_tied_to_changes, l.everythingSub, l.warnNoRecord, l.undoAfter, l.undoFailed] as string[];
+    for (const s of six(en)) expect(s).toMatch(/undone/);
+    for (const s of six(zh)) expect(s).toMatch(/撤销/);
+    const strings = (o: unknown): string[] =>
+      typeof o === "string" ? [o] : o && typeof o === "object" ? Object.values(o as Record<string, unknown>).flatMap(strings) : [];
+    // The Trial-gate lines are about a Trial or a change that may be ON right now, which is what they mean.
+    const trialOn = new Set([en.refusal.trial_running, en.refusal.trial_state_unknown, zh.refusal.trial_running, zh.refusal.trial_state_unknown]);
+    const offenders = [...strings(en), ...strings(zh)]
+      .filter((s) => !trialOn.has(s))
+      .filter((s) => /still in place|still applied|仍然生效|不再生效|处于生效状态/.test(s));
+    expect(offenders).toEqual([]);
+  });
+
   it("every status line and every new string has words in both languages", () => {
     const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "settings.json"), "utf8")).yourData;
     const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "settings.json"), "utf8")).yourData;

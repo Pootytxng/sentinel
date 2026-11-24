@@ -361,7 +361,7 @@ describe("Your data: clear everything", () => {
     render(<YourData />);
     await openEverything();
     const box = await screen.findByTestId("your-data-refused");
-    expect(box.textContent).toContain("Changes Compy made are still in place");
+    expect(box.textContent).toContain("Some changes Compy made have not been undone yet.");
     // C5a: one line per setting.
     const applied = screen.getByTestId("your-data-applied");
     expect([...applied.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["Core parking", "Game mode"]);
