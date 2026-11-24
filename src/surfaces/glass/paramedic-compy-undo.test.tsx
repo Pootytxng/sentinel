@@ -218,15 +218,33 @@ describe("B10: Undo this Compy change on the card", () => {
     ["compy-undone-clear-unjudged", "measured", { at: AT, count: "3", later: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A ran in its usual range in 3 sessions since, the latest on ${day(AT)}. Each session after that was too short, or Compy couldn't measure enough of it, so Compy can't say it is back in its usual range yet.${NEXT}`],
     ["compy-undone-unread", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 1 Game A session has been recorded since, but it was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge.${NEXT}`],
     ["compy-undone-unread", "unknown", { count: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 2 Game A sessions have been recorded since, but each was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge.${NEXT}`],
-    ["compy-undone-between", "unknown", {}, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
+    ["compy-undone-between", "unknown", {}, false, `“${GM}” was undone on ${dayTime(UNDONE)}. Of the Game A sessions since, at least one wasn't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
     // b12 item 3: one judged session since: singular. Break check: drop compyUndoneBetween_one (or stop passing
     // `count`) -> the plural "sessions since weren't" shows, fails.
     ["compy-undone-between", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. One Game A session since was measured well enough to read, and it wasn't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
-    ["compy-undone-between", "unknown", { count: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
+    ["compy-undone-between", "unknown", { count: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. Of the Game A sessions since, at least one wasn't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
   ] as const)("%s says what was read since the undo, dated from the ledger", async (code, kind, args, against, text) => {
     await show([withLine(code, kind, args, against)], [undoneRec()]);
     expect(document.body.textContent).toContain(text);
     expect(document.body.textContent).not.toMatch(/\b(fixed|caused|probably|safe|worked)\b/i);
+  });
+
+  // b12 r3 (R3-2): the state observed in the Rust build (undo, a capped session, then a normal uncapped one):
+  // CantTell{RecoveryUnclear{one_clear: true}}, compy-undone-between with count "2". One of the two WAS in its usual
+  // range, so the line says "at least one wasn't", never that the sessions weren't. Break check: put back "The {{game}}
+  // sessions since weren't clearly in its usual range" in compyUndoneBetween_other -> fails.
+  it("the observed capped-then-normal state (between, count 2) says 'at least one wasn't'", async () => {
+    const f = compyFinding("possible");
+    const line = { kind: "unknown" as const, code: "compy-undone-between", args: { title: GM, undone: UNDONE, count: "2" }, against: false, source: "sessions" };
+    answer.value = { ...diagnosis([{ ...f, evidence: [...f.evidence, line] }]), state: { kind: "cant-tell", why: { kind: "recovery-unclear", partial: false, one_clear: true, cap_changed: false } } };
+    render(<ParamedicCard drifts={[]} changes={[undoneRec()]} undoCompyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
+    openAll();
+    expect(document.body.textContent).toContain(
+      `“${GM}” was undone on ${dayTime(UNDONE)}. Of the Game A sessions since, at least one wasn't clearly in its usual range, so Compy can't tell yet.${NEXT}`,
+    );
+    expect(document.body.textContent).not.toContain("sessions since weren't clearly");
   });
 
   // The card's own footer ("Check it, play Game A once, ...") is the card's, for every Possible answer; B10's sentence
@@ -301,7 +319,7 @@ describe("B10: Undo this Compy change on the card", () => {
       await i18n.changeLanguage("zh-CN");
       await waitFor(() =>
         expect(document.body.textContent).toContain(
-          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后 Game A 测量充分的游戏并不明确在平时的范围内，所以 Compy 暂时还无法判断。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`,
+          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后 Game A 测量充分的游戏中，至少有一次并不明确在平时的范围内，所以 Compy 暂时还无法判断。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`,
         ),
       );
     } finally {

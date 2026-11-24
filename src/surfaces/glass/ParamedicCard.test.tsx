@@ -3055,14 +3055,14 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     cleanup();
     const two = ev("drift-restored-between", { restored: BACK, count: "2" }, { source: "sessions", kind: "unknown" });
     text = await open({ findings: [suspect([two])] });
-    expect(text).toContain("The sessions since it was back on weren't clearly in Game A's usual range, so Compy can't tell yet.");
+    expect(text).toContain("Of the Game A sessions since it was back on, at least one wasn't clearly in its usual range, so Compy can't tell yet.");
   });
 
   // b12 review r2 gap: the zh-CN drift lines b12 changed, pinned word for word (zh uses only the _other form, and _one is
   // the same sentence). Break check: put back "它重新开启之后的几次游戏" or "时间太短或只测量了一部分" -> fails.
   it("zh-CN: the drift lines b12 changed say the same in Chinese", () => {
     const zh = loadKeys("zh-CN").evidence as Record<string, string>;
-    expect(zh.driftRestoredBetween_other).toBe("它重新开启之后，{{game}} 测量充分的游戏并不明确在平时的范围内，所以 Compy 暂时还无法判断。");
+    expect(zh.driftRestoredBetween_other).toBe("它重新开启之后，{{game}} 测量充分的游戏中，至少有一次并不明确在平时的范围内，所以 Compy 暂时还无法判断。");
     expect(zh.driftRestoredUnjudged_other).toBe("自它重新开启以来，记录到 {{count}} 次 {{game}} 的游戏，但时间太短，或 Compy 没能测量到足够的部分，所以 Compy 没有做判断。");
     for (const k of ["driftRestoredBetween", "driftRestoredUnjudged"]) expect(zh[`${k}_one`], k).toBe(zh[`${k}_other`]);
   });
@@ -3677,7 +3677,7 @@ describe("ParamedicCard: the driver read as the earlier version again (B4)", () 
     cleanup();
     const two = { ...one, args: { back: BACK, count: "2" } };
     text = await open(driverRow([changed, back, two]));
-    expect(text).toContain("The sessions since weren't clearly in Game A's usual range, so Compy can't tell yet.");
+    expect(text).toContain("Of the Game A sessions since, at least one wasn't clearly in its usual range, so Compy can't tell yet.");
   });
 
   // b12 review r1 gap: the zh-CN driver-back lines b12 changed, pinned word for word (zh has one plural form, so the
@@ -3688,7 +3688,7 @@ describe("ParamedicCard: the driver read as the earlier version again (B4)", () 
     expect(zh.driverBackClearUnjudged_other).toBe(
       "驱动又是 {{from}} 时，{{game}} 有 {{n}} 次游戏表现在平时的范围内，最近一次在 {{date}}。之后的游戏时间太短，或 Compy 没能测量到足够的部分，所以 Compy 还不能说它已恢复到平时的范围。",
     );
-    expect(zh.driverBackBetween_other).toBe("此后 {{game}} 测量充分的游戏并不明确在平时的范围内，所以 Compy 暂时还无法判断。");
+    expect(zh.driverBackBetween_other).toBe("此后 {{game}} 测量充分的游戏中，至少有一次并不明确在平时的范围内，所以 Compy 暂时还无法判断。");
     for (const k of ["driverBackUnjudged", "driverBackClearUnjudged", "driverBackBetween"]) expect(zh[`${k}_one`], k).toBe(zh[`${k}_other`]);
   });
 
