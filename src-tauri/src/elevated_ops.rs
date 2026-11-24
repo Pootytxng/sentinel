@@ -678,11 +678,12 @@ pub(crate) enum Wrapper {
     Batch,
 }
 
-/// One item of a request: its receipt id and its ops.
+/// One item of a request: its receipt id (a batch item has one; a single op has none) and its ops.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RequestItem {
-    pub(crate) id: ItemId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) id: Option<ItemId>,
     pub(crate) ops: Vec<ElevatedOp>,
 }
 
@@ -705,10 +706,16 @@ impl ElevatedRequest {
         if !shape_ok {
             return Err(Refused::Request);
         }
-        let mut ids: Vec<&str> = self.items.iter().map(|i| i.id.as_str()).collect();
+        // A batch item carries its receipt id; a single op carries none.
+        let ids_present = match self.wrapper {
+            Wrapper::Single => self.items.iter().all(|i| i.id.is_none()),
+            Wrapper::Batch => self.items.iter().all(|i| i.id.is_some()),
+        };
+        let mut ids: Vec<&str> = self.items.iter().filter_map(|i| i.id.as_ref().map(ItemId::as_str)).collect();
+        let given = ids.len();
         ids.sort_unstable();
         ids.dedup();
-        if ids.len() != self.items.len() {
+        if !ids_present || ids.len() != given {
             return Err(Refused::Request); // two items with one id would share a receipt
         }
         for op in self.items.iter().flat_map(|i| &i.ops) {
@@ -796,6 +803,9 @@ pub(crate) fn run_request(req: &ElevatedRequest, pipe: Option<PipeOut>, fx: &mut
             let mut runnable: Vec<(String, Vec<String>)> = Vec::new();
             let mut failed: Vec<&str> = Vec::new();
             for item in &req.items {
+                let Some(id) = &item.id else {
+                    return actions::HELPER_REQUEST_REFUSED;
+                };
                 let mut scripts = Vec::with_capacity(item.ops.len());
                 let mut no_match = false;
                 for op in &item.ops {
@@ -809,9 +819,9 @@ pub(crate) fn run_request(req: &ElevatedRequest, pipe: Option<PipeOut>, fx: &mut
                     }
                 }
                 if no_match {
-                    failed.push(item.id.as_str());
+                    failed.push(id.as_str());
                 } else {
-                    runnable.push((item.id.as_str().to_string(), scripts));
+                    runnable.push((id.as_str().to_string(), scripts));
                 }
             }
             // Composed (and refused) whole before a line is written or anything runs.
@@ -876,4 +886,708 @@ pub(crate) fn helper_argv_with(
         None => None,
     };
     run_request(&req, pipe, fx)
+}
+
+#[cfg(test)]
+mod tests {
+    //! A8 Slice 1 tests. Each test names its break check (the one-line change that must make it fail); the list
+    //! is also in `_train/a8-breaks.json`. UNRUN until the coordinator lets builds resume.
+    use super::*;
+    use crate::fuzz_support::{hostile_string, mutate_text, Rng, SEEDS};
+    use std::io::Write as _;
+    use std::os::windows::process::ExitStatusExt;
+    use std::sync::{Arc, Mutex};
+
+    const N: &str = "0123456789abcdef0123456789abcdef";
+    const GUID_A: &str = "{AAAAAAAA-1111-2222-3333-444444444444}";
+    const GUID_B: &str = "{BBBBBBBB-1111-2222-3333-444444444444}";
+
+    fn out(code: u32, stdout: &str) -> std::process::Output {
+        std::process::Output { status: std::process::ExitStatus::from_raw(code), stdout: stdout.as_bytes().to_vec(), stderr: Vec::new() }
+    }
+
+    /// The test effects: fixed answers for each read, and a log of every read and run in the order they happened.
+    #[derive(Default)]
+    struct Fake {
+        task: Option<std::process::Output>,
+        eee: Option<std::process::Output>,
+        events: Vec<String>,
+        read_scripts: Vec<String>,
+        code: i32,
+    }
+
+    impl HelperReads for Fake {
+        fn read(&mut self, kind: ReadKind, script: &str) -> Option<std::process::Output> {
+            self.events.push(format!("read:{kind:?}"));
+            self.read_scripts.push(script.to_string());
+            match kind {
+                ReadKind::TaskListing => self.task.clone(),
+                ReadKind::EeeListing => self.eee.clone(),
+            }
+        }
+    }
+
+    impl HelperEffects for Fake {
+        fn run(&mut self, script: &str, pipe: Option<PipeOut>) -> i32 {
+            self.events.push(format!("run:{script}"));
+            if let Some(mut p) = pipe {
+                let _ = p.write_all(b"<powershell output>\n");
+            }
+            self.code
+        }
+    }
+
+    impl Fake {
+        fn reads(&self) -> usize {
+            self.events.iter().filter(|e| e.starts_with("read:")).count()
+        }
+        fn runs(&self) -> usize {
+            self.events.iter().filter(|e| e.starts_with("run:")).count()
+        }
+    }
+
+    /// A pipe the test can read back.
+    #[derive(Clone, Default)]
+    struct SharedBuf(Arc<Mutex<Vec<u8>>>);
+
+    impl std::io::Write for SharedBuf {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().map_err(|_| std::io::Error::other("poisoned"))?.extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl SharedBuf {
+        fn text(&self) -> String {
+            String::from_utf8_lossy(&self.0.lock().map(|v| v.clone()).unwrap_or_default()).into_owned()
+        }
+    }
+
+    fn request_json(wrapper: &str, items: &str) -> String {
+        format!(r#"{{"v":1,"nonce":"{N}","wrapper":"{wrapper}","items":[{items}]}}"#)
+    }
+
+    fn hex(s: &str) -> String {
+        actions::to_hex(s.as_bytes())
+    }
+
+    fn argv(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn eee_listing(props: &str) -> String {
+        format!(
+            r#"{{"a":[{{"g":"{GUID_A}","n":"Ethernet [2]","s":"Up","m":"802.3"}},{{"g":"{GUID_B}","n":"Ethernet 2","s":"Up","m":"802.3"}}],"p":[{props}]}}"#
+        )
+    }
+
+    fn eee_prop(guid: &str, adapter: &str, keyword: &str, dv: &str, rv: &str) -> String {
+        format!(r#"{{"i":"{guid}::{keyword}","n":"{adapter}","d":"Energy Efficient Ethernet","k":"{keyword}","v":"Enabled","dv":{dv},"rv":{rv}}}"#)
+    }
+
+    fn two_adapters() -> String {
+        eee_listing(&format!(
+            "{},{}",
+            eee_prop(GUID_A, "Ethernet [2]", "*EEE", r#"["Disabled","Enabled"]"#, r#"["0","1"]"#),
+            eee_prop(GUID_B, "Ethernet 2", "*EEE", r#"["Disabled","Enabled"]"#, r#"["0","1"]"#)
+        ))
+    }
+
+    fn saved(adapter: &str, prior: &str) -> EeeSaved {
+        EeeSaved {
+            adapter: SavedText::parse(adapter).expect("adapter"),
+            property: SavedText::parse("Energy Efficient Ethernet").expect("property"),
+            prior: SavedText::parse(prior).expect("prior"),
+        }
+    }
+
+    fn listing_of(json: &str) -> EeeListing {
+        parse_eee_listing(Some(&out(0, json))).expect("a well-formed listing")
+    }
+
+    /// The one-target EEE set script, written out (review C1: the exact object, by InstanceID, as -InputObject).
+    const GOLDEN_EEE_SET_A_1: &str = "$compyP = @(Get-NetAdapterAdvancedProperty -AllProperties -ErrorAction SilentlyContinue | Where-Object { $_.InstanceID -ceq '{AAAAAAAA-1111-2222-3333-444444444444}::*EEE' }); if ($compyP.Count -eq 1) { Set-NetAdapterAdvancedProperty -InputObject $compyP[0] -RegistryValue '1' -NoRestart -ErrorAction SilentlyContinue }; $null = 0";
+
+    // ── grammar ──
+
+    /// Break: let `nonce_ok` accept upper-case hex, or `plan_guid_ok` use `ps_safe`, and this fails.
+    #[test]
+    fn every_newtype_accepts_its_grammar_and_refuses_the_rest() {
+        for ok in ["381b4222-f694-41f0-9685-ff5bb260df2e", "381B4222-F694-41F0-9685-FF5BB260DF2E"] {
+            assert!(PlanGuid::parse(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "{381b4222-f694-41f0-9685-ff5bb260df2e}",
+            "381b4222f69441f09685ff5bb260df2e",
+            "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+            "381b4222-f694-41f0-9685-ff5bb260df2e ",
+            "381b4222-f694-41f0-9685-ff5bb260df2e; calc",
+            "SCHEME_CURRENT",
+            "381b4222-f694-41f0-9685-ff5bb260df2g",
+            "381b4222_f694-41f0-9685-ff5bb260df2e",
+        ] {
+            assert!(PlanGuid::parse(bad).is_err(), "{bad:?}");
+        }
+        for ok in [GUID_A, "{2a737441-1930-4402-8d77-b2bebba308a3}"] {
+            assert!(NicKey::parse(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "2A737441-1930-4402-8D77-B2BEBBA308A3",
+            "{x}",
+            "{AAAAAAAA-1111-2222-3333-444444444444}'",
+            "{AAAAAAAA-1111-2222-3333-444444444444",
+            "{AAAAAAAA-1111-2222-3333-444444444444}}",
+            "Ethernet",
+            "{AAAAAAAA-1111-2222-3333-44444444444Z}",
+        ] {
+            assert!(NicKey::parse(bad).is_err(), "{bad:?}");
+        }
+        assert!(Nonce::parse(N).is_ok());
+        for bad in ["", "0123456789ABCDEF0123456789ABCDEF", &N[..31], format!("{N}0").as_str(), "g123456789abcdef0123456789abcdef", "0123456789abcdef'123456789abcdef"] {
+            assert!(Nonce::parse(bad).is_err(), "{bad:?}");
+        }
+        for ok in ["Ethernet [2]", "Bob's NIC", "Énergie", "Energy-Efficient Ethernet"] {
+            assert!(SavedText::parse(ok).is_ok(), "{ok}");
+        }
+        assert!(SavedText::parse(&"x".repeat(256)).is_ok());
+        for bad in [String::new(), "x".repeat(257), "a\nb".into(), "a\u{2028}b".into(), "nul\0".into(), "tab\t".into()] {
+            assert!(SavedText::parse(&bad).is_err(), "{bad:?}");
+        }
+        assert!(Percent::parse(0).is_ok() && Percent::parse(100).is_ok());
+        assert!(Percent::parse(101).is_err() && Percent::parse(u32::MAX).is_err());
+        assert!(PagefileMb::parse(1).is_ok() && PagefileMb::parse(1_048_576).is_ok());
+        assert!(PagefileMb::parse(0).is_err() && PagefileMb::parse(1_048_577).is_err());
+        assert!(DriveLetter::parse('c').is_ok() && DriveLetter::parse('Z').is_ok());
+        for bad in ['1', ':', 'é', ' '] {
+            assert!(DriveLetter::parse(bad).is_err(), "{bad:?}");
+        }
+        // The same checks run inside Deserialize (the helper's own re-check).
+        assert!(serde_json::from_str::<PlanGuid>(r#""SCHEME_CURRENT""#).is_err());
+        assert!(serde_json::from_str::<NicKey>(r#""Ethernet""#).is_err());
+        assert!(serde_json::from_str::<Percent>("101").is_err());
+        assert!(serde_json::from_str::<DriveLetter>(r#""cd""#).is_err());
+    }
+
+    /// Break: drop "adv-pcie" from GAMING_TIER_IDS, or let `restore_id_ok` accept r32, and this fails.
+    #[test]
+    fn item_ids_are_the_closed_union_pinned_to_their_sources() {
+        for id in crate::history::APPLIABLE_REC_IDS {
+            assert!(ItemId::parse(id).is_ok(), "{id}");
+        }
+        for id in GAMING_TIER_IDS.iter().copied().chain(KnownService::ALL.iter().map(|s| s.name())) {
+            assert!(ItemId::parse(id).is_ok(), "{id}");
+        }
+        for i in 0..MAX_ITEMS {
+            assert!(ItemId::parse(&format!("r{i}")).is_ok(), "r{i}");
+        }
+        for bad in ["", "r32", "r01", "r-1", "R0", "r", "adv-usb ", "sysmain", "power-ultimatex", "'; calc", "core-parking-forced"] {
+            assert!(ItemId::parse(bad).is_err(), "{bad:?}");
+        }
+        // The Gaming Mode lists, pinned to the code that makes them.
+        let gaming = include_str!("gaming_orchestrator.rs").replace("\r\n", "\n");
+        for line in ["id: \"adv-usb\",", "id: \"adv-pcie\",", "id: svc.name(),", "let id = format!(\"r{i}\");"] {
+            assert!(gaming.contains(line), "gaming_orchestrator.rs no longer has {line:?}: update ItemId with it");
+        }
+        assert_eq!(gaming.matches("tier.push(ElevatedItem {").count(), 3, "a new tier item needs its id in ItemId");
+    }
+
+    /// Break: put `#[serde(deny_unknown_fields)]` off `ElevatedOp` (or `RequestItem`) and this fails.
+    #[test]
+    fn serde_round_trips_the_ops_and_refuses_unknown_ops_and_fields() {
+        let samples = [
+            r#"{"op":"service-restore","service":"WSearch","startup":"Disabled","start":false}"#,
+            r#"{"op":"ultimate-plan-apply"}"#,
+            r#"{"op":"core-parking-restore","ac":0,"dc":100,"target":{"kind":"current"}}"#,
+            r#"{"op":"pagefile-restore","letter":"D","init_mb":1,"max_mb":1048576}"#,
+            r#"{"op":"eee-restore","targets":[{"adapter":"Ethernet [2]","property":"Energy Efficient Ethernet","prior":"Enabled"}]}"#,
+        ];
+        for s in samples {
+            let op: ElevatedOp = serde_json::from_str(s).unwrap_or_else(|e| panic!("{s}: {e}"));
+            let back: ElevatedOp = serde_json::from_str(&serde_json::to_string(&op).expect("ser")).expect("de");
+            assert_eq!(op, back, "{s}");
+        }
+        for bad in [
+            r#"{"op":"raw","script":"calc"}"#,
+            r#"{"op":"run-script","text":"calc"}"#,
+            r#"{"op":"ultimate-plan-apply","extra":1}"#,
+            r#"{"op":"service-disable","service":"SysMain","script":"calc"}"#,
+            r#"{"op":"service-disable","service":"lsass"}"#,
+            r#"{"op":"task-disable","task":"WindowsDefender"}"#,
+            r#"{"op":"service-restore","service":"SysMain","startup":"AutomaticDelayedStart","start":true}"#,
+            r#"{"op":"core-parking-restore","ac":1,"dc":1,"target":{"kind":"current","plan":"x"}}"#,
+            r#"{"op":"eee-restore","targets":[{"adapter":"a","property":"b","prior":"c","script":"d"}]}"#,
+            r#"{"service":"SysMain"}"#,
+        ] {
+            assert!(serde_json::from_str::<ElevatedOp>(bad).is_err(), "{bad}");
+        }
+        let item_extra = request_json("single", r#"{"ops":[{"op":"hags-enable"}],"cmd":"calc"}"#);
+        assert!(serde_json::from_str::<ElevatedRequest>(&item_extra).is_err());
+        let req_extra = format!(r#"{{"v":1,"nonce":"{N}","wrapper":"single","items":[{{"ops":[{{"op":"hags-enable"}}]}}],"x":1}}"#);
+        assert!(serde_json::from_str::<ElevatedRequest>(&req_extra).is_err());
+    }
+
+    /// [v2r M4]: priors are the user's own values, any u32. Break: add a range check on `HagsRestore.prior` in
+    /// `ElevatedOp::validate` and this fails.
+    #[test]
+    fn integer_priors_are_not_narrowed() {
+        let max = u32::MAX;
+        for json in [
+            format!(r#"{{"op":"power-setting-off","plan":"381b4222-f694-41f0-9685-ff5bb260df2e","setting":"PcieAspm","prior_ac":{max}}}"#),
+            format!(r#"{{"op":"fast-startup-restore","prior":{max}}}"#),
+            format!(r#"{{"op":"hags-restore","prior":{max}}}"#),
+            format!(r#"{{"op":"mmcss-restore","sr":{max},"nti":{max}}}"#),
+            format!(r#"{{"op":"priority-separation-restore","prior":{max}}}"#),
+            format!(r#"{{"op":"mpo","value":{max}}}"#),
+            format!(r#"{{"op":"nagle-restore","interfaces":[{{"key":"{GUID_A}","ack":{max},"nodelay":{max}}}]}}"#),
+        ] {
+            let op: ElevatedOp = serde_json::from_str(&json).unwrap_or_else(|e| panic!("{json}: {e}"));
+            assert_eq!(op.validate(), Ok(()), "{json}");
+            let script = op.script(&Nonce::parse(N).expect("nonce"), &mut Fake::default()).expect("composes");
+            assert!(script.contains(&max.to_string()), "{json}");
+        }
+    }
+
+    // ── the request and the order of effects ──
+
+    /// Every malformed request is refused whole: the request sentinel, no read, no pipe, no run, no app dispatch.
+    /// Break: move the pipe `connect` above `parse_request_hex` in `helper_argv_with` (or compose before
+    /// validating) and this fails.
+    #[test]
+    fn a_malformed_request_is_refused_before_any_read_pipe_or_run() {
+        let one = r#"{"ops":[{"op":"hags-enable"}]}"#;
+        let batch_item = |id: &str| format!(r#"{{"id":"{id}","ops":[{{"op":"hags-enable"}}]}}"#);
+        let many: Vec<String> = (0..=MAX_ITEMS).map(|i| batch_item(&format!("r{}", i % MAX_ITEMS))).collect();
+        let nine_ops = format!(r#"{{"ops":[{}]}}"#, vec![r#"{"op":"hags-enable"}"#; MAX_OPS_PER_ITEM + 1].join(","));
+        let nine_nics = format!(r#"{{"ops":[{{"op":"nagle-disable","interfaces":[{}]}}]}}"#, vec![format!("\"{GUID_A}\""); MAX_TARGETS + 1].join(","));
+        let pipe_args = ["--pipe", "compy-test", "--parent-pid", "1"];
+        let with_pipe = |h: String| -> Vec<String> { std::iter::once(h).chain(pipe_args.iter().map(|s| s.to_string())).collect() };
+        let cases: Vec<(&str, Vec<String>)> = vec![
+            ("no argument", vec![]),
+            ("not hex", argv(&["zz"])),
+            ("odd hex", argv(&["0"])),
+            ("not JSON", vec![hex("not json")]),
+            ("not UTF-8", vec![actions::to_hex(&[0xff, 0xfe, 0xfd])]),
+            ("unknown op", vec![hex(&request_json("single", r#"{"ops":[{"op":"raw","script":"calc"}]}"#))]),
+            ("extra field on an op", vec![hex(&request_json("single", r#"{"ops":[{"op":"hags-enable","x":1}]}"#))]),
+            ("version 2", vec![hex(&request_json("single", one).replace(r#""v":1"#, r#""v":2"#))]),
+            ("no items", vec![hex(&request_json("single", ""))]),
+            ("33 items", with_pipe(hex(&request_json("batch", &many.join(","))))),
+            ("9 ops", vec![hex(&request_json("single", &nine_ops))]),
+            ("9 interfaces", vec![hex(&request_json("single", &nine_nics))]),
+            ("duplicate ids", with_pipe(hex(&request_json("batch", &format!("{},{}", batch_item("hags-enable"), batch_item("hags-enable")))))),
+            ("single with two ops", vec![hex(&request_json("single", r#"{"ops":[{"op":"hags-enable"},{"op":"hags-enable"}]}"#))]),
+            ("single with an id", vec![hex(&request_json("single", &batch_item("hags-enable")))]),
+            ("batch item without id", with_pipe(hex(&request_json("batch", one)))),
+            ("ultimate in a batch", with_pipe(hex(&request_json("batch", r#"{"id":"power-ultimate","ops":[{"op":"ultimate-plan-apply"}]}"#)))),
+            ("combined in a batch", with_pipe(hex(&request_json("batch", r#"{"id":"r0","ops":[{"op":"memory-compression-combined"}]}"#)))),
+            ("batch without a pipe", vec![hex(&request_json("batch", &batch_item("hags-enable")))]),
+            ("combined without a pipe", vec![hex(&request_json("single", r#"{"ops":[{"op":"memory-compression-combined"}]}"#))]),
+            ("bad GUID", vec![hex(&request_json("single", r#"{"ops":[{"op":"ultimate-plan-undo","prior":"SCHEME_CURRENT"}]}"#))]),
+            ("upper-case nonce", vec![hex(&request_json("single", one).replace(N, &N.to_uppercase()))]),
+            ("pagefile init > max", vec![hex(&request_json("single", r#"{"ops":[{"op":"pagefile-restore","letter":"C","init_mb":4096,"max_mb":1024}]}"#))]),
+            ("bad parent pid", argv(&[hex(&request_json("single", one)).as_str(), "--pipe", "n", "--parent-pid", "x"])),
+            ("unknown flag", argv(&[hex(&request_json("single", one)).as_str(), "--pid", "n", "--parent-pid", "1"])),
+            ("trailing argument", argv(&[hex(&request_json("single", one)).as_str(), "extra"])),
+            ("oversize", vec!["00".repeat(MAX_HEX_LEN / 2 + 1)]),
+        ];
+        for (why, args) in cases {
+            actions::reset_elevation_dispatch_count();
+            let mut fx = Fake::default();
+            let connects = std::cell::Cell::new(0);
+            let code = helper_argv_with(&args, &mut fx, &|_, _| {
+                connects.set(connects.get() + 1);
+                Ok(Box::new(SharedBuf::default()) as PipeOut)
+            });
+            assert_eq!(code, actions::HELPER_REQUEST_REFUSED, "{why}");
+            assert!(fx.events.is_empty(), "{why}: nothing read or run, got {:?}", fx.events);
+            assert_eq!(connects.get(), 0, "{why}: the pipe is not touched");
+            assert_eq!(actions::elevation_dispatch_count(), 0, "{why}: nothing dispatched");
+        }
+    }
+
+    /// [v2r S4]: the Ultimate apply (its own exit codes) never rides a batch. Break: return true from
+    /// `is_batchable` for every op and this fails.
+    #[test]
+    fn the_ultimate_apply_never_rides_a_batch() {
+        assert!(!ElevatedOp::UltimatePlanApply {}.is_batchable());
+        assert!(!ElevatedOp::MemoryCompressionCombined {}.is_batchable());
+        let r: ElevatedRequest = serde_json::from_str(&request_json("batch", r#"{"id":"power-ultimate","ops":[{"op":"ultimate-plan-apply"}]}"#)).expect("parses");
+        assert_eq!(r.validate(), Err(Refused::Request));
+        let single: ElevatedRequest = serde_json::from_str(&request_json("single", r#"{"ops":[{"op":"ultimate-plan-apply"}]}"#)).expect("parses");
+        assert_eq!(single.validate(), Ok(()), "alone it is allowed");
+    }
+
+    /// A well-formed request runs: the pipe is connected after the request is checked, reads come before the
+    /// one run, and a refused pipe runs nothing. Break: call `fx.run` before composing the batch items (or
+    /// connect the pipe first) and this fails.
+    #[test]
+    fn reads_finish_before_the_one_mutating_run_and_a_refused_pipe_runs_nothing() {
+        let items = r#"{"id":"eee-disable","ops":[{"op":"eee-disable","targets":[{"adapter":"Ethernet [2]","property":"Energy Efficient Ethernet"}]}]},{"id":"sysmain-disable","ops":[{"op":"service-disable","service":"SysMain"}]}"#;
+        let args: Vec<String> = argv(&[hex(&request_json("batch", items)).as_str(), "--pipe", "compy-test", "--parent-pid", "1"]);
+        let buf = SharedBuf::default();
+        let mut fx = Fake { eee: Some(out(0, &two_adapters())), ..Fake::default() };
+        let b2 = buf.clone();
+        let code = helper_argv_with(&args, &mut fx, &move |name, pid| {
+            assert_eq!((name, pid), ("compy-test", 1));
+            Ok(Box::new(b2.clone()) as PipeOut)
+        });
+        assert_eq!(code, 0);
+        assert_eq!((fx.reads(), fx.runs()), (1, 1), "one read, one run: {:?}", fx.events);
+        assert_eq!(fx.events[0], "read:EeeListing", "the read comes first");
+        assert!(fx.events[1].starts_with("run:$ErrorActionPreference='Stop'; try { $compyP = @(Get-NetAdapterAdvancedProperty"), "{}", fx.events[1]);
+        assert!(fx.events[1].contains(&format!("{N}:eee-disable:ok")) && fx.events[1].contains(&format!("{N}:sysmain-disable:ok")));
+        assert!(fx.events[1].contains("-ceq '{AAAAAAAA-1111-2222-3333-444444444444}::*EEE'"), "only Ethernet [2]'s object");
+        assert!(!fx.events[1].contains("BBBBBBBB"), "never the look-alike adapter");
+        assert_eq!(fx.read_scripts, vec![actions::EEE_LISTING_SCRIPT.to_string()], "the read is the constant one");
+
+        let mut fx = Fake { eee: Some(out(0, &two_adapters())), ..Fake::default() };
+        let code = helper_argv_with(&args, &mut fx, &|_, _| Err(()));
+        assert_eq!(code, actions::HELPER_CHANNEL_REFUSED);
+        assert!(fx.events.is_empty(), "a refused pipe reads and runs nothing: {:?}", fx.events);
+    }
+
+    /// [v3r C2]: inside a batch a refused item is its own `fail` line, and the other items still run; with every
+    /// item refused the helper writes `end` and starts no PowerShell. Break: return `HELPER_REQUEST_REFUSED`
+    /// for `Refused::NoMatch` in `run_request`'s batch arm and this fails.
+    #[test]
+    fn in_a_batch_a_refused_item_is_its_own_fail_line_and_the_rest_run() {
+        let eee = r#"{"id":"eee-disable","ops":[{"op":"eee-restore","targets":[{"adapter":"Ethernet 3","property":"Energy Efficient Ethernet","prior":"Enabled"}]}]}"#;
+        let svc = r#"{"id":"sysmain-disable","ops":[{"op":"service-disable","service":"SysMain"}]}"#;
+        let req = parse_request_hex(&hex(&request_json("batch", &format!("{eee},{svc}")))).expect("valid");
+        let buf = SharedBuf::default();
+        let mut fx = Fake { eee: Some(out(0, &two_adapters())), ..Fake::default() };
+        assert_eq!(run_request(&req, Some(Box::new(buf.clone())), &mut fx), 0);
+        let text = buf.text();
+        assert!(text.starts_with(&format!("{N}:eee-disable:fail\n")), "{text}");
+        assert_eq!(fx.runs(), 1);
+        assert!(fx.events.iter().any(|e| e.contains(&format!("{N}:sysmain-disable:ok"))), "the other item ran");
+        assert!(!fx.events.iter().any(|e| e.contains("eee-disable:ok")), "the refused item is not in the script");
+        let receipts = actions::parse_batch_receipts(&text, N);
+        assert_eq!(receipts.get("eee-disable"), Some(&false));
+
+        let only = parse_request_hex(&hex(&request_json("batch", eee))).expect("valid");
+        let buf = SharedBuf::default();
+        let mut fx = Fake { eee: Some(out(0, &two_adapters())), ..Fake::default() };
+        assert_eq!(run_request(&only, Some(Box::new(buf.clone())), &mut fx), 0);
+        assert_eq!(buf.text(), format!("{N}:eee-disable:fail\n{N}:end\n"));
+        assert_eq!(fx.runs(), 0, "no PowerShell when nothing is left");
+    }
+
+    /// [v3r C3]: a single op whose target no longer matches exits with the SAVED-VALUE sentinel (not the request
+    /// one) and runs nothing. Break: map `Refused::NoMatch` to `HELPER_REQUEST_REFUSED` and this fails.
+    #[test]
+    fn a_single_refusal_is_the_saved_value_sentinel_and_nothing_runs() {
+        let eee = r#"{"ops":[{"op":"eee-restore","targets":[{"adapter":"Ethernet 3","property":"Energy Efficient Ethernet","prior":"Enabled"}]}]}"#;
+        let task = r#"{"ops":[{"op":"task-enable","task":"CeipUsb"}]}"#;
+        for (items, fx) in [
+            (eee, Fake { eee: Some(out(0, &two_adapters())), ..Fake::default() }),
+            (eee, Fake { eee: None, ..Fake::default() }),
+            (task, Fake { task: Some(out(0, "Consolidator\r\n")), ..Fake::default() }),
+            (task, Fake { task: Some(out(1, "UsbCeip\r\n")), ..Fake::default() }),
+        ] {
+            let mut fx = fx;
+            let req = parse_request_hex(&hex(&request_json("single", items))).expect("valid");
+            assert_eq!(run_request(&req, None, &mut fx), actions::HELPER_SAVED_VALUE_NO_MATCH, "{items}");
+            assert_eq!((fx.reads(), fx.runs()), (1, 0), "{items}: read, never run");
+        }
+    }
+
+    // ── helper-side reads ──
+
+    /// The task name is resolved in the helper from the constant folder listing, by today's build-drift rule.
+    /// Break: drop the `ps_safe_squoted(&name)` re-check in `resolve_task` and this fails.
+    #[test]
+    fn the_task_name_is_resolved_in_the_helper_from_a_constant_listing() {
+        let task = KnownBloatTask::CompatibilityAppraiser;
+        let (path, _) = task.path_and_name();
+        let found = |listing: Option<std::process::Output>| {
+            let mut fx = Fake { task: listing, ..Fake::default() };
+            let r = resolve_task(&task, &mut fx).map(|(_, n)| n);
+            assert_eq!(fx.read_scripts, vec![actions::task_listing_script(path)], "a constant read");
+            r
+        };
+        assert_eq!(found(Some(out(0, "Microsoft Compatibility Appraiser\r\nMicrosoft Compatibility Appraiser Exp\r\n"))), Ok("Microsoft Compatibility Appraiser".into()));
+        assert_eq!(found(Some(out(0, "ProgramDataUpdater\r\nMicrosoft Compatibility Appraiser Exp\r\n"))), Ok("Microsoft Compatibility Appraiser Exp".into()));
+        assert_eq!(found(Some(out(0, "ProgramDataUpdater\r\n"))), Err(Refused::NoMatch), "absent");
+        assert_eq!(found(Some(out(0, ""))), Err(Refused::NoMatch), "empty folder");
+        assert_eq!(found(Some(out(0, "Microsoft Compatibility Appraiser'; calc; '\r\n"))), Err(Refused::NoMatch), "refused name");
+        assert_eq!(found(Some(out(1, "Microsoft Compatibility Appraiser\r\n"))), Err(Refused::NoMatch), "a failed read");
+        assert_eq!(found(None), Err(Refused::NoMatch), "a read that did not finish");
+        let big = "x".repeat(MAX_READ_BYTES + 1);
+        assert_eq!(found(Some(out(0, &big))), Err(Refused::NoMatch), "too large");
+    }
+
+    /// [v2r M3] / [v3r C1]: the EEE property is found in Rust by byte-equal names (no wildcard: `Ethernet [2]` is
+    /// not `Ethernet 2`), and its value by the index in the driver's parallel lists. Break: compare the adapter
+    /// name with `eq_ignore_ascii_case` or `starts_with` in `eee_find` and this fails.
+    #[test]
+    fn the_eee_match_is_byte_equal_in_rust() {
+        let l = listing_of(&two_adapters());
+        assert_eq!(eee_pick_restore(&l, &saved("Ethernet [2]", "Enabled")), Ok((GUID_A.into(), "*EEE".into(), "1".into())));
+        assert_eq!(eee_pick_restore(&l, &saved("Ethernet 2", "Disabled")), Ok((GUID_B.into(), "*EEE".into(), "0".into())));
+        for name in ["Ethernet ?2?", "Ethernet*", "Ethernet [2", "ethernet [2]", "Ethernet [2] ", "Ethernet"] {
+            assert_eq!(eee_pick_restore(&l, &saved(name, "Enabled")), Err(Refused::NoMatch), "{name}");
+        }
+        let target = EeeTarget { adapter: SavedText::parse("Ethernet [2]").expect("a"), property: SavedText::parse("Energy Efficient Ethernet").expect("p") };
+        assert_eq!(eee_pick_disable(&l, &target), Ok((GUID_A.into(), "*EEE".into(), "0".into())));
+
+        let one = |prop: String| listing_of(&eee_listing(&prop));
+        let a = |kw: &str, dv: &str, rv: &str| eee_prop(GUID_A, "Ethernet [2]", kw, dv, rv);
+        // Localized display values: matched as text, never translated.
+        let de = one(a("*EEE", r#"["Deaktiviert","Aktiviert"]"#, r#"["0","1"]"#));
+        assert_eq!(eee_pick_restore(&de, &saved("Ethernet [2]", "Enabled")), Err(Refused::NoMatch));
+        assert_eq!(eee_pick_restore(&de, &saved("Ethernet [2]", "Aktiviert")).map(|t| t.2), Ok("1".into()));
+        for (why, l) in [
+            ("no registry values", one(a("*EEE", r#"["Disabled","Enabled"]"#, "[]"))),
+            ("lists of different lengths", one(a("*EEE", r#"["Disabled","Enabled"]"#, r#"["0"]"#))),
+            ("a value that is not an integer", one(a("*EEE", r#"["Disabled","Enabled"]"#, r#"["0","1; calc"]"#))),
+            ("a hex value", one(a("*EEE", r#"["Disabled","Enabled"]"#, r#"["0","0x1"]"#))),
+            ("a duplicated display value", one(a("*EEE", r#"["Enabled","Enabled"]"#, r#"["0","1"]"#))),
+            ("a keyword outside the list", one(a("EnableGreenEthernet", r#"["Disabled","Enabled"]"#, r#"["0","1"]"#))),
+            (
+                "two properties with one name",
+                one(format!("{},{}", a("*EEE", r#"["Disabled","Enabled"]"#, r#"["0","1"]"#), a("EEE", r#"["Disabled","Enabled"]"#, r#"["0","1"]"#))),
+            ),
+            (
+                "an InstanceID keyword that differs",
+                one(a("*EEE", r#"["Disabled","Enabled"]"#, r#"["0","1"]"#).replace(r#""k":"*EEE""#, r#""k":"EEE""#)),
+            ),
+            (
+                "an InstanceID GUID that is no adapter",
+                one(eee_prop("{CCCCCCCC-1111-2222-3333-444444444444}", "Ethernet [2]", "*EEE", r#"["Disabled","Enabled"]"#, r#"["0","1"]"#)),
+            ),
+            ("an unbraced InstanceID GUID", one(eee_prop("AAAAAAAA-1111-2222-3333-444444444444", "Ethernet [2]", "*EEE", r#"["Disabled","Enabled"]"#, r#"["0","1"]"#))),
+        ] {
+            assert_eq!(eee_pick_restore(&l, &saved("Ethernet [2]", "Enabled")), Err(Refused::NoMatch), "{why}");
+        }
+        // A disconnected or wireless adapter is not an apply target.
+        let down = listing_of(&two_adapters().replacen(r#""s":"Up""#, r#""s":"Disconnected""#, 1));
+        assert_eq!(eee_pick_disable(&down, &target), Err(Refused::NoMatch));
+        // PowerShell 5.1 may unwrap a one-element array or a one-row list.
+        let unwrapped = format!(
+            r#"{{"a":{{"g":"{GUID_A}","n":"Ethernet [2]","s":"Up","m":"802.3"}},"p":{{"i":"{GUID_A}::*EEE","n":"Ethernet [2]","d":"Energy Efficient Ethernet","k":"*EEE","v":"Enabled","dv":"Enabled","rv":"1"}}}}"#
+        );
+        assert_eq!(eee_pick_restore(&listing_of(&unwrapped), &saved("Ethernet [2]", "Enabled")).map(|t| t.2), Ok("1".into()));
+    }
+
+    /// The EEE read is refused, never guessed, when it did not finish, failed, is too large or not the shape.
+    /// Break: accept a non-zero exit in `parse_eee_listing` and this fails.
+    #[test]
+    fn an_unusable_eee_read_is_no_match() {
+        assert_eq!(parse_eee_listing(None), Err(Refused::NoMatch));
+        assert_eq!(parse_eee_listing(Some(&out(1, &two_adapters()))), Err(Refused::NoMatch));
+        assert_eq!(parse_eee_listing(Some(&out(0, "not json"))), Err(Refused::NoMatch));
+        assert_eq!(parse_eee_listing(Some(&out(0, r#"{"a":"x","p":1}"#))), Err(Refused::NoMatch));
+        let big = format!("{}{}", two_adapters(), " ".repeat(MAX_READ_BYTES));
+        assert_eq!(parse_eee_listing(Some(&out(0, &big))), Err(Refused::NoMatch));
+        assert!(parse_eee_listing(Some(&out(0, &format!("\u{feff}{}\r\n", two_adapters())))).is_ok(), "a byte-order mark is tolerated");
+    }
+
+    /// The EEE set script, written out, and its builder's refusals. Break: drop the `EEE_KEYWORDS` check in
+    /// `build_eee_set_by_instance_script` and this fails.
+    #[test]
+    fn the_eee_set_script_is_the_golden_and_refuses_outside_its_grammar() {
+        assert_eq!(actions::build_eee_set_by_instance_script(&[(GUID_A, "*EEE", "1")]).as_deref(), Ok(GOLDEN_EEE_SET_A_1));
+        let l = listing_of(&two_adapters());
+        let mut fx = Fake { eee: Some(out(0, &two_adapters())), ..Fake::default() };
+        let op = ElevatedOp::EeeRestore { targets: vec![saved("Ethernet [2]", "Enabled")] };
+        assert_eq!(op.script(&Nonce::parse(N).expect("n"), &mut fx).as_deref(), Ok(GOLDEN_EEE_SET_A_1));
+        assert_eq!(eee_pick_restore(&l, &saved("Ethernet [2]", "Enabled")).map(|t| t.0), Ok(GUID_A.to_string()));
+        for (g, k, v) in [
+            ("AAAAAAAA-1111-2222-3333-444444444444", "*EEE", "1"),
+            ("{AAAAAAAA-1111-2222-3333-444444444444}' ; calc ; '", "*EEE", "1"),
+            (GUID_A, "*EEE*", "1"),
+            (GUID_A, "Green", "1"),
+            (GUID_A, "*EEE", "1'; calc; '"),
+            (GUID_A, "*EEE", "0x1"),
+            (GUID_A, "*EEE", "12345678901"),
+            (GUID_A, "*EEE", ""),
+            (GUID_A, "*EEE", "-"),
+        ] {
+            assert!(actions::build_eee_set_by_instance_script(&[(g, k, v)]).is_err(), "{g} {k} {v}");
+        }
+        assert!(actions::build_eee_set_by_instance_script(&[]).is_err());
+    }
+
+    // ── fuzz [v3r fuzz] ──
+
+    const VALID_BATCH: &str = r#"{"v":1,"nonce":"0123456789abcdef0123456789abcdef","wrapper":"batch","items":[{"id":"sysmain-disable","ops":[{"op":"service-disable","service":"SysMain"}]},{"id":"r3","ops":[{"op":"core-parking-restore","ac":100,"dc":90,"target":{"kind":"plan","plan":"381b4222-f694-41f0-9685-ff5bb260df2e","reactivate":true}}]}]}"#;
+
+    /// Arbitrary bytes, mutated valid requests and hostile strings never panic the request parser, and whatever
+    /// it accepts re-validates and round-trips. Break: replace `.ok_or(Refused::Request)?` after `from_hex` in
+    /// `parse_request_hex` with `.unwrap()` (or drop the length check) and this panics.
+    #[test]
+    fn fuzz_the_request_parser_never_panics_and_accepts_only_valid_requests() {
+        assert!(parse_request_hex(&hex(VALID_BATCH)).is_ok(), "the seed request is valid");
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for _ in 0..200 {
+                let len = rng.below(96);
+                let bytes: Vec<u8> = (0..len).map(|_| (rng.next_u64() & 0xff) as u8).collect();
+                for candidate in [actions::to_hex(&bytes), hex(&mutate_text(&mut rng, VALID_BATCH)), hostile_string(&mut rng, 6)] {
+                    if let Ok(req) = parse_request_hex(&candidate) {
+                        assert_eq!(req.validate(), Ok(()));
+                        let again = serde_json::to_string(&req).expect("serializes");
+                        assert_eq!(parse_request_hex(&hex(&again)), Ok(req), "a round trip keeps an accepted request");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Arbitrary bytes and mutated listings never panic the helper's own parsers (EEE JSON, task listing).
+    /// Break: index `p.rv[i]` without the length check in `eee_value_at` and this panics.
+    #[test]
+    fn fuzz_the_helper_read_parsers_never_panic() {
+        let base = two_adapters();
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            for _ in 0..200 {
+                let len = rng.below(128);
+                let bytes: Vec<u8> = (0..len).map(|_| (rng.next_u64() & 0xff) as u8).collect();
+                let raw = std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: bytes, stderr: Vec::new() };
+                let _ = parse_eee_listing(Some(&raw));
+                let _ = actions::task_name_from_read(Some(&raw), "Consolidator");
+                let mutated = mutate_text(&mut rng, &base);
+                if let Ok(l) = parse_eee_listing(Some(&out(0, &mutated))) {
+                    let _ = eee_pick_restore(&l, &saved("Ethernet [2]", "Enabled"));
+                    let target = EeeTarget { adapter: SavedText::parse("Ethernet [2]").expect("a"), property: SavedText::parse("Energy Efficient Ethernet").expect("p") };
+                    if let Ok((g, k, v)) = eee_pick_disable(&l, &target) {
+                        assert!(actions::build_eee_set_by_instance_script(&[(g.as_str(), k.as_str(), v.as_str())]).is_ok(), "a pick always composes");
+                    }
+                }
+                let hostile = hostile_string(&mut rng, 6);
+                let _ = parse_eee_listing(Some(&out(0, &hostile)));
+            }
+        }
+    }
+
+    // ── pins ──
+
+    /// [v3r flag]: a default build has no typed entry. Break: put `elevated-op-entry` in `default = [...]` in
+    /// Cargo.toml (or drop the cfg line above main.rs's arm) and this fails.
+    #[test]
+    fn a_default_build_has_no_typed_entry() {
+        const CFG: &str = "#[cfg(feature = \"elevated-op-entry\")]";
+        let literal = concat!("\"--run-elevated", "-op\"");
+        let main = include_str!("main.rs").replace("\r\n", "\n");
+        let lines: Vec<&str> = main.lines().collect();
+        let at: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains(literal)).map(|(i, _)| i).collect();
+        assert_eq!(at.len(), 1, "main.rs holds the literal once");
+        assert_eq!(lines[at[0] - 1].trim(), CFG, "main.rs's arm is behind the feature");
+        let lib = include_str!("lib.rs").replace("\r\n", "\n");
+        let lib_lines: Vec<&str> = lib.lines().collect();
+        let entry = lib_lines.iter().position(|l| l.starts_with("pub fn run_elevated_op_argv(")).expect("the lib entry");
+        assert_eq!(lib_lines[entry - 1].trim(), CFG, "lib.rs's entry is behind the feature");
+        // No other Rust source holds the literal outside its tests.
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut stack = vec![dir];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(&d).expect("src dir").flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.extension().is_some_and(|x| x == "rs") && p.file_name().is_some_and(|n| n != "main.rs") {
+                    let text = std::fs::read_to_string(&p).expect("read").replace("\r\n", "\n");
+                    let shipped = text.split("#[cfg(test)]\nmod tests").next().unwrap_or_default();
+                    assert!(!shipped.contains(literal), "{} holds the typed entry's literal outside its tests", p.display());
+                }
+            }
+        }
+        // The feature exists, is off by default, and no build names it.
+        let cargo = include_str!("../Cargo.toml").replace("\r\n", "\n");
+        let code: Vec<&str> = cargo.lines().map(str::trim).filter(|l| !l.starts_with('#')).collect();
+        assert!(code.contains(&"default = []"), "no default feature");
+        assert!(code.contains(&"elevated-op-entry = []"));
+        assert_eq!(code.iter().filter(|l| l.contains("elevated-op-entry")).count(), 1, "nothing enables it");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut builds = vec![root.join("package.json"), root.join("scripts").join("ship-reinstall.ps1"), root.join("src-tauri").join("tauri.conf.json")];
+        if let Ok(wf) = std::fs::read_dir(root.join(".github").join("workflows")) {
+            builds.extend(wf.flatten().map(|e| e.path()));
+        }
+        for f in builds {
+            let text = std::fs::read_to_string(&f).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
+            for word in ["elevated-op-entry", "--features", "--all-features"] {
+                assert!(!text.contains(word), "{} names {word}", f.display());
+            }
+        }
+    }
+
+    /// The closed set holds no script text: no `String` in the op enum or the structs it carries. Break: add a
+    /// `Raw { script: String }` variant and this fails.
+    #[test]
+    fn the_closed_set_has_no_script_variant() {
+        let src = include_str!("elevated_ops.rs").replace("\r\n", "\n");
+        let shipped = src.split("#[cfg(test)]\nmod tests").next().unwrap_or_default();
+        for head in [
+            "pub(crate) enum ElevatedOp {",
+            "pub(crate) struct EeeTarget {",
+            "pub(crate) struct EeeSaved {",
+            "pub(crate) struct NagleSaved {",
+            "pub(crate) enum CoreParkingTarget {",
+            "pub(crate) struct RequestItem {",
+            "pub(crate) struct ElevatedRequest {",
+        ] {
+            let at = shipped.find(head).unwrap_or_else(|| panic!("{head}"));
+            let body = &shipped[at..at + shipped[at..].find("\n}\n").expect("end")];
+            for word in ["String", "Raw", "serde_json::Value", "Box<"] {
+                assert!(!body.contains(word), "{head} holds {word}");
+            }
+        }
+    }
+
+    /// [v2r M1] / [v3r C3]: two distinct "nothing ran" sentinels, each with its exact arm, defined once. Break:
+    /// remove the `HELPER_SAVED_VALUE_NO_MATCH_MSG` arm from `elevation_error_nothing_ran` and this fails.
+    #[test]
+    fn the_two_sentinels_are_distinct_and_read_as_nothing_ran() {
+        let codes = [
+            actions::HELPER_POWERSHELL_NOT_STARTED,
+            actions::HELPER_TICKET_REFUSED,
+            actions::HELPER_CHANNEL_REFUSED,
+            actions::HELPER_REQUEST_REFUSED,
+            actions::HELPER_SAVED_VALUE_NO_MATCH,
+        ];
+        let mut unique = codes.to_vec();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), codes.len(), "every helper code is its own");
+        assert_ne!(actions::HELPER_REQUEST_REFUSED_MSG, actions::HELPER_SAVED_VALUE_NO_MATCH_MSG);
+        for (code, msg) in [
+            (actions::HELPER_REQUEST_REFUSED, actions::HELPER_REQUEST_REFUSED_MSG),
+            (actions::HELPER_SAVED_VALUE_NO_MATCH, actions::HELPER_SAVED_VALUE_NO_MATCH_MSG),
+        ] {
+            let err = actions::elevation_outcome(Ok(std::process::ExitStatus::from_raw(code as u32))).unwrap_err();
+            assert_eq!(err, msg);
+            assert!(actions::elevation_error_nothing_ran(&err), "{err}");
+        }
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        for decl in [
+            "pub(crate) const HELPER_REQUEST_REFUSED: i32",
+            "pub(crate) const HELPER_REQUEST_REFUSED_MSG: &str",
+            "pub(crate) const HELPER_SAVED_VALUE_NO_MATCH: i32",
+            "pub(crate) const HELPER_SAVED_VALUE_NO_MATCH_MSG: &str",
+        ] {
+            assert_eq!(src.matches(decl).count(), 1, "{decl} is defined once");
+        }
+    }
+
+    /// [v2r M5]: helper-side reads run with the helper's cleared, pinned environment, never the user's (a
+    /// user-shaped PSModulePath in an elevated read would be code execution). Break: build the read with
+    /// `actions::quiet_command` and this fails.
+    #[test]
+    fn the_helper_reads_run_with_the_cleared_environment() {
+        let src = include_str!("elevated_ops.rs").replace("\r\n", "\n");
+        let at = src.find("impl HelperReads for LiveEffects {").expect("live reads");
+        let body = &src[at..at + src[at..].find("\n}\n").expect("end")];
+        assert!(body.contains("crate::sys_exe::elevated_command(crate::sys_exe::SysTool::PowerShell)"), "{body}");
+        assert!(!body.contains("quiet_command") && !body.contains("sys_command"), "{body}");
+        let run = src.find("impl HelperEffects for LiveEffects {").expect("live run");
+        let run_body = &src[run..run + src[run..].find("\n}\n").expect("end")];
+        assert!(run_body.contains("crate::run_helper_script(script, pipe)"), "{run_body}");
+    }
 }

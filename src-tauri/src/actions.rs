@@ -9866,4 +9866,133 @@ mod elevated_goldens {
         assert_eq!(decode_literal("\"one; \\\n         two\""), "one; two");
         assert_eq!(fill("{{x}} {} {0} {k} {}", &[("", "a"), ("0", "z"), ("k", "v"), ("", "b")]), "{x} a z v b");
     }
+
+    // ── A8 commit 4: the typed set (elevated_ops.rs) composes the same bytes as today's callers ──
+
+    /// Answers the helper's task read with a fixed, drifted listing, and checks the read is the constant one.
+    struct DriftedTaskReads;
+
+    impl crate::elevated_ops::HelperReads for DriftedTaskReads {
+        fn read(&mut self, kind: crate::elevated_ops::ReadKind, script: &str) -> Option<std::process::Output> {
+            assert_eq!(kind, crate::elevated_ops::ReadKind::TaskListing, "only the task ops read here");
+            assert_eq!(script, task_listing_script(KnownBloatTask::CompatibilityAppraiser.path_and_name().0), "a constant read");
+            Some(finished_listing("Microsoft Compatibility Appraiser Exp\r\nProgramDataUpdater\r\n"))
+        }
+    }
+
+    fn typed(json: &str) -> String {
+        let op: crate::elevated_ops::ElevatedOp = serde_json::from_str(json).unwrap_or_else(|e| panic!("{json}: {e}"));
+        let nonce = crate::elevated_ops::Nonce::parse(NONCE).expect("nonce");
+        op.script(&nonce, &mut DriftedTaskReads).unwrap_or_else(|e| panic!("{json}: {e:?}"))
+    }
+
+    /// Every op of the closed set, from its JSON, equals today's golden byte for byte (EEE's typed script is new
+    /// and has its own goldens in elevated_ops.rs). Break: compose `Recommit::No` with `true` in
+    /// `ElevatedOp::script` (or any other builder argument) and this fails.
+    #[test]
+    fn the_typed_set_composes_every_golden_byte_for_byte() {
+        let cases: Vec<(&str, &str)> = vec![
+            (r#"{"op":"service-disable","service":"SysMain"}"#, G_SERVICE_DISABLE),
+            (r#"{"op":"service-restore","service":"SysMain","startup":"Automatic","start":true}"#, G_SERVICE_RESTORE_RUNNING),
+            (r#"{"op":"service-restore","service":"DiagTrack","startup":"Manual","start":false}"#, G_SERVICE_RESTORE_STOPPED),
+            (r#"{"op":"service-suspend","service":"WSearch"}"#, G_SERVICE_SUSPEND),
+            (r#"{"op":"service-resume","service":"WSearch"}"#, G_SERVICE_RESUME),
+            (r#"{"op":"task-disable","task":"CompatibilityAppraiser"}"#, G_TASK_DISABLE),
+            (r#"{"op":"task-enable","task":"CompatibilityAppraiser"}"#, G_TASK_ENABLE),
+            (r#"{"op":"ultimate-plan-apply"}"#, G_ULTIMATE_APPLY),
+            (concat!(r#"{"op":"ultimate-plan-undo","prior":""#, plan!(), r#""}"#), G_ULTIMATE_UNDO),
+            (r#"{"op":"reserved-storage-off"}"#, G_RESERVED_OFF),
+            (r#"{"op":"reserved-storage-restore","enabled":true}"#, G_RESERVED_ON),
+            (r#"{"op":"reserved-storage-restore","enabled":false}"#, G_RESERVED_OFF),
+            (concat!(r#"{"op":"power-setting-off","plan":""#, plan!(), r#"","setting":"UsbSelectiveSuspend","prior_ac":1}"#), G_POWER_SETTING_OFF),
+            (
+                concat!(r#"{"op":"power-setting-restore","plan":""#, plan!(), r#"","subgroup":""#, usb_sub!(), r#"","setting":""#, usb_set!(), r#"","ac":3,"dc":2,"recommit":"plan"}"#),
+                G_POWER_SETTING_RESTORE_ACTIVE,
+            ),
+            (
+                concat!(r#"{"op":"power-setting-restore","plan":""#, plan!(), r#"","subgroup":""#, usb_sub!(), r#"","setting":""#, usb_set!(), r#"","ac":3,"dc":2,"recommit":"no"}"#),
+                G_POWER_SETTING_RESTORE_OTHER,
+            ),
+            (
+                concat!(r#"{"op":"power-setting-restore","plan":""#, plan!(), r#"","subgroup":""#, usb_sub!(), r#"","setting":""#, usb_set!(), r#"","ac":3,"dc":2,"recommit":"current"}"#),
+                G_POWER_SETTING_RESTORE_UNREAD,
+            ),
+            (r#"{"op":"fast-startup-off"}"#, G_FAST_STARTUP_OFF),
+            (r#"{"op":"fast-startup-restore","prior":1}"#, G_FAST_STARTUP_RESTORE_1),
+            (r#"{"op":"fast-startup-restore","prior":null}"#, G_FAST_STARTUP_RESTORE_NONE),
+            (r#"{"op":"hags-enable"}"#, G_HAGS_ENABLE),
+            (r#"{"op":"hags-restore","prior":1}"#, G_HAGS_RESTORE_1),
+            (r#"{"op":"hags-restore","prior":null}"#, G_HAGS_RESTORE_NONE),
+            (r#"{"op":"memory-compression","enabled":true}"#, G_MEMCOMPRESS_ON),
+            (r#"{"op":"memory-compression","enabled":false}"#, G_MEMCOMPRESS_OFF),
+            (r#"{"op":"memory-compression-combined"}"#, G_MEMCOMPRESS_COMBINED),
+            (r#"{"op":"mmcss-defaults","prior_sr":14}"#, G_MMCSS_APPLY_14),
+            (r#"{"op":"mmcss-defaults","prior_sr":null}"#, G_MMCSS_APPLY_NONE),
+            (r#"{"op":"mmcss-restore","sr":14,"nti":null}"#, G_MMCSS_RESTORE),
+            (r#"{"op":"priority-separation-default"}"#, G_PRIORITY_DEFAULT),
+            (r#"{"op":"priority-separation-restore","prior":38}"#, G_PRIORITY_RESTORE_38),
+            (r#"{"op":"priority-separation-restore","prior":null}"#, G_PRIORITY_RESTORE_NONE),
+            (r#"{"op":"mpo","value":null}"#, G_MPO_DEFAULT),
+            (r#"{"op":"mpo","value":5}"#, G_MPO_RESTORE_5),
+            (concat!(r#"{"op":"core-parking-default","plan":""#, plan!(), r#"","prior_ac":100,"prior_dc":90}"#), G_CORE_PARKING_APPLY),
+            (concat!(r#"{"op":"core-parking-default","plan":""#, plan!(), r#"","prior_ac":100,"prior_dc":null}"#), G_CORE_PARKING_APPLY_NO_DC),
+            (
+                concat!(r#"{"op":"core-parking-restore","ac":100,"dc":90,"target":{"kind":"plan","plan":""#, plan!(), r#"","reactivate":true}}"#),
+                G_CORE_PARKING_RESTORE_ACTIVE,
+            ),
+            (
+                concat!(r#"{"op":"core-parking-restore","ac":100,"dc":90,"target":{"kind":"plan","plan":""#, plan!(), r#"","reactivate":false}}"#),
+                G_CORE_PARKING_RESTORE_INACTIVE,
+            ),
+            (r#"{"op":"core-parking-restore","ac":100,"dc":90,"target":{"kind":"current"}}"#, G_CORE_PARKING_RESTORE_LEGACY),
+            (r#"{"op":"pagefile-automatic"}"#, G_PAGEFILE_AUTOMATIC),
+            (r#"{"op":"pagefile-restore","letter":"c","init_mb":1024,"max_mb":4096}"#, G_PAGEFILE_RESTORE),
+            (r#"{"op":"tcp-autotuning","disabled":false}"#, G_TCP_NORMAL),
+            (r#"{"op":"tcp-autotuning","disabled":true}"#, G_TCP_DISABLED),
+            (concat!(r#"{"op":"nagle-disable","interfaces":[""#, nic!(), r#""]}"#), G_NAGLE_APPLY),
+            (concat!(r#"{"op":"nagle-restore","interfaces":[{"key":""#, nic!(), r#"","ack":1,"nodelay":null}]}"#), G_NAGLE_RESTORE),
+        ];
+        for (json, golden) in &cases {
+            assert_eq!(typed(json), *golden, "{json}");
+        }
+    }
+
+    /// The helper's own wrappers: a Single op runs with today's `$ErrorActionPreference='Stop'` prefix and a
+    /// Batch runs today's `compose_batch_script` text. Break: drop `with_error_action_stop` in `run_request`'s
+    /// Single arm, or reorder the batch items, and this fails.
+    #[test]
+    fn the_typed_wrappers_compose_todays_single_and_batch_bytes() {
+        use crate::elevated_ops::{run_request, ElevatedRequest, HelperEffects, HelperReads, PipeOut, ReadKind};
+        struct CaptureRun(Vec<String>);
+        impl HelperReads for CaptureRun {
+            fn read(&mut self, _kind: ReadKind, _script: &str) -> Option<std::process::Output> {
+                panic!("no read for these ops")
+            }
+        }
+        impl HelperEffects for CaptureRun {
+            fn run(&mut self, script: &str, _pipe: Option<PipeOut>) -> i32 {
+                self.0.push(script.to_string());
+                0
+            }
+        }
+        let request = |json: &str| -> ElevatedRequest {
+            let r: ElevatedRequest = serde_json::from_str(json).unwrap_or_else(|e| panic!("{json}: {e}"));
+            r.validate().expect("a valid request");
+            r
+        };
+        let single = request(concat!(
+            r#"{"v":1,"nonce":""#, nonce!(), r#"","wrapper":"single","items":[{"ops":[{"op":"service-disable","service":"SysMain"}]}]}"#
+        ));
+        let mut cap = CaptureRun(Vec::new());
+        assert_eq!(run_request(&single, None, &mut cap), 0);
+        assert_eq!(cap.0, vec![G_SINGLE_SERVICE_DISABLE.to_string()]);
+        let batch = request(concat!(
+            r#"{"v":1,"nonce":""#, nonce!(), r#"","wrapper":"batch","items":["#,
+            r#"{"id":"sysmain-disable","ops":[{"op":"service-disable","service":"SysMain"}]},"#,
+            r#"{"id":"nagle-disable","ops":[{"op":"nagle-disable","interfaces":[""#, nic!(), r#""]}]}]}"#
+        ));
+        let mut cap = CaptureRun(Vec::new());
+        assert_eq!(run_request(&batch, Some(Box::new(std::io::sink())), &mut cap), 0);
+        assert_eq!(cap.0, vec![G_BATCH.to_string()]);
+    }
 }
