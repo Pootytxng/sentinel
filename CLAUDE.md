@@ -53,10 +53,11 @@ Rust: `cargo test --manifest-path src-tauri/Cargo.toml`. Dev: `npm run tauri dev
 
 ### Rust module map (`lib.rs` carved into safety-boundary modules)
 
-Complete 2026-08-29 (60 `.rs` files; the count lives only here). **★ = the safety boundary
+Complete 2026-11-23 (80 `.rs` files, counted by name; the count lives only here). **★ = the safety boundary
 (mutation, rollback & gates) — scope any mutation-gate change against these first:** `lib.rs`
 (command surface) · `actions.rs` · `history.rs` · `gaming_orchestrator.rs` · `gaming_session.rs` ·
 `game_mode_persist.rs` · `services.rs` · `gpu_profile.rs` · `remote_rules.rs` · `receipts.rs` ·
 `license.rs` · `drift.rs` · `data_root.rs` · `race_seam.rs`. Entries: ★ half in
 `.claude/rules/rust-safety-boundary.md`, read-only half in `src-tauri/CLAUDE.md`; both load only for
-`src-tauri/` work. **Mechanically verified — run `node scripts/verify-module-map.mjs` before trusting the map.**
+`src-tauri/` work. **No gate checks the map (its guard was removed in `397cfe72`): run
+`node scripts/verify-module-map.mjs` by hand before trusting it; red means the map is stale.**

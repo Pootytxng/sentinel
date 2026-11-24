@@ -6,13 +6,13 @@
 > `.claude/rules/rust-safety-boundary.md` (#479), which loads alongside this file. This file carries
 > the read-only remainder.
 >
-> **Both halves are one map, and the map is NOT currently verified.** `node scripts/verify-module-map.mjs`
-> reads them together and fails on a missing module, a ghost, a wrong file count, a module declared in
-> both halves, or an unstarred module that writes Windows state. No gate runs it any more: its guard
-> test was removed with the process guards in `397cfe72` (2026-11-20), and on `main` at `5e6cb40a` it
-> fails (18 `.rs` files absent from the map; the map declares 60, the tree has 80). Until the map is
-> brought back in line, read the source for which modules exist. The `.rs` file count lives in the
-> root header, deliberately in one place so it cannot drift against itself.
+> **Both halves are one map.** `node scripts/verify-module-map.mjs` reads them together and fails on
+> a missing module, a ghost, a wrong file count, a module declared in both halves, or an unstarred
+> module that writes Windows state. No gate runs it (its guard test was removed with the process guards
+> in `397cfe72`, 2026-11-20), so run it by hand before trusting the map; a red result means the map is
+> stale, not the tree. The 18 modules it found missing on 2026-11-23 were added that day. Files are
+> counted by name, as the script counts them; the `.rs` file count lives in the root header,
+> deliberately in one place so it cannot drift against itself.
 
 Line counts drift — treat as rough and verify against current code before asserting.
 
@@ -30,6 +30,26 @@ Line counts drift — treat as rough and verify against current code before asse
 - `fps.rs` (~1092) — FPS/frametime IPC (`fps.json`/`fps.alive`) from the ETW helper.
 - `sessions.rs` (~569) — session-summary persistence (`sessions.json`).
 - `stutter.rs` (~135) — stutter/1%-low derivation.
+- `fps_pipe.rs` (~817) — hardening slice 2 (F3): the capture helper's reports travel over a named pipe the APP creates (`\\.\pipe\compy-fps-<random>`, first instance only) instead of files the (usually elevated) helper wrote in the user-writable runtime folder.
+- `session_boundary.rs` (~1005) — where one recorded session ends and the next begins: a session belongs to ONE process identity (image name + pid); a pure state machine the monitoring thread drives once a second, plus the read-only flag for a session that already swallowed two games.
+- `running_at_start.rs` (~1266) — which KNOWN programs were already running when a session began, under an allowlist-only privacy rule (only programs in its reviewed table are named; anything else is counted, never named).
+
+**Paramedic engine & the day-one answer (read-only; added to the map 2026-11-23)**
+- `changes.rs` (~844) in `paramedic/` — F4b: turns the read-only change readers' report into evidence, candidates and "what Compy checked / couldn't see" lines; runs the readers once, off the UI thread, inside a time budget. An unread source is never "nothing changed".
+- `extras.rs` (~324) in `paramedic/` — M3: the graphics card's peak temperature and the diagnosed game's crash history, as evidence, never a verdict ("overheating"/"throttling" are never said).
+- `mods.rs` (~299) in `paramedic/` — M3: graphics mods in the game's folder as evidence, from the mod detector's files-only read (it can never know a mod is loaded).
+- `facts.rs` (~744) in `paramedic/` — the first look's "What looks off on this PC" facts (the readiness rules' pure verdicts, each a code and its numbers) and Compy's own dated changes, read without locking or repairing the ledger.
+- `recovery.rs` (~954) in `paramedic/` — F3 "did it get better?": judged afresh from the game's next recorded sessions, never stored; a recovery supports or weakens a candidate, never proves one.
+- `home_status.rs` (~166) in `paramedic/` — B1 Home truth: which games run rougher than usual right now, by the Paramedic's own judgement, from the session store alone (no Windows reads, no write).
+- `tests.rs` (~6711) in `paramedic/` — the Paramedic engine's test module (numbers-only fixtures: no game names, paths or machine identifiers).
+- `first_look.rs` (~2321) in `paramedic/` — the day-one answer (design M5): what changed on this PC around when it started, for the whole PC or one picked game, from Windows' own dated records; every row a dated fact at most `Possible`, nothing called a problem or a cause. Writes and stores nothing.
+- `crash_split.rs` (~222) in `paramedic/first_look/` — S5: how many of the picked game's readable crash records fall before and after the earliest dated change; counts are "at least".
+- `recorded.rs` (~243) in `paramedic/first_look/` — how many sessions Compy has recorded for the picked game; a failed read or an unmatched pick is "can't tell", never zero.
+- `running_now.rs` (~178) in `paramedic/first_look/` — S4: which KNOWN programs are running right now (names-only snapshot, no process opened), under the same allowlist rule; a fact about now, not about when the game ran badly.
+
+**Build plumbing & test support**
+- `sys_exe.rs` (~1034) — hardening slice 1: the ONE place a Windows system tool is located and its child process built. A tool is named by a closed enum, never a string, and resolved to an absolute system path (std would search the app's own, user-writable folder first). Starts processes but changes no Windows state, so unstarred.
+- `test_scratch.rs` (~142) — test-only scratch folders under %TEMP% (D1d): a root no other run can reuse, created empty, removed on drop; a child path can never leave the root.
 
 **Benchmark & Lab**
 - `benchmark.rs` (~1330), `benchmark_trial.rs` (~615), `benchmark_verdict.rs` (~580), `benchmark_scoreboard.rs` (~460), `comparison.rs` (~686) — the Lab proving-ground bench: trials, verdicts, scoreboard, A/B comparison.
@@ -63,4 +83,6 @@ Line counts drift — treat as rough and verify against current code before asse
 **Secondary state persistence**
 - `data_clear.rs` (~1410) - D4-2: "Clear my data", the planner and the executor. `plan_clear` (pure: reads the folder listing and the ledger, changes nothing) returns exactly what would be deleted, what is kept and why, which files Compy did not create (kept, reported), and why a clear is refused; `execute_clear` re-plans, refuses on any change since the plan, then deletes exactly that list file by file and reports each failure (never as success). Every deletable name comes from `data_inventory.rs`; nothing here removes a folder or the data root (a missing root would re-arm the legacy `Sentinel` copy-in). Clear play history never touches `history.json*`; the two live wrappers are NOT registered as commands yet (UI/relaunch slice) and Clear everything has the core but no wrapper (D4-3). Deletes only files inside the data root, never through a link. Unstarred: it changes no Windows setting.
 - `data_inventory.rs` (~1270) - D4-1: the inventory of everything Compy stores (64 rows: path, writer modules, category, personal data, how it is created, sandbox effect; plus the page's 67 browser-storage keys). DATA ONLY: no command, no I/O, no deletion; first readers are the Clear-my-data commands (D4-2/D4-3). Kept complete by `scripts/data-root-guard.test.mjs` (a new file name written without a row fails the gate; a row nobody writes fails it). Writes nothing, so unstarred.
+- `win_handle.rs` (~84) — handle-bound file checks and deletes (moved out of the Clear-my-data module in hardening slice 2): open a file once, ask the HANDLE where it really is, delete through that same handle. Used by the Clear-my-data executor and by the elevated helper's ticket consume. Deletes only the file it was handed; changes no Windows setting, so unstarred.
+- `install_location.rs` (~191) — A3: records where this compy.exe runs from (`user_folder` on today's per-user install) and whether an old per-user copy is still installed for the account. Reads two known folders and one HKCU value; writes nothing but one support-log line per launch (fixed words, no path).
 - `atomic_write.rs` (~447) — whole-file byte replacement (temp in the target's own dir → rename) for the SECONDARY stores: benchmark, comparison, readiness dismissals, drift, and the license token — which is signed plain text, not JSON, so its exact bytes pass through unserialized. An interrupted save leaves the previous complete file instead of a truncated one that every loader reads as "no data". **NOT power-loss durability, NOT a lock, NOT a transaction** — the module doc says so and the tests prove only a named interruption point. Writes no Windows state, so unstarred. Deliberately NOT used by the Trust Ledger or the signed remote rules; the module doc says why (there, not here, because this map's halves must stay disjoint).

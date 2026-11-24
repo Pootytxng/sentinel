@@ -9,7 +9,8 @@ paths:
 > the safety boundary; this file carries their entries. The read-only half lives in
 > `src-tauri/CLAUDE.md`. `node scripts/verify-module-map.mjs` reads all three as one map and fails
 > on a missing module, a ghost, a wrong count, a duplicate, an unstarred mutator, or a root ★ index
-> that disagrees with the stars below.
+> that disagrees with the stars below. No gate runs it (its guard was removed in `397cfe72`), so run
+> it by hand before trusting the map; a red result means the map is stale, not the tree.
 
 ### Rust module map — ★ mutation, rollback & gate modules (continued from the root `CLAUDE.md`)
 
