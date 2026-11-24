@@ -1,4 +1,5 @@
-import type { AppliedChange, ChangedBeforeIncident } from "../types";
+import type { TFunction } from "i18next";
+import { LEDGER_CHANGED_EVENT, type AppliedChange, type ChangedBeforeIncident } from "../types";
 import { hasUndo, liveChangeGroups } from "../data/live-changes";
 import { isUnrecordedUndo } from "../data/rollback-error";
 
@@ -121,6 +122,9 @@ export type RestoreResult = {
   outcome: RestoreOutcome;
   /** "unrecorded" only: the backend's live read of the setting after the undo, when it gave one. */
   liveRead?: string;
+  /** "failed" only (C6): the backend's own reason, e.g. a Gaming Mode or Trial refusal. The backend does not type
+   *  refusals apart from failures, so a screen that shows a stop shows this text as Compy was told it. */
+  reason?: string;
 };
 
 /** The live-read sentence the backend appends to an unrecorded-undo message (history.rs
@@ -157,11 +161,52 @@ export async function runRestore(
         const liveRead = unrecordedLiveRead(e);
         out.push({ ...base, outcome: "unrecorded", ...(liveRead ? { liveRead } : {}) });
       } else {
-        out.push({ ...base, outcome: "failed" });
+        const reason = String(e instanceof Error ? e.message : e).trim();
+        out.push({ ...base, outcome: "failed", ...(reason ? { reason } : {}) });
       }
     }
   }
   return out;
+}
+
+/** C6: what one setting's undo walk did. `stop` is the record it stopped at ("failed": failed or refused, with the
+ *  backend's reason; "unrecorded": ran on Windows but not saved), or null when every record was undone. */
+export type WalkResult = { done: number; total: number; ran: boolean; stop: RestoreResult | null };
+
+/** C6: undo `rows` (one setting's open records, newest first) through `rollback` (the audited `rollback_change`),
+ *  via `runRestore`. When a record ran on Windows but no write announced it (an unrecorded undo), it dispatches
+ *  LEDGER_CHANGED_EVENT itself, as the changed-before restore does, so every ledger reader re-reads. Zero rows make
+ *  no call. */
+export async function runSettingWalk(
+  rows: readonly AppliedChange[],
+  rollback: (changeId: string) => Promise<unknown>,
+): Promise<WalkResult> {
+  if (rows.length === 0) return { done: 0, total: 0, ran: false, stop: null };
+  let announced = false;
+  const out = await runRestore(rows, async (c) => {
+    await rollback(c.id);
+    announced = true;
+  });
+  const ran = out.some((r) => r.outcome === "undone" || r.outcome === "unrecorded");
+  if (ran && !announced) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
+  return {
+    done: out.filter((r) => r.outcome === "undone").length,
+    total: rows.length,
+    ran,
+    stop: out.find((r) => r.outcome === "failed" || r.outcome === "unrecorded") ?? null,
+  };
+}
+
+/** C6: the line a walk that stopped shows, split by how it stopped; null when every record was undone. */
+export function walkStopMessage(r: WalkResult, title: string, t: TFunction): string | null {
+  if (!r.stop) return null;
+  const vars = { title, done: r.done, total: r.total };
+  if (r.stop.outcome === "unrecorded") {
+    const head = t("app.errors.undoPartialUnrecorded", vars);
+    return r.stop.liveRead ? `${head} ${r.stop.liveRead}` : head;
+  }
+  const head = t("app.errors.undoPartialFailed", vars);
+  return r.stop.reason ? `${head} ${t("app.errors.undoReason", { reason: r.stop.reason })}` : head;
 }
 
 /** True when a Trial is in progress (or Compy can't tell): the offer must not run. Same rule as the

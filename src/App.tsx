@@ -39,6 +39,9 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { keptOutsideUndoBody } from "./data/kept-outside-undo";
 import { hasUndo } from "./data/live-changes";
+import { settingUndo } from "./data/undo-setting";
+import { runSettingWalk, trialInProgress, walkStopMessage, type WalkResult } from "./surfaces/changed-before-restore";
+import { useJourneyPhase } from "./surfaces/GuidedJourney";
 import { settleLedgerRead, useLedgerReadRetry } from "./data/applied-changes-retry";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
@@ -597,6 +600,8 @@ function App() {
     setError(message);
   }, []);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // C6: the per-setting undo walk is not offered while the guided journey runs (trialInProgress).
+  const journey = useJourneyPhase();
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   // V2 is the shipped shell (2026-07-03) — the ShellV2 rail carries every room; there's no classic
   // rail layout to switch between anymore, so nothing here mirrors the retired compy_v2/living flags.
@@ -1047,14 +1052,37 @@ function App() {
       fail(t("app.errors.noSavedUndo", { title: change.rec_title }));
       return false;
     }
+    // C6: one undo per setting. With several open records of this setting, the undo walks them newest first
+    // (`walkSetting`), unless the walk must not be offered (an out-of-order undo, a Trial in progress, an unread
+    // change list: data/undo-setting.ts). Otherwise this is today's one-record undo, unchanged; when the setting has
+    // several open records, the dialog says why only one is undone.
+    const openHere = changes.filter((c) => c.rec_id === change.rec_id && c.status !== "rolled_back").length;
+    let trial: "none" | "running" | "unknown" = "none";
+    if (!changesReadFailed && openHere > 1) {
+      const xs = await invoke<{ status: string }[]>("get_experiments")
+        .then((v) => (Array.isArray(v) ? v : null))
+        .catch(() => null);
+      trial = trialInProgress(xs, journey.kind === "idle");
+    }
+    const plan = settingUndo(changesReadFailed ? null : changes, change.rec_id, trial);
+    if (plan.kind === "walk") return walkSetting(change, plan.rows);
+    const note =
+      plan.why === "out_of_order"
+        ? t("app.dialogs.rollbackOneOutOfOrder")
+        : plan.why === "trial"
+          ? t("app.dialogs.rollbackOneTrial")
+          : plan.why === "list_unread"
+            ? t("app.dialogs.rollbackOneUnread")
+            : "";
     const dest = change.restores_label
       ? t("app.dialogs.rollbackDest", { label: change.restores_label })
       : "";
+    const body = keptOutsideUndoBody(change, t) ?? t("app.dialogs.rollbackBody", { dest });
     const ok = await confirm({
       title: t("app.dialogs.rollbackTitle", { title: change.rec_title }),
       // Undo after "Keep <plan>": a row recorded as changed outside Compy names the plan the undo
       // switches to, not the generic "how it was before".
-      body: keptOutsideUndoBody(change, t) ?? t("app.dialogs.rollbackBody", { dest }),
+      body: note ? `${body} ${note}` : body,
       confirmLabel: t("app.dialogs.rollback"),
     });
     if (!ok) return false;
@@ -1075,6 +1103,36 @@ function App() {
       setBusyId(null);
     }
     return recorded;
+  };
+
+  // C6: undo every open record of one setting, newest first by change-history order, each through the audited
+  // `rollback_change` (the same per-record path and per-record elevation as one Undo; no batch). Runs through
+  // `runRestore`, so it stops at the first record that does not finish and tells "ran but not saved" apart from a
+  // failure or a refusal. Single run: refused while another ledger write holds `busyId` (the care restore sets it too).
+  const walkSetting = async (change: AppliedChange, rows: AppliedChange[]): Promise<boolean> => {
+    if (busyId !== null || rows.length === 0) return false;
+    const total = rows.length; // the count the dialog shows is the list the walk uses
+    const ok = await confirm({
+      title: t("app.dialogs.rollbackTitle", { title: change.rec_title }),
+      body: t("app.dialogs.rollbackManyBody", { total }),
+      confirmLabel: t("app.dialogs.rollbackMany", { total }),
+    });
+    if (!ok) return false;
+    setBusyId(change.id);
+    setError(null);
+    let result: WalkResult = { done: 0, total, ran: false, stop: null };
+    try {
+      result = await runSettingWalk(rows, (changeId) => writeLedger("rollback_change", { changeId }));
+    } finally {
+      setBusyId(null);
+    }
+    if (result.ran) await refresh();
+    const stopped = walkStopMessage(result, change.rec_title, t);
+    if (stopped) {
+      fail(stopped, result.stop?.reason);
+      return false;
+    }
+    return result.done === total;
   };
 
   // Find the most recent still-active applied change for a given rec_id.

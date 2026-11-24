@@ -35,7 +35,12 @@
     "planHighPerformance": "High performance",
     "planUltimate": "Ultimate Performance",
     "planPowerSaver": "Power saver",
-    "rollback": "Roll back"
+    "rollback": "Roll back",
+    "rollbackManyBody": "{{total}} records of this setting are not undone yet. Undoing it undoes each of them, newest first: each puts back what Compy saved just before that record's change, so the oldest record is undone last. If this setting needs administrator rights, Windows asks for permission once for each record. It stops at the first one that does not finish or that you decline.",
+    "rollbackMany": "Undo all {{total}} records",
+    "rollbackOneOutOfOrder": "An older record of this setting was undone before this one, so this record's saved value may be one Compy set. Compy undoes one record at a time here.",
+    "rollbackOneTrial": "A Trial is in progress (or Compy can't tell), so Compy undoes one record of this setting at a time here.",
+    "rollbackOneUnread": "Compy couldn't read its change list, so it undoes only this record here."
   },
   "errors": {
     "recoverGamingFailed": "Couldn't finish restoring your settings just now — try again, or use Review.",
@@ -50,7 +55,10 @@
     "rollbackFailed": "Couldn't undo that change just now — try again, or undo it from the Trust Ledger.",
     "noSavedUndo": "Compy has no saved undo for \"{{title}}\" (its record doesn't say how to put it back). Nothing was changed.",
     "recAppliedExternally": "\"{{title}}\" is currently on but Compy didn't apply it, so there's no rollback record. Toggle it off in the original Windows location instead.",
-    "openExportsFolderFailed": "Couldn't open the exports folder."
+    "openExportsFolderFailed": "Couldn't open the exports folder.",
+    "undoPartialFailed": "{{title}}: {{done}} of {{total}} records undone. Compy stopped at one it couldn't undo; the rest are still in your change history.",
+    "undoPartialUnrecorded": "{{title}}: {{done}} of {{total}} records undone, and one more ran on Windows but couldn't be saved to your change history. Compy stopped there.",
+    "undoReason": "What Compy was told: {{reason}}"
   },
   "backendErrors": {
     "taskUnreadable": "Compy couldn't check this Windows task right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.",

@@ -375,6 +375,51 @@ describe("Your data: clear everything", () => {
     expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain("clear_everything");
   });
 
+  // C6 review MC4 (u11): an empty change list makes no call and never reads as done; an undo that ran on Windows
+  // but couldn't be saved is told apart from one that failed (MC6). Break checks: drop the empty-list stop -> the
+  // "no records" line is missing, fails; collapse unrecorded into failed -> "Couldn't undo" shows, fails.
+  it("'Undo them first' over an empty list makes no call; an unrecorded undo says it ran but wasn't saved", async () => {
+    const calls: unknown[] = [];
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: () => REFUSED,
+      get_applied_changes: () => [],
+      rollback_change: (args) => {
+        calls.push(args?.changeId);
+        return null;
+      },
+    });
+    const first = render(<YourData />);
+    await openEverything();
+    await screen.findByTestId("your-data-refused");
+    fireEvent.click(screen.getByRole("button", { name: "Undo them first" }));
+    await waitFor(() => expect(screen.getByTestId("your-data-undo-results").textContent).toContain("Press Check again"));
+    expect(calls).toEqual([]);
+    const empty = screen.getByTestId("your-data-undo-results").textContent ?? "";
+    expect(empty).toContain("Compy found no records to undo in its change list, so it undid nothing.");
+    expect(empty).not.toContain("Undone");
+    first.unmount();
+    everything({
+      get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+      plan_clear_everything: () => REFUSED,
+      get_applied_changes: () => [
+        { id: "g1", rec_id: "game-mode", rec_title: "Game mode", status: "applied", applied_at: "2026-11-01T00:00:00Z" },
+      ],
+      rollback_change: () => {
+        // Tauri rejects with the backend's string, as here.
+        throw "The undo ran on Windows, but Compy couldn't save that to its history (disk full), so Test → Applied & history may still list this change as applied.";
+      },
+    });
+    render(<YourData />);
+    await openEverything();
+    await screen.findByTestId("your-data-refused");
+    fireEvent.click(screen.getByRole("button", { name: "Undo them first" }));
+    await waitFor(() => expect(screen.getByTestId("your-data-undo-results").textContent).toContain("Press Check again"));
+    const unsaved = screen.getByTestId("your-data-undo-results").textContent ?? "";
+    expect(unsaved).toContain("Game mode: one record's undo ran on Windows but couldn't be saved to your change history.");
+    expect(unsaved).not.toContain("Couldn't undo");
+  });
+
   // C5a. Break checks: render one line per record (applied_changes) instead of per setting -> the list has 4 lines
   // and this fails; show progress per record (no grouping) -> "2 of 3 records undone" is missing, fails.
   it("lists each setting once with its record count, says the totals, and reports the undo per setting", async () => {

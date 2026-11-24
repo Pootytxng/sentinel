@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import type { AppliedChange, ChangedBeforeIncident, IntelEvent } from "../types";
-import { restorePlan, runRestore, trialInProgress, unrecordedLiveRead } from "./changed-before-restore";
+import type { TFunction } from "i18next";
+import { LEDGER_CHANGED_EVENT, type AppliedChange, type ChangedBeforeIncident, type IntelEvent } from "../types";
+import { restorePlan, runRestore, runSettingWalk, trialInProgress, unrecordedLiveRead, walkStopMessage } from "./changed-before-restore";
 
 // P6-restore's pure halves: which changes "Put back how it was" offers, and how a run reports.
 
@@ -171,6 +172,78 @@ describe("runRestore", () => {
 
   it("has no live read to show when the message carries none", () => {
     expect(unrecordedLiveRead("The undo ran on Windows, but Compy couldn't save that to its history")).toBeUndefined();
+  });
+});
+
+describe("runSettingWalk / walkStopMessage (C6)", () => {
+  const rows = [row("g3", "game", "2026-11-04T00:00:00Z"), row("g2", "game", "2026-11-03T00:00:00Z"), row("g1", "game", "2026-11-02T00:00:00Z")];
+  const t = ((key: string, o?: Record<string, unknown>) => `${key}${o ? JSON.stringify(o) : ""}`) as unknown as TFunction;
+  const UNRECORDED =
+    "The undo ran on Windows, but Compy couldn't save that to its history (disk full), so Test → Applied & history may still list this change as applied. But a live read still shows the setting as changed (it may have been set this way before Compy touched it), so check the setting in Windows.";
+
+  // u2. Break check: keep going after a failure (drop runRestore's stop) -> g1 is tried, fails.
+  it("stops at the first record that does not finish; the rest are not tried", async () => {
+    const seen: string[] = [];
+    const r = await runSettingWalk(rows, async (id) => {
+      seen.push(id);
+      if (id === "g2") throw new Error("snapshot missing");
+    });
+    expect(seen).toEqual(["g3", "g2"]);
+    expect([r.done, r.total, r.stop?.id, r.stop?.outcome]).toEqual([1, 3, "g2", "failed"]);
+  });
+
+  // u8. Break check: collapse unrecorded into failed -> the "couldn't undo" line shows, fails.
+  it("an undo that ran but wasn't saved shows the unrecorded line with the live read, never 'couldn't undo'", async () => {
+    const r = await runSettingWalk(rows, async (id) => {
+      if (id === "g2") throw UNRECORDED;
+    });
+    const line = walkStopMessage(r, "Game Mode", t) ?? "";
+    expect(line).toContain("app.errors.undoPartialUnrecorded");
+    expect(line).not.toContain("app.errors.undoPartialFailed");
+    expect(line).toMatch(/But a live read still shows the setting as changed/);
+  });
+
+  // u9. Break check: drop the reason from the failed line -> the refusal text is missing, fails.
+  it("a refusal mid-walk (Gaming Mode, a Trial on the plan) stops there and shows the backend's reason", async () => {
+    const REFUSAL = "Gaming Mode is holding this setting. End Gaming Mode first.";
+    const r = await runSettingWalk(rows, async (id) => {
+      if (id === "g3") throw REFUSAL;
+    });
+    expect([r.done, r.stop?.outcome]).toEqual([0, "failed"]);
+    const line = walkStopMessage(r, "Game Mode", t) ?? "";
+    expect(line).toContain("app.errors.undoPartialFailed");
+    expect(line).toContain(REFUSAL);
+  });
+
+  // u13. Break check: drop the dispatch -> no event after an unrecorded run, fails.
+  it("announces a ledger change after a run in which a record ran but no write announced it", async () => {
+    let events = 0;
+    const on = () => (events += 1);
+    window.addEventListener(LEDGER_CHANGED_EVENT, on);
+    try {
+      await runSettingWalk(rows, async (id) => {
+        if (id === "g3") throw UNRECORDED;
+      });
+      expect(events).toBe(1);
+      // A clean failure before anything ran announces nothing.
+      events = 0;
+      await runSettingWalk(rows, async () => {
+        throw new Error("refused");
+      });
+      expect(events).toBe(0);
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, on);
+    }
+  });
+
+  it("zero rows make no call and no line; a full run has no stop line", async () => {
+    let calls = 0;
+    const none = await runSettingWalk([], async () => {
+      calls += 1;
+    });
+    expect([calls, none.done, none.total, none.ran, walkStopMessage(none, "x", t)]).toEqual([0, 0, 0, false, null]);
+    const all = await runSettingWalk(rows, async () => undefined);
+    expect([all.done, all.total, walkStopMessage(all, "x", t)]).toEqual([3, 3, null]);
   });
 });
 

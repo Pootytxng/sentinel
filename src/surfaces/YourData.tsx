@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { BentoTile } from "../design/bento/BentoGrid";
 import { writeLedger } from "../data/ledger-write";
-import type { AppliedChange } from "../types";
+import { LEDGER_CHANGED_EVENT, type AppliedChange } from "../types";
+import { runRestore } from "./changed-before-restore";
 import {
   clearWebviewTargets,
   failureLine,
@@ -49,9 +50,11 @@ type Phase =
   | { kind: "done"; scope: Scope; report: ClearReport; webview: WebviewResult | null; ack: "ok" | "failed" | null }
   | { kind: "error"; scope: Scope; detail: string; afterDelete: boolean };
 
-/** "Undo them first" progress (C5a): one entry per setting, the title of a setting whose undo failed (the run
- *  stops there), and whether the list of changes could not be read at all. */
-type UndoState = { running: boolean; groups: UndoGroup[]; failedTitle: string | null; readFailed: boolean };
+/** "Undo them first" progress (C5a): one entry per setting; where the run stopped and how (C6: through `runRestore`,
+ *  so an undo that ran on Windows but couldn't be saved is told apart from one that failed or was refused); whether
+ *  the list of changes could not be read; whether it listed nothing to undo. */
+type UndoStop = { title: string; kind: "failed" | "unrecorded"; reason?: string; liveRead?: string };
+type UndoState = { running: boolean; groups: UndoGroup[]; stop: UndoStop | null; readFailed: boolean; noneListed: boolean };
 
 const k = (key: string) => `settings.yourData.${key}`;
 
@@ -128,31 +131,45 @@ export function YourData() {
   }
 
   async function undoAllFirst() {
-    setUndo({ running: true, groups: [], failedTitle: null, readFailed: false });
+    setUndo({ running: true, groups: [], stop: null, readFailed: false, noneListed: false });
     let groups: UndoGroup[] = [];
-    let failedTitle: string | null = null;
+    let stop: UndoStop | null = null;
     let readFailed = false;
+    let noneListed = false;
+    let rows: AppliedChange[] = [];
     try {
-      const rows = undoOrder(await invoke<AppliedChange[]>("get_applied_changes"));
-      groups = undoGroups(rows);
-      // One rollback per record, newest first, exactly as before C5a; only the progress is grouped by setting.
-      for (const row of rows) {
-        const g = groups.find((x) => x.rec_id === row.rec_id);
-        try {
-          await writeLedger("rollback_change", { changeId: row.id });
-          if (g) g.done += 1;
-          setUndo({ running: true, groups: groups.map((x) => ({ ...x })), failedTitle: null, readFailed: false });
-        } catch {
-          // Stop at the first record that could not be undone (or whose permission prompt was declined). Named by
-          // its setting's line (the group's title), so it matches the progress line above it.
-          failedTitle = g?.title ?? row.rec_title;
-          break;
-        }
-      }
+      rows = undoOrder(await invoke<AppliedChange[]>("get_applied_changes"));
     } catch {
       readFailed = true;
     }
-    setUndo({ running: false, groups, failedTitle, readFailed });
+    // C6 review MC4: a list with nothing to undo (or one that could not be read) makes no call and never reads as
+    // done.
+    if (!readFailed && rows.length === 0) noneListed = true;
+    if (!readFailed && !noneListed) {
+      groups = undoGroups(rows);
+      let announced = false;
+      // One rollback per record, newest first (change-history order), through `runRestore`, as the changed-before
+      // restore does: it stops at the first record that does not finish and tells "ran but not saved" apart.
+      const out = await runRestore(rows, async (row) => {
+        await writeLedger("rollback_change", { changeId: row.id });
+        announced = true;
+        const g = groups.find((x) => x.rec_id === row.rec_id);
+        if (g) g.done += 1;
+        setUndo({ running: true, groups: groups.map((x) => ({ ...x })), stop: null, readFailed: false, noneListed: false });
+      });
+      const ran = out.some((r) => r.outcome === "undone" || r.outcome === "unrecorded");
+      if (ran && !announced) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
+      const s = out.find((r) => r.outcome === "failed" || r.outcome === "unrecorded");
+      if (s) {
+        // Named by its setting's line (the group's title), so it matches the progress line above it.
+        const title = groups.find((x) => x.rec_id === s.recId)?.title ?? s.title;
+        stop =
+          s.outcome === "unrecorded"
+            ? { title, kind: "unrecorded", ...(s.liveRead ? { liveRead: s.liveRead } : {}) }
+            : { title, kind: "failed", ...(s.reason ? { reason: s.reason } : {}) };
+      }
+    }
+    setUndo({ running: false, groups, stop, readFailed, noneListed });
   }
 
   async function dismissStatus() {
@@ -273,8 +290,16 @@ export function YourData() {
                           {g.count === 1 ? t(k("undoDone"), { title: g.title }) : t(k("undoProgress"), { title: g.title, done: g.done, total: g.count })}
                         </li>
                       ))}
-                    {undo.failedTitle !== null && <li>{t(k("undoFailed"), { title: undo.failedTitle })}</li>}
+                    {undo.stop?.kind === "failed" && <li>{t(k("undoFailed"), { title: undo.stop.title })}</li>}
+                    {undo.stop?.kind === "failed" && undo.stop.reason && <li>{t(k("undoReason"), { reason: undo.stop.reason })}</li>}
+                    {undo.stop?.kind === "unrecorded" && (
+                      <li>
+                        {t(k("undoUnrecorded"), { title: undo.stop.title })}
+                        {undo.stop.liveRead ? ` ${undo.stop.liveRead}` : ""}
+                      </li>
+                    )}
                     {undo.readFailed && <li>{t(k("undoReadFailed"))}</li>}
+                    {undo.noneListed && <li>{t(k("undoNoneListed"))}</li>}
                     {!undo.running && <li>{t(k("undoAfter"))}</li>}
                   </ul>
                 )}
