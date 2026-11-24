@@ -77,7 +77,7 @@ describe("postureLine (real headline + priorities-driven sentence)", () => {
       "Every check Compy could read came back right. 1 thing is listed below as worth a look.",
     );
     expect(p.sentence).not.toMatch(/fix/i);
-    expect(p.reassurance).toMatch(/1 change active/);
+    expect(p.reassurance).toMatch(/1 Compy-changed setting in effect/);
   });
 
   // review r1 B1: dialed-in also holds unread, advisory and dismissed checks, so the dek may never
@@ -181,7 +181,7 @@ describe("postureLine (real headline + priorities-driven sentence)", () => {
 
     it("a row whose live check failed is never counted as in effect", () => {
       const p = postureLine(ready(), priorities(0), counted(1, 2));
-      expect(p.reassurance).toMatch(/^1 change active/);
+      expect(p.reassurance).toMatch(/^1 Compy-changed setting in effect/);
       expect(p.reassurance).not.toMatch(/\b3\b/);
     });
 

@@ -108,7 +108,7 @@
       "titlePost": ",时长 ",
       "oneLow": "1% 最低帧",
       "delta": "{{arrow}} 较上次 {{sign}}{{value}} fps",
-      "changesOn_other": "{{count}} 项优化生效中"
+      "changesOn_other": "{{count}} 项由 Compy 更改的设置处于开启状态"
     },
     "autopsyBody": {
       "title": "你核查了一份指南",
@@ -123,7 +123,7 @@
       "noDetail": "在两次 Compy 读数之间发现的变化。"
     },
     "tapeMore_other": "显示另外 {{count}} 条记录",
-    "manageJump_other": "前往「测试」撤销这 {{count}} 项优化中的任意一项",
+    "manageJump_other": "前往「测试」撤销这 {{count}} 项仍生效的设置中的任意一项",
     "manageJumpSplit": "前往「测试」撤销：{{count}} 项生效中 · {{unknown}} 项无法确认",
     "library": {
       "eyebrow": "指南库",

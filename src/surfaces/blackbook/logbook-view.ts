@@ -32,8 +32,8 @@ export const TAPE_CAP = 8;
 export type LogbookView = ReturnType<typeof useLogbookView>;
 
 /**
- * The route to undo in Test. With nothing unconfirmed it reads as it always did ("Undo any of the
- * N changes in Test"), N being the active count Health and Optimize print. When some can't be
+ * The route to undo in Test. With nothing unconfirmed it reads "Undo any of the N settings still on,
+ * in Test" (D7: it counts settings, as the footer does), N being the active count Health and Optimize print. When some can't be
  * confirmed, the sentence names both groups instead of folding them into one "changes" number
  * (#453: History said 14 while Health said 13 for the same ledger).
  */

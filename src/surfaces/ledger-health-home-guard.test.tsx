@@ -658,7 +658,7 @@ describe("HomeConsole — the face a default-flag user actually lands on", () =>
       const l = line(container);
       expect(l).toBeTruthy();
       expect(l!.textContent).toContain("0 active now");
-      expect(l!.textContent).toContain("1 change Compy can't confirm is still in place");
+      expect(l!.textContent).toContain("1 setting Compy can't confirm is still in place");
       expect(container.textContent!.toLowerCase()).not.toContain("no changes");
     });
 
@@ -668,7 +668,7 @@ describe("HomeConsole — the face a default-flag user actually lands on", () =>
 
       const l = line(container)!;
       expect(l.textContent).toContain("2 active now");
-      expect(l.textContent).toContain("1 change Compy can't confirm");
+      expect(l.textContent).toContain("1 setting Compy can't confirm");
       expect(l.textContent).not.toContain("3");
     });
 

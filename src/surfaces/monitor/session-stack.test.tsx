@@ -277,7 +277,7 @@ describe("expand/collapse detail line (e)", () => {
     expect(detail.textContent).toContain("181 1% LOW");
     expect(detail.textContent).toContain("1 SPIKE");
     expect(detail.textContent).toContain(`worst dip ${clock} — OneDrive.exe starting`);
-    expect(detail.textContent).toContain("2 COMPY CHANGES ON");
+    expect(detail.textContent).toContain("2 COMPY-CHANGED SETTINGS ON");
     fireEvent.click(row);
     expect(container.querySelector(".ss-detail")).toBeNull();
   });
@@ -288,7 +288,7 @@ describe("expand/collapse detail line (e)", () => {
     const detail = container.querySelector(".ss-detail")!;
     expect(detail.textContent).toContain("0 SPIKES");
     expect(detail.textContent).not.toContain("worst dip");
-    expect(detail.textContent).not.toContain("COMPY CHANGES");
+    expect(detail.textContent).not.toContain("COMPY-CHANGED SETTING");
   });
 });
 

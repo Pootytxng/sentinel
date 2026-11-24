@@ -122,7 +122,7 @@ describe("Health, Optimize and History count the same active changes (#453)", ()
     );
     // With nothing unconfirmed the sentence reads as it always did, with the active count.
     expect(manageJumpLabel(en, { active: ACTIVE, cantConfirm: 0 })).toBe(
-      `Undo any of the ${ACTIVE} changes in Test`,
+      `Undo any of the ${ACTIVE} settings still on, in Test`,
     );
   });
 

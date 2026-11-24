@@ -114,8 +114,8 @@
       "label": "Compy's changes on this PC",
       "active_one": "{{count}} active now",
       "active_other": "{{count}} active now",
-      "unconfirmed_one": "{{count}} change Compy can't confirm is still in place",
-      "unconfirmed_other": "{{count}} changes Compy can't confirm are still in place"
+      "unconfirmed_one": "{{count}} setting Compy can't confirm is still in place",
+      "unconfirmed_other": "{{count}} settings Compy can't confirm are still in place"
     },
     "rigFocus": {
       "part": "Highlighted: {{part}} — the top thing Compy flagged is about this part.",
@@ -474,8 +474,8 @@
     },
     "dialedInHeadline": "You're ready to play",
     "dialedInSub": "Every check Compy could read came back right · {{changeNote}}.",
-    "changeNote_one": "{{count}} change active",
-    "changeNote_other": "{{count}} changes active",
+    "changeNote_one": "{{count}} Compy-changed setting in effect",
+    "changeNote_other": "{{count}} Compy-changed settings in effect",
     "noChangeNote": "nothing needs changing",
     "readyWorthFixing_one": "Every check Compy could read came back right. {{count}} thing is listed below as worth a look.",
     "readyWorthFixing_other": "Every check Compy could read came back right. {{count}} things are listed below as worth a look.",
@@ -487,8 +487,8 @@
     "dismissedCount_one": "{{count}} check you set aside isn't counted.",
     "dismissedCount_other": "{{count}} checks you set aside aren't counted.",
     "readyMeasuredClean": "Ready to play — this rig measured clean today.",
-    "changeNoteReversible_one": "{{count}} change active. ",
-    "changeNoteReversible_other": "{{count}} changes active. ",
+    "changeNoteReversible_one": "{{count}} Compy-changed setting in effect. ",
+    "changeNoteReversible_other": "{{count}} Compy-changed settings in effect. ",
     "changeNoteUnknown": "Compy can't read its change record right now. ",
     "noChangeWithoutSayso": "Nothing changes without your say-so.",
     "lastSessionFallback": "Last session",

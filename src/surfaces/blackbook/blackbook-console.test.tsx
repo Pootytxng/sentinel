@@ -301,7 +301,7 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
     });
     // Action-first, plain words (intimidation pass 2026-08-20): "N changes still active — roll
     // back" read as a warning above a room that had not yet explained itself.
-    const jump = screen.getByRole("button", { name: /undo any of the 2 changes in Test/i });
+    const jump = screen.getByRole("button", { name: /undo any of the 2 settings still on, in Test/i });
     fireEvent.click(jump);
     expect(onOpenLab).toHaveBeenCalledOnce();
   });
@@ -309,7 +309,7 @@ describe("BlackbookConsole — undo is NOT triggered in-room; active changes rou
   it("singular copy for one active change", () => {
     useReduced();
     mountConsole([change({ active: true })]);
-    expect(screen.getByRole("button", { name: /undo the 1 change in Test/i })).not.toBeNull();
+    expect(screen.getByRole("button", { name: /undo the 1 setting still on, in Test/i })).not.toBeNull();
   });
 
   it("no active changes ⇒ no jump (rolled-back / no-longer-active never summon it)", () => {

@@ -113,8 +113,8 @@
       "titlePost": " for ",
       "oneLow": "1% low",
       "delta": "{{arrow}} {{sign}}{{value}} fps vs last",
-      "changesOn_one": "{{count}} change on",
-      "changesOn_other": "{{count}} changes on"
+      "changesOn_one": "{{count}} Compy-changed setting on",
+      "changesOn_other": "{{count}} Compy-changed settings on"
     },
     "autopsyBody": {
       "title": "You fact-checked a guide",
@@ -130,8 +130,8 @@
     },
     "tapeMore_one": "Show {{count}} older record",
     "tapeMore_other": "Show {{count}} older records",
-    "manageJump_one": "Undo the {{count}} change in Test",
-    "manageJump_other": "Undo any of the {{count}} changes in Test",
+    "manageJump_one": "Undo the {{count}} setting still on, in Test",
+    "manageJump_other": "Undo any of the {{count}} settings still on, in Test",
     "manageJumpSplit": "Undo in Test: {{count}} still on · {{unknown}} can't confirm",
     "library": {
       "eyebrow": "The field guide",
