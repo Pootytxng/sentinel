@@ -38,7 +38,8 @@ describe("a Trial verdict's metric is said in the user's language (D8)", () => {
     for (const m of VERDICT_METRICS) {
       expect(verdictMetricText(m.name, t)).toBe(`T(${m.key})`);
       expect(enM[leaf(m.key)]).toBe(m.name);
-      expect(zhM[leaf(m.key)], m.key).toMatch(/低帧$/);
+      // r1: this card's own glossary term (calibrateTerm3 「1% 最低帧」).
+      expect(zhM[leaf(m.key)], m.key).toMatch(/最低帧$/);
     }
     expect(Object.keys(zhM).sort()).toEqual(Object.keys(enM).sort());
     for (const v of Object.values(zhM)) expect(v).not.toMatch(/[A-Za-z]/);
@@ -47,7 +48,7 @@ describe("a Trial verdict's metric is said in the user's language (D8)", () => {
   it("an unknown name is the fixed line, never the raw value", () => {
     expect(verdictMetricText("average FPS", t)).toBe("T(gaming.benchmark.verdictMetric.unknown)");
     expect(verdictMetricText("", t)).toBe("T(gaming.benchmark.verdictMetric.unknown)");
-    expect(enM.unknown).toBe("measured value");
+    expect(enM.unknown).toBe("the measured value");
     expect(zhM.unknown).toBe("测量值");
   });
 
