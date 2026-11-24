@@ -2499,7 +2499,7 @@ mod safety_tests {
         assert_eq!(refused_generic_elevated_entry(), actions::HELPER_POWERSHELL_NOT_STARTED);
         let old = <std::process::ExitStatus as std::os::windows::process::ExitStatusExt>::from_raw(refused_generic_elevated_entry() as u32);
         assert_eq!(actions::elevation_outcome(Ok(old)), Err(actions::HELPER_POWERSHELL_NOT_STARTED_MSG.to_string()));
-        assert_eq!(run_elevated_op_argv(&[hex.clone()]), actions::HELPER_REQUEST_REFUSED);
+        assert_eq!(run_elevated_op_argv(std::slice::from_ref(&hex)), actions::HELPER_REQUEST_REFUSED);
         assert_eq!(
             run_elevated_op_argv(&[hex, r"C:\__compy_qa_missing__\no.ticket".to_string()]),
             actions::HELPER_REQUEST_REFUSED,

@@ -2782,7 +2782,7 @@ mod tests {
                 .collect()
         };
         let mut seen: Vec<String> = Vec::new();
-        let mut queue = names_in(body);
+        let mut queue = names_in(&body);
         while let Some(m) = queue.pop() {
             if seen.contains(&m) {
                 continue;
