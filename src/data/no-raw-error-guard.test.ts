@@ -9,6 +9,9 @@ import en from "../i18n/locales/en/app.json";
 import zh from "../i18n/locales/zh-CN/app.json";
 import { BACKEND_SENTENCES, backendMessages, backendSentenceKey } from "./backend-error";
 import { STACK_APPLY_PREFIX, TRIAL_APPLY_PREFIX, trialErrorText } from "../surfaces/bench-error";
+import { NOT_CONCLUDED_PREFIX, NOT_STARTED_PREFIX, trialWriteText } from "../surfaces/trial-error";
+import enLab from "../i18n/locales/en/lab.json";
+import zhLab from "../i18n/locales/zh-CN/lab.json";
 
 const src = (p: string) => readFileSync(join("src", ...p.split("/")), "utf8");
 
@@ -31,7 +34,7 @@ describe("B11: these screens never show the backend's raw text", () => {
   }
 
   it("each screen routes a failure through backendMessage", () => {
-    expect(src("surfaces/ExperimentBench.tsx")).toContain('backendMessages(e, t) ?? t("lab.experimentBench.errors.writeFailed")');
+    expect(src("surfaces/ExperimentBench.tsx")).toContain("setError(trialWriteText(e, t), String(e));");
     expect(src("surfaces/ExperimentBench.tsx")).toContain('backendMessage(e, t) ?? t("lab.experimentBench.errors.simulateFailed")');
     expect(src("surfaces/Benchmark.tsx")).toContain('backendMessage(e, t) ?? t("gaming.benchmark.errors.startFailed")');
     expect(src("surfaces/Benchmark.tsx")).toContain('backendMessage(e, t) ?? t("gaming.benchmark.errors.baselineFailed")');
@@ -73,6 +76,66 @@ describe("B11: the benchmark's apply-failed lines", () => {
       expect(rust.includes(`{${name}} (`), `${name} is written with its detail in ( )`).toBe(true);
       expect(trialErrorText(`${s(name).text} (access denied (os error 5))`, t)).toBe(`T(${s(name).key})`);
     }
+  });
+});
+
+describe("B11 r1 F3: a Trial write with no mapped sentence is said by its prefix", () => {
+  const rust = readFileSync(join("src-tauri", "src", "experiment.rs"), "utf8");
+  const code = rust.slice(0, rust.indexOf("#[cfg(test)]"));
+  const t = ((k: string) => `T(${k})`) as never;
+
+  it("the prefixes are the ones experiment.rs writes", () => {
+    // Break check: change either prefix here or in the Rust -> fails.
+    expect(code).toContain(`format!("${NOT_STARTED_PREFIX}{why}")`);
+    expect(code).toContain(`format!("${NOT_CONCLUDED_PREFIX}{why}")`);
+  });
+
+  it("each prefix is written only where nothing was recorded, applied or restored yet", () => {
+    // The notStarted / notConcluded lines say "nothing was changed"; that holds only for these refusals. Break
+    // check: write NOT_STARTED_PREFIX after start_experiment's Pending save, or from another fn -> fails.
+    const allowed: Record<string, string[]> = {
+      [NOT_STARTED_PREFIX]: ["start_outcome", "start_mode", "precheck_refusal", "start_experiment", "settle_failed_apply"],
+      [NOT_CONCLUDED_PREFIX]: ["conclude_experiment", "conclude_realplay"],
+    };
+    const MUTATES = ["save_store(", "apply_recommendation(", "rollback_change(", "finish_conclude(", "record_real_play("];
+    const fnHeads = [...code.matchAll(/^\s*(?:pub(?:\([a-z]+\))? )?(?:async )?fn ([a-z_0-9]+)\s*[(<]/gm)];
+    for (const [prefix, fns] of Object.entries(allowed)) {
+      let at = code.indexOf(prefix);
+      let seen = 0;
+      for (; at >= 0; at = code.indexOf(prefix, at + 1)) {
+        const lineStart = code.lastIndexOf("\n", at) + 1;
+        if (/^\s*\/\//.test(code.slice(lineStart, at))) continue; // a comment that names the prefix
+        seen++;
+        const head = fnHeads.filter((m) => m.index! < at).pop()!;
+        const name = head[1];
+        expect(fns, `${prefix} written in ${name}`).toContain(name);
+        if (name !== "settle_failed_apply") {
+          // Nothing in the same fn before the refusal mutates (the record, Windows or the ledger).
+          const before = code.slice(head.index!, at);
+          for (const m of MUTATES) expect(before.includes(m), `${name}: ${m} before "${prefix}"`).toBe(false);
+        }
+      }
+      expect(seen, prefix).toBeGreaterThan(0);
+    }
+  });
+
+  it("a mapped sentence wins; else the prefix picks the line; else the bench's own line", () => {
+    const missing = BACKEND_SENTENCES.find((x) => x.rust === "BASELINE_MISSING")!;
+    expect(trialWriteText(`${NOT_STARTED_PREFIX}${missing.text}`, t)).toBe(`T(${missing.key})`);
+    expect(trialWriteText(`${NOT_STARTED_PREFIX}2 other settings can't be confirmed`, t)).toBe("T(lab.experimentBench.errors.notStarted)");
+    expect(trialWriteText(new Error(`${NOT_CONCLUDED_PREFIX}Compy is still collecting: 2 sessions`), t)).toBe(
+      "T(lab.experimentBench.errors.notConcluded)",
+    );
+    expect(trialWriteText("experiment is not running — nothing to conclude", t)).toBe("T(lab.experimentBench.errors.writeFailed)");
+  });
+
+  it("en + zh literals", () => {
+    const en = enLab.experimentBench.errors as Record<string, string>;
+    const zh = zhLab.experimentBench.errors as Record<string, string>;
+    expect(en.notStarted).toBe("Compy didn't start this Trial, so nothing was changed.");
+    expect(zh.notStarted).toBe("Compy 没有启动这次试验，所以没有做任何更改。");
+    expect(en.notConcluded).toBe("Compy didn't conclude this Trial, so nothing was changed. It is still running.");
+    expect(zh.notConcluded).toBe("Compy 没有为这次试验得出结论，所以没有做任何更改。试验仍在进行。");
   });
 });
 
