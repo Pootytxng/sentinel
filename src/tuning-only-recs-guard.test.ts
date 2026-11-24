@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
-import { join } from "path";
 import { layerOneRecs } from "./data/tuning-tools";
 import { safeStackOf } from "./surfaces/lab/OptimizeStation";
 import type { Recommendation } from "./types";
@@ -11,7 +10,7 @@ import type { Recommendation } from "./types";
 // its undo and its "Turned off outside Compy" turn-on (pinned in lab/tuning-tools-off.test.tsx); the
 // Something's-wrong card only re-applies existing rows (turnBackOn), so it has no fresh Nagle apply to gate.
 
-const APP = readFileSync(join(__dirname, "App.tsx"), "utf8");
+const APP = readFileSync("src/App.tsx", "utf8");
 
 const rec = (id: string): Recommendation =>
   ({ id, title: id, severity: "safe", eligible: true, currently_applied: false }) as unknown as Recommendation;
