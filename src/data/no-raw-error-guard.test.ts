@@ -128,7 +128,9 @@ describe("B11: the benchmark's apply-failed lines", () => {
   // `error` field in the non-test code of benchmark_trial.rs and benchmark.rs, whatever its receiver or shape
   // (`x.error = …`, `error: …` in a struct literal), and fails on any value it can't trace to a MAPPED const (one in
   // BACKEND_SENTENCES, alone or at the head of a format!) or to an apply prefix trialErrorText knows. A variable
-  // (`Some(msg)`) is traced to its nearest `let` before the write, whose value must itself be one of those.
+  // (`Some(msg)`) is traced to its nearest `let` before the write IN THE SAME fn, whose value must itself be one of
+  // those. Break check (r1): in start_stack_trial write `if let Err(msg) = … { set(|s| s.error = Some(msg)); }` (a
+  // match-bound msg; record_stack_rollback_outcome's mapped `let mut msg` is earlier in the file) -> fails.
   // Break checks: in record_stack_rollback_outcome write `let mut msg = format!("Some rollbacks failed ({}", …)` -> fails;
   // write `s.error = Some(e)` or `s.error = Some(e.to_string())` anywhere -> fails; lead a format! with a const that is
   // not in BACKEND_SENTENCES -> fails.
@@ -168,9 +170,14 @@ describe("B11: the benchmark's apply-failed lines", () => {
         if (mappedHead(inner)) continue;
         const id = /^\s*([a-z_][a-z0-9_]*)\s*\)/.exec(inner);
         if (id) {
-          const lets = [...code.slice(0, m.index!).matchAll(new RegExp(`\\blet\\s+(?:mut\\s+)?${id[1]}\\s*(?::[^=]*)?=\\s*`, "g"))];
+          // r1: only a `let` inside the enclosing fn counts (from the nearest `fn name` before the write), so a variable
+          // from a match arm or a parameter is never excused by an unrelated mapped `let` elsewhere in the file.
+          const before = code.slice(0, m.index!);
+          const fnAt = Math.max(0, ...[...before.matchAll(/\bfn\s+[A-Za-z_]\w*/g)].map((x) => x.index!));
+          const scope = before.slice(fnAt);
+          const lets = [...scope.matchAll(new RegExp(`\\blet\\s+(?:mut\\s+)?${id[1]}\\s*(?::[^=]*)?=\\s*`, "g"))];
           const last = lets[lets.length - 1];
-          if (last && mappedHead(code.slice(last.index! + last[0].length, last.index! + last[0].length + 400))) {
+          if (last && mappedHead(scope.slice(last.index! + last[0].length, last.index! + last[0].length + 400))) {
             traced.push(id[1]);
             continue;
           }
