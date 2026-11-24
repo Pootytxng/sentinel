@@ -221,9 +221,11 @@ describe("B10: Undo this Compy change on the card", () => {
     expect(document.body.textContent).not.toMatch(/\b(fixed|caused|probably|safe|worked)\b/i);
   });
 
+  // The card's own footer ("Check it, play Game A once, ...") is the card's, for every Possible answer; B10's sentence
+  // is what the rough line must not carry. Break check: append it to compyUndoneRough_one -> fails.
   it("a rough line after the undo carries no 'play once' step", async () => {
     await show([withLine("compy-undone-rough", "measured", { at: AT, count: "1" }, true)], [undoneRec()]);
-    expect(document.body.textContent).not.toContain("then press Something's wrong again");
+    expect(document.body.textContent).not.toContain(NEXT.trim());
   });
 
   // Decided: once a session was read after the undo, the evidence line says when it was undone and what was read, so
@@ -236,7 +238,7 @@ describe("B10: Undo this Compy change on the card", () => {
     expect(document.body.textContent).not.toContain("Undo the newest one");
   });
 
-  // zh-CN literal. Break check: drop compyUndoneRough_one from zh-CN -> falls back to en text, fails.
+  // zh-CN literal. Break check: drop compyUndoneRough_other from zh-CN -> falls back to en text, fails.
   it("zh-CN says the same lines in Chinese", async () => {
     const zDayTime = (iso: string) => new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
     const zDay = (iso: string) => new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric" }).format(new Date(iso));
@@ -244,7 +246,8 @@ describe("B10: Undo this Compy change on the card", () => {
     try {
       await show([withLine("compy-undone-rough", "measured", { at: AT, count: "1" }, true)], [undoneRec()]);
       await i18n.changeLanguage("zh-CN");
-      await waitFor(() => expect(document.body.textContent).toContain(`“${GM}”已于 ${zDayTime(UNDONE)} 撤销，Game A 在 ${zDay(AT)} 仍然不顺。`));
+      // zh-CN has one plural form (other): a count of 1 reads "仍有 1 次不顺，最早的一次在 …".
+      await waitFor(() => expect(document.body.textContent).toContain(`“${GM}”已于 ${zDayTime(UNDONE)} 撤销，此后 Game A 仍有 1 次不顺，最早的一次在 ${zDay(AT)}。`));
       cleanup();
       await i18n.changeLanguage("en");
       await show([withLine("compy-undone-unread", "unknown", { count: "2" })], [undoneRec()]);
