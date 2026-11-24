@@ -2711,7 +2711,8 @@ mod nagle_target_tests {
         let end = body.find(concat!("pub(crate) fn rollback_", "nagle_disable_typed")).expect("rollback fn");
         let body = &body[..end];
         let refuse = body.find(concat!("require_nagle_", "interfaces(")).expect("apply must route through the refusal");
-        let write = body.find(concat!("run_elevated_", "powershell(&ps)")).expect("apply writes through the runner");
+        // A9: the runner is the typed one now.
+        let write = body.find(concat!("run_elevated_", "op(ElevatedOp::NagleDisable")).expect("apply writes through the runner");
         assert!(refuse < write, "the refusal must come before the elevated write");
     }
 }
