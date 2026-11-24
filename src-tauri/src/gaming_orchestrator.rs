@@ -375,7 +375,7 @@ pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
 /// recovery is putting a session's changes back. Its contract is being rewritten, so a read of it
 /// can fail for a moment, and the plain-change rule "a record this Compy can't read is not refused"
 /// would let a change land on a setting the restore is about to write.
-const RESTORE_IN_FLIGHT_REFUSAL: &str =
+pub(crate) const RESTORE_IN_FLIGHT_REFUSAL: &str =
     "Gaming Mode is putting its changes back right now (if a Windows permission prompt is open, answer \
      or cancel it). Try again when it has finished. Nothing was changed.";
 

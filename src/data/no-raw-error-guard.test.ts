@@ -94,7 +94,9 @@ describe("B11 r1 F3: a Trial write with no mapped sentence is said by its prefix
     // The notStarted / notConcluded lines say "nothing was changed"; that holds only for these refusals. Break
     // check: write NOT_STARTED_PREFIX after start_experiment's Pending save, or from another fn -> fails.
     const allowed: Record<string, string[]> = {
-      [NOT_STARTED_PREFIX]: ["start_outcome", "start_mode", "precheck_refusal", "start_experiment", "settle_failed_apply"],
+      // mark_failed_apply (F6) writes it only in front of a mapped apply refusal that wrote nothing
+      // (APPLY_REFUSALS_BEFORE_WRITE), so the screen shows that refusal, never this fallback line.
+      [NOT_STARTED_PREFIX]: ["start_outcome", "start_mode", "precheck_refusal", "start_experiment", "mark_failed_apply"],
       [NOT_CONCLUDED_PREFIX]: ["conclude_experiment", "conclude_realplay"],
     };
     const MUTATES = ["save_store(", "apply_recommendation(", "rollback_change(", "finish_conclude(", "record_real_play("];
@@ -109,7 +111,7 @@ describe("B11 r1 F3: a Trial write with no mapped sentence is said by its prefix
         const head = fnHeads.filter((m) => m.index! < at).pop()!;
         const name = head[1];
         expect(fns, `${prefix} written in ${name}`).toContain(name);
-        if (name !== "settle_failed_apply") {
+        if (name !== "mark_failed_apply") {
           // Nothing in the same fn before the refusal mutates (the record, Windows or the ledger).
           const before = code.slice(head.index!, at);
           for (const m of MUTATES) expect(before.includes(m), `${name}: ${m} before "${prefix}"`).toBe(false);

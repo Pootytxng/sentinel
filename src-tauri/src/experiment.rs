@@ -4818,9 +4818,40 @@ fn mark_failed_apply(rec: &mut ExperimentRecord, err: &str, check: crate::histor
     rec.trial_result = Some(TrialResult::Unmeasurable);
     rec.concluded_at = Some(Utc::now().to_rfc3339());
     rec.stop_reason = Some(format!("start-aborted: {why}: {err}"));
+    // B11 r1 F6: an apply that REFUSED before writing anything says so itself ("…nothing was changed."); the
+    // APPLY_ERR_* hedge ("a change that stopped part-way…") in front of it would contradict it. The record is
+    // handled the same either way.
+    if apply_refused_before_write(err) {
+        return format!("experiment not started — {err}");
+    }
     // B11: the sentence is one of the mapped APPLY_ERR_* consts; the apply's own error follows in ( ) for the
     // console and support log only.
     format!("experiment aborted — {message} ({err})")
+}
+
+/// B11 r1 F6: the mapped apply refusals that return before anything is written (each says nothing was
+/// changed): the actions.rs apply checks, and the hold / busy refusals of a Trial, the benchmark and Gaming
+/// Mode. Each is a fixed const, so a match is by containment of the whole sentence.
+const APPLY_REFUSALS_BEFORE_WRITE: &[&str] = &[
+    crate::actions::TASK_UNREADABLE_APPLY,
+    crate::actions::TASK_NAME_REFUSED,
+    crate::actions::EEE_UNREADABLE_APPLY,
+    crate::actions::EEE_VALUE_REFUSED_APPLY,
+    TRIAL_HOLDS_SETTING_REFUSAL,
+    TRIAL_START_INTERRUPTED_REFUSAL,
+    PLAN_CLASS_TRIAL_REFUSAL,
+    PLAN_CLASS_BENCH_REFUSAL,
+    PLAN_CLASS_INTERRUPTED_REFUSAL,
+    crate::benchmark_trial::BENCH_HOLDS_SETTING_REFUSAL,
+    crate::gaming_orchestrator::GM_HOLDS_SETTING_REFUSAL,
+    crate::gaming_orchestrator::GM_HOLDS_PLAN_REFUSAL,
+    crate::gaming_orchestrator::GM_LEFTOVER_HOLDS_PLAN_REFUSAL,
+    crate::gaming_orchestrator::GM_LEFTOVER_HOLDS_SETTING_REFUSAL,
+    crate::gaming_orchestrator::RESTORE_IN_FLIGHT_REFUSAL,
+];
+
+fn apply_refused_before_write(err: &str) -> bool {
+    APPLY_REFUSALS_BEFORE_WRITE.iter().any(|r| err.contains(r))
 }
 
 /// Abort a start AFTER its change was applied: restore through the audited boundary and record why.
@@ -8637,6 +8668,36 @@ mod experiment_tests {
             assert!(msg.contains("no undo record"), "no undo is ever claimed: {msg}");
             assert!(!msg.contains("unchanged") && !msg.contains("nothing changed"), "{check:?}: {msg}");
         }
+    }
+
+    #[test]
+    fn a_failed_apply_that_refused_before_writing_says_only_the_refusal() {
+        // B11 r1 F6: an apply refusal that returns before any write ("…nothing was changed.") is said as a
+        // not-started refusal, never behind the APPLY_ERR_* "stopped part-way" hedge; the record is the same.
+        use crate::history::ActiveCheck;
+        let pending = || ExperimentRecord { status: ExperimentStatus::Pending, applied_at: None, ..running() };
+        for refusal in APPLY_REFUSALS_BEFORE_WRITE {
+            assert!(refusal.to_lowercase().contains("nothing was changed"), "only refusals that say so: {refusal}");
+            for check in [ActiveCheck::Off, ActiveCheck::On, ActiveCheck::Unreadable] {
+                let mut r = pending();
+                let msg = mark_failed_apply(&mut r, refusal, check);
+                assert_eq!(msg, format!("experiment not started — {refusal}"), "{check:?}");
+                for hedge in [APPLY_ERR_READS_UNCHANGED, APPLY_ERR_READS_CHANGED, APPLY_ERR_UNREADABLE] {
+                    assert!(!msg.contains(hedge), "{check:?}: {msg}");
+                }
+                assert_eq!(r.status, ExperimentStatus::Aborted, "the record is handled the same");
+                assert_eq!(r.trial_result, Some(TrialResult::Unmeasurable));
+                assert!(r.stop_reason.unwrap().ends_with(refusal), "the stored reason keeps the apply's error");
+            }
+        }
+        // Any other apply error keeps the hedge, by what the live read showed.
+        let mut r = pending();
+        let msg = mark_failed_apply(&mut r, "access denied (os error 5)", ActiveCheck::Off);
+        assert_eq!(msg, format!("experiment aborted — {APPLY_ERR_READS_UNCHANGED} (access denied (os error 5))"));
+        // A wrapped refusal (the history layer's prefix in front) is still recognised.
+        let mut r = pending();
+        let wrapped = format!("apply failed: {}", crate::actions::TASK_UNREADABLE_APPLY);
+        assert!(mark_failed_apply(&mut r, &wrapped, ActiveCheck::Unreadable).starts_with("experiment not started — "));
     }
 
     #[test]
