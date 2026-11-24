@@ -2582,6 +2582,27 @@ mod capture_pipe_tests {
     /// helper's report while g is current, and once generation g+1 starts it writes nothing more and stops.
     #[test]
     fn a_reader_of_an_older_capture_relays_nothing_once_a_newer_one_starts() {
+        // A7: bounded, so a break that leaves the reader's join (or the helper's open) unanswered FAILS within
+        // seconds instead of hanging the run. A panic in the body is passed on unchanged.
+        let limit = std::time::Duration::from_secs(20);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let t = std::thread::spawn(move || {
+            older_capture_relays_nothing_body();
+            let _ = tx.send(());
+        });
+        match rx.recv_timeout(limit) {
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                if let Err(p) = t.join() {
+                    std::panic::resume_unwind(p);
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                panic!("the test did not finish within {limit:?}: the reader never stopped")
+            }
+        }
+    }
+
+    fn older_capture_relays_nothing_body() {
         use std::io::Write;
         use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
         use std::sync::Arc;

@@ -931,11 +931,37 @@ mod tests {
         assert_eq!(w.dropped(), dropped, "the count line itself was not a drop");
     }
 
+    /// A7: run a test body that waits on other threads (a barrier, a join) with a bound, so a break that leaves
+    /// one of those waits unanswered FAILS here within seconds instead of hanging the run. A panic in the body
+    /// is passed on unchanged; a body still running at the limit fails the test (its thread is left blocked).
+    fn within(limit: std::time::Duration, body: impl FnOnce() + Send + 'static) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let t = std::thread::spawn(move || {
+            body();
+            let _ = tx.send(());
+        });
+        match rx.recv_timeout(limit) {
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                if let Err(p) = t.join() {
+                    std::panic::resume_unwind(p);
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                panic!("the test did not finish within {limit:?}: a wait in it was never answered")
+            }
+        }
+    }
+
     /// Review r2 N3: an unreadable count that does not fit is NOT a dropped line; it is re-sent once
     /// there is room, as the latest cumulative count, so the app counts each unreadable tick once.
     /// Keepalives that do not fit are not counted either.
     #[test]
     fn a_dropped_unreadable_count_is_resent_not_counted_as_a_drop() {
+        // A7: bounded, so a break that leaves a `gate.wait()` unanswered fails instead of hanging.
+        within(std::time::Duration::from_secs(20), a_dropped_unreadable_count_is_resent_body);
+    }
+
+    fn a_dropped_unreadable_count_is_resent_body() {
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let gate = std::sync::Arc::new(std::sync::Barrier::new(2));
         let w = PipeWriter::start(Gate(seen.clone(), gate.clone()));
