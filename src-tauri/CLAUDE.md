@@ -48,7 +48,7 @@ Line counts drift — treat as rough and verify against current code before asse
 - `running_now.rs` (~178) in `paramedic/first_look/` — S4: which KNOWN programs are running right now (names-only snapshot, no process opened), under the same allowlist rule; a fact about now, not about when the game ran badly.
 
 **Build plumbing & test support**
-- `sys_exe.rs` (~1034) — hardening slice 1: the ONE place a Windows system tool is located and its child process built. A tool is named by a closed enum, never a string, and resolved to an absolute system path (std would search the app's own, user-writable folder first). Starts processes but changes no Windows state, so unstarred.
+- `sys_exe.rs` (~1034) — hardening slice 1: the ONE place a Windows system tool is located and its child process built. A tool is named by a closed enum, never a string, and resolved to an absolute system path (std would search the app's own, user-writable folder first). Builds (never starts) the process; callers start it. Changes no Windows state, so unstarred.
 - `test_scratch.rs` (~142) — test-only scratch folders under %TEMP% (D1d): a root no other run can reuse, created empty, removed on drop; a child path can never leave the root.
 
 **Benchmark & Lab**
