@@ -3400,9 +3400,17 @@ mod plain_start_tests {
         let region = &mon[from..to];
         assert!(!region.contains(concat!("Open", "Process(")), "the launch/token code opens a process handle");
         assert!(!region.contains(concat!("Duplicate", "Handle")));
-        assert!(region.contains(concat!("Open", "ProcessToken(GetCurrentProcess()")), "it reads our OWN token");
+        // The token helper moved verbatim to the leaf `own_token.rs` (store lock order); the region takes
+        // it from there, and that file is held to the same rules as the region.
+        assert!(region.contains(concat!("use crate::own_token::", "with_own_token;")), "the token comes from own_token.rs");
+        let own = include_str!("own_token.rs");
+        assert!(own.contains(concat!("Open", "ProcessToken(GetCurrentProcess()")), "it reads our OWN token");
+        assert!(!own.contains(concat!("Open", "Process(")), "the token helper opens a process handle");
+        assert!(!own.contains(concat!("Duplicate", "Handle")));
+        assert!(own.contains(concat!("CloseHandle(", "token)")), "the token handle is closed");
         for other in ["sysinfo", "Toolhelp", "EnumProcesses", "refresh_processes"] {
             assert!(!region.contains(other), "the launch/token code enumerates processes: {other}");
+            assert!(!own.contains(other), "the token helper enumerates processes: {other}");
         }
     }
 
