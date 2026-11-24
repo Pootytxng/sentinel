@@ -15,7 +15,7 @@ import { driftShort, stampOf } from "../drift-named";
 import { requestCheckFocus } from "../check-focus";
 import { roughLine, type RoughGame } from "../home-facts";
 import { turnBackOn, type RevertedChange } from "../../data/turn-back-on";
-import { compyUndoOffer, type CardUndoResult } from "../../data/compy-undo";
+import { compyUndoOffer, type CardUndoResult, type CompyUndoOffer } from "../../data/compy-undo";
 import { useConfirmOptional } from "../../design/ConfirmDialog";
 import type {
   AppliedChange,
@@ -1103,8 +1103,12 @@ function FixBlock({
   appliedOnly?: boolean;
   finding?: ParamedicFinding;
 }) {
-  const steps = stepLines(fix, ctx, restored, appliedOnly);
-  const undo = fix.kind === "steps" && fix.code === "compy-change" && finding ? <CompyUndoRow f={finding} ctx={ctx} /> : null;
+  const offer = fix.kind === "steps" && fix.code === "compy-change" && finding ? compyOfferFor(finding, ctx) : null;
+  // B10 review r1 F3: once the row's change is undone, its "undo the newest one" and "play once" steps go: the undone
+  // line carries the one next step, and step 1 would point at a different, unnamed change.
+  const steps = offer?.kind === "undone" ? [] : stepLines(fix, ctx, restored, appliedOnly);
+  const undo = offer ? <CompyUndoRow offer={offer} ctx={ctx} /> : null;
+  if (offer?.kind === "undone") return undo;
   if (steps.length > 0) {
     // Navigation only: the one-press "turn it back on" lives in the Test room's check, with its own confirm. The
     // button is shown only for the applied-changes setting; nothing else has a turn-on there.
@@ -1163,12 +1167,17 @@ function FixBlock({
 /** B10: what the compy-change row offers, from the ledger list the card was given and the finding's own window and
  *  count (src/data/compy-undo.ts). A button only for one record that passes every rule; one record otherwise is named
  *  with where to undo it; several are listed, never "undo all"; an undone one gets the ledger's own date. */
-function CompyUndoRow({ f, ctx }: { f: ParamedicFinding; ctx: Ctx }) {
-  const { t } = ctx;
+function compyOfferFor(f: ParamedicFinding, ctx: Ctx): CompyUndoOffer | null {
   const cu = ctx.compyUndo;
   if (!cu || f.since_when.kind !== "observed-between") return null;
   const count = f.evidence.find((e) => e.code === "count-changed")?.args;
-  const offer = compyUndoOffer({ from: f.since_when.from, to: f.since_when.to, countFrom: count?.from, countTo: count?.to }, cu.list, cu.driftRecs);
+  return compyUndoOffer({ from: f.since_when.from, to: f.since_when.to, countFrom: count?.from, countTo: count?.to }, cu.list, cu.driftRecs);
+}
+
+function CompyUndoRow({ offer, ctx }: { offer: CompyUndoOffer; ctx: Ctx }) {
+  const { t } = ctx;
+  const cu = ctx.compyUndo;
+  if (!cu) return null;
   switch (offer.kind) {
     case "none":
       return null;

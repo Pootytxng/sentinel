@@ -142,7 +142,7 @@ describe("B10: Undo this Compy change on the card", () => {
     await show([compyFinding("likely", "3", "5")], [rec(), rec({ id: "vfx-1", rec_id: "visual-effects", rec_title: "Trim visual effects", applied_at: "2026-11-19T11:00:00Z", rollback_action: { kind: "restore-visual-effects-from-snapshot" } })]);
     expect(screen.queryByTestId("paramedic-undo-compy")).toBeNull();
     expect(screen.getByTestId("paramedic-undo-compy-several").textContent).toBe(
-      `Compy recorded 2 of its changes in that time: ${GM}, Trim visual effects. To see which one matters, undo one at a time in Test → Applied & history, and play once after each.`,
+      `Compy recorded changes to 2 settings in that time: ${GM}, Trim visual effects. To check them one at a time, undo one in Test → Applied & history, then play once before undoing the next.`,
     );
   });
 
@@ -151,7 +151,7 @@ describe("B10: Undo this Compy change on the card", () => {
   it.each([
     ["failed", null, true],
     ["cancelled", null, true],
-    ["trial", "A Trial is running, or Compy can't tell, so it didn't undo anything. Finish the Trial first.", true],
+    ["trial", "A Trial is running, or Compy can't tell whether one is, so it didn't undo anything. Check Test, then press Something's wrong again.", true],
     ["changed", "This changed since the card was drawn, so Compy didn't undo anything. Press Something's wrong again.", true],
     ["unread", "Compy couldn't read its change list just now, so it didn't undo anything. Press Something's wrong again.", true],
     ["unrecorded", "The undo worked on Windows, but Compy couldn't save it to its history, so Applied & history may still list this change. Check the setting in Windows if unsure.", false],
@@ -176,6 +176,21 @@ describe("B10: Undo this Compy change on the card", () => {
       `Undone on ${when}: “${GM}”. Play Game A once the way you usually do, then press Something's wrong again.`,
     );
     expect(screen.queryByTestId("paramedic-undo-compy")).toBeNull();
+  });
+
+  // Review r1 F3: once undone, the row's own steps go ("Undo the newest one" would point at another, unnamed change, and
+  // "play once" repeats the undone line). Break check: keep the steps beside the undone line -> fails.
+  it("an undone row shows only its dated line, not the 'undo the newest one' steps", async () => {
+    await show([compyFinding("likely")], [rec({ status: "rolled_back", rolled_back_at: "2026-11-22T09:30:00Z", active_check: null })]);
+    expect(screen.getByTestId("paramedic-undo-compy-done")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Undo the newest one");
+    expect(document.body.textContent).not.toContain("Play Game A once, then press Something's wrong again.");
+  });
+
+  it("while the change is open, the row keeps its steps beside the button", async () => {
+    await show([compyFinding("likely")], [rec()]);
+    expect(document.body.textContent).toContain("Undo the newest one");
+    expect(screen.getByTestId("paramedic-undo-compy")).toBeTruthy();
   });
 
   it("no ledger list or no undo from App: nothing is offered", async () => {

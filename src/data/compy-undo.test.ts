@@ -50,6 +50,11 @@ describe("B10 offer rules (each break: drop that rule -> the button comes back, 
     ["its undo needs admin rights", [rec({ rollback_action: { kind: "restore-hw-sch-mode-from-snapshot" } })], NONE],
     ["a legacy row with no typed undo (counted as admin)", [rec({ rollback_action: null })], NONE],
     ["a newer record of the setting after the window", [rec(), rec({ id: "gm-2", applied_at: "2026-11-20T10:00:00Z" })], NONE],
+    // Review r1 F1: an older record undone after the window, out of order: this record's saved value is Compy's own.
+    // Break check: drop `undoneOutOfOrder` from recordUndoableFromCard -> the button comes back, fails.
+    ["an older record of it undone out of order after the window", [rec({ id: "gm-0", applied_at: "2026-11-10T00:00:00Z", status: "rolled_back", rolled_back_at: "2026-11-20T00:00:00Z" }), rec()], NONE],
+    ["an older record of it undone with no undo date", [rec({ id: "gm-0", applied_at: "2026-11-10T00:00:00Z", status: "rolled_back", rolled_back_at: null }), rec()], NONE],
+    ["two records of the same setting in the window", [rec(), rec({ id: "gm-2", applied_at: "2026-11-19T12:00:00Z" })], NONE],
   ] as const)("%s: named, no button", (_why, list, drift) => {
     expect(compyUndoOffer(W, list as readonly AppliedChange[], drift)).toEqual({ kind: "noUndoHere", title: "Game Mode" });
   });
@@ -64,6 +69,24 @@ describe("B10 offer rules (each break: drop that rule -> the button comes back, 
   it("the in-window record undone after the window: the ledger's own rolled_back_at", () => {
     const at = "2026-11-22T09:30:00Z";
     expect(compyUndoOffer(W, [rec({ status: "rolled_back", rolled_back_at: at, active_check: null })], NONE)).toEqual({ kind: "undone", title: "Game Mode", at });
+  });
+  // Review r1 F2: an undone record is never named as one "to undo if you choose".
+  // Break check: return noUndoHere for these -> fails.
+  it.each([
+    ["undone inside the window", "2026-11-19T12:00:00Z"],
+    ["undone with no undo date", null],
+    ["undone with an unreadable undo date", "not a date"],
+  ] as const)("the in-window record %s: nothing is offered or named", (_why, at) => {
+    expect(compyUndoOffer(W, [rec({ status: "rolled_back", rolled_back_at: at, active_check: null })], NONE)).toEqual({ kind: "none" });
+  });
+  // Review r1 F4: the count is of settings, never records. Break check: count records -> 3, fails.
+  it("several counts the settings it lists", () => {
+    const list = [
+      rec(),
+      rec({ id: "gm-2", applied_at: "2026-11-19T12:00:00Z" }),
+      rec({ id: "v-1", rec_id: "visual-effects", rec_title: "Visual effects", applied_at: "2026-11-19T11:00:00Z" }),
+    ];
+    expect(compyUndoOffer(W, list, NONE)).toEqual({ kind: "several", count: 2, titles: ["Game Mode", "Visual effects"] });
   });
   it("the newest open record is the last in change-history order, and App's re-check uses the same rules", () => {
     const list = [rec(), rec({ id: "gm-2", applied_at: "2026-11-01T00:00:00Z" })];
@@ -105,6 +128,28 @@ describe("B10 the no-admin allowlist matches the Rust undo dispatch", () => {
       const body = bodyOf(handlerOf(pascal(kind)));
       expect(body, kind).toMatch(/HKEY_CURRENT_USER/);
       expect(body, kind).not.toMatch(ELEVATED);
+    }
+  });
+
+  // Review r1: a handler that later calls a helper must not pass by hiding the elevation one call down. Every free
+  // function a listed handler calls is followed one call deep: it must be a helper on this short list, and its own
+  // body must elevate nothing and call no further function of this file. Break check: make a listed handler call
+  // `run_elevated_powershell` through a new helper -> fails (the helper is not on the list).
+  it("the listed handlers call no helper beyond a short pure list, followed one call deep", () => {
+    const ALLOWED_HELPERS = new Set(["startup_reg_type_from_u32"]);
+    const NOT_CALLS = new Set(["Ok", "Err", "Some", "if", "match", "while", "for", "restore", "map_err", "fn"]);
+    const freeCalls = (body: string) =>
+      [...body.matchAll(/(?<![.:\w])([a-z_][a-z0-9_]*)\(/g)].map((m) => m[1]).filter((n) => !NOT_CALLS.has(n));
+    for (const kind of NO_ADMIN_UNDO_KINDS) {
+      const handler = handlerOf(pascal(kind));
+      const body = bodyOf(handler).slice(`fn ${handler}(`.length);
+      expect(body, kind).not.toMatch(/\bcrate::|\bsuper::|\bstd::process/);
+      for (const name of freeCalls(body)) {
+        expect(ALLOWED_HELPERS.has(name), `${kind} calls ${name}`).toBe(true);
+        const helper = bodyOf(name);
+        expect(helper, name).not.toMatch(ELEVATED);
+        expect(freeCalls(helper.slice(`fn ${name}(`.length)), name).toEqual([]);
+      }
     }
   });
 
@@ -150,6 +195,35 @@ describe("B10 who may run the undo (source guards)", () => {
     // The confirm is always shown before the call.
     expect(body.indexOf("await confirm(")).toBeGreaterThan(-1);
     expect(body.indexOf("await confirm(")).toBeLessThan(body.indexOf("writeLedger("));
+  });
+
+  // Review r1: each line of undoOneRecord, literally and in this order: the busy gate, both re-reads, the Trial check,
+  // the unread list, the expected newest open record re-checked by the card's own rules, the confirm, then the one
+  // write. Break checks: move the Trial check after the confirm, or drop `recordUndoableFromCard(fresh, row)` -> fails.
+  it("App's undoOneRecord does its steps in this order, each literally", () => {
+    const app = read("App.tsx");
+    const body = app.split("const undoOneRecord = async")[1].split("\n  };\n")[0];
+    const steps = [
+      'if (busyId !== null) return { kind: "busy" };',
+      'const fresh = await invoke<AppliedChange[]>("get_applied_changes")',
+      'const xs = await invoke<{ status: string }[]>("get_experiments")',
+      'if (trialInProgress(xs, journey.kind === "idle") !== "none") return { kind: "trial" };',
+      'if (!fresh) return { kind: "unread" };',
+      "const row = newestOpenRecord(fresh, recId);",
+      'if (!row || row.id !== expectedId || !recordUndoableFromCard(fresh, row)) return { kind: "changed" };',
+      'const dialog = undoDialog({ kind: "one", why: "single", open: 1 }, row, t);',
+      "const ok = await confirm({ ...dialog, body: `${dialog.body} ${extraBody}` });",
+      'if (!ok) return { kind: "cancelled" };',
+      "setBusyId(expectedId);",
+      'await writeLedger("rollback_change", { changeId: expectedId });',
+    ];
+    let at = -1;
+    for (const s of steps) {
+      const next = body.indexOf(s);
+      expect(next, s).toBeGreaterThan(at);
+      at = next;
+    }
+    expect(body.split('writeLedger("rollback_change"').length - 1).toBe(1);
   });
 });
 

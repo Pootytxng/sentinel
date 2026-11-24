@@ -1,5 +1,6 @@
 import type { AppliedChange } from "../types";
 import { hasUndo, liveChangeGroups } from "./live-changes";
+import { undoneOutOfOrder } from "./undo-setting";
 
 // B10 (owner decision 2026-11-24: the coordinator's recommendation, no-admin undos only): "Undo this Compy change" on
 // the Something's-wrong card's compy-change row. PURE: what the card may offer for one finding, and the rule App's
@@ -48,6 +49,9 @@ export function newestOpenRecord(list: readonly AppliedChange[], recId: string):
 export function recordUndoableFromCard(list: readonly AppliedChange[], rec: AppliedChange): boolean {
   if (newestOpenRecord(list, rec.rec_id)?.id !== rec.id) return false;
   if (liveChangeGroups(list).active.find((c) => c.rec_id === rec.rec_id)?.id !== rec.id) return false;
+  // B10 review r1 F1: an older record of the setting undone after this one was applied (or with no undo date) means
+  // this record's saved value may be one Compy set, and one undo would write Compy's own value back (C6 MC1).
+  if (undoneOutOfOrder(list, rec.rec_id)) return false;
   return hasUndo(rec) && !rec.result_unconfirmed && !rec.justified_by_experiment && undoNeedsNoAdmin(rec);
 }
 
@@ -82,11 +86,19 @@ export function compyUndoOffer(w: CompyChangeWindow, list: readonly AppliedChang
   };
   const applied = list.filter((c) => inside(c.applied_at));
   if (applied.length === 0) return { kind: "none" };
-  if (applied.length > 1) return { kind: "several", count: applied.length, titles: [...new Set(applied.map((c) => c.rec_title))] };
+  if (applied.length > 1) {
+    // B10 review r1 F4: the count is of settings (the titles listed), never records.
+    const titles = [...new Set(applied.map((c) => c.rec_title))];
+    // Several records of ONE setting in the window: one setting, named, not offered here (exactly one apply only).
+    if (titles.length === 1) return { kind: "noUndoHere", title: titles[0] };
+    return { kind: "several", count: titles.length, titles };
+  }
   const rec = applied[0];
   if (rec.status === "rolled_back") {
+    // Undone after the window: the ledger's own date. Undone inside it, or with no readable undo date: it is already
+    // undone, so nothing is offered or named here (review r1 F2: never "undo it if you choose" over an undone record).
     const at = rec.rolled_back_at ?? "";
-    return ms(at) >= to ? { kind: "undone", title: rec.rec_title, at } : { kind: "noUndoHere", title: rec.rec_title };
+    return ms(at) >= to ? { kind: "undone", title: rec.rec_title, at } : { kind: "none" };
   }
   const a = Number(w.countFrom);
   const b = Number(w.countTo);
