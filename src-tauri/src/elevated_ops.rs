@@ -1097,7 +1097,8 @@ mod tests {
         for id in crate::history::APPLIABLE_REC_IDS {
             assert!(ItemId::parse(id).is_ok(), "{id}");
         }
-        for id in GAMING_TIER_IDS.iter().copied().chain(KnownService::ALL.iter().map(|s| s.name())) {
+        // The ids written out (not read back from GAMING_TIER_IDS), so dropping one from the list fails here.
+        for id in ["adv-usb", "adv-pcie", "SysMain", "DiagTrack", "WSearch", "NvTelemetryContainer"] {
             assert!(ItemId::parse(id).is_ok(), "{id}");
         }
         for i in 0..MAX_ITEMS {
