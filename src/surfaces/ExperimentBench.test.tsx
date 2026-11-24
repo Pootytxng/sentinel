@@ -230,6 +230,15 @@ const pickChange = async (value: string) => {
 const wholeLine = (line: string) => (_: string, el: Element | null) =>
   !!el && el.textContent === line && ![...el.children].some((c) => c.textContent === line);
 
+// B11: a bench write the backend refused or failed shows the bench's own line (a mapped backend sentence when
+// backend-error.ts knows it), never the backend's raw text ("no String(e) in the face"). Break check: put
+// `setError(String(e))` back in runWrite -> the generic line is missing and the raw text appears.
+const WRITE_FAILED = "Compy couldn't finish that. It may have stopped part-way, so check Test → Applied & history to see what is on now.";
+const expectGeneric = (alert: HTMLElement, raw: string) => {
+  expect(alert.textContent).toBe(WRITE_FAILED);
+  expect(alert.textContent).not.toContain(raw);
+};
+
 describe("ExperimentBench (dark)", () => {
   it("renders NOTHING while the backend gate is hard-false (every shipped build today)", async () => {
     const { container } = render(<ExperimentBench />);
@@ -1353,7 +1362,7 @@ describe("ExperimentBench (armed)", () => {
     };
     render(<ExperimentBench />);
     fireEvent.click(await screen.findByRole("button", { name: /Conclude with my latest/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("that session was played before the change was applied");
+    expectGeneric(await screen.findByRole("alert"), "that session was played before the change was applied");
     expect(screen.getByTestId("experiment-running")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Restore now" })).toBeInTheDocument();
   });
@@ -1370,7 +1379,7 @@ describe("ExperimentBench (armed)", () => {
     const start = await screen.findByRole("button", { name: /Start experiment/ });
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
-    expect(await screen.findByRole("alert")).toHaveTextContent("no longer in your session history");
+    expectGeneric(await screen.findByRole("alert"), "no longer in your session history");
     expect(screen.queryByTestId("experiment-running")).toBeNull();
   });
 
@@ -1394,7 +1403,7 @@ describe("ExperimentBench (armed)", () => {
     window.addEventListener(LEDGER_CHANGED_EVENT, ledger);
     try {
       fireEvent.click(start);
-      expect(await screen.findByRole("alert")).toHaveTextContent("Compy restored it");
+      expectGeneric(await screen.findByRole("alert"), "Compy restored it");
       await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(1));
       expect(ledger).toHaveBeenCalled();
     } finally {
@@ -1421,7 +1430,7 @@ describe("ExperimentBench (armed)", () => {
     try {
       fireEvent.click(control);
       await waitFor(() => expect(ledger).toHaveBeenCalled());
-      if (refuse) expect(await screen.findByRole("alert")).toHaveTextContent("still reads changed");
+      if (refuse) expectGeneric(await screen.findByRole("alert"), "still reads changed");
     } finally {
       window.removeEventListener(LEDGER_CHANGED_EVENT, ledger);
     }
@@ -3420,7 +3429,9 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === "conclude_realplay" || c === "conclude_experiment")).toEqual([]);
   });
 
-  it("when the count can't be read, it says so in the backend's words and still offers Restore now", async () => {
+  // B11: the backend's own text for why the count can't be read is no longer shown ("no String(e) in the face"); the
+  // panel's own status line says the count can't be read. Break check: pass rp.error through raw (the line returns).
+  it("when the count can't be read, it says so in its own words, never the backend's, and still offers Restore now", async () => {
     state.gate = true;
     state.experiments = [RP_RUNNING];
     state.realPlay = "reject";
@@ -3428,7 +3439,8 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     await waitFor(() =>
       expect(screen.getByTestId("realplay-status").textContent).toBe("Compy can't count this test's sessions right now. HAGS stays on until you put it back."),
     );
-    expect(screen.getByTestId("realplay-unread").textContent).toBe("Compy can't read its change history: the ledger was set aside");
+    expect(screen.queryByTestId("realplay-unread")).toBeNull();
+    expect(screen.getByTestId("experiment-bench").textContent).not.toContain("the ledger was set aside");
     expect(screen.getByRole("button", { name: "Restore now" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Measure my next session" })).toBeNull();
   });

@@ -17,6 +17,7 @@ import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import type { AppliedChange, SessionSummary } from "../types";
 import { ChangedOutsideRemedy } from "./ChangedOutsideRemedy";
+import { backendMessage } from "../data/backend-error";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import { writeLedger } from "../data/ledger-write";
 import { liveChangeGroups } from "../data/live-changes";
@@ -958,7 +959,11 @@ export default function ExperimentBench({
   const [hypothesis, setHypothesis] = useState<string>("");
   const [outcome, setOutcome] = useState<TrialOutcome>("recommended");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // B11: `error.text` is what the bench shows, always words Compy wrote (a mapped backend sentence or the bench's
+  // own line), never the backend's raw text ("no String(e) in the face"). `error.raw` keeps that text only for
+  // ChangedOutsideRemedy, which reads it to decide whether to offer its remedy, and for the console.
+  const [error, setErrorState] = useState<{ text: string; raw?: string } | null>(null);
+  const setError = useCallback((text: string | null, raw?: string) => setErrorState(text === null ? null : { text, raw }), []);
   // P8-posture-b: how far Compy may go on this PC; sent with every candidate read.
   const [riskChoice, setRiskChoice] = useState<RiskChoice>(loadRiskChoice);
   // P5-guided: while the one-button journey runs, it is the bench's only panel.
@@ -1041,12 +1046,16 @@ export default function ExperimentBench({
         }
       } catch (e) {
         if (simReq.current !== reqId) return; // stale error from a superseded pick — ignore
-        if (!quiet) setError(String(e));
+        if (!quiet) {
+          // B11: the backend's text is console detail only; the bench says a mapped sentence or its own line.
+          console.error("[compy] simulate_optimization", e);
+          setError(backendMessage(e, t) ?? t("lab.experimentBench.errors.simulateFailed"));
+        }
       } finally {
         if (simReq.current === reqId && !quiet) setSimBusy(false);
       }
     },
-    [hasBaseline, t],
+    [hasBaseline, t, setError],
   );
 
   // Intelligence Phase 3 fast-follow (W2 + Measurement-2.0 Task A): the bench loads once when the gate
@@ -1322,8 +1331,12 @@ export default function ExperimentBench({
         await settle();
       });
     } catch (e) {
-      // A loud restore-failed error is surfaced verbatim — never hidden (honesty rail).
-      setError(String(e));
+      // A loud restore-failed error is never hidden (honesty rail), but never shown raw either (B11, the owner's "no
+      // String(e) in the face" law): a sentence backend-error.ts knows is said in the user's language; anything else
+      // gets the bench's own line, which says the write may have stopped part-way and where to see what is on now.
+      // The raw text goes to the console and to ChangedOutsideRemedy (which only reads it).
+      console.error("[compy] bench write", e);
+      setError(backendMessage(e, t) ?? t("lab.experimentBench.errors.writeFailed"), String(e));
       if (!announced) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       await settle().catch(() => {});
     }
@@ -1476,10 +1489,10 @@ export default function ExperimentBench({
 
       {error && (
         <p className="exp-bench-error" role="alert">
-          {error}
+          {error.text}
         </p>
       )}
-      {error && <ChangedOutsideRemedy reason={error} refresh={settle} />}
+      {error?.raw && <ChangedOutsideRemedy reason={error.raw} refresh={settle} />}
 
       {ledgerBusy && !running && (
         <p className="exp-fineprint" data-testid="exp-ledger-busy" role="status">
@@ -1539,7 +1552,10 @@ export default function ExperimentBench({
         <RealPlayPanel
           exp={running}
           progress={rp?.progress ?? null}
-          unread={rp ? (rp.error ?? (rp.progress ? null : "")) : null}
+          // B11: a failed progress read passes on only a sentence backend-error.ts knows, in the user's language; any
+          // other text becomes "" (answered, no words), so the panel says its own "can't read the count" line and
+          // never the backend's raw text. `rp.error` itself stays raw (console detail).
+          unread={rp ? (rp.error != null ? (backendMessage(rp.error, t) ?? "") : rp.progress ? null : "") : null}
           canAct={!busy && !ledgerBusy}
           refresh={settle}
         />

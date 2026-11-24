@@ -745,6 +745,10 @@
     "applying": "Applying…",
     "startExperiment": "Start experiment — apply & measure next session",
     "ledgerBusy": "Compy is still making another change, such as putting things back. You can start a Trial when it finishes.",
+    "errors": {
+      "simulateFailed": "Compy couldn't work out what this change is expected to do just now. Nothing was changed. Pick it again to retry.",
+      "writeFailed": "Compy couldn't finish that. It may have stopped part-way, so check Test → Applied & history to see what is on now."
+    },
     "fineprint": "Saves the setting, applies one change now, then compares your next {{game}} session. Compy puts the setting back unless the result clearly beats the noise floor.",
     "fineprintGameFallback": "game",
     "noBaselineYet": "No baseline yet — play one monitored gaming session first. Compy needs a real before-reading; it won't invent one.",
