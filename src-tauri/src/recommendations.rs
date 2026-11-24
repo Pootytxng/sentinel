@@ -321,7 +321,9 @@ fn stale_primary_driver(hw: &HardwareInfo) -> Option<(&'static str, i64)> {
 /// finish (`None`, so the card says Compy couldn't read it), and `Unrecognised` (no probe) is the old
 /// "not applied". A service reads as DISABLED by its start type, the state the one-click change sets
 /// (CR-stopped-service); a failed WMI listing, or a service with no row, is `Unreadable`, exactly as
-/// the ledger's live check reads it (`history::disabled_service_check`).
+/// the ledger's live check reads it (`history::disabled_service_check`). D4 r1 (FIX 1): the catalog
+/// omits a service rec whose listing was read without its row (`LiveReads::service_presence`) before
+/// its state is shown, so on a card `Unreadable` only ever means the read failed.
 fn live_read(check: ActiveCheck) -> Option<bool> {
     match check {
         ActiveCheck::On => Some(true),
@@ -404,7 +406,7 @@ pub(crate) fn check_state_kind(
         // The rule kind keeps its historical name; since 2026-11-04 it reads the service's start type
         // (Disabled), which is what the change sets, not whether the service happens to be running.
         "service-not-running" => {
-            return match params.as_ref().and_then(|p| p.get("service")).and_then(|s| s.as_str()) {
+            return match service_param(params) {
                 Some(name) => live_read(reads.service_disabled(name)),
                 None => Some(false),
             }
@@ -421,6 +423,11 @@ pub(crate) fn check_state_kind(
         "eee-disabled-on-eligible-adapters" => return eee_disabled_on_any_eligible_adapter_checked(),
         _ => false,
     })
+}
+
+/// The `service` param of a "service-not-running" rule (its state kind's only param).
+fn service_param(params: &Option<serde_json::Value>) -> Option<&str> {
+    params.as_ref().and_then(|p| p.get("service")).and_then(|s| s.as_str())
 }
 
 /// PURE (D2b): a state read → `(currently_applied, state_unread)`. A read that did not finish is
@@ -472,11 +479,24 @@ pub(crate) fn evaluate_rule_spec(
         .map(|t| template_substitute(t, hw))
         .unwrap_or_default();
 
-    let (currently_applied, state_read_unread) = applied_and_unread(
-        spec.state_kind
+    // D4 r1 (FIX 1): a "service-not-running" rule whose service Windows does not list (the read
+    // finished, no row) is omitted: the service is not on this PC, so there is nothing to turn off.
+    // A read that failed keeps the rec, flagged "couldn't read". Presence and state come from ONE
+    // read, so a remote rule's single-read service costs one WMI query, as before.
+    let service_read = match spec.state_kind.as_deref() {
+        Some("service-not-running") => service_param(&spec.state_params).map(|name| reads.service_presence_and_check(name)),
+        _ => None,
+    };
+    if matches!(service_read, Some((Some(false), _))) {
+        return None;
+    }
+    let (currently_applied, state_read_unread) = applied_and_unread(match service_read {
+        Some((_, check)) => Some(live_read(check)),
+        None => spec
+            .state_kind
             .as_ref()
             .map(|kind| check_state_kind(kind, &spec.state_params, hw, reads)),
-    );
+    });
     // D2b r1 (F2): a rec held back only because its hardware read did not finish is "couldn't check",
     // not "not for this rig": the card leaves that group and shows no override.
     // D2b r2 (F2b): a rec held back for a DETECTED hardware reason stays "not for this rig" (with its
@@ -636,24 +656,29 @@ pub(crate) fn build_recommendations_with(hw: &HardwareInfo, reads: &LiveReads) -
     // ─── GPU vendor-specific ─────────────────────────────────────────────
     if let Some(name) = gpu_vendor_match(hw, "NVIDIA") {
         let (telemetry_stopped, telemetry_unread) = live_state("nvidia-telemetry", reads);
-        recs.push(Recommendation {
-            id: "nvidia-telemetry".into(),
-            title: "Disable NVIDIA Container telemetry services".into(),
-            category: "GPU".into(),
-            severity: "safe".into(),
-            description:
-                "NVIDIA's driver bundle ships several background services that exist mainly to send usage data and check for GeForce Experience updates. They consume RAM and CPU constantly. Disabling them does not affect game performance or driver functionality.".into(),
-            impact: "Free ~150–250 MB RAM · less background CPU".into(),
-            downside: Some("GeForce Experience won't auto-update; you can still update manually.".into()),
-            applies_to: name.clone(),
-            currently_applied: telemetry_stopped,
-            provenance: Provenance::ExpectedImpact,
-            eligible: true,
-            ineligible_reason: None,
-            risk_dimensions: None,
-            state_unread: telemetry_unread,
-            live_read_unread: telemetry_unread,
-        });
+        // D4 r1 (FIX 1): a listing that was read and has no NvTelemetryContainer row means the service
+        // is not on this PC, so there is nothing to turn off: the rec is omitted (a relevance gate). A
+        // listing that failed (`None`) keeps the rec, flagged "couldn't read".
+        if reads.service_presence("NvTelemetryContainer") != Some(false) {
+            recs.push(Recommendation {
+                id: "nvidia-telemetry".into(),
+                title: "Disable NVIDIA Container telemetry services".into(),
+                category: "GPU".into(),
+                severity: "safe".into(),
+                description:
+                    "NVIDIA's driver bundle ships several background services that exist mainly to send usage data and check for GeForce Experience updates. They consume RAM and CPU constantly. Disabling them does not affect game performance or driver functionality.".into(),
+                impact: "Free ~150–250 MB RAM · less background CPU".into(),
+                downside: Some("GeForce Experience won't auto-update; you can still update manually.".into()),
+                applies_to: name.clone(),
+                currently_applied: telemetry_stopped,
+                provenance: Provenance::ExpectedImpact,
+                eligible: true,
+                ineligible_reason: None,
+                risk_dimensions: None,
+                state_unread: telemetry_unread,
+                live_read_unread: telemetry_unread,
+            });
+        }
 
         recs.push(Recommendation {
             id: "nvidia-low-latency".into(),
@@ -759,7 +784,9 @@ pub(crate) fn build_recommendations_with(hw: &HardwareInfo, reads: &LiveReads) -
     // SysMain is GOOD on HDDs (it pre-caches apps to speed up launches). Only
     // recommend disabling when fast storage is present, where the benefit is
     // marginal and the disk thrashing complaint applies.
-    if ram_gb >= 16.0 && (has_nvme || has_ssd) {
+    // D4 r1 (FIX 1): a listing that was read and has no SysMain row: the service is not on this PC, so
+    // there is nothing to turn off and the rec is omitted. A failed listing (`None`) keeps it, unread.
+    if ram_gb >= 16.0 && (has_nvme || has_ssd) && reads.service_presence("SysMain") != Some(false) {
         let storage_kind = if has_nvme { "NVMe" } else { "SSD" };
         let (sysmain_off, sysmain_unread) = live_state("sysmain-disable", reads);
         recs.push(Recommendation {
@@ -1549,6 +1576,68 @@ mod rec_tests {
             "live_state(\"hags-enable\", reads)",
         ] {
             assert!(src.contains(arm), "missing: {arm}");
+        }
+    }
+
+    // ── D4 r1 (FIX 1): a service Windows does not list is "not on this PC", never "couldn't read" ──
+    fn no_service_listed() -> Option<crate::history::ServiceListing> {
+        Some(Vec::new())
+    }
+    fn hdd_nvidia_rig() -> HardwareInfo {
+        HardwareInfo {
+            ram_total_bytes: 32 << 30,
+            gpus: vec![gpu("NVIDIA GeForce RTX 4080")],
+            physical_disks: vec![pdisk("HDD", "SATA")],
+            ..Default::default()
+        }
+    }
+
+    // The listing was READ and has no row for the service: there is nothing to turn off, so the rec
+    // is omitted, on the two code-built recs (nvidia-telemetry, sysmain-disable) and on the
+    // "service-not-running" rule kind (diagtrack-disable; windows-search-disable on an HDD rig, where
+    // it would otherwise be eligible).
+    // Break check: in `LiveReads::service_presence` return `None` for a missing row (e.g.
+    // `self.service_row(name).flatten().map(|_| true)`), or drop the `!= Some(false)` /
+    // `Some((Some(false), _))` omissions in recommendations.rs: the recs come back flagged
+    // "couldn't read" and this test fails.
+    #[test]
+    fn d4r1_a_service_windows_does_not_list_omits_its_rec_never_couldnt_read() {
+        let reads = LiveReads::with_listings(no_tasks, no_service_listed).with_scheme_read(ultimate_scheme);
+        for name in crate::history::DISABLE_REC_SERVICES {
+            assert_eq!(reads.service_presence(name), Some(false), "{name}: read, and not listed");
+        }
+        for rig in [nvidia_nvme_rig(), hdd_nvidia_rig()] {
+            let recs = build_recommendations_with(&rig, &reads);
+            for id in ["nvidia-telemetry", "sysmain-disable", "diagtrack-disable", "windows-search-disable"] {
+                assert!(recs.iter().all(|r| r.id != id), "{id}: its service is not on this PC, so it is omitted");
+            }
+            // The other recs still build (the omission is per service, not the whole catalog).
+            assert!(recs.iter().any(|r| r.id == "power-ultimate"));
+        }
+        // A listing that has the service keeps the rec (presence is read, not assumed).
+        let listed = LiveReads::with_listings(no_tasks, services_read).with_scheme_read(ultimate_scheme);
+        assert_eq!(listed.service_presence("SysMain"), Some(true));
+        let hdd = build_recommendations_with(&hdd_nvidia_rig(), &listed);
+        let search = hdd.iter().find(|r| r.id == "windows-search-disable").expect("listed: kept");
+        assert!(search.eligible && !search.state_unread && !search.currently_applied);
+    }
+
+    // The listing FAILED: Compy can't tell whether the service is there, so every service rec stays,
+    // not applied and flagged "couldn't read" (never omitted, never "off").
+    // Break check: make the omission test `!= Some(true)` (omit on a failed read too), or map a failed
+    // listing to `Some(false)` in `LiveReads::service_row`: the recs vanish and this test fails.
+    #[test]
+    fn d4r1_a_failed_service_listing_keeps_every_service_rec_as_couldnt_read() {
+        let failed = LiveReads::with_listings(no_tasks, failed_services).with_scheme_read(ultimate_scheme);
+        for name in crate::history::DISABLE_REC_SERVICES {
+            assert_eq!(failed.service_presence(name), None, "{name}: a failed listing can't tell");
+        }
+        let nvme = build_recommendations_with(&nvidia_nvme_rig(), &failed);
+        let hdd = build_recommendations_with(&hdd_nvidia_rig(), &failed);
+        let get = |recs: &[Recommendation], id: &str| recs.iter().find(|r| r.id == id).cloned().unwrap_or_else(|| panic!("{id} kept"));
+        for r in [get(&nvme[..], "nvidia-telemetry"), get(&nvme[..], "sysmain-disable"), get(&nvme[..], "diagtrack-disable"), get(&hdd[..], "windows-search-disable")] {
+            assert!(r.eligible, "{}", r.id);
+            assert!(!r.currently_applied && r.state_unread && r.live_read_unread, "{}: couldn't read, never off", r.id);
         }
     }
 

@@ -593,17 +593,44 @@ impl LiveReads {
     /// rule's `service-not-running` param) keeps its own single read, as before, through the read-only
     /// probe module and never through `actions` (`src/experiment-record-first-guard.test.ts`).
     pub(crate) fn service_disabled(&self, name: &str) -> ActiveCheck {
+        disabled_service_check(self.service_row(name).flatten())
+    }
+
+    /// D4 r1 (FIX 1): whether Windows lists `name` on this PC. `None` = the listing (or, for a name
+    /// outside [`DISABLE_REC_SERVICES`], the single read) failed, so Compy can't tell; `Some(false)` =
+    /// it was read and has no row for `name` (the service is not installed: there is nothing to turn
+    /// off); `Some(true)` = it has a row. The catalog omits a service rec on `Some(false)` and keeps
+    /// "couldn't read" on `None`. A batched name reads the pass's one listing, so asking this and then
+    /// [`LiveReads::service_disabled`] costs no second query.
+    pub(crate) fn service_presence(&self, name: &str) -> Option<bool> {
+        self.service_row(name).map(|row| row.is_some())
+    }
+
+    /// D4 r1 (FIX 1): [`LiveReads::service_presence`] and [`LiveReads::service_disabled`] from ONE
+    /// read, for a caller that needs both for a name outside [`DISABLE_REC_SERVICES`] (whose single
+    /// read is not shared through the pass), so it costs one WMI query, not two.
+    pub(crate) fn service_presence_and_check(&self, name: &str) -> (Option<bool>, ActiveCheck) {
+        let row = self.service_row(name);
+        (row.as_ref().map(Option::is_some), disabled_service_check(row.flatten()))
+    }
+
+    /// `name`'s row: `None` = the read failed, `Some(None)` = read, and no such service is listed,
+    /// `Some(Some((state, start mode)))` = its row. One of [`DISABLE_REC_SERVICES`] reads from the
+    /// pass's one batched listing; any other name keeps its own single read through the read-only
+    /// probe module.
+    fn service_row(&self, name: &str) -> Option<Option<(String, String)>> {
         if !DISABLE_REC_SERVICES.iter().any(|s| s.eq_ignore_ascii_case(name)) {
-            return disabled_service_check(crate::hardware::service_state_and_start_mode(name));
+            return crate::hardware::service_state_and_start_mode(name);
         }
-        let listing = self.services.get_or_init(self.list_services).as_ref();
-        disabled_service_check(service_in_listing(listing, name))
+        let listing = self.services.get_or_init(self.list_services).as_ref()?;
+        Some(service_in_listing(Some(listing), name))
     }
 }
 
 /// Pure: `name`'s (state, start mode) in a batched listing. A failed listing (`None`) and a service
 /// with no row both give `None`, which [`disabled_service_check`] reads as `Unreadable`, exactly as a
-/// single read did. WMI matches `Name` without regard to case, so this does too.
+/// single read did. WMI matches `Name` without regard to case, so this does too. D4 r1 (FIX 1): callers
+/// that must tell the two apart go through [`LiveReads::service_presence`].
 fn service_in_listing(listing: Option<&ServiceListing>, name: &str) -> Option<(String, String)> {
     listing?
         .iter()

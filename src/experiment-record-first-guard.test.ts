@@ -183,7 +183,8 @@ describe("a Trial verifies the setting before, during and after (#583 lane 2)", 
   // `actions::service_info` — the check above passed on a body that no longer held the probe. The
   // read-only rule follows the probe to where it now runs.
   it("the probe's real body and its service read stay read-only", () => {
-    for (const sig of ["pub(crate) fn probe_rec_target_with(", "pub(crate) fn service_disabled("]) {
+    // D4 r1 (FIX 1): `service_disabled` now reads through `LiveReads::service_row`, which holds the read.
+    for (const sig of ["pub(crate) fn probe_rec_target_with(", "pub(crate) fn service_disabled(", "fn service_row("]) {
       expect(fnBody(HISTORY, sig), sig).not.toMatch(/apply_|rollback_|actions::|save_history/);
     }
   });
