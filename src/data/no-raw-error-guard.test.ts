@@ -243,3 +243,28 @@ describe("B11: the same-setting refusals are mapped in both languages", () => {
     expect(enText).not.toMatch(/[“”]/);
   });
 });
+
+// B11 r1: en is pinned to the Rust byte for byte, but zh only for being Chinese, so a zh text swapped between two
+// keys stayed green. For the safety-relevant sentences (did the change go back, is it still on, can it be undone),
+// each zh text must carry a phrase that says ITS case, and no other listed zh text may carry it. Break check: swap
+// the zh of restoreNotCompleted and benchRollbackFailed (or of any two below) -> fails.
+describe("B11 r1: the safety-relevant zh sentences can't be swapped between keys", () => {
+  const zhKeys = zh.backendErrors as Record<string, string>;
+  const DISTINGUISHING: Array<[string, string]> = [
+    ["restoreNotCompleted", "恢复没有完成"],
+    ["restoredStillReadsChanged", "已恢复这项更改，但之后读取时"],
+    ["alreadyUndoneReadsChanged", "但现在读取到该设置处于已更改状态"],
+    ["applyErrReadsUnchanged", "读起来没有改变"],
+    ["applyErrReadsChanged", "现在读起来已更改"],
+    ["applyErrUnreadable", "无法读取这项设置来判断"],
+    ["benchRollbackFailed", "尝试回滚这项更改时回滚失败"],
+    ["benchStackRollbackFailed", "有一项或多项回滚失败"],
+    ["benchRolledBackUnrecorded", "无法把这次撤销保存"],
+    ["benchLedgerUnreadBefore", "在测量前无法读取"],
+    ["benchLedgerUnreadAfter", "已执行应用"],
+  ];
+  it.each(DISTINGUISHING)("%s says its own case, and only it does", (key, phrase) => {
+    expect(zhKeys[key], key).toContain(phrase);
+    for (const [other] of DISTINGUISHING) if (other !== key) expect(zhKeys[other], `${other} vs ${key}`).not.toContain(phrase);
+  });
+});
