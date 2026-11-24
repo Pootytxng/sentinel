@@ -1199,6 +1199,7 @@ mod tests {
             ("duplicate ids", with_pipe(hex(&request_json("batch", &format!("{},{}", batch_item("hags-enable"), batch_item("hags-enable")))))),
             ("single with two ops", vec![hex(&request_json("single", r#"{"ops":[{"op":"hags-enable"},{"op":"hags-enable"}]}"#))]),
             ("single with an id", vec![hex(&request_json("single", &batch_item("hags-enable")))]),
+            ("single with two items", vec![hex(&request_json("single", &format!("{one},{one}")))]),
             ("batch item without id", with_pipe(hex(&request_json("batch", one)))),
             ("ultimate in a batch", with_pipe(hex(&request_json("batch", r#"{"id":"power-ultimate","ops":[{"op":"ultimate-plan-apply"}]}"#)))),
             ("combined in a batch", with_pipe(hex(&request_json("batch", r#"{"id":"r0","ops":[{"op":"memory-compression-combined"}]}"#)))),
@@ -1426,6 +1427,27 @@ mod tests {
             r#"{{"a":{{"g":"{GUID_A}","n":"Ethernet [2]","s":"Up","m":"802.3"}},"p":{{"i":"{GUID_A}::*EEE","n":"Ethernet [2]","d":"Energy Efficient Ethernet","k":"*EEE","v":"Enabled","dv":"Enabled","rv":"1"}}}}"#
         );
         assert_eq!(eee_pick_restore(&listing_of(&unwrapped), &saved("Ethernet [2]", "Enabled")).map(|t| t.2), Ok("1".into()));
+    }
+
+    /// Review r1 G: protections that had no failing test. A wireless adapter is not an EEE apply target; a read
+    /// listing more than MAX_READ_ROWS rows is refused; `run_request` itself refuses a pipe-needing request without
+    /// a pipe (before any read or run). Break: drop `|| a.m != "802.3"` in `eee_pick_disable`, or the
+    /// `MAX_READ_ROWS` check in `parse_eee_listing`, and this fails.
+    #[test]
+    fn the_wired_check_the_row_cap_and_the_pipe_check_each_refuse() {
+        let target = EeeTarget { adapter: SavedText::parse("Ethernet [2]").expect("a"), property: SavedText::parse("Energy Efficient Ethernet").expect("p") };
+        let wifi = listing_of(&two_adapters().replacen(r#""m":"802.3""#, r#""m":"Native 802.11""#, 1));
+        assert_eq!(eee_pick_disable(&wifi, &target), Err(Refused::NoMatch));
+        let row = format!(r#"{{"g":"{GUID_B}","n":"x","s":"Up","m":"802.3"}}"#);
+        let too_many = format!(r#"{{"a":[{}],"p":[]}}"#, vec![row; MAX_READ_ROWS + 1].join(","));
+        assert_eq!(parse_eee_listing(Some(&out(0, &too_many))), Err(Refused::NoMatch));
+        let batch = parse_request_hex(&hex(&request_json("batch", r#"{"id":"hags-enable","ops":[{"op":"hags-enable"}]}"#))).expect("valid");
+        let combined = parse_request_hex(&hex(&request_json("single", r#"{"ops":[{"op":"memory-compression-combined"}]}"#))).expect("valid");
+        for req in [batch, combined] {
+            let mut fx = Fake::default();
+            assert_eq!(run_request(&req, None, &mut fx), actions::HELPER_REQUEST_REFUSED);
+            assert!(fx.events.is_empty(), "{:?}", fx.events);
+        }
     }
 
     /// The EEE read is refused, never guessed, when it did not finish, failed, is too large or not the shape.

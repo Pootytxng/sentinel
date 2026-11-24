@@ -9845,6 +9845,39 @@ mod elevated_goldens {
         assert_eq!(sunk(|| rollback_nagle_disable_typed(&[snap])), vec![G_NAGLE_RESTORE.to_string()]);
     }
 
+    /// Review r1 (weak pin): the Nagle builders and the typed ops over TWO interfaces, so a builder that keeps only
+    /// the first key (or reorders them) fails. Break: `for interface in interfaces.iter().take(1)` in
+    /// `nagle_apply_script` (or the same in `nagle_rollback_script`) and this fails.
+    #[test]
+    fn golden_nagle_two_interfaces() {
+        macro_rules! nic2 { () => { "{3B848552-2A41-4513-9E88-C3CFCCB419B4}" }; }
+        macro_rules! nic2_path { () => { concat!(r"HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\", nic2!()) }; }
+        const G_NAGLE_APPLY_2: &str = concat!(
+            "Set-ItemProperty -Path '", nic_path!(), "' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; ",
+            "Set-ItemProperty -Path '", nic_path!(), "' -Name 'TCPNoDelay' -Value 1 -Type DWord -ErrorAction SilentlyContinue; ",
+            "Set-ItemProperty -Path '", nic2_path!(), "' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; ",
+            "Set-ItemProperty -Path '", nic2_path!(), "' -Name 'TCPNoDelay' -Value 1 -Type DWord -ErrorAction SilentlyContinue; "
+        );
+        const G_NAGLE_RESTORE_2: &str = concat!(
+            "Set-ItemProperty -Path '", nic_path!(), "' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; ",
+            "Remove-ItemProperty -Path '", nic_path!(), "' -Name 'TCPNoDelay' -ErrorAction SilentlyContinue; ",
+            "Remove-ItemProperty -Path '", nic2_path!(), "' -Name 'TcpAckFrequency' -ErrorAction SilentlyContinue; ",
+            "Set-ItemProperty -Path '", nic2_path!(), "' -Name 'TCPNoDelay' -Value 0 -Type DWord -ErrorAction SilentlyContinue; "
+        );
+        assert_eq!(nagle_apply_script(&[NIC, nic2!()]).as_deref(), Ok(G_NAGLE_APPLY_2));
+        let snaps = [
+            NagleInterfaceSnapshot { interface: NIC.to_string(), prior_ack: Some(1), prior_nodelay: None },
+            NagleInterfaceSnapshot { interface: nic2!().to_string(), prior_ack: None, prior_nodelay: Some(0) },
+        ];
+        assert_eq!(sunk(|| rollback_nagle_disable_typed(&snaps)), vec![G_NAGLE_RESTORE_2.to_string()]);
+        let apply = concat!(r#"{"op":"nagle-disable","interfaces":[""#, nic!(), r#"",""#, nic2!(), r#""]}"#);
+        assert_eq!(typed(apply), G_NAGLE_APPLY_2);
+        let restore = concat!(
+            r#"{"op":"nagle-restore","interfaces":[{"key":""#, nic!(), r#"","ack":1,"nodelay":null},{"key":""#, nic2!(), r#"","ack":null,"nodelay":0}]}"#
+        );
+        assert_eq!(typed(restore), G_NAGLE_RESTORE_2);
+    }
+
     // ── the wrappers ──
 
     /// Break: drop the `trim_end_matches(';')` in `compose_batch_script`, or the Single prefix, and this fails.
