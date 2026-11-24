@@ -154,14 +154,16 @@ fleet path has since carried real traffic — the owner reports at least two tes
   registration, the declaration, the grants and the overlay's real `invoke()` sites in agreement.
   Owner GO given 2026-08-03. **Open sub-item:** the spec's per-command main-window caller check
   (defense in depth behind the ACL) is deliberately deferred — see the PR for the reasoning.
-- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:7576`).
-- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:1586`).
-- Elevation: relaunch `compy.exe --run-elevated <hex> <ticket>` (windowless), 4-way honest UAC
-  attribution (`elevation_outcome` — `actions.rs:1486`); helper runs ONLY hex byte-matching the
-  one-time ticket (`mint_elevation_ticket` — `actions.rs:1686`).
+- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:6313`).
+- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:1533`).
+- Elevation (in source since A9; the installed build is per the rows above): every admin step relaunches
+  `compy.exe --run-elevated-op <hex JSON>` (windowless) with one request of the closed typed set
+  (`run_elevated_op` — `actions.rs:1606`; helper `run_request` — `elevated_ops.rs:880`); the generic
+  `--run-elevated` entry and its ticket are deleted (refused, nothing run:
+  `refused_generic_elevated_entry` — `lib.rs:112`). 4-way honest UAC attribution (`elevation_outcome` — `actions.rs:1540`).
 - Gaming-session advanced tier batches to ONE elevation per session start and per restore
   (`apply_elevated_tier` — `gaming_orchestrator.rs:659`); no-partial abort+restore contract;
-  UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1515`).
+  UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1568`).
 
 ## Release blockers
 
