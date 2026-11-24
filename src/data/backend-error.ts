@@ -64,7 +64,7 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   // D4: the all-HDD gate's reason when the drive list came back empty (never "this rig has an SSD").
   {
     rust: "DRIVES_UNREAD_REASON",
-    text: "Only for HDD-only systems — Compy couldn't read this rig's drives.",
+    text: "Only for HDD-only systems — Compy couldn't list this rig's drives.",
     key: "app.backendErrors.drivesUnreadReason",
   },
   // A6: an EEE value Compy won't put into a Windows command (a control character) refuses before any prompt.

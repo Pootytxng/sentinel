@@ -208,7 +208,9 @@ pub(crate) const EEE_UNREAD_REASON: &str = "Couldn't check Energy-Efficient Ethe
 /// D4: the all-HDD gate's reason when the drive list came back EMPTY (the read found no drive), so the
 /// card never says "this rig has an SSD/NVMe" on no evidence. Routed like [`EEE_UNREAD_REASON`]: the
 /// rec is "couldn't check", not "not for this rig". Mirrored byte-for-byte in `src/data/backend-error.ts`.
-pub(crate) const DRIVES_UNREAD_REASON: &str = "Only for HDD-only systems — Compy couldn't read this rig's drives.";
+/// D4 r1 (FIX 4): "couldn't list", not "couldn't read": an empty list is not always a failed read (a VM
+/// whose storage query returns no physical disk), and "couldn't list" is true either way.
+pub(crate) const DRIVES_UNREAD_REASON: &str = "Only for HDD-only systems — Compy couldn't list this rig's drives.";
 
 /// D4: a held-back reason that means the hardware gate's read did not finish (not a detected fact).
 fn is_gate_unread_reason(reason: Option<&str>) -> bool {
