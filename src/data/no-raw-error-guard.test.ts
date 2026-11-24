@@ -150,6 +150,14 @@ describe("B11 r1 F3: a Trial write with no mapped sentence is said by its prefix
     }
   });
 
+  it("start_experiment's one-Trial-at-a-time refusals carry the prefix (they return before any record or apply)", () => {
+    // B11 r2: without it the screen said an apply "may have stopped part-way" though nothing ran. Break check:
+    // drop the prefix from either format! -> fails.
+    const joined = code.replace(/\\\r?\n\s*/g, "");
+    expect(joined).toContain(`"${NOT_STARTED_PREFIX}an earlier experiment start ({}) was interrupted`);
+    expect(joined).toContain(`"${NOT_STARTED_PREFIX}another experiment ({}) is still running`);
+  });
+
   it("a mapped sentence wins; else the prefix picks the line; else the bench's own line", () => {
     const missing = BACKEND_SENTENCES.find((x) => x.rust === "BASELINE_MISSING")!;
     expect(trialWriteText(`${NOT_STARTED_PREFIX}${missing.text}`, t)).toBe(`T(${missing.key})`);

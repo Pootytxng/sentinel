@@ -4543,17 +4543,20 @@ pub(crate) fn start_experiment(
     // now rather than letting it block until the next launch.
     reconcile_pending_locked(&mut store)?;
     // §3 one causal question at a time — enforced here, not only by the UI hiding the button.
+    // B11 r2: both refusals return before this start saves a record or touches Windows (the only write
+    // above is reconcile_pending_locked's save, which resolves a stale Pending record and never mutates
+    // Windows), so they carry the not-started prefix and the screen says nothing was changed.
     if let Some(active) = active_trial(&store) {
         return Err(if active.status == ExperimentStatus::Pending {
             format!(
-                "an earlier experiment start ({}) was interrupted and isn't resolved yet — check \
-                 Test → Applied & history, then try again",
+                "experiment not started — an earlier experiment start ({}) was interrupted and isn't \
+                 resolved yet — check Test → Applied & history, then try again",
                 active.rec_title,
             )
         } else {
             format!(
-                "another experiment ({}) is still running — conclude or restore it before starting \
-                 a new one",
+                "experiment not started — another experiment ({}) is still running — conclude or \
+                 restore it before starting a new one",
                 active.rec_title,
             )
         });
