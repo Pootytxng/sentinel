@@ -3940,6 +3940,10 @@ mod recovery_f3 {
     const B10B_UNDONE: &str = "2026-10-09T12:00:00Z";
 
     fn undo_case(after: Vec<SessionFacts>, records: Vec<super::super::extras::CompyRecord>) -> Diagnosis {
+        diagnose(&undo_inputs(after, records), Complaint::Slow, Some("g"))
+    }
+
+    fn undo_inputs(after: Vec<SessionFacts>, records: Vec<super::super::extras::CompyRecord>) -> DiagnoseInputs {
         let mut v: Vec<SessionFacts> = (1..=4)
             .map(|d| {
                 let mut s = on(d, 50.0, None);
@@ -3954,7 +3958,7 @@ mod recovery_f3 {
         let mut inp = inputs(v);
         inp.changes = ChangeRead::Report { report: Box::new(report(Vec::new())), steam: GameSteam::Found };
         inp.compy_records = records;
-        diagnose(&inp, Complaint::Slow, Some("g"))
+        inp
     }
 
     fn record(applied: &str, undone: Option<&str>) -> super::super::extras::CompyRecord {
@@ -4126,6 +4130,31 @@ mod recovery_f3 {
         assert_eq!(undone_lines(&d).iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-rough"], "at the start: in");
         let d = undo_case(rough(), vec![record(&to, Some(B10B_UNDONE))]);
         assert!(undone_lines(&d).is_empty(), "at the end: out");
+    }
+
+    /// b12 item 2: ONE window test for Compy's own records, [win_start, win_end) (`Ctx::compy_in_window`): the crash
+    /// line's period and the undo follow-through agree about a record at either edge. Break check: put back
+    /// `*t > c.win_start && *t <= c.win_end` in extras::detect_crashes -> the start case names no Compy change and the
+    /// end case names one, fails.
+    #[test]
+    fn b12_the_crash_period_and_the_undo_follow_through_share_one_half_open_window() {
+        use super::super::extras::{CompyApplies, CrashFact, CrashHistory, CrashRead};
+        let rough = || vec![day_count(10, 30.0, 3)];
+        let When::ObservedBetween { from, to } = finding_of(&undo_case(rough(), Vec::new()), "compy-change").since_when.clone() else { panic!("no window") };
+        let k = |when: &str| CrashFact { app: "g".into(), when: utc(when), module: Some("nvwgf2umx.dll".into()), code: Some("c0000005".into()), version: None, path_ok: None };
+        // Two same-signature crashes before the window, and one Compy record applied (then undone) at `at`.
+        let read = |at: &str| -> (Option<(String, String)>, Vec<&'static str>) {
+            let mut inp = undo_inputs(rough(), vec![record(at, Some(B10B_UNDONE))]);
+            inp.compy_applies = CompyApplies::Read(vec![(utc(at), "Enable Game Mode".to_string())]);
+            inp.crashes = CrashRead::Read(CrashHistory { crashes: vec![k("2026-09-28T08:00:00Z"), k("2026-09-29T08:00:00Z")], listed: true, partial: false });
+            let d = diagnose(&inp, Complaint::Slow, Some("g"));
+            let sig = d.seen.iter().find(|s| s.id == "game-crash-signature").map(|s| (s.args["before"].clone(), s.args["kind"].clone()));
+            (sig, undone_lines(&d).iter().map(|e| e.code).collect())
+        };
+        // At the window's start: in, for both (the crash line names it as Compy's change; the follow-through reads it).
+        assert_eq!(read(&from), (Some((from.clone(), "compy".to_string())), vec!["compy-undone-rough"]), "at the start: in");
+        // At its end (the first rough session's own start): out, for both.
+        assert_eq!(read(&to), (None, Vec::<&'static str>::new()), "at the end: out");
     }
 
     /// No line unless exactly one record sits in the window and it was undone after the window, with a readable time.

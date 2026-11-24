@@ -1373,6 +1373,14 @@ impl<'a> Ctx<'a> {
         sitting_span(self.inp, s)
     }
 
+    /// b12: THE window test for Compy's own ledger records against the card's period, half-open [win_start, win_end),
+    /// as the card's undo offer reads its window (compy-undo.ts) and as sessions are placed (`normal_in_window`).
+    /// Shared by the crash line's period (`extras::detect_crashes`) and the undo follow-through (`compy_undone_since`),
+    /// so the two never disagree about one record. It differs from the old (start, end] only at the two exact instants.
+    fn compy_in_window(&self, t: DateTime<Utc>) -> bool {
+        t >= self.win_start && t < self.win_end
+    }
+
     /// Sessions of any game, judged Normal, that started between the last normal session's end and the
     /// first rough one's start: they ran fine while whatever changed was already (or not yet) in place.
     fn normal_in_window(&self) -> Vec<&'a SessionFacts> {
@@ -2974,7 +2982,7 @@ fn detect_compy_changes(c: &Ctx, out: &mut Out) {
 ///   The recovery is "can't tell" then, so this row says it (as B4's `driver-back-clear-unjudged`); never a support;
 /// - `compy-undone-between` (Unknown): judgeable sessions since, none rough, not all clear.
 fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
-    let mut inside = c.inp.compy_records.iter().filter(|r| r.applied >= c.win_start && r.applied < c.win_end);
+    let mut inside = c.inp.compy_records.iter().filter(|r| c.compy_in_window(r.applied));
     let rec = inside.next()?;
     if inside.next().is_some() {
         return None;

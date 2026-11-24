@@ -144,8 +144,10 @@ pub(super) fn detect_crashes(c: &Ctx, out: &mut Out) {
             let windows = dated_candidates(&out.cands);
             // An unreadable ledger is not "Compy changed nothing": it stays out of the comparison and the answer
             // says so (below), and the sentence never claims the earliest change of all.
+            // b12: the period is THE shared half-open window [win_start, win_end) (`Ctx::compy_in_window`), the same
+            // test the undo follow-through uses; it was (win_start, win_end] here, different only at those two instants.
             let in_period: Vec<(DateTime<Utc>, &str)> = match &c.inp.compy_applies {
-                CompyApplies::Read(v) => v.iter().filter(|(t, _)| *t > c.win_start && *t <= c.win_end).map(|(t, title)| (*t, title.as_str())).collect(),
+                CompyApplies::Read(v) => v.iter().filter(|(t, _)| c.compy_in_window(*t)).map(|(t, title)| (*t, title.as_str())).collect(),
                 CompyApplies::NotRead | CompyApplies::Unreadable => Vec::new(),
             };
             let ledger_unreadable = matches!(c.inp.compy_applies, CompyApplies::Unreadable);
