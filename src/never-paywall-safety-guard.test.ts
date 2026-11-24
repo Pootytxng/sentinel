@@ -64,6 +64,8 @@ describe("#195 §5 — safety is never behind Pro", () => {
   const safety = FILES.filter((f) => SAFETY_IPC.test(f.raw));
 
   it("finds a real safety surface to guard (the derivation is not silently empty)", () => {
+    // 30 files on 2026-11-24 (D6 "Tuning tools": + data/tuning-tools.ts, whose first-run decision reads the
+    // get_applied_changes answer to decide whether Test's tuning stations start shown).
     // 29 files on 2026-11-24 (B10 "Undo this Compy change" on the Something's-wrong card: + data/compy-undo.ts, which
     // decides what the card offers before App's one rollback_change; + surfaces/glass/ParamedicCard.tsx, which offers
     // it; + surfaces/glass/HomeGlass.tsx, which passes App's undo to the card).
@@ -88,7 +90,7 @@ describe("#195 §5 — safety is never behind Pro", () => {
     expect(
       safety.map((f) => f.path),
       "the mutation/rollback surface shrank — either a refactor renamed the commands (update SAFETY_IPC) or the match is broken",
-    ).toHaveLength(29);
+    ).toHaveLength(30);
   });
 
   it("no file that applies, rolls back, or reads the Trust Ledger touches the Pro gate", () => {
