@@ -12,6 +12,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
 import "../i18n";
 import YourData from "./YourData";
+import { BACKEND_SENTENCES } from "../data/backend-error";
 import type { ClearPlan, ClearReport } from "./your-data";
 
 const PLAN: ClearPlan = {
@@ -418,6 +419,40 @@ describe("Your data: clear everything", () => {
     const unsaved = screen.getByTestId("your-data-undo-results").textContent ?? "";
     expect(unsaved).toContain("Game mode: one record's undo ran on Windows but couldn't be saved to your change history.");
     expect(unsaved).not.toContain("Couldn't undo");
+  });
+
+  // C6 review decision ("no String(e) in the face"): a stop shows a reason only when backend-error.ts knows the
+  // sentence. Break checks: render the raw reason -> the unmapped text appears, fails; drop the mapped line -> the
+  // Gaming Mode sentence is missing, fails.
+  it("'Undo them first' shows a known refusal's sentence and never an unmapped backend text", async () => {
+    const GM = BACKEND_SENTENCES.find((s) => s.rust === "GM_HOLDS_SETTING_REFUSAL")!;
+    const RAW = "access is denied (os error 5) at C:\\fixture\\path";
+    for (const [thrown, shown] of [
+      [GM.text, true],
+      [RAW, false],
+    ] as const) {
+      everything({
+        get_clear_status: () => ({ roll_forward: null, record: "none", abandoned_code: null, webview: [] }),
+        plan_clear_everything: () => REFUSED,
+        get_applied_changes: () => [
+          { id: "g1", rec_id: "game-mode", rec_title: "Game mode", status: "applied", applied_at: "2026-11-01T00:00:00Z" },
+        ],
+        rollback_change: () => {
+          throw thrown; // Tauri rejects with the backend's string
+        },
+      });
+      const view = render(<YourData />);
+      await openEverything();
+      await screen.findByTestId("your-data-refused");
+      fireEvent.click(screen.getByRole("button", { name: "Undo them first" }));
+      await waitFor(() => expect(screen.getByTestId("your-data-undo-results").textContent).toContain("Press Check again"));
+      const text = screen.getByTestId("your-data-undo-results").textContent ?? "";
+      expect(text).toContain("Couldn't undo: Game mode.");
+      expect(text.includes(GM.text)).toBe(shown); // en: the mapped sentence is the same words
+      expect(text).not.toContain("access is denied");
+      expect(text).not.toContain("What Compy was told");
+      view.unmount();
+    }
   });
 
   // C5a. Break checks: render one line per record (applied_changes) instead of per setting -> the list has 4 lines

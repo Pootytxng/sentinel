@@ -1129,6 +1129,7 @@ function App() {
     if (result.ran) await refresh();
     const stopped = walkStopMessage(result, change.rec_title, t);
     if (stopped) {
+      // The backend's raw text is console detail only; the line shows a reason only when backend-error.ts maps it.
       fail(stopped, result.stop?.reason);
       return false;
     }

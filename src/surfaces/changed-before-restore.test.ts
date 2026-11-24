@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { TFunction } from "i18next";
 import { LEDGER_CHANGED_EVENT, type AppliedChange, type ChangedBeforeIncident, type IntelEvent } from "../types";
 import { restorePlan, runRestore, runSettingWalk, trialInProgress, unrecordedLiveRead, walkStopMessage } from "./changed-before-restore";
+import { BACKEND_SENTENCES } from "../data/backend-error";
 
 // P6-restore's pure halves: which changes "Put back how it was" offers, and how a run reports.
 
@@ -203,16 +204,30 @@ describe("runSettingWalk / walkStopMessage (C6)", () => {
     expect(line).toMatch(/But a live read still shows the setting as changed/);
   });
 
-  // u9. Break check: drop the reason from the failed line -> the refusal text is missing, fails.
-  it("a refusal mid-walk (Gaming Mode, a Trial on the plan) stops there and shows the backend's reason", async () => {
-    const REFUSAL = "Gaming Mode is holding this setting. End Gaming Mode first.";
+  // u9. Break checks: (a) drop the mapped line from walkStopMessage -> the gmHoldsSetting key is missing, fails;
+  // (b) show `r.stop.reason` as is -> the English sentence appears, fails.
+  it("a Gaming Mode refusal mid-walk stops there and says why through the backend-error mapper, never as raw text", async () => {
+    const GM = BACKEND_SENTENCES.find((s) => s.rust === "GM_HOLDS_SETTING_REFUSAL")!;
     const r = await runSettingWalk(rows, async (id) => {
-      if (id === "g3") throw REFUSAL;
+      if (id === "g3") throw GM.text; // Tauri rejects with the backend's string
     });
     expect([r.done, r.stop?.outcome]).toEqual([0, "failed"]);
     const line = walkStopMessage(r, "Game Mode", t) ?? "";
     expect(line).toContain("app.errors.undoPartialFailed");
-    expect(line).toContain(REFUSAL);
+    expect(line).toContain("app.backendErrors.gmHoldsSetting");
+    expect(line).not.toContain(GM.text);
+  });
+
+  // u9b. Break check: show `r.stop.reason` when the mapper doesn't know it -> the raw text appears, fails.
+  it("an unmapped backend reason never reaches the screen: only the stop line shows", async () => {
+    const RAW = "access is denied (os error 5) at C:\\fixture\\path";
+    const r = await runSettingWalk(rows, async (id) => {
+      if (id === "g2") throw RAW;
+    });
+    expect(r.stop?.reason).toBe(RAW); // kept internally (console detail), not shown
+    const line = walkStopMessage(r, "Game Mode", t) ?? "";
+    expect(line).toBe(`app.errors.undoPartialFailed${JSON.stringify({ title: "Game Mode", done: 1, total: 3 })}`);
+    expect(line).not.toContain("access is denied");
   });
 
   // u13. Break check: drop the dispatch -> no event after an unrecorded run, fails.

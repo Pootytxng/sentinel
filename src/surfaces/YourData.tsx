@@ -5,6 +5,7 @@ import { BentoTile } from "../design/bento/BentoGrid";
 import { writeLedger } from "../data/ledger-write";
 import { LEDGER_CHANGED_EVENT, type AppliedChange } from "../types";
 import { runRestore } from "./changed-before-restore";
+import { backendSentenceKey } from "../data/backend-error";
 import {
   clearWebviewTargets,
   failureLine,
@@ -52,8 +53,10 @@ type Phase =
 
 /** "Undo them first" progress (C5a): one entry per setting; where the run stopped and how (C6: through `runRestore`,
  *  so an undo that ran on Windows but couldn't be saved is told apart from one that failed or was refused); whether
- *  the list of changes could not be read; whether it listed nothing to undo. */
-type UndoStop = { title: string; kind: "failed" | "unrecorded"; reason?: string; liveRead?: string };
+ *  the list of changes could not be read; whether it listed nothing to undo. A failed stop keeps only the i18n key of
+ *  a backend sentence backend-error.ts knows (`reasonKey`), never the backend's text: the owner's "no String(e) in
+ *  the face" law. */
+type UndoStop = { title: string; kind: "failed" | "unrecorded"; reasonKey?: string | null; liveRead?: string };
 type UndoState = { running: boolean; groups: UndoGroup[]; stop: UndoStop | null; readFailed: boolean; noneListed: boolean };
 
 const k = (key: string) => `settings.yourData.${key}`;
@@ -166,7 +169,7 @@ export function YourData() {
         stop =
           s.outcome === "unrecorded"
             ? { title, kind: "unrecorded", ...(s.liveRead ? { liveRead: s.liveRead } : {}) }
-            : { title, kind: "failed", ...(s.reason ? { reason: s.reason } : {}) };
+            : { title, kind: "failed", reasonKey: backendSentenceKey(s.reason) };
       }
     }
     setUndo({ running: false, groups, stop, readFailed, noneListed });
@@ -291,7 +294,7 @@ export function YourData() {
                         </li>
                       ))}
                     {undo.stop?.kind === "failed" && <li>{t(k("undoFailed"), { title: undo.stop.title })}</li>}
-                    {undo.stop?.kind === "failed" && undo.stop.reason && <li>{t(k("undoReason"), { reason: undo.stop.reason })}</li>}
+                    {undo.stop?.kind === "failed" && undo.stop.reasonKey && <li>{t(undo.stop.reasonKey)}</li>}
                     {undo.stop?.kind === "unrecorded" && (
                       <li>
                         {t(k("undoUnrecorded"), { title: undo.stop.title })}

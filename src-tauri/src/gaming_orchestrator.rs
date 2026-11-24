@@ -57,13 +57,23 @@ pub(crate) fn session_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, S
     match SESSION_OP.try_lock() {
         Ok(g) => Ok(g),
         Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
-        Err(std::sync::TryLockError::WouldBlock) => Err(
-            "Compy is still finishing another change or a Gaming Mode start (if a Windows permission \
-             prompt is open, answer or cancel it) — give it a second and try again"
-                .to_string(),
-        ),
+        Err(std::sync::TryLockError::WouldBlock) => Err(SESSION_OP_BUSY_REFUSAL.to_string()),
     }
 }
+
+// C6 (review r1 decision): the fixed refusal sentences a plain undo can meet here are consts so the
+// webview's `src/data/backend-error.ts` can show them in the user's language; its test pins each one
+// byte-equal to these. Text unchanged from the inline literals they replace.
+/// [`session_op_guard`] while another holder has the gate.
+pub(crate) const SESSION_OP_BUSY_REFUSAL: &str = "Compy is still finishing another change or a Gaming Mode start (if a Windows permission prompt is open, answer or cancel it) — give it a second and try again";
+/// [`session_hold_refusal`]: the session holds this setting.
+pub(crate) const GM_HOLDS_SETTING_REFUSAL: &str = "Gaming Mode is on and holds this setting for its session, and puts it back when it stops. Stop Gaming Mode first. Nothing was changed.";
+/// [`session_hold_refusal`]: the session holds the power plan this setting belongs to.
+pub(crate) const GM_HOLDS_PLAN_REFUSAL: &str = "Gaming Mode is on and has switched your power plan for its session, and this setting belongs to the power plan. Stop Gaming Mode first, then change it. Nothing was changed.";
+/// [`file_hold_refusal`]: a leftover session holds the power plan this setting belongs to.
+pub(crate) const GM_LEFTOVER_HOLDS_PLAN_REFUSAL: &str = "A Gaming Mode session that didn't finish putting its changes back still holds your power plan, and this setting belongs to the power plan. Finish that session first in Gaming Mode (\"Finish the last Gaming Mode session\"). Nothing was changed.";
+/// [`file_hold_refusal`]: a leftover session holds this setting.
+pub(crate) const GM_LEFTOVER_HOLDS_SETTING_REFUSAL: &str = "A Gaming Mode session that didn't finish putting its changes back holds this setting, and puts it back when it's finished. Finish it first in Gaming Mode (\"Finish the last Gaming Mode session\"). Nothing was changed.";
 
 /// CR-gm-stop-busy: serializes the three session operations that write the contract and receipts
 /// files, start, stop and recover, without [`SESSION_OP`], which plain changes also hold. Taken only
@@ -321,11 +331,7 @@ fn left_alone_labels(held: &[String], opts: &StartOptions, gate_open: bool) -> V
 fn session_hold_refusal(rec_id: &str, contract: Option<&[SessionChange]>) -> Option<String> {
     let contract = contract?;
     if contract.iter().any(|c| rec_of_label(&c.label) == Some(rec_id)) {
-        return Some(
-            "Gaming Mode is on and holds this setting for its session, and puts it back when it stops. \
-             Stop Gaming Mode first. Nothing was changed."
-                .to_string(),
-        );
+        return Some(GM_HOLDS_SETTING_REFUSAL.to_string());
     }
     // CR-gm-stop-busy review r1 (opus MUST-FIX): USB selective suspend and PCIe link power are
     // settings OF the active power plan. While a session holds the plan, the active plan is the
@@ -334,11 +340,7 @@ fn session_hold_refusal(rec_id: &str, contract: Option<&[SessionChange]>) -> Opt
     // user's own plan changed with no record. Held with the plan.
     // CR-core-parking-held-with-plan: the core-parking restore writes the active plan too.
     let plan_held = contract.iter().any(|c| rec_of_label(&c.label) == Some(REC_POWER));
-    (plan_held && PLAN_SCOPED.contains(&rec_id)).then(|| {
-        "Gaming Mode is on and has switched your power plan for its session, and this setting belongs \
-         to the power plan. Stop Gaming Mode first, then change it. Nothing was changed."
-            .to_string()
-    })
+    (plan_held && PLAN_SCOPED.contains(&rec_id)).then(|| GM_HOLDS_PLAN_REFUSAL.to_string())
 }
 
 /// CR-gm-spans-trial: whether a Gaming Mode contract on disk holds `rec_id`. A contract that is on
@@ -511,15 +513,9 @@ fn file_hold_refusal(rec_id: &str, file: &SessionFile, live: Option<&str>) -> Op
         refusal
     } else if refusal.contains("belongs to the power plan") {
         // CR-gm-stop-busy review r2 (opus nit 2): keep the plan reason for a leftover session.
-        "A Gaming Mode session that didn't finish putting its changes back still holds your power plan, \
-         and this setting belongs to the power plan. Finish that session first in Gaming Mode (\"Finish \
-         the last Gaming Mode session\"). Nothing was changed."
-            .to_string()
+        GM_LEFTOVER_HOLDS_PLAN_REFUSAL.to_string()
     } else {
-        "A Gaming Mode session that didn't finish putting its changes back holds this setting, and \
-         puts it back when it's finished. Finish it first in Gaming Mode (\"Finish the last Gaming \
-         Mode session\"). Nothing was changed."
-            .to_string()
+        GM_LEFTOVER_HOLDS_SETTING_REFUSAL.to_string()
     })
 }
 

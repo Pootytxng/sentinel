@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import { LEDGER_CHANGED_EVENT, type AppliedChange, type ChangedBeforeIncident } from "../types";
 import { hasUndo, liveChangeGroups } from "../data/live-changes";
 import { isUnrecordedUndo } from "../data/rollback-error";
+import { backendMessage } from "../data/backend-error";
 
 // P6-restore: "Put back how it was on <date>" for one incident's "Changed before this" block.
 //
@@ -122,8 +123,9 @@ export type RestoreResult = {
   outcome: RestoreOutcome;
   /** "unrecorded" only: the backend's live read of the setting after the undo, when it gave one. */
   liveRead?: string;
-  /** "failed" only (C6): the backend's own reason, e.g. a Gaming Mode or Trial refusal. The backend does not type
-   *  refusals apart from failures, so a screen that shows a stop shows this text as Compy was told it. */
+  /** "failed" only (C6): the backend's own text, e.g. a Gaming Mode refusal. INTERNAL: never put on screen as is.
+   *  A screen passes it to `backendMessage` (backend-error.ts) and shows only a sentence that maps; an unmapped one
+   *  shows nothing (it may go to the console as detail). */
   reason?: string;
 };
 
@@ -170,7 +172,8 @@ export async function runRestore(
 }
 
 /** C6: what one setting's undo walk did. `stop` is the record it stopped at ("failed": failed or refused, with the
- *  backend's reason; "unrecorded": ran on Windows but not saved), or null when every record was undone. */
+ *  backend's text kept internal in `reason`; "unrecorded": ran on Windows but not saved), or null when every record
+ *  was undone. */
 export type WalkResult = { done: number; total: number; ran: boolean; stop: RestoreResult | null };
 
 /** C6: undo `rows` (one setting's open records, newest first) through `rollback` (the audited `rollback_change`),
@@ -206,7 +209,10 @@ export function walkStopMessage(r: WalkResult, title: string, t: TFunction): str
     return r.stop.liveRead ? `${head} ${r.stop.liveRead}` : head;
   }
   const head = t("app.errors.undoPartialFailed", vars);
-  return r.stop.reason ? `${head} ${t("app.errors.undoReason", { reason: r.stop.reason })}` : head;
+  // The owner's "no String(e) in the face" law: the backend's own text is never shown. A reason line appears only
+  // when backend-error.ts knows the sentence (a fixed refusal pinned to its Rust const), in the user's language.
+  const known = backendMessage(r.stop.reason, t);
+  return known ? `${head} ${known}` : head;
 }
 
 /** True when a Trial is in progress (or Compy can't tell): the offer must not run. Same rule as the

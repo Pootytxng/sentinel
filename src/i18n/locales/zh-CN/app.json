@@ -57,8 +57,7 @@
     "recAppliedExternally": "「{{title}}」目前是开启状态,但并非 Compy 应用的,因此没有可回滚的记录。请前往 Windows 原本的设置位置手动关闭。",
     "openExportsFolderFailed": "无法打开导出文件夹。",
     "undoPartialFailed": "{{title}}：已撤销 {{done}} / {{total}} 条记录。Compy 在一条无法撤销的记录处停下；其余的仍在你的更改历史中。",
-    "undoPartialUnrecorded": "{{title}}：已撤销 {{done}} / {{total}} 条记录，另有一条已在 Windows 上执行，但无法保存到你的更改历史。Compy 在此停下。",
-    "undoReason": "Compy 收到的说明：{{reason}}"
+    "undoPartialUnrecorded": "{{title}}：已撤销 {{done}} / {{total}} 条记录，另有一条已在 Windows 上执行，但无法保存到你的更改历史。Compy 在此停下。"
   },
   "backendErrors": {
     "taskUnreadable": "Compy 现在无法检查这个 Windows 任务（检查无法运行，或 Windows 没有及时响应），因此没有做任何更改。请稍后再试。",
@@ -72,7 +71,13 @@
     "eeeNoSwitch": "你的适配器驱动有「节能以太网」设置，但没有 Compy 能识别为「关闭」的值，所以 Compy 保持原样，不去猜测。",
     "eeeUnreadReason": "现在无法检查有线网络适配器上的「节能以太网」设置。",
     "settingUnread": "Compy 现在无法读取这项设置，因此无法判断它是开启还是关闭。",
-    "couldntCheckHeading": "现在无法检查"
+    "couldntCheckHeading": "现在无法检查",
+    "gmBusy": "Compy 仍在完成另一项更改或游戏模式的启动（如果 Windows 权限提示已打开，请回应或取消它）——请稍等片刻再试",
+    "gmHoldsSetting": "游戏模式已开启，并在本次会话中占用此设置，停止时会将其恢复。请先停止游戏模式。没有做任何更改。",
+    "gmHoldsPlan": "游戏模式已开启，并在本次会话中切换了你的电源计划，而此设置属于该电源计划。请先停止游戏模式，然后再更改它。没有做任何更改。",
+    "gmLeftoverHoldsPlan": "一个未完成恢复更改的游戏模式会话仍占用你的电源计划，而此设置属于该电源计划。请先在游戏模式中完成该会话（「完成上一次游戏模式会话」）。没有做任何更改。",
+    "gmLeftoverHoldsSetting": "一个未完成恢复更改的游戏模式会话占用了此设置，并会在完成时将其恢复。请先在游戏模式中完成它（「完成上一次游戏模式会话」）。没有做任何更改。",
+    "gmRestoreInFlight": "游戏模式正在恢复它的更改（如果 Windows 权限提示已打开，请回应或取消它）。请在它完成后再试。没有做任何更改。"
   },
   "status": {
     "rulesRemote": "规则:远程(已签名)",

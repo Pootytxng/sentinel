@@ -192,7 +192,6 @@
     "undoFailed": "无法撤销：{{title}}。Compy 在此停下；之后的记录尚未撤销。",
     "undoReadFailed": "Compy 无法读取更改历史，因此没有撤销任何内容。",
     "undoUnrecorded": "{{title}}：有一条记录的撤销已在 Windows 上执行，但无法保存到你的更改历史。Compy 在此停下；之后的记录尚未撤销。",
-    "undoReason": "Compy 收到的说明：{{reason}}",
     "undoNoneListed": "Compy 在更改列表中没有找到要撤销的记录，因此没有撤销任何内容。",
     "undoAfter": "按「重新检查」查看哪些尚未撤销。",
     "everythingNotFinished": "清除没有完成。在你再次确认之前，不会再删除任何内容。",

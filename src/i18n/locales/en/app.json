@@ -57,8 +57,7 @@
     "recAppliedExternally": "\"{{title}}\" is currently on but Compy didn't apply it, so there's no rollback record. Toggle it off in the original Windows location instead.",
     "openExportsFolderFailed": "Couldn't open the exports folder.",
     "undoPartialFailed": "{{title}}: {{done}} of {{total}} records undone. Compy stopped at one it couldn't undo; the rest are still in your change history.",
-    "undoPartialUnrecorded": "{{title}}: {{done}} of {{total}} records undone, and one more ran on Windows but couldn't be saved to your change history. Compy stopped there.",
-    "undoReason": "What Compy was told: {{reason}}"
+    "undoPartialUnrecorded": "{{title}}: {{done}} of {{total}} records undone, and one more ran on Windows but couldn't be saved to your change history. Compy stopped there."
   },
   "backendErrors": {
     "taskUnreadable": "Compy couldn't check this Windows task right now (the check couldn't run or Windows didn't answer in time), so nothing was changed. Try again in a moment.",
@@ -72,7 +71,13 @@
     "eeeNoSwitch": "Your adapter's driver has an Energy-Efficient Ethernet setting, but no value Compy recognizes as off, so Compy left it as it is rather than guess.",
     "eeeUnreadReason": "Couldn't check Energy-Efficient Ethernet on your wired adapter right now.",
     "settingUnread": "Compy couldn't read this setting right now, so it can't say whether it is on or off.",
-    "couldntCheckHeading": "Couldn't check right now"
+    "couldntCheckHeading": "Couldn't check right now",
+    "gmBusy": "Compy is still finishing another change or a Gaming Mode start (if a Windows permission prompt is open, answer or cancel it) — give it a second and try again",
+    "gmHoldsSetting": "Gaming Mode is on and holds this setting for its session, and puts it back when it stops. Stop Gaming Mode first. Nothing was changed.",
+    "gmHoldsPlan": "Gaming Mode is on and has switched your power plan for its session, and this setting belongs to the power plan. Stop Gaming Mode first, then change it. Nothing was changed.",
+    "gmLeftoverHoldsPlan": "A Gaming Mode session that didn't finish putting its changes back still holds your power plan, and this setting belongs to the power plan. Finish that session first in Gaming Mode (\"Finish the last Gaming Mode session\"). Nothing was changed.",
+    "gmLeftoverHoldsSetting": "A Gaming Mode session that didn't finish putting its changes back holds this setting, and puts it back when it's finished. Finish it first in Gaming Mode (\"Finish the last Gaming Mode session\"). Nothing was changed.",
+    "gmRestoreInFlight": "Gaming Mode is putting its changes back right now (if a Windows permission prompt is open, answer or cancel it). Try again when it has finished. Nothing was changed."
   },
   "status": {
     "rulesRemote": "Rules: Remote (signed)",

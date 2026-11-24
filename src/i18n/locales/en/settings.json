@@ -192,7 +192,6 @@
     "undoFailed": "Couldn't undo: {{title}}. Compy stopped there; the records after it are not undone.",
     "undoReadFailed": "Compy couldn't read its change history, so it undid nothing.",
     "undoUnrecorded": "{{title}}: one record's undo ran on Windows but couldn't be saved to your change history. Compy stopped there; the records after it are not undone.",
-    "undoReason": "What Compy was told: {{reason}}",
     "undoNoneListed": "Compy found no records to undo in its change list, so it undid nothing.",
     "undoAfter": "Press Check again to see what is not undone yet.",
     "everythingNotFinished": "The clear did not finish. Nothing more will be deleted until you confirm it again.",

@@ -8,18 +8,25 @@ import en from "../i18n/locales/en/app.json";
 import zh from "../i18n/locales/zh-CN/app.json";
 import { BACKEND_SENTENCES, backendSentenceKey, localizeBackendText } from "./backend-error";
 
-const rust = ["actions.rs", "recommendations.rs"]
+// A Rust string read as Rust reads it: a `\` at a line end drops the newline and the next line's leading
+// whitespace, and `\"` is a quote. The match below is still byte-equal to the whole const.
+const rust = ["actions.rs", "recommendations.rs", "gaming_orchestrator.rs"]
   .map((f) => readFileSync(join("src-tauri", "src", f), "utf8"))
-  .join("\n");
+  .join("\n")
+  .replace(/\\\r?\n\s*/g, "");
+const rustConst = (name: string): string | null => {
+  const m = rust.match(new RegExp(`const ${name}: &str =\\s*"((?:[^"\\\\]|\\\\.)*)";`));
+  return m ? m[1].replace(/\\"/g, '"') : null;
+};
 
 const leaf = (key: string) => key.replace(/^app\.backendErrors\./, "");
 
 describe("backend-error: the backend's refusal sentences", () => {
   it("each TS sentence equals its Rust const", () => {
     for (const s of BACKEND_SENTENCES) {
-      const m = rust.match(new RegExp(`const ${s.rust}: &str =\\s*"([^"]*)";`));
-      expect(m, `${s.rust} not found in actions.rs / recommendations.rs`).not.toBeNull();
-      expect(s.text, s.rust).toBe(m![1]);
+      const m = rustConst(s.rust);
+      expect(m, `${s.rust} not found in actions.rs / recommendations.rs / gaming_orchestrator.rs`).not.toBeNull();
+      expect(s.text, s.rust).toBe(m);
     }
   });
 
