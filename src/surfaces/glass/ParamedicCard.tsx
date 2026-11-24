@@ -429,6 +429,18 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.ramWarning");
     case "ram-lower":
       return t("paramedic.evidence.ramLower", { peakGb: a.peakGb });
+    // B8: the newest session after the rough ones, its memory reading, dated. A size, never the reason; one clear
+    // session is said as one session; no reading is "no memory reading", never 0 GB.
+    case "ram-since":
+      return t("paramedic.evidence.ramSince", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb });
+    case "ram-since-full":
+      return t("paramedic.evidence.ramSinceFull", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb });
+    case "ram-since-lower-clear":
+      return t("paramedic.evidence.ramSinceLowerClear", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb });
+    case "ram-since-full-clear":
+      return t("paramedic.evidence.ramSinceFullClear", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb });
+    case "ram-since-unread":
+      return t("paramedic.evidence.ramSinceUnread", { game, date: dates.day(a.date) });
     // B4: the graphics driver read as the earlier version again, and what the sessions since say. Never who changed it.
     case "driver-back":
       return t("paramedic.evidence.driverBack", { from: a.from, back: dates.dayTime(a.back), game });
@@ -680,7 +692,14 @@ function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | n
     case "memory-pressure":
       return t("paramedic.checked.memoryPressure", { percent: a.percent, count: Number(a.count ?? 1) });
     case "memory-as-full":
-      return t("paramedic.checked.memoryAsFull", { peakGb: a.peakGb, totalGb: a.totalGb, basePeakGb: a.basePeakGb });
+      // B8: how many rough sessions were nearly full, of how many, so the absolute fact is said, not only "as full as".
+      return t("paramedic.checked.memoryAsFull", {
+        count: Number(a.count ?? 1),
+        full: a.full ?? "1",
+        peakGb: a.peakGb,
+        totalGb: a.totalGb,
+        basePeakGb: a.basePeakGb,
+      });
     case "setting-drift":
       return t("paramedic.checked.settingDrift");
     case "compy-change":

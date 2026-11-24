@@ -2757,11 +2757,20 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
             out.unknown("memory");
         } else if let Some(w) = c.affected.iter().copied().filter(|s| full(s)).max_by_key(|s| peak(s)) {
             // Memory was nearly full in a rough session, but the normal sessions already peaked that high:
-            // that is no change, and it is not "never nearly full" either. Said as what it is.
+            // that is no change, and it is not "never nearly full" either. Said as what it is. B8: with how many
+            // rough sessions were nearly full (the same RAM_FULL_FRACTION) of how many, every one of which has a
+            // reading here, so the absolute fact is said and not only "as full as".
             let base_peak = c.base.iter().filter_map(|s| s.peak_ram_bytes).max().unwrap_or(0);
+            let full_count = c.affected.iter().filter(|s| full(s)).count();
             out.ruled_out(
                 "memory-as-full",
-                &[("peakGb", gb(peak(w))), ("totalGb", gb(w.ram_total_bytes.unwrap_or(0))), ("basePeakGb", gb(base_peak))],
+                &[
+                    ("peakGb", gb(peak(w))),
+                    ("totalGb", gb(w.ram_total_bytes.unwrap_or(0))),
+                    ("basePeakGb", gb(base_peak)),
+                    ("full", full_count.to_string()),
+                    ("count", c.affected.len().to_string()),
+                ],
             );
         } else {
             // Every rough session had a reading, none reached the line the code applies: the card says that
@@ -2816,6 +2825,12 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
     if let Some(l) = lower.iter().copied().max_by_key(|s| peak(s)) {
         evidence.push(ev(EvidenceKind::Measured, "ram-lower", "sessions", true, &[("peakGb", gb(peak(l))), ("count", lower.len().to_string())]));
     }
+    // B8: what the newest session after the rough ones recorded about memory, dated, against the highest peak of
+    // every rough session with a memory reading (the line says "the highest peak in the rough sessions").
+    let rough_max = c.affected.iter().copied().filter(|s| s.ram_fraction().is_some()).map(peak).max().unwrap_or(0);
+    if let Some(line) = memory_since(c, gb(rough_max)) {
+        evidence.push(line);
+    }
     out.cands.push(Cand {
         id: "memory-pressure",
         t: false,
@@ -2829,6 +2844,49 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
         fix: steps("memory-pressure", &[("peakGb", gb(peak(worst))), ("totalGb", gb(total))]),
         evidence,
     });
+}
+
+/// B8 (memory follow-through): what the newest session of this game after the newest rough one recorded about memory,
+/// dated, against `rough_gb` (the highest peak of the rough sessions that have a memory reading). Memory is a size,
+/// not a timing: no line is support or `against`, none changes a candidate flag (so memory stays at most Possible),
+/// and none says that freeing memory helped. Nothing new is read or stored: every session row already carries its
+/// memory peak and total.
+/// - none after the newest rough session: no line.
+/// - two or more clear sessions after it: no line (the recovery's own `recovered-ram-*` answers).
+/// - `ram-since-unread` (Unknown): the newest has no memory reading. Never a peak of 0.
+/// - `ram-since-full-clear` / `ram-since-lower-clear`: exactly one session after it, it ran clear (one session is
+///   said, never support), at or above / below `RAM_FULL_FRACTION` of what is usable.
+/// - `ram-since-full` / `ram-since`: any other newest session (unjudged, or after a clear one), with its numbers.
+fn memory_since(c: &Ctx, rough_gb: String) -> Option<Evidence> {
+    let n = c.sess.len();
+    let last_rough = (0..n).rev().find(|&i| c.judged[i].verdict == Verdict::Fired)?;
+    let first_after = last_rough + 1;
+    if first_after >= n {
+        return None;
+    }
+    let since = c.sess[first_after].start().map(|t| recovery::since_restore(c, t, None));
+    if matches!(since, Some(recovery::Since::Clear { count, .. }) if count >= 2) {
+        return None;
+    }
+    let newest = c.sess[n - 1];
+    let date = newest.started_at.clone();
+    let (Some(f), Some(peak), Some(total)) = (newest.ram_fraction(), newest.peak_ram_bytes, newest.ram_total_bytes) else {
+        return Some(ev(EvidenceKind::Unknown, "ram-since-unread", "sessions", false, &[("date", date)]));
+    };
+    let one_clear = first_after == n - 1 && matches!(since, Some(recovery::Since::Clear { count: 1, .. }));
+    let code = match (one_clear, f >= RAM_FULL_FRACTION) {
+        (true, true) => "ram-since-full-clear",
+        (true, false) => "ram-since-lower-clear",
+        (false, true) => "ram-since-full",
+        (false, false) => "ram-since",
+    };
+    Some(ev(
+        EvidenceKind::Measured,
+        code,
+        "sessions",
+        false,
+        &[("date", date), ("peakGb", gb(peak)), ("totalGb", gb(total)), ("roughGb", rough_gb)],
+    ))
 }
 
 fn detect_compy_changes(c: &Ctx, out: &mut Out) {

@@ -757,6 +757,23 @@ fn memory_already_that_full_in_normal_sessions_is_not_never_nearly_full() {
     let m = d.not_it.iter().find(|n| n.id == "memory-as-full").expect("said as what it is");
     assert!(m.args.contains_key("peakGb") && m.args.contains_key("totalGb") && m.args.contains_key("basePeakGb"));
     assert!(d.findings.iter().all(|f| f.id != "memory-pressure"), "no change, so no finding");
+    // B8: the line says how many rough sessions were nearly full, of how many (the absolute fact, not only "as full
+    // as"). Normal sessions at 85%, rough ones at 95% and 85%: one of two. Break check: count every rough session as
+    // full (`full` becomes 2).
+    let mut sess = steady(4);
+    for s in sess.iter_mut() {
+        s.peak_ram_bytes = Some(85);
+        s.ram_total_bytes = Some(100);
+    }
+    for (day, p) in [("2026-10-09T10:00:00Z", 95), ("2026-10-10T10:00:00Z", 85)] {
+        let mut r = facts(day, 600, 600, 100.0, 30.0);
+        r.peak_ram_bytes = Some(p);
+        r.ram_total_bytes = Some(100);
+        sess.push(r);
+    }
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let m = d.not_it.iter().find(|n| n.id == "memory-as-full").expect("said as what it is");
+    assert_eq!((m.args["full"].as_str(), m.args["count"].as_str()), ("1", "2"), "{:?}", m.args);
     // And when every rough session really stayed below 90%, the plain line is still right.
     let mut sess = steady(4);
     for s in sess.iter_mut() {
@@ -3705,6 +3722,91 @@ mod recovery_f3 {
         assert_eq!(d.state, DiagnosisState::Recovered, "{:?}", d.state);
         assert_eq!(now_of(&d, "memory-pressure"), (Some(NowStatus::CantTell), vec!["recovered-ram-rough-lower"]));
         assert_ne!(d.recovery.as_ref().map(|r| r.summary.clone()), Some(RecoverySummary::PointsTo { id: "memory-pressure" }));
+    }
+
+    // ---- B8: memory follow-through (the newest session after the rough ones, its memory reading, dated) ----
+
+    /// Four normal sessions peaking 20 of 33.7 GB, one rough one on day 9 peaking 31.0 (nearly full), then `after`.
+    fn ram_then(after: Vec<SessionFacts>) -> Diagnosis {
+        let mut v: Vec<SessionFacts> = (1..=4)
+            .map(|d| {
+                let mut s = on(d, 50.0, None);
+                s.peak_ram_bytes = gb_of(20.0);
+                s.ram_total_bytes = gb_of(33.7);
+                s
+            })
+            .collect();
+        let mut r = on(9, 30.0, None);
+        r.peak_ram_bytes = gb_of(31.0);
+        r.ram_total_bytes = gb_of(33.7);
+        v.push(r);
+        v.extend(after);
+        with_report(v, Vec::new())
+    }
+
+    /// A session on `day`: clear (600 s, ratio 0.5) or a 2-minute one (not judgeable), peaking `peak` of 33.7 GB
+    /// (`None`: no memory reading at all).
+    fn later(day: u32, clear: bool, peak: Option<f64>) -> SessionFacts {
+        let mut s = if clear { on(day, 50.0, None) } else { facts(&at_day(day, 10), 120, 120, 100.0, 50.0) };
+        s.peak_ram_bytes = peak.and_then(gb_of);
+        s.ram_total_bytes = peak.and_then(|_| gb_of(33.7));
+        s
+    }
+
+    fn ram_since_lines(d: &Diagnosis) -> Vec<&Evidence> {
+        finding_of(d, "memory-pressure").evidence.iter().filter(|e| e.code.starts_with("ram-since")).collect()
+    }
+
+    // B8 t1/t5: nothing after the rough session says nothing; two clear sessions are the recovery's own answer.
+    // Break check (d): emit the line for a two-clear recovery; the second assert fails.
+    #[test]
+    fn b8_no_memory_since_line_with_nothing_after_or_a_two_clear_recovery() {
+        let d = ram_then(Vec::new());
+        assert!(ram_since_lines(&d).is_empty(), "{:?}", ram_since_lines(&d));
+        let d = ram_then(vec![later(10, true, Some(20.0)), later(11, true, Some(20.0))]);
+        assert_eq!(d.state, DiagnosisState::Recovered, "{:?}", d.state);
+        assert!(ram_since_lines(&d).is_empty(), "the recovery answers: {:?}", ram_since_lines(&d));
+    }
+
+    // B8 t2/t3: one clear session after the rough one is said as one session, with both numbers, never as support.
+    // Break check (b): drop `one_clear` (the code becomes ram-since). Break check (c): drop the RAM_FULL_FRACTION test
+    // (the full case reads as lower).
+    #[test]
+    fn b8_one_clear_session_says_its_memory_peak_and_never_supports_memory() {
+        let d = ram_then(vec![later(10, true, Some(20.0))]);
+        let lines = ram_since_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["ram-since-lower-clear"], "{lines:?}");
+        let l = lines[0];
+        assert_eq!(
+            (l.args["peakGb"].as_str(), l.args["totalGb"].as_str(), l.args["roughGb"].as_str(), l.args["date"].as_str()),
+            ("20.0", "33.7", "31.0", at_day(10, 10).as_str())
+        );
+        assert!(!l.against && l.kind == EvidenceKind::Measured);
+        assert_eq!(finding_of(&d, "memory-pressure").confidence, Certainty::Possible, "a size never lifts memory");
+        assert!(d.measured_once.is_some(), "B2's block is still there");
+        let d = ram_then(vec![later(10, true, Some(31.5))]);
+        assert_eq!(ram_since_lines(&d).iter().map(|e| e.code).collect::<Vec<_>>(), ["ram-since-full-clear"]);
+        assert!(ram_since_lines(&d).iter().all(|e| !e.against));
+    }
+
+    // B8 t4: the NEWEST session after the rough one is the one said; with no memory reading it is "no reading", never
+    // a number. Break check (a): read a missing reading as 0 GB (a ram-since line with peakGb appears). Break check
+    // (e): date the first session after instead of the newest.
+    #[test]
+    fn b8_the_newest_session_is_said_and_no_reading_is_never_a_number() {
+        let d = ram_then(vec![later(10, true, Some(20.0)), later(11, false, None)]);
+        let lines = ram_since_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["ram-since-unread"], "{lines:?}");
+        assert_eq!(lines[0].kind, EvidenceKind::Unknown);
+        assert_eq!(lines[0].args["date"], at_day(11, 10));
+        assert!(!lines[0].args.contains_key("peakGb"));
+        // A 2-minute session with a reading: its numbers, and "nearly full" only at or above the line.
+        let d = ram_then(vec![later(10, false, Some(31.5))]);
+        assert_eq!(ram_since_lines(&d).iter().map(|e| e.code).collect::<Vec<_>>(), ["ram-since-full"]);
+        let d = ram_then(vec![later(10, false, Some(20.0))]);
+        let lines = ram_since_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["ram-since"]);
+        assert_eq!((lines[0].args["peakGb"].as_str(), lines[0].args["roughGb"].as_str()), ("20.0", "31.0"));
     }
 
     #[test]

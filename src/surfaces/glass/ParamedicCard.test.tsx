@@ -1501,6 +1501,26 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).not.toMatch(/in these sessions/);
   });
 
+  // B8 (panel 2026-11-23: 30.4 of 31.4 GB read as "fine" under "Unchanged"): memory as full as in the normal sessions
+  // says the absolute fact, how many rough sessions were nearly full of how many, and why it doesn't set them apart.
+  // Break check: drop `count` from the t() call (the singular sentence shows for 2 rough sessions).
+  it("B8: memory as full as in the normal sessions says it was nearly full, in how many, and why that doesn't set them apart", async () => {
+    const args = { peakGb: "30.4", totalGb: "31.4", basePeakGb: "29.8", full: "2", count: "3" };
+    await ask(answerOf([background()], { not_it: [{ id: "memory-as-full", args }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(
+      "Memory: nearly full in 2 of the 3 rough sessions (the highest peak was 30.4 of 31.4 GB usable), but your normal sessions also peaked high (29.8 GB), so full memory doesn't set the rough sessions apart.",
+    );
+    cleanup();
+    await ask(answerOf([background()], { not_it: [{ id: "memory-as-full", args: { ...args, full: "1", count: "1" } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(
+      "Memory: nearly full in the rough session (peaked 30.4 of 31.4 GB usable), but your normal sessions also peaked high (29.8 GB), so full memory doesn't set the rough session apart.",
+    );
+  });
+
   it("a crash complaint that reaches the card gets a truthful line, not the no-game text", async () => {
     await ask({ ...base, state: { kind: "cant-tell", why: { kind: "crash-not-covered" } }, findings: [] });
     await waitFor(() => expect(screen.getByText("Crashes have their own page for now. Open Problems to see what Windows recorded.")).toBeTruthy());
@@ -2713,6 +2733,74 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
     const ph = (s: string) => (s.match(/\{\{\w+\}\}/g) ?? []).sort().join(",");
     for (const k of ["ramPeak_one", "ramPeak_other", "ramNormalRange_one", "ramNormalRange_other", "ramUnrecorded_one", "ramUnrecorded_other"]) {
       expect(ph(zh[k]), k).toBe(ph(en[k]));
+    }
+  });
+
+  // B8: the newest session after the rough ones, its memory reading, dated: what was measured then and now, one clear
+  // session said as one session, no reading said as no reading. Never a reason, never "freed" or "helped".
+  // Break check: drop a case from evidenceLine (its sentence is missing).
+  it("B8: says the memory reading of the newest session after the rough ones, dated, in each case", async () => {
+    const when = "2026-11-22T10:00:00Z";
+    const sinceLine = (code: string, kind: "measured" | "unknown" = "measured") =>
+      ({ kind, code, args: { date: when, peakGb: "20.0", totalGb: "31.4", roughGb: "30.4" }, against: false, source: "sessions" }) as F["evidence"][number];
+    const mem = find("memory-pressure", {
+      evidence: [
+        { kind: "measured", code: "ram-peak", args: { peakGb: "30.4", totalGb: "31.4", full: "1", count: "1", percent: "90", dates: when }, against: false, source: "sessions" },
+        sinceLine("ram-since"),
+        sinceLine("ram-since-full"),
+        sinceLine("ram-since-lower-clear"),
+        sinceLine("ram-since-full-clear"),
+        sinceLine("ram-since-unread", "unknown"),
+      ],
+      fix: steps("memory-pressure"),
+    });
+    answer.value = { ...base, why_first: null, findings: [mem] };
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    const text = screen.getByTestId("paramedic").textContent ?? "";
+    const d = day(when);
+    expect(text).toContain(`Memory peaked at 20.0 of 31.4 GB usable in your Game A session on ${d}; the highest peak in the rough sessions was 30.4 GB.`);
+    expect(text).toContain(`Memory was nearly full again in your Game A session on ${d}: it peaked at 20.0 of 31.4 GB usable.`);
+    expect(text).toContain(
+      `Memory peaked at 20.0 of 31.4 GB usable in your Game A session on ${d}, against 30.4 GB at most in the rough sessions, and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`,
+    );
+    expect(text).toContain(
+      `Memory was nearly full again in your Game A session on ${d} (it peaked at 20.0 of 31.4 GB usable), and that session ran in its usual range. One session so far; Compy says a game is back in its usual range after two.`,
+    );
+    expect(text).toContain(`Compy has no memory reading for your Game A session on ${d}.`);
+    const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8")).evidence as Record<string, string>;
+    for (const k of ["ramSince", "ramSinceFull", "ramSinceLowerClear", "ramSinceFullClear", "ramSinceUnread"]) {
+      expect(en[k], k).not.toMatch(/\b(caused|fixed|probably|safe|freed|helped|likely)\b/i);
+    }
+  });
+
+  it("B8: the memory follow-through lines say the same in Chinese", async () => {
+    const when = "2026-11-22T10:00:00Z";
+    const mem = find("memory-pressure", {
+      evidence: [
+        { kind: "measured", code: "ram-since-lower-clear", args: { date: when, peakGb: "20.0", totalGb: "31.4", roughGb: "30.4" }, against: false, source: "sessions" },
+        { kind: "unknown", code: "ram-since-unread", args: { date: when }, against: false, source: "sessions" },
+      ],
+      fix: steps("memory-pressure"),
+    });
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      answer.value = { ...base, why_first: null, findings: [mem] };
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      const text = screen.getByTestId("paramedic").textContent ?? "";
+      // The date is in the zh date format; the sentence around it is literal.
+      expect(text).toContain(
+        " 那次 Game A 游戏内存最高用到 20.0 GB（可用 31.4 GB），卡顿的那几次最高为 30.4 GB，那次表现在平时的范围内。目前只有一次；要连续两次在平时的范围内，Compy 才会说游戏已恢复到平时的范围。",
+      );
+      expect(text).toMatch(/Compy 没有 \S+ 那次 Game A 游戏的内存读数。/);
+    } finally {
+      await i18n.changeLanguage("en");
     }
   });
 });
