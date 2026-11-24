@@ -2583,7 +2583,7 @@ mod capture_pipe_tests {
             assert!(!src.contains(gone), "{gone} must be gone from the app");
         }
         assert_eq!(src.matches(concat!(".args(pipe", ".argv())")).count(), 2, "UAC-off and plain launches use the pipe argv");
-        assert_eq!(src.matches(concat!("&argv.each_ref()", ".map(OsStr::new),\n            |pid| pipe.launched_as(pid),\n            || pipe.finished(),\n")).count(), 1, "the elevated launch: pid in, finished before the handle closes (r2 N2)");
+        assert_eq!(src.matches(concat!("&argv.each_ref()", ".map(OsStr::new),\n            |pid| pipe.launched_", "as(pid),\n            || pipe.finished(),\n")).count(), 1, "the elevated launch: pid in, finished before the handle closes (r2 N2)");
         assert_eq!(src.matches(concat!("crate::fps_pipe::", "is_our_helper(pid, &launched)")).count(), 1, "the reader checks its client");
         assert_eq!(src.matches(concat!("pipe.", "finished();")).count(), 5, "every helper end stops its reader");
         // Review r1 B5: each of the three launches hands its started pid to the pipe.
