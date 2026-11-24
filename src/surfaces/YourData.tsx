@@ -275,7 +275,8 @@ export function YourData() {
                         {(s.unconfirmed_records ?? 0) > 0 && (
                           <span className="sev-warn" data-testid="your-data-applied-unconfirmed">
                             {" "}
-                            {t("optimize.fix.resultUnconfirmed")}
+                            {/* This list has no per-change undo, so the warning does not say "here". */}
+                            {t("optimize.fix.resultUnconfirmedNoUndoHere")}
                           </span>
                         )}
                       </li>

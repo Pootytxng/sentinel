@@ -835,7 +835,7 @@ describe("Fix telemetry-task disable announces the ledger change", () => {
 // Fix surface that lists it (the batch result, Applied, History), and only while it has not been undone.
 describe("Fix: a change recorded without its result", () => {
   beforeEach(() => localStorage.clear());
-  const WARNING = /Compy didn't get a result for this change, so it is recorded as made\. Check the setting in Windows, and undo it here if you don't want it\./;
+  const WARNING = /Compy didn't get a result for this change, so it may or may not have been made\. It is recorded so it can be undone: check the setting in Windows, and undo it here if you don't want it\./;
   const ch = (id: string, title: string, extra: Partial<AppliedChange> = {}): AppliedChange =>
     ({
       id,
@@ -892,7 +892,8 @@ describe("Fix: a change recorded without its result", () => {
   });
 
   it("the batch result names each unconfirmed change with the warning", async () => {
-    const onApplyBatch = vi.fn().mockResolvedValue({ applied: 2, skipped: [], unconfirmed: ["Title sysmain-disable"] });
+    // App reports the CONFIRMED count (unconfirmed-change.ts confirmedCount): 1 confirmed + 1 unconfirmed.
+    const onApplyBatch = vi.fn().mockResolvedValue({ applied: 1, skipped: [], unconfirmed: ["Title sysmain-disable"] });
     const recs = [
       rec("game-mode", false, "expected-impact", "safe"),
       rec("sysmain-disable", false, "expected-impact", "safe"),
@@ -903,5 +904,8 @@ describe("Fix: a change recorded without its result", () => {
     const note = await screen.findByTestId("fix-batch-result-unconfirmed");
     expect(note.textContent).toMatch(/^Title sysmain-disable: /);
     expect(note.textContent).toMatch(WARNING);
+    // Review r1 C: the unconfirmed one is named with the warning, never counted in "Applied".
+    expect(screen.getByText(/^Applied 1\b/)).toBeTruthy();
+    expect(screen.queryByText(/^Applied 2\b/)).toBeNull();
   });
 });

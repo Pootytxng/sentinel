@@ -38,7 +38,7 @@ import { inEffectCounts, useMachineModel } from "./data/machine-model";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, BatchApplyResult, ExportResult, PendingCareIncident } from "./types";
 import { keptOutsideUndoBody } from "./data/kept-outside-undo";
-import { unconfirmedTitles } from "./data/unconfirmed-change";
+import { confirmedCount, unconfirmedTitles } from "./data/unconfirmed-change";
 import { hasUndo } from "./data/live-changes";
 import { settingUndo } from "./data/undo-setting";
 import { runSettingWalk, trialInProgress, walkStopMessage, type WalkResult } from "./surfaces/changed-before-restore";
@@ -1030,13 +1030,15 @@ function App() {
         undefined,
         (r) => r.applied > 0,
       );
+      // A5 Part A: recorded without the admin step's own result; every surface that lists the batch says so,
+      // by name. Those are never counted as applied (review r1 C): `applied` is the confirmed count only.
+      const unconfirmed = unconfirmedTitles(report);
       return {
-        applied: report.applied,
+        applied: confirmedCount(report),
         skipped: report.items
           .filter((i) => i.status === "skipped")
           .map((i) => ({ title: i.rec_title, reason: localizeBackendText(i.reason ?? "", t) })),
-        // A5 Part A: recorded without the admin step's own result; every surface that lists the batch says so.
-        unconfirmed: unconfirmedTitles(report),
+        unconfirmed,
       };
     } catch (e) {
       return {

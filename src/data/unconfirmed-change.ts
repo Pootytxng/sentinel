@@ -11,3 +11,10 @@ export function recordedWithoutResult(c: Pick<AppliedChange, "status" | "result_
 export function unconfirmedTitles(report: Pick<BatchApplyReport, "items">): string[] {
   return report.items.filter((i) => i.status === "applied" && i.unconfirmed === true).map((i) => i.rec_title);
 }
+
+/** A5 Part A review r1 C: how many batch items Compy KNOWS were made, for "Applied {{count}}" and the Home
+ *  receipt. An item recorded without its result is not one of them: it is shown only by name, with the
+ *  warning, never counted as applied. */
+export function confirmedCount(report: Pick<BatchApplyReport, "items">): number {
+  return report.items.filter((i) => i.status === "applied" && i.unconfirmed !== true).length;
+}

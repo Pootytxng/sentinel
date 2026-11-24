@@ -563,9 +563,11 @@ describe("Your data: clear everything", () => {
     const applied = await screen.findByTestId("your-data-applied");
     const notes = screen.getAllByTestId("your-data-applied-unconfirmed");
     expect(notes).toHaveLength(1);
+    // Review r1 C: this list has no per-change undo, so the warning here never says "undo it here".
     expect(notes[0].textContent).toContain(
-      "Compy didn't get a result for this change, so it is recorded as made. Check the setting in Windows, and undo it here if you don't want it.",
+      "Compy didn't get a result for this change, so it may or may not have been made. It is recorded so it can be undone: check the setting in Windows, and undo it if you don't want it.",
     );
+    expect(notes[0].textContent).not.toContain("undo it here");
     const lines = [...applied.querySelectorAll("li")].map((li) => li.textContent ?? "");
     expect(lines[0].startsWith("Core parking ")).toBe(true);
     expect(lines[1]).toBe("Game mode");
