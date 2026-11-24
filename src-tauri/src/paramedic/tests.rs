@@ -4192,25 +4192,49 @@ mod recovery_f3 {
         }
     }
 
-    /// b12 review r1 F1: a session under another frame cap after the undo is CapChanged: measured well enough to read,
-    /// never judged normal or rough. since_restore counts it among the judged ones, so the between line (count 1) shows,
-    /// which is why the text says "measured well enough to read" and not "that Compy could judge". Uncapped baseline
-    /// and rough session, then one capped session (as a_frame_cap_change_is_never_a_recovery). Break check: count
-    /// CapChanged as unjudged in since_restore (`verdict != Unjudged` -> `!matches!(verdict, Unjudged | CapChanged)`)
-    /// -> the line becomes compy-undone-unread, fails.
-    #[test]
-    fn b12_a_session_under_another_frame_cap_since_the_undo_is_a_between_line_of_one() {
-        let mut capped = day_count(10, 50.0, 3);
-        capped.cap = CapState::Capped { at_fps: 60.0 };
-        let mut inp = undo_inputs(vec![capped], one_undone());
+    /// Uncapped baseline and rough session (as a_frame_cap_change_is_never_a_recovery), then `after`, with the undo.
+    fn uncapped_undo_case(after: Vec<SessionFacts>) -> Diagnosis {
+        let mut inp = undo_inputs(after, one_undone());
         for s in inp.sessions.iter_mut().filter(|s| matches!(s.cap, CapState::Unknown)) {
             s.cap = CapState::Uncapped;
         }
-        let d = diagnose(&inp, Complaint::Slow, Some("g"));
-        assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::FrameCapChanged }, "the capped session is CapChanged");
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    fn capped_day(day: u32) -> SessionFacts {
+        let mut s = day_count(day, 50.0, 3);
+        s.cap = CapState::Capped { at_fps: 60.0 };
+        s
+    }
+
+    /// b12 build (r1 F1 follow-up): when the newest judged session since the undo ran under another frame cap
+    /// (CapChanged), diagnose takes the CapChanged branch (paramedic.rs:1036-1044) and never calls explain(): the answer
+    /// is CantTell{FrameCapChanged}, the only finding is frame-cap-change, and there is no compy-change finding, so no
+    /// compy-undone-* line can show. Break check: none in b12 (this pins existing behaviour); a change that called
+    /// explain() on that branch would list compy-change and fail.
+    #[test]
+    fn b12_a_capped_newest_session_since_the_undo_is_cant_tell_frame_cap_with_no_compy_change_finding() {
+        let d = uncapped_undo_case(vec![capped_day(10)]);
+        assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::FrameCapChanged });
+        assert_eq!(ids(&d), ["frame-cap-change"]);
+        assert!(d.findings.iter().all(|f| f.evidence.iter().all(|e| !e.code.starts_with("compy-undone-"))));
+    }
+
+    /// b12 build (r1 F1 follow-up), pinned from one observed run at aca554b6+: undo, a capped session (CapChanged),
+    /// then a normal uncapped one. Observed: state CantTell{RecoveryUnclear{partial: false, one_clear: true,
+    /// cap_changed: false}}, findings ["compy-change"], one line compy-undone-between (Unknown) with count "2": the
+    /// CapChanged session is counted among the sessions measured well enough to read. Break check (r1-F1): count
+    /// CapChanged as unjudged in since_restore -> only the normal session is judged, Clear{1}, the line becomes
+    /// compy-undone-clear-once, fails.
+    #[test]
+    fn b12_a_capped_then_a_normal_session_since_the_undo_is_a_between_line_of_two() {
+        let d = uncapped_undo_case(vec![capped_day(10), day_count(11, 50.0, 3)]);
+        assert_eq!(d.state, unclear(false, true, false));
+        assert_eq!(ids(&d), ["compy-change"]);
         let lines = undone_lines(&d);
         assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-between"], "{lines:?}");
-        assert_eq!(lines[0].args["count"], "1");
+        assert_eq!(lines[0].kind, EvidenceKind::Unknown);
+        assert_eq!(lines[0].args["count"], "2");
     }
 
     /// Review r1 FIX 1: once the same setting (same rec_id) was applied again after the undo, later sessions were played
