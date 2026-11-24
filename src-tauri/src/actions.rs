@@ -2473,31 +2473,23 @@ mod elevation_attribution_tests {
     #[test]
     fn no_shipped_elevated_command_starts_a_process_that_could_hold_the_relay_open() {
         fn production(src: &str) -> String {
-            // Drop every `#[cfg(test)]` item (brace-matched); what is left is the shipped text.
+            // Drop every top-level `#[cfg(test)] mod … {` up to its closing `}` at column 0 (rustfmt layout).
+            // Line-based on purpose: braces inside format strings cannot unbalance it. Everything else is kept,
+            // so the check reads MORE text than ships, never less.
             let mut out = String::new();
-            let mut rest = src;
-            while let Some(hit) = rest.find("#[cfg(test)]") {
-                out.push_str(&rest[..hit]);
-                let after = &rest[hit..];
-                let Some(open) = after.find('{') else { return out };
-                let mut depth = 0usize;
-                let mut end = after.len();
-                for (i, ch) in after[open..].char_indices() {
-                    match ch {
-                        '{' => depth += 1,
-                        '}' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                end = open + i + 1;
-                                break;
-                            }
+            let mut lines = src.lines().peekable();
+            while let Some(line) = lines.next() {
+                if line == "#[cfg(test)]" && lines.peek().is_some_and(|n| n.starts_with("mod ") && n.ends_with('{')) {
+                    for skipped in lines.by_ref() {
+                        if skipped == "}" {
+                            break;
                         }
-                        _ => {}
                     }
+                    continue;
                 }
-                rest = &after[end..];
+                out.push_str(line);
+                out.push('\n');
             }
-            out.push_str(rest);
             out
         }
         for (file, src) in [
