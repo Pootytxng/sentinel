@@ -131,7 +131,7 @@
     "planTrialInterrupted": "之前一次针对电源计划或它的某项设置的试验启动被中断了，尚未解决。这项操作会写入同一个电源计划，所以 Compy 现在不会执行它。请查看「测试 → 已应用与历史记录」，然后再试。没有做任何更改。",
     "benchCalibrationNoFrames": "没能收集到足够的游戏帧。请在游戏运行时开启 FPS 监测。",
     "benchBaselineNoFrames": "没能收集到基准阶段的帧。请在游戏运行时开启 FPS 监测。",
-    "benchChangeOnNoFrames": "更改开启时没能收集到帧。",
+    "benchChangeOnNoFrames": "这项更改开启时没能收集到帧。",
     "benchStackOnNoFrames": "这组更改开启时没能收集到帧。",
     "benchStackNothingAppliable": "没有可以作为一组来测量的入门优化项。",
     "benchStackNothingApplied": "这组更改没有被应用——没有做任何更改，所以没有可测量的内容。",

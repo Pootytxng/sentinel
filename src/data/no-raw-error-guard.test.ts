@@ -99,6 +99,14 @@ describe("B11: the benchmark's apply-failed lines", () => {
     const code = rust.replace(/\r\n/g, "\n");
     const literalErrors = [...code.matchAll(/s\.error = Some\(\s*"/g)];
     expect(literalErrors.length, "a bare English literal is written to the trial card's error").toBe(0);
+    // D7 r1 gap: a formatted error must lead with a mapped const ("{BENCH_…} ({e})") or one of the two apply prefixes
+    // trialErrorText knows. Break check: write `s.error = Some(format!("New sentence: {e}"))` -> fails. (An error built
+    // in a variable first, `Some(msg)`, is not seen here: follow-up.)
+    const formatted = [...code.matchAll(/s\.error = Some\(\s*format!\(\s*"([^"]*)"/g)].map((m) => m[1]);
+    expect(formatted.length).toBeGreaterThan(0);
+    expect(
+      formatted.filter((f) => !/^\{[A-Z_]+\}/.test(f) && !f.startsWith(TRIAL_APPLY_PREFIX) && !f.startsWith(STACK_APPLY_PREFIX)),
+    ).toEqual([]);
     for (const name of [
       "BENCH_CALIBRATION_NO_FRAMES",
       "BENCH_BASELINE_NO_FRAMES",
@@ -313,6 +321,15 @@ describe("B11 r1: the safety-relevant zh sentences can't be swapped between keys
     ["benchLedgerUnreadBefore", "在测量前无法读取"],
     ["benchLedgerUnreadAfter", "已执行应用"],
     ["unverifiedOthersStart", "无法确认仍然生效"],
+    // D7 r1: the new benchmark and Trial-refusal zh texts.
+    ["trialHoldsSetting", "正在被一项试验测量"],
+    ["benchCalibrationNoFrames", "没能收集到足够的游戏帧"],
+    ["benchBaselineNoFrames", "没能收集到基准阶段的帧"],
+    ["benchChangeOnNoFrames", "这项更改开启时没能收集到帧"],
+    ["benchStackOnNoFrames", "这组更改开启时没能收集到帧"],
+    ["benchStackNothingAppliable", "没有可以作为一组来测量的入门优化项"],
+    ["benchStackNothingApplied", "这组更改没有被应用"],
+    ["benchRunCancelled", "这次运行已取消"],
   ];
   it.each(DISTINGUISHING)("%s says its own case, and only it does", (key, phrase) => {
     expect(zhKeys[key], key).toContain(phrase);
