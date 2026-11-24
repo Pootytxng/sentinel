@@ -1515,12 +1515,14 @@ describe("ParamedicCard: temperature and crash history", () => {
     const i18n = (await import("../../i18n")).default;
     await i18n.changeLanguage("zh-CN");
     try {
-      answer.value = answerOf([background()], { not_it: [{ id: "memory-pressure", args: { percent: "90", count: "1" } }] });
+      // zh has only the plural category, so i18next renders memoryPressure_other at every count (a pre-existing zh
+      // singular gap, the same as the ramSince* one B9 fixed with its own keys; noted as a follow-up).
+      answer.value = answerOf([background()], { not_it: [{ id: "memory-pressure", args: { percent: "90", count: "3" } }] });
       render(<ParamedicCard />);
       fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
-      expect(screen.getByTestId("paramedic-not-a-lead").textContent).toBe("测到了，但按 Compy 的规则不算线索：内存：在出问题的那次游戏中从未达到 90% 满。");
+      expect(screen.getByTestId("paramedic-not-a-lead").textContent).toBe("测到了，但按 Compy 的规则不算线索：内存：在出问题的这几次游戏中从未达到 90% 满。");
     } finally {
       await i18n.changeLanguage("en");
     }

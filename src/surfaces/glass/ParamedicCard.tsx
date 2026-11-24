@@ -434,20 +434,31 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     // B9: the rough side gets its own usable total when it differs (`roughTotalGb` is sent only then), and one rough
     // session is said in the singular. Literal keys only (zh has no plural forms, so the singular is its own key).
     case "ram-since": {
-      const v = { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb, roughTotalGb: a.roughTotalGb };
+      // The variables are written at each call (not a shared object) so the locale-parity guard can see them passed.
+      const date = dates.day(a.date);
       const single = a.roughCount === "1";
-      if (a.roughTotalGb) return single ? t("paramedic.evidence.ramSinceTotalsSingle", v) : t("paramedic.evidence.ramSinceTotals", v);
-      return single ? t("paramedic.evidence.ramSinceSingle", v) : t("paramedic.evidence.ramSince", v);
+      if (a.roughTotalGb) {
+        return single
+          ? t("paramedic.evidence.ramSinceTotalsSingle", { game, date, peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb, roughTotalGb: a.roughTotalGb })
+          : t("paramedic.evidence.ramSinceTotals", { game, date, peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb, roughTotalGb: a.roughTotalGb });
+      }
+      return single
+        ? t("paramedic.evidence.ramSinceSingle", { game, date, peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb })
+        : t("paramedic.evidence.ramSince", { game, date, peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb });
     }
     case "ram-since-full":
       return t("paramedic.evidence.ramSinceFull", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb });
     case "ram-since-lower-clear": {
-      const v = { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb, roughTotalGb: a.roughTotalGb };
+      const date = dates.day(a.date);
       const single = a.roughCount === "1";
       if (a.roughTotalGb) {
-        return single ? t("paramedic.evidence.ramSinceLowerClearTotalsSingle", v) : t("paramedic.evidence.ramSinceLowerClearTotals", v);
+        return single
+          ? t("paramedic.evidence.ramSinceLowerClearTotalsSingle", { game, date, peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb, roughTotalGb: a.roughTotalGb })
+          : t("paramedic.evidence.ramSinceLowerClearTotals", { game, date, peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb, roughTotalGb: a.roughTotalGb });
       }
-      return single ? t("paramedic.evidence.ramSinceLowerClearSingle", v) : t("paramedic.evidence.ramSinceLowerClear", v);
+      return single
+        ? t("paramedic.evidence.ramSinceLowerClearSingle", { game, date, peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb })
+        : t("paramedic.evidence.ramSinceLowerClear", { game, date, peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb });
     }
     case "ram-since-full-clear":
       return t("paramedic.evidence.ramSinceFullClear", { game, date: dates.day(a.date), peakGb: a.peakGb, totalGb: a.totalGb });
