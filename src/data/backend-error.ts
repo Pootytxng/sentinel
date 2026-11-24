@@ -130,7 +130,13 @@ export function localizeBackendText(text: string, t: TFunction): string {
 /** D3a: an error for a surface that shows the backend's words. A known sentence comes back in the
  *  user's language; anything else is MARKED as untranslated detail ("Compy couldn't finish this.
  *  Details: <English>" / zh-CN the same frame), so English never reads as half of a Chinese sentence.
- *  Never empty: an error with no text still says Compy couldn't finish. */
+ *  Never empty: an error with no text still says Compy couldn't finish.
+ *
+ *  NOT for the `fail` error banner: App.tsx's banner mapper keeps the raw error in the console and
+ *  never on screen (the owner's "no String(e) in the face" law), and a MARKED "Details: <raw>" still
+ *  puts String(e) on screen (raw text may also carry paths with the Windows user name). Only for a
+ *  surface that ALREADY shows backend text unmarked. Deliberately unused: its first use on any screen
+ *  needs the owner's ruling on "Details:" on screen vs console-only. */
 export function backendDetail(err: unknown, t: TFunction): string {
   const known = backendMessage(err, t);
   if (known) return known;
