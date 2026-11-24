@@ -1058,22 +1058,31 @@ function App() {
     // several open records, the dialog says why only one is undone.
     const openHere = changes.filter((c) => c.rec_id === change.rec_id && c.status !== "rolled_back").length;
     let trial: "none" | "running" | "unknown" = "none";
+    // C6 review F2: with several open records, the out-of-order check, the walk and the dialog's count all use a
+    // list read at the click (as Your data's "Undo them first" does), never App's cached `changes`, which an undo on
+    // another surface may have left stale. A failed read gives the one-record undo ("couldn't read its change list").
+    let walkList: readonly AppliedChange[] | null = changesReadFailed ? null : changes;
     if (!changesReadFailed && openHere > 1) {
+      walkList = await invoke<AppliedChange[]>("get_applied_changes")
+        .then((v) => (Array.isArray(v) ? v : null))
+        .catch(() => null);
       const xs = await invoke<{ status: string }[]>("get_experiments")
         .then((v) => (Array.isArray(v) ? v : null))
         .catch(() => null);
       trial = trialInProgress(xs, journey.kind === "idle");
     }
-    const plan = settingUndo(changesReadFailed ? null : changes, change.rec_id, trial);
+    const plan = settingUndo(walkList, change.rec_id, trial);
     if (plan.kind === "walk") return walkSetting(change, plan.rows);
     const note =
-      plan.why === "out_of_order"
-        ? t("app.dialogs.rollbackOneOutOfOrder")
-        : plan.why === "trial"
-          ? t("app.dialogs.rollbackOneTrial")
-          : plan.why === "list_unread"
-            ? t("app.dialogs.rollbackOneUnread")
-            : "";
+      plan.why === "no_saved_undo"
+        ? t("app.dialogs.rollbackOneNoSavedUndo")
+        : plan.why === "out_of_order"
+          ? t("app.dialogs.rollbackOneOutOfOrder")
+          : plan.why === "trial"
+            ? t("app.dialogs.rollbackOneTrial")
+            : plan.why === "list_unread"
+              ? t("app.dialogs.rollbackOneUnread")
+              : "";
     const dest = change.restores_label
       ? t("app.dialogs.rollbackDest", { label: change.restores_label })
       : "";

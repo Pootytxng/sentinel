@@ -40,7 +40,8 @@
     "rollbackMany": "Undo all {{total}} records",
     "rollbackOneOutOfOrder": "An older record of this setting was undone before this one, so this record's saved value may be one Compy set. Compy undoes one record at a time here.",
     "rollbackOneTrial": "A Trial is in progress (or Compy can't tell), so Compy undoes one record of this setting at a time here.",
-    "rollbackOneUnread": "Compy couldn't read its change list, so it undoes only this record here."
+    "rollbackOneUnread": "Compy couldn't read its change list, so it undoes only this record here.",
+    "rollbackOneNoSavedUndo": "One record of this setting has no saved undo, so Compy undoes one record at a time here."
   },
   "errors": {
     "recoverGamingFailed": "Couldn't finish restoring your settings just now — try again, or use Review.",

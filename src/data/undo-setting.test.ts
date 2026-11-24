@@ -69,6 +69,15 @@ describe("C6 per-setting undo: when the walk is not offered", () => {
     expect(settingUndo(inOrder, "game", "none").kind).toBe("walk");
   });
 
+  // F1 (review r2). Break check: drop the hasUndo check in settingUndo -> a walk is offered, fails.
+  it("an open record with no saved undo gives the one-record undo, never a walk that stops on Compy's value", () => {
+    const list = [row("g1", "game", "2026-11-01T00:00:00Z", { undo_contract: false }), row("g2", "game", "2026-11-02T00:00:00Z"), row("g3", "game", "2026-11-03T00:00:00Z")];
+    expect(settingUndo(list, "game", "none")).toEqual({ kind: "one", why: "no_saved_undo", open: 3 });
+    // Every record has its undo: the walk stays offered.
+    const ok = [row("g1", "game", "2026-11-01T00:00:00Z", { undo_contract: true }), row("g2", "game", "2026-11-02T00:00:00Z")];
+    expect(settingUndo(ok, "game", "none").kind).toBe("walk");
+  });
+
   // u12. Break check: drop the trial check -> a walk is offered during a Trial, fails.
   it("a Trial in progress, or one Compy can't rule out, gives the one-record undo", () => {
     const list = [row("g1", "game", "2026-11-01T00:00:00Z"), row("g2", "game", "2026-11-02T00:00:00Z")];
@@ -99,6 +108,21 @@ describe("C6 per-setting undo: the audited path only (source pins)", () => {
     const walk = app.split("const walkSetting = async")[1].split("\n  };\n")[0];
     expect(walk).toMatch(/runSettingWalk\(rows, \(changeId\) => writeLedger\("rollback_change", \{ changeId \}\)\)/);
     expect(walk).not.toMatch(/rollback_change_citing|history::/);
-    expect(app).toMatch(/settingUndo\(changesReadFailed \? null : changes, change\.rec_id, trial\)/);
+    expect(app).toMatch(/settingUndo\(walkList, change\.rec_id, trial\)/);
+  });
+
+  // F2 (review r2): with several open records the walk, its out-of-order check and the dialog count use a list read
+  // at the click, never App's cached `changes`; a failed read is null (the one-record undo, "couldn't read"). F1's
+  // reason has its own dialog note. Break check: pass `changes` to settingUndo again (or drop the re-read) -> fails.
+  it("App re-reads get_applied_changes at the click for a setting with several open records", () => {
+    const app = src("App.tsx");
+    const body = app.split("const rollback = async")[1].split("const walkSetting = async")[0];
+    const reread = body.split("if (!changesReadFailed && openHere > 1) {")[1]?.split("\n    }\n")[0] ?? "";
+    expect(reread).toMatch(
+      /walkList = await invoke<AppliedChange\[\]>\("get_applied_changes"\)\s*\.then\(\(v\) => \(Array\.isArray\(v\) \? v : null\)\)\s*\.catch\(\(\) => null\);/,
+    );
+    expect(body).toMatch(/settingUndo\(walkList, change\.rec_id, trial\)/);
+    expect(body).not.toMatch(/settingUndo\([^)]*\bchanges\b/);
+    expect(body).toMatch(/plan\.why === "no_saved_undo"\s*\?\s*t\("app\.dialogs\.rollbackOneNoSavedUndo"\)/);
   });
 });

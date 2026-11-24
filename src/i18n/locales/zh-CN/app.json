@@ -40,7 +40,8 @@
     "rollbackMany": "撤销全部 {{total}} 条记录",
     "rollbackOneOutOfOrder": "此设置的一条较早记录在这条记录之前已被撤销，因此这条记录保存的值可能是 Compy 设置的。这里 Compy 一次只撤销一条记录。",
     "rollbackOneTrial": "试验正在进行（或 Compy 无法判断），因此这里 Compy 一次只撤销此设置的一条记录。",
-    "rollbackOneUnread": "Compy 无法读取更改列表，因此这里只撤销这一条记录。"
+    "rollbackOneUnread": "Compy 无法读取更改列表，因此这里只撤销这一条记录。",
+    "rollbackOneNoSavedUndo": "此设置有一条记录没有保存的撤销信息，因此这里 Compy 一次只撤销一条记录。"
   },
   "errors": {
     "recoverGamingFailed": "暂时无法恢复你的设置——请重试,或点击「查看」。",

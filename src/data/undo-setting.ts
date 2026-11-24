@@ -1,4 +1,5 @@
 import type { AppliedChange } from "../types";
+import { hasUndo } from "./live-changes";
 
 // C6: one undo per setting. A setting re-applied N times without an undo between has N open records in the change
 // history; each record's undo puts back what Compy saved just before that record's change. Undoing them newest
@@ -10,6 +11,7 @@ import type { AppliedChange } from "../types";
 //
 // The walk is NOT offered (the card keeps today's one-record undo) when:
 //   - the setting has fewer than two open records (nothing to walk);
+//   - any open record of it has no saved undo (`hasUndo`, review F1): the walk would stop there on Compy's value;
 //   - an older record of it was undone OUT OF ORDER (review MC1): a rolled-back record earlier in the history than
 //     an open one, undone after that open record was applied, or with no undo date (can't tell). The open record's
 //     saved value may then be one Compy set, and walking would put Compy's value back;
@@ -19,7 +21,7 @@ import type { AppliedChange } from "../types";
 
 export type SettingUndo =
   | { kind: "walk"; rows: AppliedChange[] }
-  | { kind: "one"; why: "single" | "out_of_order" | "trial" | "list_unread"; open: number };
+  | { kind: "one"; why: "single" | "no_saved_undo" | "out_of_order" | "trial" | "list_unread"; open: number };
 
 /** The setting's records that are not rolled back, newest first by change-history order. `changes` must be in
  *  file order, as `get_applied_changes` returns them. */
@@ -59,6 +61,9 @@ export function settingUndo(
   if (!changes) return { kind: "one", why: "list_unread", open: 0 };
   const rows = openRecordsNewestFirst(changes, recId);
   if (rows.length < 2) return { kind: "one", why: "single", open: rows.length };
+  // C6 review F1: a record with no saved undo can't be undone, so a walk would stop there on a value Compy set.
+  // Refused up front, as restorePlan's s35 rule does (changed-before-restore.ts), never offered and then failed.
+  if (rows.some((c) => !hasUndo(c))) return { kind: "one", why: "no_saved_undo", open: rows.length };
   if (undoneOutOfOrder(changes, recId)) return { kind: "one", why: "out_of_order", open: rows.length };
   if (trial !== "none") return { kind: "one", why: "trial", open: rows.length };
   return { kind: "walk", rows };
