@@ -9852,7 +9852,7 @@ mod elevated_goldens {
     fn golden_single_and_batch_wrappers() {
         assert_eq!(with_error_action_stop(G_SERVICE_DISABLE), G_SINGLE_SERVICE_DISABLE);
         assert_eq!(with_error_action_stop(G_MEMCOMPRESS_COMBINED), G_MEMCOMPRESS_COMBINED, "an embedded preference is not doubled");
-        let items = vec![
+        let items = [
             ("sysmain-disable".to_string(), vec![G_SERVICE_DISABLE.to_string()]),
             ("nagle-disable".to_string(), vec![G_NAGLE_APPLY.to_string()]),
         ];
@@ -9891,7 +9891,7 @@ mod elevated_goldens {
     /// `ElevatedOp::script` (or any other builder argument) and this fails.
     #[test]
     fn the_typed_set_composes_every_golden_byte_for_byte() {
-        let cases: Vec<(&str, &str)> = vec![
+        let cases: &[(&str, &str)] = &[
             (r#"{"op":"service-disable","service":"SysMain"}"#, G_SERVICE_DISABLE),
             (r#"{"op":"service-restore","service":"SysMain","startup":"Automatic","start":true}"#, G_SERVICE_RESTORE_RUNNING),
             (r#"{"op":"service-restore","service":"DiagTrack","startup":"Manual","start":false}"#, G_SERVICE_RESTORE_STOPPED),
@@ -9952,7 +9952,7 @@ mod elevated_goldens {
             (concat!(r#"{"op":"nagle-disable","interfaces":[""#, nic!(), r#""]}"#), G_NAGLE_APPLY),
             (concat!(r#"{"op":"nagle-restore","interfaces":[{"key":""#, nic!(), r#"","ack":1,"nodelay":null}]}"#), G_NAGLE_RESTORE),
         ];
-        for (json, golden) in &cases {
+        for (json, golden) in cases {
             assert_eq!(typed(json), *golden, "{json}");
         }
     }
