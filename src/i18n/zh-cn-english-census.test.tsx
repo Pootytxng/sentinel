@@ -74,7 +74,7 @@ import Check from "../surfaces/Check";
 import Fix from "../surfaces/Fix";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { invalidateProbe } from "../data/probe-cache";
-import { readFileSync } from "node:fs";
+import { readFileSync } from "fs";
 import baselineRules from "../../src-tauri/resources/baseline-rules-v1.json";
 
 type Provenance = "verified" | "measured-signal" | "expected-impact";
