@@ -5617,7 +5617,7 @@ mod eee_script_tests {
         for q in CURLY {
             let payload = format!("x{q}; Stop-Computer; {q}");
             let escaped = format!("x{q}{q}; Stop-Computer; {q}{q}");
-            for field in 0..3 {
+            for field in [0usize, 1, 2] {
                 let mut raw = base.map(String::from);
                 raw[field] = payload.clone();
                 let mut esc = base.map(String::from);
@@ -5664,7 +5664,7 @@ mod eee_script_tests {
         let _force = ForceElevationError::begin();
         let base = ["Ethernet", "Energy Efficient Ethernet", "Enabled"];
         for bad in ["a\nb", "a\rb", "a\0b", "a\tb", "a\u{1b}b", "a\u{85}b", "a\u{2028}b"] {
-            for field in 0..3 {
+            for field in [0usize, 1, 2] {
                 let mut raw = base.map(String::from);
                 raw[field] = bad.to_string();
                 let snap = EeeNicSnapshot {
