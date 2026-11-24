@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
@@ -132,14 +132,29 @@ type Rec = {
 export function StateUnreadLine({
   rec,
   inline = false,
+  id,
 }: {
   rec: Pick<Rec, "state_unread" | "live_read_unread">;
   inline?: boolean;
+  id?: string; // D4: the row's TrustSwitch points aria-describedby here
 }) {
   const { t } = useTranslation();
-  if (!rec.state_unread && !rec.live_read_unread) return null;
+  if (!isStateUnread(rec)) return null;
   const text = t("app.backendErrors.settingUnread");
-  return inline ? <span className="fix-row-unread">{text}</span> : <p className="fix-row-unread">{text}</p>;
+  return inline ? (
+    <span className="fix-row-unread" id={id}>
+      {text}
+    </span>
+  ) : (
+    <p className="fix-row-unread" id={id}>
+      {text}
+    </p>
+  );
+}
+
+/** D4: the row shows the couldn't-read line (and its switch is described by it). */
+function isStateUnread(rec: Pick<Rec, "state_unread" | "live_read_unread">): boolean {
+  return !!(rec.state_unread || rec.live_read_unread);
 }
 
 type IneligibleRec = Pick<Rec, "id" | "title" | "ineligible_reason" | "state_unread">;
@@ -342,6 +357,7 @@ function FixRow({
   gameModeReverted?: boolean;
 }) {
   const { t } = useTranslation();
+  const unreadId = useId();
   return (
     <li className="fix-row">
       <div className="fix-row-main">
@@ -358,7 +374,7 @@ function FixRow({
           )}
         </div>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
-        <StateUnreadLine rec={rec} />
+        <StateUnreadLine rec={rec} id={unreadId} />
         <GameModeNote id={rec.id} vendor={vendor} reverted={gameModeReverted} />
         {applied && (
           <TrustSnapshotLine
@@ -381,6 +397,7 @@ function FixRow({
           action: applied ? t("optimize.fix.rollBack") : t("optimize.fix.apply"),
           title: rec.title,
         })}
+        describedBy={isStateUnread(rec) ? unreadId : undefined}
       />
     </li>
   );
@@ -417,6 +434,7 @@ export function SlimFixRow({
   const mut = recMutation(rec.id);
   const walkthrough = walkthroughForKeyForLanguage(rec.id, i18n.language);
   const why = rec.description || rec.impact;
+  const unreadId = useId();
   return (
     <SlimRecRow
       title={<RecTitle id={rec.id} title={rec.title} />}
@@ -425,7 +443,7 @@ export function SlimFixRow({
         <>
           <ExpertTargetLine id={rec.id} />
           {/* D2c: always visible, never only inside the collapsed detail. */}
-          <StateUnreadLine rec={rec} inline />
+          <StateUnreadLine rec={rec} inline id={unreadId} />
         </>
       }
       badge={rec.severity === "safe" ? "recommended" : "optional"}
@@ -439,6 +457,7 @@ export function SlimFixRow({
             action: applied ? t("optimize.fix.rollBack") : t("optimize.fix.apply"),
             title: rec.title,
           })}
+          describedBy={isStateUnread(rec) ? unreadId : undefined}
         />
       }
     >

@@ -24,12 +24,16 @@ export function TrustSwitch({
   onToggle,
   ariaLabel,
   label,
+  describedBy,
 }: {
   applied: boolean;
   busy: boolean;
   onToggle: () => void;
   ariaLabel: string;
   label?: string; // optional inline status label; omit when the row carries its own
+  // D4: the id of a line that qualifies the switch's state (the "couldn't read this setting" line), so
+  // a screen reader announces it with the switch instead of a bare "off".
+  describedBy?: string;
 }) {
   const { t } = useTranslation();
   return (
@@ -39,6 +43,7 @@ export function TrustSwitch({
         role="switch"
         aria-checked={applied}
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
         className={`ts-switch ${applied ? "ts-switch-on" : ""}`}
         disabled={busy}
         onClick={onToggle}
