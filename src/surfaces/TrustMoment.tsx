@@ -90,7 +90,9 @@ export function TrustMoment({
         });
       } catch (e) {
         // D2b: a refusal the backend explains is shown in the user's language, on its own.
-        setErrorMsg(backendMessage(e, t) ?? t("home.trustMoment.errors.applyFailed", { error: String(e) }));
+        // B11: anything else gets the generic line; the backend's own text is console detail only (App's rule).
+        console.error("[compy] trust moment apply", e);
+        setErrorMsg(backendMessage(e, t) ?? t("home.trustMoment.errors.applyFailed"));
         setPhase("error");
         return;
       }
@@ -104,10 +106,17 @@ export function TrustMoment({
       } catch (e) {
         // Honest, unsoftened: the change is real and still active — say exactly where to undo it.
         // #631: an undo that ran but couldn't be saved is not a failed undo — never say "still active".
+        // B11 (c8 review nit): a mapped refusal ends "Nothing was changed.", which is true of the undo only: the
+        // demo's apply is still on. So it is said inside a sentence that first says the change is still on. Anything
+        // else gets the generic line; the backend's own text is console detail only.
+        console.error("[compy] trust moment rollback", e);
+        const refused = backendMessage(e, t);
         setErrorMsg(
           isUnrecordedUndo(e)
             ? t("common.undoUnrecorded")
-            : backendMessage(e, t) ?? t("home.trustMoment.errors.rollbackFailed", { error: String(e) }),
+            : refused
+              ? t("home.trustMoment.errors.rollbackRefused", { reason: refused })
+              : t("home.trustMoment.errors.rollbackFailed"),
         );
         setPhase("error");
         onChanged();
