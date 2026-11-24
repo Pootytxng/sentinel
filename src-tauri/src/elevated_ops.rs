@@ -1162,11 +1162,11 @@ mod tests {
         let one = r#"{"ops":[{"op":"hags-enable"}]}"#;
         let batch_item = |id: &str| format!(r#"{{"id":"{id}","ops":[{{"op":"hags-enable"}}]}}"#);
         let many: Vec<String> = (0..=MAX_ITEMS).map(|i| batch_item(&format!("r{}", i % MAX_ITEMS))).collect();
-        let nine_ops = format!(r#"{{"ops":[{}]}}"#, vec![r#"{"op":"hags-enable"}"#; MAX_OPS_PER_ITEM + 1].join(","));
+        let nine_ops = format!(r#"{{"ops":[{}]}}"#, [r#"{"op":"hags-enable"}"#; MAX_OPS_PER_ITEM + 1].join(","));
         let nine_nics = format!(r#"{{"ops":[{{"op":"nagle-disable","interfaces":[{}]}}]}}"#, vec![format!("\"{GUID_A}\""); MAX_TARGETS + 1].join(","));
         let pipe_args = ["--pipe", "compy-test", "--parent-pid", "1"];
         let with_pipe = |h: String| -> Vec<String> { std::iter::once(h).chain(pipe_args.iter().map(|s| s.to_string())).collect() };
-        let cases: Vec<(&str, Vec<String>)> = vec![
+        let cases: &[(&str, Vec<String>)] = &[
             ("no argument", vec![]),
             ("not hex", argv(&["zz"])),
             ("odd hex", argv(&["0"])),
@@ -1199,7 +1199,7 @@ mod tests {
             actions::reset_elevation_dispatch_count();
             let mut fx = Fake::default();
             let connects = std::cell::Cell::new(0);
-            let code = helper_argv_with(&args, &mut fx, &|_, _| {
+            let code = helper_argv_with(args, &mut fx, &|_, _| {
                 connects.set(connects.get() + 1);
                 Ok(Box::new(SharedBuf::default()) as PipeOut)
             });
