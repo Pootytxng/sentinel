@@ -10,11 +10,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::hardware::{collect_hardware, gpu_vendor_match, HardwareInfo};
 use crate::remote_rules::{load_rules, RulesSource};
+use crate::history::{probe_rec_target_with, ActiveCheck, LiveReads};
 use crate::{
-    eee_disabled_on_any_eligible_adapter_checked, fast_startup_state,
-    game_bar_disabled, game_mode_enabled, hags_state, memory_integrity_or_vbs_active,
-    mouse_accel_disabled, nagle_disabled_on_any_nic, pcie_aspm_off_on_ac_checked, reserved_storage_enabled,
-    usb_selective_suspend_off_on_ac_checked, visual_effects_for_best_performance,
+    eee_disabled_on_any_eligible_adapter_checked, fast_startup_state_checked,
+    game_bar_disabled, game_mode_enabled, hags_state_checked, memory_integrity_or_vbs_active,
+    mouse_accel_disabled, nagle_disabled_on_any_nic_checked, pcie_aspm_off_on_ac_checked,
+    reserved_storage_enabled_checked, usb_selective_suspend_off_on_ac_checked,
+    visual_effects_for_best_performance,
 };
 
 // Provenance is the honesty tier for each rec's *impact* claim. The UI surfaces
@@ -301,13 +303,25 @@ fn stale_primary_driver(hw: &HardwareInfo) -> Option<(&'static str, i64)> {
     Some((vendor, days))
 }
 
-/// The service reads as DISABLED — its start type, the state the one-click change sets — not merely
-/// as not running (CR-stopped-service, 2026-11-04: a Manual service that was idle read as "already set
-/// this way", as if the change were made). A failed read, or a service that is not there, is never
-/// "applied" (codebase review 2026-11-02). One seam with the ledger's live check. Cost: the catalog
-/// build shares one `LiveReads`, so its four service-disable reads are one WMI query (CR-service-batch).
-fn service_read_disabled(name: &str, reads: &crate::history::LiveReads) -> bool {
-    reads.service_disabled(name) == crate::history::ActiveCheck::On
+/// D4: a live check as a state read: `On`/`Off` are answers, `Unreadable` is a read that did not
+/// finish (`None`, so the card says Compy couldn't read it), and `Unrecognised` (no probe) is the old
+/// "not applied". A service reads as DISABLED by its start type, the state the one-click change sets
+/// (CR-stopped-service); a failed WMI listing, or a service with no row, is `Unreadable`, exactly as
+/// the ledger's live check reads it (`history::disabled_service_check`).
+fn live_read(check: ActiveCheck) -> Option<bool> {
+    match check {
+        ActiveCheck::On => Some(true),
+        ActiveCheck::Off | ActiveCheck::Unrecognised => Some(false),
+        ActiveCheck::Unreadable => None,
+    }
+}
+
+/// D4: a code-built rec's `(currently_applied, unread)` from the SAME probe the ledger's live check
+/// uses ([`probe_rec_target_with`], one seam), inside the catalog's pass (`reads`: one WMI service
+/// listing and one `powercfg` scheme read for the whole build). A failed read is "not applied" AND
+/// unread, never a not-applied switch that reads as "off".
+fn live_state(rec_id: &str, reads: &LiveReads) -> (bool, bool) {
+    applied_and_unread(Some(live_read(probe_rec_target_with(rec_id, reads))))
 }
 
 pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
@@ -358,33 +372,36 @@ pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
 // function; new kinds require a code release. Params allow parameterizing
 // shared shapes (e.g. "service-not-running" takes a service name).
 //
-// D2b: `None` = the read did not finish ("can't tell"), carried to the card as `state_unread`. Only the
-// two powercfg AC reads and the EEE read answer None so far (they used unchecked forms, which turned a
-// failed or timed-out read into "not off"); every other kind keeps its existing answer.
+// D2b: `None` = the read did not finish ("can't tell"), carried to the card as `state_unread`.
+// D4: every kind whose read CAN fail now answers None on a failed read (service start types, the
+// power plan, HAGS, Fast Startup, Reserved Storage, Nagle) instead of folding it into "off". The four
+// HKCU preference kinds (game mode, visual effects, mouse acceleration, Game Bar) stay plain reads, as
+// in the ledger's probe (`history::probe_rec_target_with`): an absent value there is the Windows
+// default, which IS their "off" answer.
 pub(crate) fn check_state_kind(
     kind: &str,
     params: &Option<serde_json::Value>,
     _hw: &HardwareInfo,
-    reads: &crate::history::LiveReads,
+    reads: &LiveReads,
 ) -> Option<bool> {
     Some(match kind {
         "game-mode-enabled" => game_mode_enabled(),
         "visual-effects-best-perf" => visual_effects_for_best_performance(),
         // The rule kind keeps its historical name; since 2026-11-04 it reads the service's start type
         // (Disabled), which is what the change sets, not whether the service happens to be running.
-        "service-not-running" => params
-            .as_ref()
-            .and_then(|p| p.get("service"))
-            .and_then(|s| s.as_str())
-            .map(|name| service_read_disabled(name, reads))
-            .unwrap_or(false),
-        "power-plan-ultimate" => crate::current_power_plan().is_some_and(|(class, _)| class == crate::PowerPlanClass::Ultimate),
-        "nagle-disabled-any-nic" => nagle_disabled_on_any_nic(),
-        "hags-on" => hags_state() == Some(2),
+        "service-not-running" => {
+            return match params.as_ref().and_then(|p| p.get("service")).and_then(|s| s.as_str()) {
+                Some(name) => live_read(reads.service_disabled(name)),
+                None => Some(false),
+            }
+        }
+        "power-plan-ultimate" => return reads.scheme().map(|seen| seen.class == crate::PowerPlanClass::Ultimate),
+        "nagle-disabled-any-nic" => return nagle_disabled_on_any_nic_checked(),
+        "hags-on" => return hags_state_checked().ok().map(|v| v == Some(2)),
         "mouse-accel-disabled" => mouse_accel_disabled(),
         "game-bar-disabled" => game_bar_disabled(),
-        "fast-startup-disabled" => fast_startup_state() == Some(0),
-        "reserved-storage-disabled" => !reserved_storage_enabled(),
+        "fast-startup-disabled" => return fast_startup_state_checked().ok().map(|v| v == Some(0)),
+        "reserved-storage-disabled" => return reserved_storage_enabled_checked().ok().map(|on| !on),
         "usb-selective-suspend-off-on-ac" => return usb_selective_suspend_off_on_ac_checked(),
         "pcie-aspm-off-on-ac" => return pcie_aspm_off_on_ac_checked(),
         "eee-disabled-on-eligible-adapters" => return eee_disabled_on_any_eligible_adapter_checked(),
@@ -474,9 +491,14 @@ pub(crate) fn evaluate_rule_spec(
 
 
 pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
-    let mut recs: Vec<Recommendation> = Vec::new();
     // One pass's live reads: every service-disable state below reads one batched WMI listing.
-    let reads = crate::history::LiveReads::default();
+    build_recommendations_with(hw, &LiveReads::default())
+}
+
+/// [`build_recommendations`] inside a caller's pass of live reads. Tests pass a pass whose service
+/// listing or power-scheme read fails (`LiveReads::with_listings` / `with_scheme_read`).
+pub(crate) fn build_recommendations_with(hw: &HardwareInfo, reads: &LiveReads) -> Vec<Recommendation> {
+    let mut recs: Vec<Recommendation> = Vec::new();
 
     // ── Step B: rules loaded from the embedded baseline JSON ──────────
     // Currently empty in commit B; first rec (game-mode) migrates over in C.
@@ -486,14 +508,16 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     // disabled (see `remote_fetch_enabled()`).
     let (baseline, _source) = load_rules();
     for spec in &baseline.rules {
-        if let Some(rec) = evaluate_rule_spec(spec, hw, &reads) {
+        if let Some(rec) = evaluate_rule_spec(spec, hw, reads) {
             recs.push(rec);
         }
     }
 
     // The plan's class comes from its GUID (CR-localized-reads); the name is shown, never judged.
-    let (plan_class, active_plan) = crate::current_power_plan().unwrap_or((crate::PowerPlanClass::Other, String::new()));
-    let on_ultimate = plan_class == crate::PowerPlanClass::Ultimate;
+    // D4: the pass's one scheme read (shared with the ledger's probe); a failed read is unread, not
+    // "not on Ultimate".
+    let active_plan = reads.scheme().map(|seen| seen.name).unwrap_or_default();
+    let (on_ultimate, plan_unread) = live_state("power-ultimate", reads);
 
     // ─── Universal Windows tweaks ────────────────────────────────────────
     recs.push(Recommendation {
@@ -515,8 +539,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         eligible: true,
         ineligible_reason: None,
         risk_dimensions: None,
-        state_unread: false,
-        live_read_unread: false,
+        state_unread: plan_unread,
+        live_read_unread: plan_unread,
     });
 
     // game-mode is now defined in src-tauri/resources/baseline-rules-v1.json
@@ -544,6 +568,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         }
     });
     if c_drive_free_pct.map(|pct| pct < 25.0).unwrap_or(false) {
+        let (reserve_off, reserve_unread) = live_state("reserved-storage-off", reads);
         recs.push(Recommendation {
             id: "reserved-storage-off".into(),
             title: "Disable Windows Reserved Storage (reclaim ~7–10 GB on C:)".into(),
@@ -557,16 +582,19 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 "C: at {:.0}% free — reserved storage is worth reclaiming",
                 c_drive_free_pct.unwrap_or(0.0)
             ),
-            currently_applied: !reserved_storage_enabled(),
+            currently_applied: reserve_off,
             provenance: Provenance::MeasuredSignal,
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
-            state_unread: false,
-            live_read_unread: false,
+            state_unread: reserve_unread,
+            live_read_unread: reserve_unread,
         });
     }
 
+    // D4: the checked read; a key Compy can't open is unread, never "Not yet configured".
+    let fast_startup = fast_startup_state_checked();
+    let (fast_startup_off, fast_startup_unread) = live_state("fast-startup-off", reads);
     recs.push(Recommendation {
         id: "fast-startup-off".into(),
         title: "Disable Fast Startup".into(),
@@ -576,23 +604,24 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             "Fast Startup makes 'Shut down' actually hibernate the Windows kernel session instead of fully shutting down. It saves a few seconds at boot but causes drivers to keep stale state between sessions, breaks dual-boot setups, and is one of the most common silent causes of post-update weirdness ('Windows Update applied but I'm still seeing the bug').".into(),
         impact: "Clean shutdowns · drivers reload fresh each boot · fixes a category of 'why is X behaving weird' issues".into(),
         downside: Some("Cold boot will take a few extra seconds (typically 3-8 s on NVMe).".into()),
-        applies_to: match fast_startup_state() {
-            Some(1) => "Currently enabled (default on most installs)".into(),
-            Some(0) => "Currently disabled".into(),
-            _ => "Not yet configured".into(),
+        applies_to: match fast_startup {
+            Ok(Some(1)) => "Currently enabled (default on most installs)".into(),
+            Ok(Some(0)) => "Currently disabled".into(),
+            Ok(_) => "Not yet configured".into(),
+            Err(_) => "Couldn't read the current setting".into(),
         },
-        currently_applied: fast_startup_state() == Some(0),
+        currently_applied: fast_startup_off,
         provenance: Provenance::ExpectedImpact,
         eligible: true,
         ineligible_reason: None,
         risk_dimensions: None,
-        state_unread: false,
-        live_read_unread: false,
+        state_unread: fast_startup_unread,
+        live_read_unread: fast_startup_unread,
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
     if let Some(name) = gpu_vendor_match(hw, "NVIDIA") {
-        let telemetry_stopped = service_read_disabled("NvTelemetryContainer", &reads);
+        let (telemetry_stopped, telemetry_unread) = live_state("nvidia-telemetry", reads);
         recs.push(Recommendation {
             id: "nvidia-telemetry".into(),
             title: "Disable NVIDIA Container telemetry services".into(),
@@ -608,8 +637,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
-            state_unread: false,
-            live_read_unread: false,
+            state_unread: telemetry_unread,
+            live_read_unread: telemetry_unread,
         });
 
         recs.push(Recommendation {
@@ -718,6 +747,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     // marginal and the disk thrashing complaint applies.
     if ram_gb >= 16.0 && (has_nvme || has_ssd) {
         let storage_kind = if has_nvme { "NVMe" } else { "SSD" };
+        let (sysmain_off, sysmain_unread) = live_state("sysmain-disable", reads);
         recs.push(Recommendation {
             id: "sysmain-disable".into(),
             title: "Disable SysMain (Superfetch)".into(),
@@ -728,21 +758,23 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             impact: "Lower idle disk activity · ~100–200 MB RAM back".into(),
             downside: Some("App launches will be a tiny bit slower (usually unnoticeable on fast storage).".into()),
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
-            currently_applied: service_read_disabled("SysMain", &reads),
+            currently_applied: sysmain_off,
             provenance: Provenance::ExpectedImpact,
             eligible: true,
             ineligible_reason: None,
             risk_dimensions: None,
-            state_unread: false,
-            live_read_unread: false,
+            state_unread: sysmain_unread,
+            live_read_unread: sysmain_unread,
         });
     }
 
     // Hardware-accelerated GPU Scheduling: modern GPUs only, requires reboot.
     {
-        let state = hags_state();
+        // D4: the checked read; a key Compy can't open is unread, never "not yet configured".
+        let state = hags_state_checked();
         let has_modern_gpu = hw.gpus.iter().any(|g| hags_capable(&g.name));
         if has_modern_gpu {
+            let (hags_on, hags_unread) = live_state("hags-enable", reads);
             recs.push(Recommendation {
                 id: "hags-enable".into(),
                 title: "Enable Hardware-accelerated GPU Scheduling".into(),
@@ -753,18 +785,19 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 impact: "Lower input latency · CPU cycles freed up for game logic".into(),
                 downside: Some("Reboot required. Very occasionally a specific driver/game combo regresses with HAGS on — easy to roll back if it doesn't feel right.".into()),
                 applies_to: match state {
-                    Some(0) => "Currently: Auto (driver chooses)".into(),
-                    Some(1) => "Currently: Off".into(),
-                    Some(2) => "Currently: On".into(),
-                    _ => "Modern GPU detected — HAGS not yet configured".into(),
+                    Ok(Some(0)) => "Currently: Auto (driver chooses)".into(),
+                    Ok(Some(1)) => "Currently: Off".into(),
+                    Ok(Some(2)) => "Currently: On".into(),
+                    Ok(_) => "Modern GPU detected — HAGS not yet configured".into(),
+                    Err(_) => "Modern GPU detected — couldn't read the current HAGS setting".into(),
                 },
-                currently_applied: state == Some(2),
+                currently_applied: hags_on,
                 provenance: Provenance::MeasuredSignal,
                 eligible: true,
                 ineligible_reason: None,
                 risk_dimensions: None,
-                state_unread: false,
-                live_read_unread: false,
+                state_unread: hags_unread,
+                live_read_unread: hags_unread,
             });
         }
     }
@@ -1399,5 +1432,109 @@ mod rec_tests {
         let no_switch = HardwareInfo { has_wired_ethernet_port: true, ..Default::default() };
         let eee2 = build_recommendations(&no_switch).into_iter().find(|r| r.id == "eee-disable").expect("kept");
         assert!(!eee2.eligible && !eee2.state_unread);
+    }
+
+    // ── D4: a failed live read on the code-built recs and the remaining rule kinds ──────────────
+    fn no_tasks() -> Option<String> {
+        None
+    }
+    fn failed_services() -> Option<crate::history::ServiceListing> {
+        None
+    }
+    fn failed_scheme() -> Option<crate::history::ObservedPlan> {
+        None
+    }
+    fn services_read() -> Option<crate::history::ServiceListing> {
+        Some(vec![
+            ("SysMain".into(), "Stopped".into(), "Disabled".into()),
+            ("NvTelemetryContainer".into(), "Running".into(), "Auto".into()),
+            ("DiagTrack".into(), "Running".into(), "Auto".into()),
+            ("WSearch".into(), "Running".into(), "Auto".into()),
+        ])
+    }
+    fn ultimate_scheme() -> Option<crate::history::ObservedPlan> {
+        Some(crate::history::ObservedPlan {
+            guid: "e9a42b02-d5df-448d-aa00-03f14749eb61".into(),
+            name: "Ultimate Performance".into(),
+            class: crate::PowerPlanClass::Ultimate,
+        })
+    }
+    fn nvidia_nvme_rig() -> HardwareInfo {
+        HardwareInfo {
+            ram_total_bytes: 32 << 30,
+            gpus: vec![gpu("NVIDIA GeForce RTX 4080")],
+            physical_disks: vec![pdisk("SSD", "NVMe")],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn d4_live_read_maps_unreadable_to_unread_never_off() {
+        assert_eq!(live_read(ActiveCheck::Unreadable), None);
+        assert_eq!(live_read(ActiveCheck::On), Some(true));
+        assert_eq!(live_read(ActiveCheck::Off), Some(false));
+        assert_eq!(live_read(ActiveCheck::Unrecognised), Some(false));
+    }
+
+    // The service listing and the power-scheme read fail for the whole pass: every rec that reads them
+    // says it couldn't read (not applied, both flags), never a not-applied switch that reads as off.
+    #[test]
+    fn d4_a_failed_service_or_plan_read_says_couldnt_read_on_every_rec_that_reads_it() {
+        let reads = LiveReads::with_listings(no_tasks, failed_services).with_scheme_read(failed_scheme);
+        let recs = build_recommendations_with(&nvidia_nvme_rig(), &reads);
+        let get = |id: &str| recs.iter().find(|r| r.id == id).unwrap_or_else(|| panic!("{id} present"));
+        for id in ["power-ultimate", "nvidia-telemetry", "sysmain-disable", "diagtrack-disable"] {
+            let r = get(id);
+            assert!(r.eligible, "{id}");
+            assert!(!r.currently_applied, "{id}: not applied");
+            assert!(r.state_unread, "{id}: the card says couldn't read");
+            assert!(r.live_read_unread, "{id}: the failed live read is carried");
+        }
+        // Held back on this SSD rig (detected), so its bucket is unchanged; the failed read is carried.
+        let search = get("windows-search-disable");
+        assert!(!search.eligible && !search.state_unread && search.live_read_unread);
+    }
+
+    #[test]
+    fn d4_a_finished_service_or_plan_read_carries_no_flag() {
+        let reads = LiveReads::with_listings(no_tasks, services_read).with_scheme_read(ultimate_scheme);
+        let recs = build_recommendations_with(&nvidia_nvme_rig(), &reads);
+        let get = |id: &str| recs.iter().find(|r| r.id == id).unwrap_or_else(|| panic!("{id} present"));
+        let plan = get("power-ultimate");
+        assert!(plan.currently_applied && !plan.state_unread && !plan.live_read_unread);
+        assert_eq!(plan.applies_to, "Currently on 'Ultimate Performance'");
+        let sysmain = get("sysmain-disable");
+        assert!(sysmain.currently_applied && !sysmain.state_unread && !sysmain.live_read_unread);
+        for id in ["nvidia-telemetry", "diagtrack-disable"] {
+            let r = get(id);
+            assert!(!r.currently_applied && !r.state_unread && !r.live_read_unread, "{id}: read, and not disabled");
+        }
+    }
+
+    #[test]
+    fn d4_rule_kinds_answer_none_on_a_failed_read() {
+        let hw = HardwareInfo::default();
+        let svc = Some(serde_json::json!({ "service": "DiagTrack" }));
+        let failed = LiveReads::with_listings(no_tasks, failed_services).with_scheme_read(failed_scheme);
+        assert_eq!(check_state_kind("service-not-running", &svc, &hw, &failed), None);
+        assert_eq!(check_state_kind("power-plan-ultimate", &None, &hw, &failed), None);
+        let finished = LiveReads::with_listings(no_tasks, services_read).with_scheme_read(ultimate_scheme);
+        assert_eq!(check_state_kind("service-not-running", &svc, &hw, &finished), Some(false));
+        assert_eq!(check_state_kind("power-plan-ultimate", &None, &hw, &finished), Some(true));
+        // The registry kinds have no read seam (a real key Compy can't open can't be staged here): their
+        // arms read the CHECKED forms, and the code-built registry recs read the ledger's probe, which
+        // reads the same checked forms (history::probe_rec_target_with).
+        let src = include_str!("recommendations.rs").replace("\r\n", "\n");
+        for arm in [
+            "\"hags-on\" => return hags_state_checked().ok().map(|v| v == Some(2)),",
+            "\"fast-startup-disabled\" => return fast_startup_state_checked().ok().map(|v| v == Some(0)),",
+            "\"reserved-storage-disabled\" => return reserved_storage_enabled_checked().ok().map(|on| !on),",
+            "\"nagle-disabled-any-nic\" => return nagle_disabled_on_any_nic_checked(),",
+            "live_state(\"reserved-storage-off\", reads)",
+            "live_state(\"fast-startup-off\", reads)",
+            "live_state(\"hags-enable\", reads)",
+        ] {
+            assert!(src.contains(arm), "missing: {arm}");
+        }
     }
 }

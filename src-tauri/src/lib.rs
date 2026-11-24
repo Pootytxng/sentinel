@@ -873,6 +873,36 @@ pub(crate) fn nagle_disabled_on_any_nic() -> bool {
     false
 }
 
+/// D4: [`nagle_disabled_on_any_nic`] for the rec catalog's state read, `None` when it could not
+/// read: the Interfaces key would not open (any error but "not found"), or no adapter reads as
+/// disabled while one or more adapter keys would not open. An absent Interfaces key, or absent
+/// values on an adapter, stay the Windows default ("not disabled"), as before.
+pub(crate) fn nagle_disabled_on_any_nic_checked() -> Option<bool> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let interfaces = match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces") {
+        Ok(k) => k,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(false),
+        Err(_) => return None,
+    };
+    let mut unread_adapter = false;
+    for name in interfaces.enum_keys() {
+        let Ok(name) = name else {
+            unread_adapter = true;
+            continue;
+        };
+        let Ok(adapter) = interfaces.open_subkey(&name) else {
+            unread_adapter = true;
+            continue;
+        };
+        if adapter.get_value::<u32, _>("TcpAckFrequency").ok() == Some(1)
+            && adapter.get_value::<u32, _>("TCPNoDelay").ok() == Some(1)
+        {
+            return Some(true);
+        }
+    }
+    (!unread_adapter).then_some(false)
+}
+
 
 
 
