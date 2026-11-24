@@ -1178,7 +1178,11 @@ pub(crate) fn run_elevated_capture(command: &str) -> ElevatedCapture {
     if FORCE_DIRECT_ELEVATION.with(|f| *f.borrow()) {
         let out = std::env::temp_dir().join(format!("compy-qa-{}.out", std::process::id()));
         let _ = std::fs::remove_file(&out);
-        let lit = out.to_string_lossy().replace('\'', "''");
+        // A6: the same five-quote escape as every other single-quoted value (test-only temp path).
+        let lit = match ps_squote_value(&out.to_string_lossy()) {
+            Ok(l) => l,
+            Err(e) => return none(Err(e)),
+        };
         let run = run_elevated_powershell(&format!("& {{ {command} }} | Out-File -LiteralPath '{lit}' -Encoding ascii"));
         let text = std::fs::read_to_string(&out).unwrap_or_default();
         let _ = std::fs::remove_file(&out);
@@ -1829,6 +1833,84 @@ pub(crate) fn nic_interface_safe(name: &str) -> Result<(), String> {
         Err(format!(
             "refusing to build an elevated command with an unsafe interface key: {name:?}"
         ))
+    }
+}
+
+/// A6: every character PowerShell accepts as a SINGLE QUOTE, both to open and to close a single-quoted
+/// literal: the ASCII apostrophe and U+2018, U+2019, U+201A, U+201B. Escaping only the ASCII one leaves
+/// the other four as a way out of the literal (the EEE rollback hole, review a5-closed-elevated-set r1).
+pub(crate) const PS_SINGLE_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
+
+/// A6: `value` made ready to sit INSIDE a single-quoted PowerShell literal (`'...'`), for text Compy did not
+/// choose (vendor adapter strings, values read back from history.json). Inside such a literal a quote
+/// character followed by another quote character is one literal character and nothing else is special, so
+/// each of the five [`PS_SINGLE_QUOTES`] is doubled. A value carrying a control character (CR, LF, NUL, tab,
+/// any other C0/C1 code) or a Unicode line/paragraph separator is REFUSED: nothing is composed, so nothing can
+/// be elevated. The result MUST only ever be placed between two ASCII `'`.
+pub(crate) fn ps_squote_value(value: &str) -> Result<String, String> {
+    if value.chars().any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}')) {
+        return Err(format!(
+            "refusing to put a value with a control character into a Windows command: {value:?}"
+        ));
+    }
+    let mut out = String::with_capacity(value.len() + 2);
+    for c in value.chars() {
+        if PS_SINGLE_QUOTES.contains(&c) {
+            out.push(c);
+        }
+        out.push(c);
+    }
+    Ok(out)
+}
+
+/// A6: a GUID that reaches a Windows command (powercfg plan/subgroup/setting ids read back from
+/// history.json) must be exactly `8-4-4-4-12` hex digits: no braces, no spaces, nothing else. `ps_safe`
+/// alone admitted any `[A-Za-z0-9_.-]` token, which is not GUID-shaped.
+pub(crate) fn guid_exact(token: &str) -> Result<(), String> {
+    let shaped = token.len() == 36
+        && token.bytes().enumerate().all(|(i, b)| match i {
+            8 | 13 | 18 | 23 => b == b'-',
+            _ => b.is_ascii_hexdigit(),
+        });
+    if shaped {
+        Ok(())
+    } else {
+        Err(format!("refusing to build a Windows command with a value that is not a GUID: {token:?}"))
+    }
+}
+
+#[cfg(test)]
+mod guid_shape_tests {
+    use super::*;
+
+    /// A6: a power GUID read back from history.json reaches `powercfg` only when it is exactly 8-4-4-4-12 hex.
+    /// `zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz` passes `ps_safe` and the old length check, so it is the case
+    /// that proves the new check (with it removed, the Ultimate undo would dispatch).
+    #[test]
+    fn a_recorded_power_guid_must_be_exactly_guid_shaped_before_anything_is_dispatched() {
+        assert!(guid_exact("381b4222-f694-41f0-9685-ff5bb260df2e").is_ok());
+        assert!(guid_exact("381B4222-F694-41F0-9685-FF5BB260DF2E").is_ok());
+        for bad in [
+            "",
+            "abc",
+            "381b4222-f694-41f0-9685-ff5bb260df2",
+            "{381b4222-f694-41f0-9685-ff5bb260df2e}",
+            "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+            "381b4222_f694-41f0-9685-ff5bb260df2e",
+            "381b4222-f694-41f0-9685-ff5bb260df2 ",
+            "381b4222-f694-41f0-9685-ff5bb260df2\u{2019}",
+        ] {
+            assert!(guid_exact(bad).is_err(), "{bad:?}");
+        }
+        let _force = ForceElevationError::begin();
+        reset_elevation_dispatch_count();
+        let not_hex = "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz";
+        assert!(rollback_power_ultimate_typed(not_hex).is_err());
+        assert!(rollback_power_plan_setting_typed(not_hex, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1).is_err());
+        let balanced = "381b4222-f694-41f0-9685-ff5bb260df2e";
+        assert!(rollback_power_plan_setting_typed(balanced, not_hex, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1).is_err());
+        assert!(rollback_power_plan_setting_typed(balanced, PWR_SUBGROUP_USB, not_hex, 1, 1).is_err());
+        assert_eq!(elevation_dispatch_count(), 0, "refused before any elevation");
     }
 }
 
@@ -2724,7 +2806,7 @@ mod eee_resolution_tests {
             (prop("EEE", "On", &["On", "Off"]), "Off".to_string()),
             (prop("Energy Efficient Ethernet", "Enabled", &["Enabled", "Disabled"]), "Disabled".to_string()),
         ];
-        let ps = build_eee_apply_script(&targets);
+        let ps = build_eee_apply_script(&targets).expect("well-formed values compose");
         assert!(ps.contains("-DisplayValue 'Off'"), "uses the driver's own token");
         assert!(ps.contains("-DisplayValue 'Disabled'"));
         assert!(ps.ends_with("$null = 0"), "deterministic exit 0 — a skipped pair must never masquerade as an elevation failure");
@@ -2738,7 +2820,8 @@ mod eee_resolution_tests {
                 valid_values: vec!["On".into(), "Off".into()],
             },
             "Off".into(),
-        )]);
+        )])
+        .expect("an apostrophe is escaped, not refused");
         assert!(quoted.contains("'Bob''s NIC'"));
     }
 }
@@ -4028,6 +4111,7 @@ pub(crate) fn rollback_power_ultimate_typed(prior_guid: &str) -> Result<(), Stri
         return Err("no valid prior plan GUID in snapshot".into());
     }
     ps_safe(prior_guid)?; // GUID is hex+hyphens — reject anything that isn't
+    guid_exact(prior_guid)?; // A6: exactly 8-4-4-4-12 hex (ps_safe alone is not GUID-shaped)
     run_elevated_powershell(&format!("powercfg /setactive {}", prior_guid))?;
     Ok(())
 }
@@ -5050,6 +5134,13 @@ pub(crate) fn rollback_power_plan_setting_typed(
     ps_safe(plan_guid)?;
     ps_safe(subgroup_guid)?;
     ps_safe(setting_guid)?;
+    // A6: and each exactly GUID-shaped (8-4-4-4-12 hex). The refusal names the plan, so the existing
+    // "the plan is gone" wording test still reads a plan sentence.
+    for g in [plan_guid, subgroup_guid, setting_guid] {
+        guid_exact(g).map_err(|_| {
+            "This entry's recorded power plan setting isn't a plan/setting id - cannot roll back blind.".to_string()
+        })?;
+    }
     // Restore AC/DC to the EXACT plan this was applied to. If that plan no
     // longer exists (deleted, or never captured), fail safe with a clear
     // message — we will NOT silently restore the value onto whatever plan
@@ -5313,19 +5404,29 @@ foreach ($a in $adapters) {{
 /// failure must never bleed into the host exit code and masquerade as an elevation problem (the
 /// false-cancel chain) — detection recomputes the real state afterwards and stays honest. NEVER
 /// `exit` here: eee-disable is safe-tier batchable and the §4 composition rule bans it.
-pub(crate) fn build_eee_apply_script(targets: &[(EeeProperty, String)]) -> String {
+///
+/// A6: every field goes through [`ps_squote_value`] (all five single-quote characters doubled; a control
+/// character refuses the whole script, so nothing is composed or elevated).
+pub(crate) fn build_eee_apply_script(targets: &[(EeeProperty, String)]) -> Result<String, String> {
     let mut ps = String::new();
     for (p, value) in targets {
         ps.push_str(&format!(
             "Set-NetAdapterAdvancedProperty -Name '{}' -DisplayName '{}' -DisplayValue '{}' -NoRestart -ErrorAction SilentlyContinue; ",
-            p.adapter_name.replace('\'', "''"),
-            p.display_name.replace('\'', "''"),
-            value.replace('\'', "''"),
+            ps_squote_value(&p.adapter_name)?,
+            ps_squote_value(&p.display_name)?,
+            ps_squote_value(value)?,
         ));
     }
     ps.push_str("$null = 0");
-    ps
+    Ok(ps)
 }
+
+/// A6: the apply refused because the live adapter strings carry a character Compy won't put into a Windows
+/// command (nothing was changed, nothing was elevated).
+pub(crate) const EEE_VALUE_REFUSED_APPLY: &str = "Compy found your adapter's Energy-Efficient Ethernet setting, but its details contain characters Compy won't put into a Windows command, so nothing was changed.";
+/// A6: the undo refused because the saved adapter details carry such a character. The undo returns Err, so
+/// the ledger row stays as it is.
+pub(crate) const EEE_VALUE_REFUSED_UNDO: &str = "Compy found this change's saved adapter details, but they contain characters Compy won't put into a Windows command, so it didn't run the undo. The change stays in your Trust Ledger.";
 
 /// Issue 617 assessment: every per-NIC write is SilentlyContinue and the apply always returns Ok
 /// with the full snapshot, so any partial state is always receipted and rollback-able.
@@ -5353,7 +5454,11 @@ pub(crate) fn apply_eee_disable() -> Result<ApplyResult, String> {
         })
         .collect();
 
-    let ps = build_eee_apply_script(&targets);
+    let ps = build_eee_apply_script(&targets).map_err(|_| EEE_VALUE_REFUSED_APPLY.to_string())?;
+    // A6, rollback first: the undo puts the prior values (not in the apply script) into the same kind of
+    // literal. If the undo could not be composed from this snapshot, the change would have no working undo,
+    // so the apply refuses before anything is elevated.
+    build_eee_rollback_script(&adapters).map_err(|_| EEE_VALUE_REFUSED_APPLY.to_string())?;
     run_elevated_powershell(&ps)
         .map_err(|e| format!("Couldn't change Energy Efficient Ethernet — {}", e))?;
 
@@ -5375,30 +5480,38 @@ pub(crate) fn apply_eee_disable() -> Result<ApplyResult, String> {
 /// value strings — vendor text Compy did not choose and cannot constrain, read back out of a
 /// snapshot. Refusing an apostrophe would make a legitimately-named NIC UNROLLBACKABLE, a worse
 /// failure than the one it prevents. Inside a PowerShell single-quoted literal the ONLY
-/// metacharacter is `'`, and doubling it is the complete, documented escape — so the safety here
+/// metacharacter is a single quote, and doubling it is the complete escape — so the safety here
 /// rests on a proof rather than an alphabet: `eee_scripts_never_break_out_of_their_quotes` fuzzes
 /// both builders and re-parses the emitted script back to the exact input tokens.
-pub(crate) fn build_eee_rollback_script(adapters: &[EeeNicSnapshot]) -> String {
+///
+/// A6: the old escape doubled only the ASCII `'`, but PowerShell also closes a single-quoted literal at
+/// U+2018, U+2019, U+201A and U+201B, so a tampered history.json could end the literal and add a
+/// statement that ran elevated when the user approved the undo. Every field now goes through
+/// [`ps_squote_value`]: all five quote characters doubled, a control character refused (Err, nothing
+/// composed, nothing elevated). The fuzz re-parses with PowerShell's five-quote rule.
+pub(crate) fn build_eee_rollback_script(adapters: &[EeeNicSnapshot]) -> Result<String, String> {
     let mut ps = String::new();
     for a in adapters {
         ps.push_str(&format!(
             "Set-NetAdapterAdvancedProperty -Name '{}' -DisplayName '{}' -DisplayValue '{}' -NoRestart -ErrorAction SilentlyContinue; ",
-            a.adapter_name.replace('\'', "''"),
-            a.property_display_name.replace('\'', "''"),
-            a.prior_value.replace('\'', "''"),
+            ps_squote_value(&a.adapter_name)?,
+            ps_squote_value(&a.property_display_name)?,
+            ps_squote_value(&a.prior_value)?,
         ));
     }
     // Same deterministic-exit-0 tail as the apply: a silently-skipped pair must never read as an
     // elevation failure (restored values come from the snapshot = the driver's own prior strings).
     ps.push_str("$null = 0");
-    ps
+    Ok(ps)
 }
 
 pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<(), String> {
     if adapters.is_empty() {
         return Err("snapshot had no EEE adapters to roll back".into());
     }
-    let ps = build_eee_rollback_script(adapters);
+    // A6: saved details Compy won't put into a command refuse the undo before anything is elevated; the Err
+    // leaves the ledger row as it is.
+    let ps = build_eee_rollback_script(adapters).map_err(|_| EEE_VALUE_REFUSED_UNDO.to_string())?;
     run_elevated_powershell(&ps)
         .map_err(|e| format!("Couldn't restore Energy Efficient Ethernet — {}", e))?;
     Ok(())
@@ -5438,12 +5551,254 @@ mod eee_script_tests {
 
     #[test]
     fn a_normal_eee_apply_script_is_byte_for_byte_the_golden() {
-        assert_eq!(build_eee_apply_script(&golden_targets()), GOLDEN_APPLY);
+        assert_eq!(build_eee_apply_script(&golden_targets()).expect("well-formed values compose"), GOLDEN_APPLY);
     }
 
     #[test]
     fn a_normal_eee_rollback_script_is_byte_for_byte_the_golden() {
-        assert_eq!(build_eee_rollback_script(&golden_snapshots()), GOLDEN_ROLLBACK);
+        assert_eq!(build_eee_rollback_script(&golden_snapshots()).expect("well-formed values compose"), GOLDEN_ROLLBACK);
+    }
+
+    /// PowerShell's own rule for single-quoted literals, used to read a composed script back: ANY of the five
+    /// quote characters opens and closes a literal, and inside one a quote character followed by another quote
+    /// character is one literal character (the second). Returns the literals and the text outside them (the
+    /// quotes themselves dropped). `None` = an unterminated literal.
+    pub(super) fn parse_ps_squoted_literals(script: &str) -> Option<(Vec<String>, String)> {
+        let q = |c: Option<&char>| c.is_some_and(|c| PS_SINGLE_QUOTES.contains(c));
+        let cs: Vec<char> = script.chars().collect();
+        let mut out = Vec::new();
+        let mut outside = String::new();
+        let mut i = 0;
+        while i < cs.len() {
+            if !q(cs.get(i)) {
+                outside.push(cs[i]);
+                i += 1;
+                continue;
+            }
+            i += 1;
+            let mut lit = String::new();
+            loop {
+                if i >= cs.len() {
+                    return None;
+                }
+                if q(cs.get(i)) {
+                    if q(cs.get(i + 1)) {
+                        lit.push(cs[i + 1]);
+                        i += 2;
+                    } else {
+                        i += 1;
+                        break;
+                    }
+                } else {
+                    lit.push(cs[i]);
+                    i += 1;
+                }
+            }
+            out.push(lit);
+        }
+        Some((out, outside))
+    }
+
+    const CURLY: [char; 4] = ['\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
+
+    fn one_line(name: &str, display: &str, value: &str) -> String {
+        format!(
+            "Set-NetAdapterAdvancedProperty -Name '{name}' -DisplayName '{display}' -DisplayValue '{value}' -NoRestart -ErrorAction SilentlyContinue; $null = 0"
+        )
+    }
+
+    /// A6 (review a5-closed-elevated-set r1, the live hole): a curly-quote breakout in ANY of the three fields,
+    /// with each of the four characters PowerShell treats as a quote, stays inside its literal in both scripts.
+    /// The exact composed text is asserted, then read back with PowerShell's rule: three literals, the input
+    /// exactly, and no statement outside them.
+    #[test]
+    fn a_curly_quote_breakout_stays_inside_its_literal_in_every_field() {
+        let base = ["Ethernet", "Energy Efficient Ethernet", "Enabled"];
+        for q in CURLY {
+            let payload = format!("x{q}; Stop-Computer; {q}");
+            let escaped = format!("x{q}{q}; Stop-Computer; {q}{q}");
+            for field in 0..3 {
+                let mut raw = base.map(String::from);
+                raw[field] = payload.clone();
+                let mut esc = base.map(String::from);
+                esc[field] = escaped.clone();
+                let expected = one_line(&esc[0], &esc[1], &esc[2]);
+
+                let rollback = build_eee_rollback_script(&[EeeNicSnapshot {
+                    adapter_name: raw[0].clone(),
+                    property_display_name: raw[1].clone(),
+                    prior_value: raw[2].clone(),
+                }])
+                .expect("a quote is escaped, not refused");
+                assert_eq!(rollback, expected, "rollback, field {field}, {q:?}");
+
+                let apply = build_eee_apply_script(&[(
+                    EeeProperty {
+                        adapter_name: raw[0].clone(),
+                        display_name: raw[1].clone(),
+                        current_value: "On".into(),
+                        valid_values: vec![],
+                    },
+                    raw[2].clone(),
+                )])
+                .expect("a quote is escaped, not refused");
+                assert_eq!(apply, expected, "apply, field {field}, {q:?}");
+
+                for script in [&rollback, &apply] {
+                    let (lits, outside) = parse_ps_squoted_literals(script).expect("every literal is closed");
+                    assert_eq!(lits, raw.to_vec(), "the payload stays inside its literal");
+                    // Outside the literals only Compy's own text remains: no second statement.
+                    assert_eq!(
+                        outside,
+                        "Set-NetAdapterAdvancedProperty -Name  -DisplayName  -DisplayValue  -NoRestart -ErrorAction SilentlyContinue; $null = 0"
+                    );
+                }
+            }
+        }
+    }
+
+    /// A6: a control character (CR, LF, NUL, tab, ESC, a Unicode line separator) in any field refuses the
+    /// whole script in both builders, and the undo refuses with its own sentence before anything is elevated.
+    #[test]
+    fn a_control_character_in_any_field_refuses_and_nothing_is_dispatched() {
+        let _force = ForceElevationError::begin();
+        let base = ["Ethernet", "Energy Efficient Ethernet", "Enabled"];
+        for bad in ["a\nb", "a\rb", "a\0b", "a\tb", "a\u{1b}b", "a\u{85}b", "a\u{2028}b"] {
+            for field in 0..3 {
+                let mut raw = base.map(String::from);
+                raw[field] = bad.to_string();
+                let snap = EeeNicSnapshot {
+                    adapter_name: raw[0].clone(),
+                    property_display_name: raw[1].clone(),
+                    prior_value: raw[2].clone(),
+                };
+                assert!(build_eee_rollback_script(std::slice::from_ref(&snap)).is_err(), "{bad:?} field {field}");
+                let target = (
+                    EeeProperty {
+                        adapter_name: raw[0].clone(),
+                        display_name: raw[1].clone(),
+                        current_value: "On".into(),
+                        valid_values: vec![],
+                    },
+                    raw[2].clone(),
+                );
+                assert!(build_eee_apply_script(&[target]).is_err(), "{bad:?} field {field}");
+                reset_elevation_dispatch_count();
+                assert_eq!(rollback_eee_disable_typed(&[snap]), Err(EEE_VALUE_REFUSED_UNDO.to_string()));
+                assert_eq!(elevation_dispatch_count(), 0, "refused before any elevation: {bad:?} field {field}");
+            }
+        }
+    }
+
+    fn read(stdout: &str) -> std::process::Output {
+        use std::os::windows::process::ExitStatusExt;
+        std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: stdout.as_bytes().to_vec(), stderr: Vec::new() }
+    }
+
+    /// A6: the apply refuses with its own sentence and elevates nothing when a live adapter string (or the
+    /// prior value only the undo would carry) has a control character.
+    #[test]
+    fn an_apply_whose_live_strings_carry_a_control_character_refuses_before_any_prompt() {
+        let _force = ForceElevationError::begin();
+        for line in [
+            "Eth\u{1}ernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n",
+            "Ethernet|Energy-Efficient Ethernet|En\u{1}abled|Enabled~Disabled\r\n",
+        ] {
+            reset_elevation_dispatch_count();
+            let _read = ForceEeeRead::begin(Some(read(line)));
+            assert_eq!(apply_eee_disable().err().expect("refused"), EEE_VALUE_REFUSED_APPLY, "{line:?}");
+            assert_eq!(elevation_dispatch_count(), 0, "{line:?}");
+        }
+    }
+
+    /// A6 source pin: both builders put every interpolated field through `ps_squote_value`, and no shipped
+    /// text in the modules that build Windows commands escapes with the apostrophe-only `replace` any more.
+    #[test]
+    fn both_eee_builders_quote_every_field_through_the_helper() {
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        for name in [concat!("pub(crate) fn build_eee_", "apply_script("), concat!("pub(crate) fn build_eee_", "rollback_script(")] {
+            let at = src.find(name).expect(name);
+            let body = &src[at..at + src[at..].find("\n}\n").expect("end")];
+            assert_eq!(body.matches("'{}'").count(), 3, "{name}: three single-quoted fields");
+            assert_eq!(body.matches(concat!("ps_squote_", "value(")).count(), 3, "{name}: each through the helper");
+            assert!(!body.contains(concat!(".replace(", "'\\''")), "{name}: no apostrophe-only escape");
+        }
+        let at = src.find(concat!("pub(crate) fn ps_squote_", "value(")).expect("helper");
+        let helper = &src[at..at + src[at..].find("\n}\n").expect("end")];
+        assert!(helper.contains("is_control()"), "the helper refuses control characters");
+        assert!(helper.contains(concat!("PS_SINGLE_", "QUOTES.contains(&c)")), "the helper doubles every quote character");
+        assert_eq!(PS_SINGLE_QUOTES, ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}']);
+        assert_eq!(ps_squote_value("a'\u{2018}\u{2019}\u{201A}\u{201B}b").as_deref(), Ok("a''\u{2018}\u{2018}\u{2019}\u{2019}\u{201A}\u{201A}\u{201B}\u{201B}b"));
+    }
+
+    /// A6 census (sweep: _train/a6-interpolation-sweep.md): every placeholder that sits inside a single-quoted
+    /// literal in the shipped text of this file is one of the classified sites below, each with the guard that
+    /// makes it safe. A new `'{...}'` fails here until someone puts it through `ps_squote_value` (or a refusing
+    /// alphabet) and classifies it, and no shipped line escapes with the apostrophe-only `replace` any more.
+    #[test]
+    fn every_single_quoted_placeholder_in_shipped_actions_text_is_classified() {
+        const CLASSIFIED: &[(&str, &str)] = &[
+            ("rec '{}' deferred no commands", "error text, not a command"),
+            ("rec '{}' uses an exit-style command", "error text, not a command"),
+            ("Could not read the current startup approval for '{}'", "error text, not a command"),
+            ("legacy AppliedChange for rec_id '{}'", "error text, not a command"),
+            ("Write-Output '{nonce}:{rec_id}:ok'", "compose_batch_script: ps_safe(rec_id), ps_safe(nonce)"),
+            ("Write-Output '{nonce}:end'", "nonce: ps_safe at compose / memcompress script"),
+            ("Out-File -LiteralPath '{lit}'", "cfg(test) direct-elevation seam: ps_squote_value"),
+            ("WHERE Name='{}'", "WQL through the WMI crate, not PowerShell; KnownService name, ps_safe"),
+            ("Get-ScheduledTask -TaskPath '{}' -ErrorAction Stop", "constant task path, ps_safe_squoted"),
+            ("(Get-ScheduledTask -TaskPath '{}' -TaskName '{}')", "constant path + resolved name, ps_safe_squoted"),
+            ("format!(\"'{p}'\")", "constant task paths, ps_safe_squoted"),
+            ("Disable-ScheduledTask -TaskPath '{}' -TaskName '{}'", "constant path + resolved name, ps_safe_squoted"),
+            ("Enable-ScheduledTask -TaskPath '{}' -TaskName '{}'", "constant path + resolved name, ps_safe_squoted"),
+            ("Get-AppxPackage -Name '{}'", "constant package name, ps_safe"),
+            ("safe_names.push(format!(\"'{}'\"", "constant package names, ps_safe"),
+            ("Remove-AppxPackage -Package '{}'", "live full name, ps_safe"),
+            ("-MainPackage '{}'", "ledger family name, ps_safe"),
+            ("-match '{plan_guid}'", "live plan GUID, is_whole_plan_guid (8-4-4-4-12 + ps_safe)"),
+            ("-match '{names}'", "constant pattern"),
+            ("Write-Output '{unread}'", "constant marker"),
+            (
+                "Set-NetAdapterAdvancedProperty -Name '{}' -DisplayName '{}' -DisplayValue '{}'",
+                "EEE: ps_squote_value on every field (pinned above)",
+            ),
+            ("-Path '{path}' -Name '{name}'", "set_or_remove_dword: constant path and name"),
+            ("-Path '{}' -Name 'SystemResponsiveness'", "constant MMCSS path"),
+            ("-Path '{MEMORY_MGMT_PATH}'", "constant path; entry = drive letter char + two u32"),
+            ("-Path '{path}' -Name 'TcpAckFrequency'", "interface key, nic_interface_safe"),
+            ("-Path '{path}' -Name 'TCPNoDelay'", "interface key, nic_interface_safe"),
+            ("-Path '{}' -Name 'TcpAckFrequency'", "interface key, nic_interface_safe"),
+            ("-Path '{}' -Name 'TCPNoDelay'", "interface key, nic_interface_safe"),
+        ];
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        let mut lines = src.lines().peekable();
+        let mut unclassified = Vec::new();
+        while let Some(line) = lines.next() {
+            // Shipped text only: a top-level test module is skipped to its column-0 close.
+            if line == "#[cfg(test)]" && lines.peek().is_some_and(|n| n.starts_with("mod ") && n.ends_with('{')) {
+                for skipped in lines.by_ref() {
+                    if skipped == "}" {
+                        break;
+                    }
+                }
+                continue;
+            }
+            let t = line.trim();
+            if t.starts_with("//") {
+                continue;
+            }
+            assert!(
+                !t.contains(concat!(".replace(", "'\\'', \"''\")")),
+                "an apostrophe-only escape reaches a command: {t}"
+            );
+            let placeholder = t
+                .match_indices("'{")
+                .any(|(i, _)| t[i + 2..].chars().next().is_some_and(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '}' | ':')));
+            if placeholder && !CLASSIFIED.iter().any(|(needle, _)| t.contains(needle)) {
+                unclassified.push(t.to_string());
+            }
+        }
+        assert!(unclassified.is_empty(), "single-quoted placeholders with no classified guard: {unclassified:#?}");
     }
 }
 
@@ -7388,7 +7743,8 @@ mod rollback_tests {
         // restore onto whatever plan is current. The all-zeros GUID is never a
         // real scheme, so this resolves to Err before any elevation is attempted.
         let bogus = "00000000-0000-0000-0000-000000000000";
-        let result = rollback_power_plan_setting_typed(bogus, "SUB", "SET", 1, 1);
+        // A6: real subgroup/setting GUIDs, so the GUID-shape check passes and the missing PLAN is what refuses.
+        let result = rollback_power_plan_setting_typed(bogus, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1);
         assert!(result.is_err(), "missing plan GUID must fail safe");
         let msg = result.unwrap_err().to_lowercase();
         assert!(
@@ -7718,42 +8074,9 @@ mod ipc_input_fuzz_tests {
     // EXACT input tokens. If a token could terminate its literal early — the definition of a
     // breakout — the parse would return something else, or fail. Both builders are covered, because
     // the rollback half is the half a tampered history.json feeds.
-    /// Read the PowerShell single-quoted literals out of a script, in order, unescaping `''`.
-    /// Returns None if the script is not well-formed (an unterminated literal = a breakout).
-    fn parse_squoted_literals(script: &str) -> Option<Vec<String>> {
-        let cs: Vec<char> = script.chars().collect();
-        let mut out = Vec::new();
-        let mut i = 0;
-        while i < cs.len() {
-            if cs[i] != '\'' {
-                i += 1;
-                continue;
-            }
-            i += 1; // opening quote
-            let mut lit = String::new();
-            loop {
-                match cs.get(i) {
-                    None => return None, // unterminated literal
-                    Some('\'') => {
-                        if cs.get(i + 1) == Some(&'\'') {
-                            lit.push('\'');
-                            i += 2;
-                        } else {
-                            i += 1; // closing quote
-                            break;
-                        }
-                    }
-                    Some(c) => {
-                        lit.push(*c);
-                        i += 1;
-                    }
-                }
-            }
-            out.push(lit);
-        }
-        Some(out)
-    }
-
+    // A6: the reader that re-parses the scripts is `eee_script_tests::parse_ps_squoted_literals`, which
+    // follows PowerShell's own rule (FIVE quote characters). The ASCII-only reader that stood here could not
+    // see a U+2019 closing the literal, which is how the rollback hole passed this fuzz.
     #[test]
     fn eee_scripts_never_break_out_of_their_quotes() {
         for seed in SEEDS {
@@ -7805,8 +8128,16 @@ mod ipc_input_fuzz_tests {
                     .iter()
                     .flat_map(|(a, b, c)| [a.clone(), b.clone(), c.clone()])
                     .collect();
+                // A6: a token with a control character refuses the whole script (nothing composed).
+                let refusable = expected.iter().any(|t| t.chars().any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}')));
+                if refusable {
+                    assert!(apply.is_err() && rollback.is_err(), "seed {seed} case {case}: a control character must refuse both scripts");
+                    continue;
+                }
+                let (apply, rollback) = (apply.expect("composes"), rollback.expect("composes"));
                 for (which, script) in [("apply", &apply), ("rollback", &rollback)] {
-                    let lits = parse_squoted_literals(script).unwrap_or_else(|| {
+                    // A6: read back with PowerShell's five-quote rule (the ASCII-only reader missed U+2018..U+201B).
+                    let lits = super::eee_script_tests::parse_ps_squoted_literals(script).map(|(l, _)| l).unwrap_or_else(|| {
                         panic!("seed {seed} case {case} n={n}: {which} script has an unterminated literal — a token escaped its quotes: {script:?}")
                     });
                     assert_eq!(

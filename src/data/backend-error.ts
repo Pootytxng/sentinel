@@ -61,6 +61,17 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "Couldn't check Energy-Efficient Ethernet on your wired adapter right now.",
     key: "app.backendErrors.eeeUnreadReason",
   },
+  // A6: an EEE value Compy won't put into a Windows command (a control character) refuses before any prompt.
+  {
+    rust: "EEE_VALUE_REFUSED_APPLY",
+    text: "Compy found your adapter's Energy-Efficient Ethernet setting, but its details contain characters Compy won't put into a Windows command, so nothing was changed.",
+    key: "app.backendErrors.eeeValueRefused",
+  },
+  {
+    rust: "EEE_VALUE_REFUSED_UNDO",
+    text: "Compy found this change's saved adapter details, but they contain characters Compy won't put into a Windows command, so it didn't run the undo. The change stays in your Trust Ledger.",
+    key: "app.backendErrors.eeeValueRefusedUndo",
+  },
   // C6: the fixed refusals an undo meets in front of the audited one (experiment::rollback_change →
   // gaming_orchestrator::plain_change_gate), so a stopped undo walk can say why in the user's language.
   // Consts in gaming_orchestrator.rs. The Trial/benchmark plan-class refusal carries the setting's title,

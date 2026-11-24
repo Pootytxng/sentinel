@@ -1482,10 +1482,14 @@ fn event_log_script() -> String {
     let reads: Vec<String> = channels
         .into_iter()
         .filter_map(event_log_query_xml)
+        // A6: the shared five-quote escape (actions::ps_squote_value). The XML is built from the constant
+        // table above, so it never carries a control character and the output is unchanged; a future
+        // non-constant value would be refused (that channel is then left out) rather than break the literal.
+        .filter_map(|xml| crate::actions::ps_squote_value(&xml).ok())
         .map(|xml| {
             format!(
                 "@(Get-WinEvent -FilterXml '{}' -MaxEvents {EVENTS_PER_CHANNEL} -ErrorVariable +cerr)",
-                xml.replace('\'', "''")
+                xml
             )
         })
         .collect();

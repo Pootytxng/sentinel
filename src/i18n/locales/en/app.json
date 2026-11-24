@@ -71,6 +71,8 @@
     "eeeNoAdapter": "No connected wired network adapter on this PC offers an Energy-Efficient Ethernet setting, so there is nothing to change.",
     "eeeNoSwitch": "Your adapter's driver has an Energy-Efficient Ethernet setting, but no value Compy recognizes as off, so Compy left it as it is rather than guess.",
     "eeeUnreadReason": "Couldn't check Energy-Efficient Ethernet on your wired adapter right now.",
+    "eeeValueRefused": "Compy found your adapter's Energy-Efficient Ethernet setting, but its details contain characters Compy won't put into a Windows command, so nothing was changed.",
+    "eeeValueRefusedUndo": "Compy found this change's saved adapter details, but they contain characters Compy won't put into a Windows command, so it didn't run the undo. The change stays in your Trust Ledger.",
     "settingUnread": "Compy couldn't read this setting right now, so it can't say whether it is on or off.",
     "couldntCheckHeading": "Couldn't check right now",
     "gmBusy": "Compy is still finishing another change or a Gaming Mode start (if a Windows permission prompt is open, answer or cancel it) — give it a second and try again",

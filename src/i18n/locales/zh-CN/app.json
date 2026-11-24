@@ -71,6 +71,8 @@
     "eeeNoAdapter": "这台电脑上没有已连接的有线网络适配器提供「节能以太网」设置，所以没有需要更改的内容。",
     "eeeNoSwitch": "你的适配器驱动有「节能以太网」设置，但没有 Compy 能识别为「关闭」的值，所以 Compy 保持原样，不去猜测。",
     "eeeUnreadReason": "现在无法检查有线网络适配器上的「节能以太网」设置。",
+    "eeeValueRefused": "Compy 找到了你的适配器的「节能以太网」设置，但它的详细信息包含 Compy 不会放进 Windows 命令的字符，因此没有做任何更改。",
+    "eeeValueRefusedUndo": "Compy 找到了这项更改保存的适配器详细信息，但其中包含 Compy 不会放进 Windows 命令的字符，所以没有执行撤销。这项更改仍保留在你的「信任台账」中。",
     "settingUnread": "Compy 现在无法读取这项设置，因此无法判断它是开启还是关闭。",
     "couldntCheckHeading": "现在无法检查",
     "gmBusy": "Compy 仍在完成另一项更改或游戏模式的启动（如果 Windows 权限提示已打开，请回应或取消它）——请稍等片刻再试",
