@@ -210,7 +210,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
         let band = band_at(lane.sessions[n - 1]);
         if band.is_none() {
             coverage.push(format!(
-                "1% low directions for {game}: not called. Compy hasn't measured how much {game} moves between your sessions with nothing changed."
+                "1% low directions for {game}: not called. Compy has no noise figure for {game} yet (too few sessions with nothing changed, or they differ too much from each other)."
             ));
         }
         let floor = band.unwrap_or(f64::INFINITY);

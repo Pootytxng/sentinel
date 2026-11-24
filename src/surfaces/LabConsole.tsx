@@ -33,7 +33,7 @@ import { measureTuning, tuningEvidence, type PostComparability } from "../data/t
 import { primaryGpu } from "../data/gpu-sensor";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { prettyGameName } from "./game-name";
-import { soleGameNoise, soleGameTooVaried, type MeasuredGameNoise, type SummaryExperiment } from "./test-summary";
+import { NOISE_BAND_MAX_PCT, soleGameNoise, soleGameTooVaried, type MeasuredGameNoise, type SummaryExperiment } from "./test-summary";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
 import { BlackBox } from "./BlackBox";
@@ -569,7 +569,12 @@ export function LabConsole({
   // bench's run-to-run spread, a different measurement wearing the same field name.
   // Item 8: a comparison's band only when it was measured (`game_noise`); an older result's fixed 3%
   // and an "unmeasured" result's 0 are not a measurement of this rig.
-  const cmpBand = latestCmp?.game_noise != null && latestCmp.verdict !== "unmeasured" ? latestCmp.noise_floor_pct : null;
+  // B6 r1: a STORED result judged before the engine refused bands over NOISE_BAND_MAX_PCT can still carry
+  // one (e.g. 203); that is no noise figure, so the tile never shows it.
+  const cmpBand =
+    latestCmp?.game_noise != null && latestCmp.verdict !== "unmeasured" && latestCmp.noise_floor_pct <= NOISE_BAND_MAX_PCT
+      ? latestCmp.noise_floor_pct
+      : null;
   // s44 tester pass: else the game's own measured noise from its Trial records (the figure the Test
   // room's "measured noise is ±N% (from M sessions)" line quotes), so this tile never says "not yet"
   // beside that line.

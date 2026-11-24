@@ -469,7 +469,7 @@ export function measureTuning(
     // Item 8: nothing to call the frames on. Show them; never a null invented from a fixed floor.
     verdict = "unmeasured";
     headline = "Can't call the frames";
-    detail = `${tempLine} ${band == null ? "Compy hasn't measured how much this game moves between your sessions with nothing changed, so it won't call the frames better or worse" : `Compy won't call the frames better or worse (${unjudgedWhy})`}${low1DeltaPct != null ? ` (latest 1% low ${low1DeltaPct > 0 ? "+" : ""}${low1DeltaPct}% vs your baseline)` : ""} — ${progress} so far.`;
+    detail = `${tempLine} ${band == null ? "Compy has no noise figure for this game yet (too few sessions with nothing changed, or they differ too much from each other), so it won't call the frames better or worse" : `Compy won't call the frames better or worse (${unjudgedWhy})`}${low1DeltaPct != null ? ` (latest 1% low ${low1DeltaPct > 0 ? "+" : ""}${low1DeltaPct}% vs your baseline)` : ""} — ${progress} so far.`;
   } else {
     verdict = "no-change";
     headline = "No measurable change";

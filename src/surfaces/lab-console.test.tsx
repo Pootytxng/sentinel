@@ -792,6 +792,33 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     // One supporting line: the reason replaces NOT YET, never joins it.
     expect(tr.querySelector(".ag-tag-ny")).toBeNull();
   });
+
+  // B6 r1 B2: a STORED comparison judged before the engine refused bands over 100% can still carry
+  // noise_floor_pct 203 with its game_noise; the tile must not show it. The 8% control proves the stored
+  // comparison is the path read here. Break check: drop `&& latestCmp.noise_floor_pct <= NOISE_BAND_MAX_PCT`.
+  it("Noise floor never shows a stored comparison band over 100%", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const cmp = (pct: number) => ({
+      rec_id: "r", rec_title: "x", game: "ROB RUN.exe", verdict: "no-change", noise_floor_pct: pct,
+      game_noise: { model: 3, low1_band_pct: pct, avg_band_pct: pct, low1_step_pct: 30, avg_step_pct: 30, sessions: 5, cap: { state: "uncapped" }, cap_unread: 0, max_gap_mins: 60 },
+    });
+    const mount = (pct: number) => {
+      vi.mocked(invoke).mockImplementation((cmd: string) =>
+        cmd === "get_latest_comparison" ? Promise.resolve(cmp(pct)) : cmd === "get_session_summaries" ? Promise.resolve([]) : Promise.resolve(null),
+      );
+      renderConsole();
+      return reading(1);
+    };
+    const control = mount(8);
+    await waitFor(() => expect(control.querySelector(".ag-v")!.textContent).toBe("8"));
+    cleanup();
+    const wide = mount(203);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(wide.querySelector(".ag-v")!.textContent).not.toMatch(/\d/);
+    expect(wide.textContent).not.toMatch(/203/);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────

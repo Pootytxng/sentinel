@@ -187,7 +187,10 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     );
     let card = await screen.findByTestId("cmp-card");
     expect(card.textContent).toMatch(/Can't call this one/);
-    expect(screen.getByTestId("cmp-unmeasured").textContent).toMatch(/hasn't measured how much eldenring moves between your sessions/i);
+    // B6 r1 B1: true for both causes (too few as-is sessions, or too varied to give a figure); no promise.
+    expect(screen.getByTestId("cmp-unmeasured").textContent).toBe(
+      "Compy has no noise figure for eldenring yet: either too few of its sessions were played with nothing changed, or they differ too much from each other. Until it has one, it won't call this better or worse.",
+    );
     expect(card.textContent).not.toMatch(/improvement|made it worse|No measurable change|noise floor/i);
     card = await openWhy();
     expect(card.querySelector(".cmp-delta")!.textContent).toMatch(/\+12\.5%\), not judged/);

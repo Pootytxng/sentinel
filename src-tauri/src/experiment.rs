@@ -3061,7 +3061,8 @@ pub(crate) fn noise_unmeasured_message(why: &crate::noise_floor::NoiseUnmeasured
             "Compy can't give a noise figure for {name} yet: its {} baseline sessions with nothing changed \
              differ too much from each other to show what \"no change\" looks like, so no result could be \
              told apart from that swing. Play more baseline sessions of {name} the same way (same settings, \
-             same kind of match, 10 minutes or more), then start.",
+             same kind of match, 10 minutes or more). If they still differ this much, Compy won't test {name} \
+             this way.",
             why.have
         );
     }
@@ -3117,7 +3118,9 @@ pub(crate) fn unmeasured_noise_outcome(outcome: ConcludeOutcome, why: &crate::no
         keep: false,
         stop_reason: Some("noise-unmeasured".into()),
         confidence: Confidence::Unknown,
-        note: format!("{} Compy restored the change and judged nothing.", noise_unmeasured_message(why, game)),
+        // B6 r1: the note is written before the restore runs, so it never says "restored" itself;
+        // `finish_conclude` adds that only when the restore actually completed (status Restored).
+        note: format!("{} Compy judged nothing, so it does not keep the change.", noise_unmeasured_message(why, game)),
         ..outcome
     }
 }
@@ -3460,7 +3463,7 @@ pub(crate) fn with_noise_words(
     let measured = if noise.sessions < FULL_CONFIDENCE_SESSIONS && !(floored(noise.low1_band_pct) && floored(noise.avg_band_pct)) {
         format!(
             "{measured} The band is this wide partly because only {} sessions were measured; more sessions played \
-             with nothing changed will narrow it.",
+             with nothing changed can narrow it if they are closer to each other.",
             noise.sessions
         )
     } else {
@@ -5176,6 +5179,15 @@ pub(crate) fn judge_pair(i: &PairInputs) -> ConcludeOutcome {
     picked
 }
 
+/// B6 r1: an unmeasured-noise note is written before the restore runs and says only that Compy does
+/// not keep the change; it says "restored" once the restore actually completed. Called from
+/// `finish_conclude`'s `Ok` arm only, never on an Aborted (failed) restore.
+fn note_restore_completed(rec: &mut ExperimentRecord) {
+    if let (Some("noise-unmeasured"), Some(note)) = (rec.stop_reason.as_deref(), rec.verdict_note.as_mut()) {
+        note.push_str(" Compy restored the change.");
+    }
+}
+
 /// The keep-or-restore tail both concludes share (`conclude_experiment`, `conclude_realplay`), run
 /// under their store gate once the outcome is judged and the target check has had the last word
 /// (`guard_target_at_conclude`). A keep changes nothing, so `target_now`, the read the conclude took
@@ -5204,6 +5216,7 @@ fn finish_conclude(
                 store.experiments[idx].status = ExperimentStatus::Restored;
                 store.experiments[idx].kept = false;
                 store.experiments[idx].stop_reason = outcome.stop_reason;
+                note_restore_completed(&mut store.experiments[idx]);
                 true
             }
             Err(e) if restore_already_reverted(&e) => {
@@ -11332,6 +11345,27 @@ mod refuse_early_tests {
         assert_eq!((err.have, err.too_varied, err.cap_unknown), (5, true, false));
         let o = unmeasured_noise_outcome(measured(180.0), &err, "ROB RUN.exe");
         assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("not-comparable", false, Some("noise-unmeasured")));
+        // B6 r1: the refusal promises nothing ("then start" read as "it will work"): more sessions help only
+        // if they are closer to each other.
+        assert!(m.ends_with("If they still differ this much, Compy won't test ROB RUN this way."), "{m}");
+        assert!(!m.contains("then start"), "{m}");
+        // B6 r1: written before the restore runs, the note never says "restored"; it does once the restore
+        // completed, and only for this stop. Break check: put "restored" back in unmeasured_noise_outcome's
+        // note, or drop the note_restore_completed call from finish_conclude's Ok arm.
+        assert!(o.note.ends_with("Compy judged nothing, so it does not keep the change.") && !o.note.contains("restored"), "{}", o.note);
+        assert!(!o.note.contains("puts the change back"), "false when the restore fails (Aborted): {}", o.note);
+        let mut done = ExperimentRecord { stop_reason: o.stop_reason.clone(), verdict_note: Some(o.note.clone()), ..rec(150.0, 5) };
+        note_restore_completed(&mut done);
+        assert!(done.verdict_note.as_deref().unwrap().ends_with("does not keep the change. Compy restored the change."));
+        let mut other = ExperimentRecord { stop_reason: Some("crash".into()), verdict_note: Some("x".into()), ..rec(150.0, 5) };
+        note_restore_completed(&mut other);
+        assert_eq!(other.verdict_note.as_deref(), Some("x"), "only the unmeasured-noise note");
+        let src = include_str!("experiment.rs");
+        let tail = &src[src.find("fn finish_conclude(").unwrap()..];
+        let tail = &tail[..tail.find("\n}\n").unwrap()];
+        let ok_arm = &tail[tail.find("Ok(()) => {").unwrap()..tail.find("Err(e) if restore_already_reverted(&e)").unwrap()];
+        assert!(ok_arm.contains("note_restore_completed(&mut store.experiments[idx]);"), "on a completed restore");
+        assert_eq!(tail.matches("note_restore_completed(").count(), 1, "never on an Aborted restore");
     }
 
     #[test]

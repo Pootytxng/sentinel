@@ -259,7 +259,7 @@
     "expiredHeadline": "Baseline too old to compare",
     "expiredSub": "This was armed too long ago to compare fairly — drivers, games, and Windows move on. Re-arm fresh from a new debrief.",
     "unmeasuredHeadline": "Can't call this one",
-    "unmeasuredNoiseSub": "Compy hasn't measured how much {{game}} moves between your sessions with nothing changed, so it won't call this better or worse. A few more sessions of {{game}} with nothing changed let the next comparison be judged.",
+    "unmeasuredNoiseSub": "Compy has no noise figure for {{game}} yet: either too few of its sessions were played with nothing changed, or they differ too much from each other. Until it has one, it won't call this better or worse.",
     "unmeasuredCapSub": "The frame cap wasn't the same in both {{game}} sessions, or Compy couldn't read it, so this comparison can't be judged.",
     "unmeasuredConditionsSub": "Compy couldn't confirm the two {{game}} sessions were played under comparable conditions (for example, a different GPU), so this comparison can't be judged.",
     "unmeasuredDeltaLine": "Average {{avgSign}} FPS ({{avgPct}}%), worst-moment FPS (1% low) {{lowSign}} FPS ({{lowPct}}%), not judged.",

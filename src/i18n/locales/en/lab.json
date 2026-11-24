@@ -150,7 +150,7 @@
     "backToRoom": "Back to Test",
     "closeStationAriaLabel": "Close station",
     "close": "Close",
-    "optimizeReassurance": "This station applies your starter stack in one click: the lower-risk tier of the tweaks that match your hardware. Compy saves each current setting first, so it can roll back any of these from the ledger.",
+    "optimizeReassurance": "This station applies your starter stack in one click: the lower-risk tier of the tweaks that match your hardware. Compy saves each current setting first, so it can roll back each one from the ledger.",
     "tiles": {
       "stage": "Your rig on the bench",
       "reading": "Rig reading",
@@ -956,7 +956,7 @@
     "noiseMeasuredBandsSmoothest": "Judged on frame pacing against its own measured band, and against +{{low}}% / −{{lowFall}}% on the 1% low.",
     "noiseMeasuredCappedUnjudged": "A frame cap held {{game}} in these sessions, so this goal wasn't judged; lift the cap to test it.",
     "noiseMeasuredSource": "Across {{sessions}} of your {{game}} sessions with nothing changed, the 1% low typically moved about {{lowStep}}% and the average about {{avgStep}}% from one session to the next; to be sure a change did something, Compy needs it to go past the band, which allows for those swings. A result is negligible only when every number this goal judges stays inside its band.",
-    "noiseMeasuredFewSessions": "The band is this wide partly because only {{sessions}} sessions were measured; more sessions played with nothing changed will narrow it.",
+    "noiseMeasuredFewSessions": "The band is this wide partly because only {{sessions}} sessions were measured; more sessions played with nothing changed can narrow it if they are closer to each other.",
     "noiseMeasuredCantRead": "Compy can't read your in-game graphics settings or which map or scene you played, so keep those the same between sessions.",
     "noiseMeasuredFloor": "Where {{game}} moved less than ±{{min}}%, the band is ±{{min}}%: the smallest change Compy ever claims, not a measured swing.",
     "noiseMeasuredCapUnread_one": "Left out: 1 more of your {{game}} sessions under the same changes, because Compy couldn't read whether a frame cap held it.",

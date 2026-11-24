@@ -357,6 +357,11 @@ export type Lesson = {
 // The smallest change Compy ever claims (noise_floor.rs `MIN_CLAIM_PCT`).
 const MIN_CLAIM_PCT = 3;
 
+/** B6 r1: the widest band that is still a noise figure (noise_floor.rs `NOISE_BAND_MAX_PCT`, pinned to it
+ *  in noise-figure-words.test.ts). A stored band over it (a result judged before the engine refused such
+ *  bands) is never shown as this game's noise floor. */
+export const NOISE_BAND_MAX_PCT = 100;
+
 /** The noise model from which a measured band is a rise over the baseline judged at its matching fall
  *  (noise_floor.rs `NOISE_MODEL_VERSION` 3); earlier models judged the same band both ways. */
 export const NOISE_MODEL_LOG = 3;

@@ -649,13 +649,17 @@ export function HomeConsole({
     };
   }, [intelOn, sessions]);
   // B6: the newest recorded session, so the tile never says "no before-and-after yet" while Live shows one.
+  // B6 r2: always the NEWEST session (it is the last one, named or not); one that recorded no game is said
+  // as "unknown game", so the line never reads "(, Nov 20)".
   const lastSession = useMemo(() => {
     const newest = sessions.reduce<SessionSummary | null>(
       (a, s) => (a == null || Date.parse(s.started_at) > Date.parse(a.started_at) ? s : a),
       null,
     );
-    return newest ? { game: prettyGameName(newest.process_name) || newest.process_name, date: roughDay(newest.started_at, i18n.language) } : null;
-  }, [sessions, i18n.language]);
+    if (!newest) return null;
+    const game = prettyGameName(newest.process_name) || newest.process_name.trim() || t("monitor.monitorConsole.unknownGame");
+    return { game, date: roughDay(newest.started_at, i18n.language) };
+  }, [sessions, i18n.language, t]);
   const liveRoom = rooms?.find((r) => r.key === "play")?.name;
 
   // ── rig view state (same persisted pref as HomeHud/HomeV2 — Cards vs 3D) ──
@@ -840,6 +844,10 @@ export function HomeConsole({
   const verdictNamesLimiter =
     rawTopLimiter != null && (headNormFull === limNorm || headNormFull.startsWith(`${limNorm} and `));
   const topLimiter = verdictNamesLimiter ? null : rawTopLimiter;
+  // B6 r1: "nothing else stands out" is true by construction only when the verdict names the ONE
+  // attention limiter; with more than one, the older standdown line stays.
+  const onlyLimiterCoveredAbove =
+    verdictNamesLimiter && (priorities?.limiters ?? []).filter((l) => l.status === "attention").length === 1;
   // P7-rig-limiter (ROADMAP P7 bullet 4, Constitution §24): the rig picks out what the #1 limiter
   // is about — the RAW top limiter, whether or not the verdict line already names it (the rig is a
   // second way of saying the same answer, not a second answer). Only an attention limiter counts.
@@ -1408,7 +1416,7 @@ export function HomeConsole({
                     as "nothing found" beside "1 of 14 checks needs a look". */}
                 {!priorities
                   ? t("home.homeConsole.limiter.pending")
-                  : verdictNamesLimiter
+                  : onlyLimiterCoveredAbove
                     ? t("home.homeConsole.limiter.coveredAbove")
                     : t("home.homeConsole.limiter.none")}
               </p>

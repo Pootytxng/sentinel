@@ -941,6 +941,12 @@ describe("HomeConsole — verdict/top-limiter one-owner dedup", () => {
     const findings = c.querySelector(".hc-none")!.textContent!;
     expect(findings).toBe("The check that needs a look is the one named above; nothing else stands out.");
     expect(findings).not.toMatch(/Nothing further/);
+    // B6 r1: "nothing else stands out" only when that is the ONE attention limiter. A second one makes the
+    // claim false, so the line is not said. Break check: use `verdictNamesLimiter` for coveredAbove again.
+    cleanup();
+    const second = { id: "ram", title: "RAM runs below its rated speed", reason: "", linked: null, confidence: "high", status: "attention" };
+    const two = mount({ ...props, readiness: attn, priorities: { ...priorities, limiters: [...priorities.limiters, second] } as Priorities }).container;
+    expect(two.querySelector(".hc-none")!.textContent).not.toMatch(/nothing else stands out/);
   });
 
   it("a DIFFERENT flagged check does not suppress an unrelated top limiter (no false standdown)", () => {
@@ -1026,6 +1032,18 @@ describe("HomeConsole — the last-session intelligence line (Intelligence Phase
     expect(tile).not.toMatch(/No before-and-after yet/);
     expect(tile).toMatch(/^Your last session \(.+, Jul \d+(, \d{4})?\) didn't measure clearly better or worse/);
     expect(tile).toContain("Its numbers are in Monitor.");
+  });
+
+  // B6 r2: the last session is the NEWEST one, named or not; one that recorded no game reads "unknown game",
+  // never "(, Jul 2)". Break check: drop the "unknown game" fallback in HomeConsole's lastSession.
+  it("the newest session with no game name is still the last one, said as 'unknown game'", async () => {
+    state.headline = null;
+    const blank = { ...session, started_at: "2026-07-02T18:00:00Z", process_name: "" } as SessionSummary;
+    const c = mount({ ...props, sessions: [session, blank], rooms: groundRooms, onNavigate: () => {} }).container;
+    await waitFor(() => expect(state.calls).toContain("get_intelligence_headline"));
+    const tile = c.querySelector(".hc-lastsession")!.textContent!;
+    expect(tile).not.toMatch(/\(\s*,/);
+    expect(tile).toMatch(/^Your last session \(unknown game, Jul 2/);
   });
 
   it("no session on record ⇒ the tile still says there is nothing to compare yet", async () => {

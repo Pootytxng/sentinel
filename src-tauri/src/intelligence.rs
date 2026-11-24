@@ -1856,9 +1856,10 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
     if inp.noise.is_none() {
         let mut r = base(
             "inconclusive",
+            // B6 r1 B1: true for both reasons a band is missing (too few as-is sessions, or sessions
+            // too varied to give a figure, noise_floor::NOISE_BAND_MAX_PCT); no promise of a verdict.
             format!(
-                "The 1% low moved {delta_low1:+.1}%, but how much {game} varies on its own isn't measured yet (Compy needs {} sessions of it with nothing changed), so Compy won't call this better or worse.",
-                crate::noise_floor::MIN_UNCHANGED_SESSIONS
+                "The 1% low moved {delta_low1:+.1}%, but Compy has no noise figure for {game} yet (too few sessions with nothing changed, or they differ too much from each other), so Compy won't call this better or worse."
             ),
         );
         if let Some(o) = observations.first_mut() {
@@ -3952,7 +3953,9 @@ mod tests {
         };
         let unmeasured = report(&inputs(None));
         assert_eq!((unmeasured.verdict.as_str(), unmeasured.noise_measured), ("inconclusive", false));
-        assert!(unmeasured.headline.contains("isn't measured yet"), "{}", unmeasured.headline);
+        // B6 r1 B1: no band can mean too few sessions OR too varied; the line says both, never "isn't measured".
+        assert!(unmeasured.headline.contains("has no noise figure for") && unmeasured.headline.contains("differ too much"), "{}", unmeasured.headline);
+        assert!(!unmeasured.headline.contains("isn't measured"), "{}", unmeasured.headline);
         assert!(unmeasured.observations.iter().all(|o| !o.meaningful));
         // A -16% drop inside ROB RUN's measured 20.6% band (its matching fall is 17.0%) is no
         // regression; past a quiet game's 3% it is. CR-what-changed-fall: -20% is past that fall.

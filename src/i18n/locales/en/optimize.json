@@ -499,7 +499,7 @@
     "whatChangedTag": "What changed?",
     "headlineDefault": "WHAT CHANGED? · vs your previous {{game}} session",
     "noiseFloor": "noise floor +{{rise}}% / -{{fall}}%",
-    "noiseUnmeasured": "this game's noise isn't measured yet",
+    "noiseUnmeasured": "no noise figure for this game yet",
     "mostLikelyCause": "Possible reason",
     "nextTest": "Next test",
     "rollBackNamed": "Roll back \"{{title}}\"",
