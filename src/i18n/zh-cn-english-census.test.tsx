@@ -241,15 +241,30 @@ describe("English in zh-CN screens: the census (ratchet-only)", () => {
     const recs = rs("src-tauri/src/recommendations.rs");
     for (const s of [POWER_ULTIMATE.title, POWER_ULTIMATE.description, POWER_ULTIMATE.impact, NO_WIRED_PORT_REASON])
       expect(recs, s).toContain(`"${s}"`);
-    expect(recs).toMatch(/id: "power-ultimate"[\s\S]*?provenance: Provenance::MeasuredSignal/);
+    // The provenance is read inside power-ultimate's OWN struct literal (from its id to the next
+    // `recs.push(`), so a change there can never pass by matching the next rec's provenance.
+    const puStart = recs.indexOf('id: "power-ultimate"');
+    const puEnd = recs.indexOf("recs.push(", puStart);
+    expect(puStart, "power-ultimate's block").toBeGreaterThan(-1);
+    expect(puEnd, "the rec after power-ultimate").toBeGreaterThan(puStart);
+    const puBlock = recs.slice(puStart, puEnd);
+    expect(puBlock.match(/provenance: Provenance::\w+/g)).toEqual(["provenance: Provenance::MeasuredSignal"]);
+    // The VRR strings are matched quoted, inside the verified-on arm only (`Some(true) =>` up to
+    // `Some(false) =>`): the off and advisory arms reuse the label and the action label.
     const readiness = rs("src-tauri/src/readiness.rs");
+    const onStart = readiness.indexOf("Some(true) => ReadinessCheck {");
+    const onEnd = readiness.indexOf("Some(false) => ReadinessCheck {", onStart);
+    expect(onStart, "the verified-on VRR arm").toBeGreaterThan(-1);
+    expect(onEnd, "the arm after it").toBeGreaterThan(onStart);
+    const onArm = readiness.slice(onStart, onEnd);
     for (const s of [
+      "vrr",
       "Variable refresh rate (G-SYNC / FreeSync)",
       "FreeSync is ON — your AMD GPU reports adaptive sync enabled on a connected display. Frame pacing is smoothed and tearing removed.",
       "FreeSync: on",
       "Open VRR settings",
     ])
-      expect(readiness, s).toContain(s);
+      expect(onArm, s).toContain(`"${s}"`);
   });
 
   it("no new English reaches a zh-CN screen, and fixed debt is removed from the list", async () => {
