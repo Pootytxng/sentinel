@@ -105,6 +105,12 @@
     "remeasureButton": "Re-measure",
     "runBenchmarkButton": "Run benchmark",
     "cancelButton": "Cancel",
+    "errors": {
+      "startFailed": "Compy couldn't start the benchmark just now. Try again in a moment.",
+      "baselineFailed": "Compy couldn't save this as your baseline just now. Try again in a moment.",
+      "trialApplyFailed": "Compy couldn't apply the change, so it measured nothing with it on. Check Test → Applied & history to see what is on now.",
+      "stackApplyFailed": "Compy couldn't apply the changes, so it measured nothing with them on. Check Test → Applied & history to see what is on now."
+    },
     "baselineLabel": "Baseline",
     "latestRunLabel": "Latest run",
     "baselineSavedPrefix": "Baseline saved",

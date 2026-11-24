@@ -6,6 +6,8 @@ import { Card, StatusPill, SectionHeader } from "../design";
 // only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import i18n from "../i18n";
 import { humanizeWhen } from "../data/humanize-when";
+import { backendMessage } from "../data/backend-error";
+import { trialErrorText } from "./bench-error";
 import { Term } from "../design/Term";
 import { WhatsThis } from "../design/WhatsThis";
 import { Picker } from "../design/Picker";
@@ -256,7 +258,9 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
       try {
         await invoke("start_benchmark");
       } catch (e) {
-        setErr(String(e));
+        // B11: a mapped sentence or this screen's own line; the backend's text is console detail only.
+        console.error("[compy] start_benchmark", e);
+        setErr(backendMessage(e, t) ?? t("gaming.benchmark.errors.startFailed"));
       }
       await refresh();
     });
@@ -277,7 +281,9 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
       await invoke("set_benchmark_baseline");
       await refresh();
     } catch (e) {
-      setErr(String(e));
+      // B11: a mapped sentence or this screen's own line; the backend's text is console detail only.
+      console.error("[compy] set_benchmark_baseline", e);
+      setErr(backendMessage(e, t) ?? t("gaming.benchmark.errors.baselineFailed"));
     } finally {
       setBusy(false);
     }
@@ -556,7 +562,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
           </p>
         )}
 
-        {!trial?.running && trial?.error && <p className="bench-err">{trial.error}</p>}
+        {!trial?.running && trial?.error && <p className="bench-err">{trialErrorText(trial.error, t)}</p>}
       </Card>
 
       <Card>
