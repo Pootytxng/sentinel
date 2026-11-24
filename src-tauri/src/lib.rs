@@ -2041,6 +2041,9 @@ fn should_suppress_activation(
 }
 
 pub fn run() {
+    // A9 review r1 (b)(2): remember which file this app was started from, so an administrator step never
+    // launches a different compy.exe that an update put at the same path while this one runs.
+    actions::record_running_exe_identity();
     // FOREGROUND COURTESY, part 1 of 2 — the CREATION-TIME half. `focus` is honoured by the runtime
     // (tao raises the first ShowWindow with SW_SHOWNOACTIVATE when it is false), but it has to be
     // decided HERE: by the time `setup` runs the window already exists and has already activated, so

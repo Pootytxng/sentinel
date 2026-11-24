@@ -723,7 +723,7 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
     // A9: a typed batch request (each item its id and its closed ops); refused here, before anything is
     // staged or launched, when the helper would refuse it.
     let request = crate::elevated_ops::ElevatedRequest::batch(request_items, &nonce).map_err(|_| {
-        "the elevated step was not started: it could not be put into the form the administrator helper accepts".to_string()
+        actions::BATCH_REQUEST_NOT_PREPARED.to_string()
     })?;
 
     // Crash-safe fail-safe ordering: the contract carries every staged change BEFORE the one

@@ -1136,8 +1136,7 @@ pub(crate) const HELPER_CHANNEL_REFUSED_MSG: &str =
 
 /// A8 (plan a5 v4 §2): exit code of the TYPED elevated helper entry when the request itself is malformed (bad
 /// hex, not UTF-8, an unknown op or field, a value outside its grammar, a bad item count or shape). It refuses
-/// before any read and before PowerShell, so no command ran. A9: main.rs's refusal of the deleted generic
-/// `--run-elevated` form exits with it too (nothing is decoded or run).
+/// before any read and before PowerShell, so no command ran. Mirrored in `src/data/backend-error.ts` (A9 review r1 F4).
 pub(crate) const HELPER_REQUEST_REFUSED: i32 = 0x4350_5336;
 
 /// What the parent says for [`HELPER_REQUEST_REFUSED`]. Matched exactly by `elevation_error_nothing_ran`.
@@ -1151,8 +1150,11 @@ pub(crate) const HELPER_REQUEST_REFUSED_MSG: &str =
 pub(crate) const HELPER_SAVED_VALUE_NO_MATCH: i32 = 0x4350_5337;
 
 /// What the parent says for [`HELPER_SAVED_VALUE_NO_MATCH`]. Matched exactly by `elevation_error_nothing_ran`.
+/// A9 review r1 F4: reworded to be true on every path that returns it (the helper may have run its READ, so not
+/// "no command ran"; the read may not have finished, so "find or read"), and mirrored in backend-error.ts. Since
+/// A9 F1 it is reachable only from an apply (EEE, task) and the task undo, which maps it to the stored-record sentence.
 pub(crate) const HELPER_SAVED_VALUE_NO_MATCH_MSG: &str =
-    "The administrator helper found that what this change was made on no longer matches this PC, so no command ran.";
+    "The administrator helper couldn't find or read the setting this change is for on this PC, so it changed nothing.";
 
 /// A5 Part A: the pre-launch refusal when the app cannot create the results pipe (nothing was launched).
 const RESULTS_CHANNEL_NOT_CREATED: &str = "elevated results channel could not be created";
@@ -1218,6 +1220,9 @@ pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCap
         Ok(h) => h,
         Err(e) => return none(Err(e)),
     };
+    if let Err(e) = refuse_if_exe_replaced(&exe) {
+        return none(Err(e));
+    }
     let pipe = match crate::fps_pipe::ServerPipe::create() {
         Ok(p) => p,
         Err(e) => return none(Err(format!("{RESULTS_CHANNEL_NOT_CREATED}: {e}"))),
@@ -1262,7 +1267,15 @@ pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCap
 /// A9: the start of the pre-launch refusal when the app cannot put a typed request into the form the helper
 /// accepts (its results key could not be made, or the request fails the checks the helper will make). Nothing
 /// was launched; `elevation_error_nothing_ran` matches it.
-pub(crate) const TYPED_REQUEST_NOT_PREPARED: &str = "elevated request could not be prepared";
+pub(crate) const TYPED_REQUEST_NOT_PREPARED: &str =
+    "Compy couldn't put this administrator step into the form its helper accepts, so it didn't start it.";
+
+/// A9 (review r1 F4): the batch form of [`TYPED_REQUEST_NOT_PREPARED`]: the Fix batch's or Gaming Mode's one
+/// administrator step was refused app-side, before launch. It says nothing about what else was changed: a Fix
+/// batch may already have made its no-admin items, and a Gaming start goes on to undo its core. Mirrored in
+/// `src/data/backend-error.ts`.
+pub(crate) const BATCH_REQUEST_NOT_PREPARED: &str =
+    "Compy couldn't put this batch's administrator step into the form its helper accepts, so it didn't start that step.";
 
 /// A9: the typed request as its one argv value: the hex of its JSON, refused when it would not fit the helper's
 /// cap (the helper refuses the same length). The request was checked whole when it was built.
@@ -1273,6 +1286,45 @@ fn typed_request_hex(req: &ElevatedRequest) -> Result<String, String> {
         return Err("elevated command is too long to dispatch".to_string());
     }
     Ok(encoded)
+}
+
+/// A9 review r1 (b)(2): the pre-launch refusal when the compy.exe at this app's own path is no longer the file
+/// this app was started from (an update replaced it while Compy ran). Nothing is launched. Mirrored in
+/// `src/data/backend-error.ts`; `elevation_error_nothing_ran` matches it.
+pub(crate) const EXE_REPLACED_REFUSED: &str =
+    "Compy was updated while it was running, so it didn't start this administrator step. Restart Compy, then try again.";
+
+/// The identity of the file this app was started from: its NTFS volume serial number and 64-bit file index
+/// (`GetFileInformationByHandle`), read once at startup (`record_running_exe_identity`, first thing in `run()`).
+/// Windows cannot overwrite a running exe in place (its image is mapped), so an updater that replaces it while
+/// Compy runs renames the old file aside and creates a NEW file at the path: same path, new file index. That is
+/// exactly the case caught: launching that new (or an old, downgraded) compy.exe with `--run-elevated-op`
+/// could reach a build that does not know the typed entry and opens its whole window elevated instead.
+static RUNNING_EXE_IDENTITY: std::sync::OnceLock<Option<(u32, u64)>> = std::sync::OnceLock::new();
+
+/// Record [`RUNNING_EXE_IDENTITY`] (once; later calls change nothing).
+pub(crate) fn record_running_exe_identity() {
+    let _ = RUNNING_EXE_IDENTITY.get_or_init(|| std::env::current_exe().ok().and_then(|p| crate::data_root::file_identity(&p)));
+}
+
+/// PURE: whether the exe about to be launched is still the file the app started from. Nothing recorded at
+/// startup (the read failed, or a test process): no evidence of a change, so not refused. Recorded, and the file
+/// now has another identity or cannot be read: refused.
+pub(crate) fn exe_identity_unchanged(at_start: Option<(u32, u64)>, now: Option<(u32, u64)>) -> bool {
+    match at_start {
+        None => true,
+        Some(start) => now == Some(start),
+    }
+}
+
+/// The check every typed launch makes right before `elevate_and_wait*` (nothing has run yet).
+fn refuse_if_exe_replaced(exe: &std::path::Path) -> Result<(), String> {
+    let at_start = RUNNING_EXE_IDENTITY.get().copied().flatten();
+    if exe_identity_unchanged(at_start, crate::data_root::file_identity(exe)) {
+        Ok(())
+    } else {
+        Err(EXE_REPLACED_REFUSED.to_string())
+    }
 }
 
 /// Quote one argument per the MSVC CommandLineToArgvW rules: bare if it has no space/tab/quote,
@@ -1521,6 +1573,7 @@ pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
         || err == HELPER_SAVED_VALUE_NO_MATCH_MSG
         || err == STORED_RECORD_REFUSED_UNDO
         || err.starts_with(TYPED_REQUEST_NOT_PREPARED)
+        || err == EXE_REPLACED_REFUSED
         || err.starts_with(RESULTS_CHANNEL_NOT_CREATED)
         || err.starts_with("could not launch elevated process")
         || err.starts_with("cannot find own exe")
@@ -1552,7 +1605,7 @@ pub(crate) fn with_error_action_stop(command: &str) -> std::borrow::Cow<'_, str>
 /// the false-ledger guard), exactly as the old single path did.
 pub(crate) fn run_elevated_op(op: ElevatedOp) -> Result<(), String> {
     op.validate()
-        .map_err(|_| format!("{TYPED_REQUEST_NOT_PREPARED}: the operation is not one the helper accepts"))?;
+        .map_err(|_| TYPED_REQUEST_NOT_PREPARED.to_string())?;
     let parked = ELEVATION_SINK.with(|s| {
         if let Some(sink) = s.borrow_mut().as_mut() {
             sink.push(op.clone());
@@ -1578,7 +1631,7 @@ pub(crate) fn run_elevated_op(op: ElevatedOp) -> Result<(), String> {
     }
     let nonce = crate::fps_pipe::random_hex().map_err(|e| format!("{TYPED_REQUEST_NOT_PREPARED}: {e}"))?;
     let req = ElevatedRequest::single(op, &nonce)
-        .map_err(|_| format!("{TYPED_REQUEST_NOT_PREPARED}: the operation is not one the helper accepts"))?;
+        .map_err(|_| TYPED_REQUEST_NOT_PREPARED.to_string())?;
     // Test-only: elevate powershell DIRECTLY with the script the helper would compose, so live-QA elevated
     // steps actually run under `cargo test` (the test binary has no helper entry). Never shipped.
     #[cfg(test)]
@@ -1591,6 +1644,7 @@ pub(crate) fn run_elevated_op(op: ElevatedOp) -> Result<(), String> {
     // exact: a real UAC decline is a LAUNCH error 1223, a non-zero exit is "approved but the operation failed".
     let exe = std::env::current_exe().map_err(|e| format!("cannot find own exe: {e}"))?;
     let encoded = typed_request_hex(&req)?;
+    refuse_if_exe_replaced(&exe)?;
     elevation_outcome(elevate_and_wait(
         exe.as_os_str(),
         &[std::ffi::OsStr::new(crate::ELEVATED_OP_FLAG), std::ffi::OsStr::new(&encoded)],
@@ -2151,6 +2205,8 @@ mod elevation_attribution_tests {
         // A9: a typed request the app could not prepare, and an undo refused for its stored record, both
         // refuse before any launch. Break: drop either arm from elevation_error_nothing_ran and this fails.
         assert!(elevation_error_nothing_ran(&format!("{}: os error 5", super::TYPED_REQUEST_NOT_PREPARED)));
+        assert!(elevation_error_nothing_ran(super::TYPED_REQUEST_NOT_PREPARED));
+        assert!(elevation_error_nothing_ran(super::EXE_REPLACED_REFUSED));
         assert!(elevation_error_nothing_ran(super::STORED_RECORD_REFUSED_UNDO));
     }
 
@@ -6296,7 +6352,7 @@ fn restore_memory_compression_elevated_read() -> Result<(ApplyResult, ResultRece
     // A9: the combined op, run alone over the pipe; the helper composes `memcompress_combined_restore_script`
     // with this request's nonce, so the lines read below carry it.
     let request = ElevatedRequest::single(ElevatedOp::MemoryCompressionCombined {}, &nonce)
-        .map_err(|_| format!("{TYPED_REQUEST_NOT_PREPARED}: the operation is not one the helper accepts"))?;
+        .map_err(|_| TYPED_REQUEST_NOT_PREPARED.to_string())?;
     let capture = run_elevated_request_capture(&request);
     let (prior, received) = memcompress_outcome(&capture.run, parse_memcompress_restore_result(&capture.text, &nonce))?;
     let result = ApplyResult {
@@ -7093,7 +7149,7 @@ pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
             .iter()
             .map(|k| crate::elevated_ops::NicKey::parse(k))
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| format!("{TYPED_REQUEST_NOT_PREPARED}: a network interface key is not a braced GUID"))?;
+            .map_err(|_| TYPED_REQUEST_NOT_PREPARED.to_string())?;
         run_elevated_op(ElevatedOp::NagleDisable { interfaces })?;
     }
     Ok(ApplyResult {
@@ -9979,5 +10035,41 @@ mod a9_stored_record_tests {
                 target: CoreParkingTarget::Plan { plan: PlanGuid::parse(plan).expect("plan"), reactivate: true },
             }))
         );
+    }
+}
+
+#[cfg(test)]
+mod a9_exe_identity_tests {
+    //! A9 review r1 (b)(2): an administrator step never launches a compy.exe that is not the file this app started from.
+    use super::*;
+
+    /// Break: make `exe_identity_unchanged` return true for a different identity, or drop the
+    /// `refuse_if_exe_replaced` call from either typed launch (or move it after the launch), and this fails.
+    #[test]
+    fn a_replaced_exe_is_refused_before_any_launch() {
+        assert!(exe_identity_unchanged(None, None), "nothing recorded: no evidence of a change");
+        assert!(exe_identity_unchanged(None, Some((1, 2))));
+        assert!(exe_identity_unchanged(Some((1, 2)), Some((1, 2))), "the same file");
+        assert!(!exe_identity_unchanged(Some((1, 2)), Some((1, 3))), "a new file at the path");
+        assert!(!exe_identity_unchanged(Some((1, 2)), Some((9, 2))), "a file on another volume");
+        assert!(!exe_identity_unchanged(Some((1, 2)), None), "the path can no longer be read");
+        assert!(elevation_error_nothing_ran(EXE_REPLACED_REFUSED), "nothing was launched");
+        let src = include_str!("actions.rs").replace("\r\n", "\n");
+        for f in [concat!("pub(crate) fn run_elevated_", "op(op"), concat!("pub(crate) fn run_elevated_", "request_capture(")] {
+            let at = src.find(f).expect(f);
+            let body = &src[at..at + src[at..].find("\n}\n").expect("end")];
+            let check = body.find(concat!("refuse_if_exe_", "replaced(&exe)")).unwrap_or_else(|| panic!("{f} checks the exe"));
+            let launch = body.find(concat!("elevate_and_", "wait")).unwrap_or_else(|| panic!("{f} launches"));
+            assert!(check < launch, "{f}: the check comes before the launch");
+        }
+        let lib = include_str!("lib.rs").replace("\r\n", "\n");
+        let run = lib.find(concat!("pub fn ", "run() {")).expect("run");
+        let first = lib[run..].lines().skip(1).find(|l| !l.trim_start().starts_with("//")).unwrap_or_default();
+        assert_eq!(first.trim(), "actions::record_running_exe_identity();", "recorded first thing at startup");
+        // The running test exe reads one stable identity.
+        let me = std::env::current_exe().expect("exe");
+        let id = crate::data_root::file_identity(&me);
+        assert!(id.is_some(), "the running exe's identity is readable");
+        assert_eq!(id, crate::data_root::file_identity(&me));
     }
 }

@@ -501,6 +501,12 @@ fn dir_identity(_p: &Path) -> Option<(u32, u64)> {
     None
 }
 
+/// A9 review r1 (b)(2): a FILE's NTFS identity (volume serial + 64-bit file index), read the same way as
+/// [`dir_identity`] (one read-only open, `GetFileInformationByHandle`). `None` when it cannot be read.
+pub(crate) fn file_identity(p: &Path) -> Option<(u32, u64)> {
+    dir_identity(p)
+}
+
 /// Receipt count of a ledger. `Some(0)` = absent or genuinely empty; `None` = present but
 /// unreadable, which every caller must treat as "may hold receipts". Read-only.
 fn ledger_receipts(path: &Path) -> Option<usize> {

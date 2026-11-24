@@ -2323,17 +2323,41 @@ fn is_leftover_result_file(name: &str) -> bool {
     })
 }
 
-/// Delete leftover result files (only plain files directly in `dir` whose names match). Best-effort: a file
-/// that cannot be deleted is left; nothing reads it.
+/// A9 (review r1 F3): the one-time launch tickets older versions wrote for the deleted generic elevated entry
+/// (`<pid>` and `<n>` are digits). Compy no longer writes or reads them; a ticket was deleted on every outcome
+/// by the parent, so one is left only when the parent was killed mid-launch. Any left behind is deleted by
+/// [`clear_leftover_result_files`]. Spelled here for the data inventory.
+const LEFTOVER_TICKET: &str = "runtime/elev-<pid>-<n>.ticket";
+
+/// PURE: whether `name` has exactly the old ticket's shape, `elev-<digits>-<digits>.ticket` (the same check the
+/// deleted `is_ticket_path` made); nothing else in the folder matches.
+fn is_leftover_ticket_name(name: &str) -> bool {
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    name.strip_prefix("elev-")
+        .and_then(|n| n.strip_suffix(".ticket"))
+        .and_then(|n| n.split_once('-'))
+        .is_some_and(|(pid, n)| digits(pid) && digits(n))
+}
+
+/// Delete leftover result files (only plain files directly in `dir` whose names match), and leftover tickets
+/// (only plain files directly in `dir`'s ticket folder whose names have the exact ticket shape). Best-effort: a
+/// file that cannot be deleted is left; nothing reads it. An entry that is a link or a folder is never deleted
+/// (`DirEntry::file_type` does not follow links).
 fn clear_leftover_result_files(dir: &std::path::Path) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let is_file = entry.file_type().map(|t| t.is_file()).unwrap_or(false);
-        if is_file && entry.file_name().to_str().is_some_and(is_leftover_result_file) {
-            let _ = std::fs::remove_file(entry.path());
+    fn sweep(dir: &std::path::Path, matches: fn(&str) -> bool) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let is_file = entry.file_type().map(|t| t.is_file()).unwrap_or(false);
+            if is_file && entry.file_name().to_str().is_some_and(matches) {
+                let _ = std::fs::remove_file(entry.path());
+            }
         }
+    }
+    sweep(dir, is_leftover_result_file);
+    if let Some((folder, _)) = LEFTOVER_TICKET.split_once('/') {
+        sweep(&dir.join(folder), is_leftover_ticket_name);
     }
 }
 
@@ -2522,7 +2546,7 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         // A9: the batch is a typed request (each item its receipt id and its closed ops); the helper checks it
         // again and composes the one script. A request the helper would refuse is refused here, before launch.
         let request = crate::elevated_ops::ElevatedRequest::batch(request_items, &nonce).map_err(|_| {
-            "The admin step was not started: Compy could not put this batch into the form its administrator helper accepts. Nothing else was changed.".to_string()
+            crate::actions::BATCH_REQUEST_NOT_PREPARED.to_string()
         })?;
         elevation_prompts = 1;
         // A declined UAC ran nothing, so every item is skipped and the phase-1 items stand on their
@@ -9105,5 +9129,43 @@ mod open_settings_tests {
     #[test]
     fn an_empty_ledger_counts_nothing() {
         assert_eq!(open_settings(&[]), OpenSettings::default());
+    }
+}
+
+#[cfg(test)]
+mod a9_leftover_ticket_tests {
+    //! A9 review r1 F3: the tickets older versions left are swept like the retired result files. Run only against a
+    //! temp directory, never a real data root.
+    use super::{clear_leftover_result_files, is_leftover_ticket_name, LEFTOVER_TICKET};
+
+    /// Break: drop the `.ticket` sweep from `clear_leftover_result_files` (or loosen the name check to
+    /// `starts_with("elev-")`) and this fails.
+    #[test]
+    fn leftover_tickets_are_swept_and_nothing_else_is() {
+        assert_eq!(LEFTOVER_TICKET, "runtime/elev-<pid>-<n>.ticket", "the inventory row's path");
+        for ok in ["elev-12-3.ticket", "elev-0-0.ticket"] {
+            assert!(is_leftover_ticket_name(ok), "{ok}");
+        }
+        for bad in ["elev-12.ticket", "elev--3.ticket", "elev-a-3.ticket", "elev-12-3.ticket.txt", "xelev-1-2.ticket", "elev-1-2-3.ticket", "settings.json"] {
+            assert!(!is_leftover_ticket_name(bad), "{bad}");
+        }
+        let root = crate::test_scratch::scratch("a9-leftover-tickets");
+        let runtime = root.join("runtime");
+        std::fs::create_dir_all(&runtime).expect("runtime");
+        std::fs::write(runtime.join("elev-12-3.ticket"), "abcd").expect("ticket");
+        std::fs::write(runtime.join("elev-12.ticket"), "x").expect("look-alike");
+        std::fs::write(runtime.join("other.txt"), "x").expect("other");
+        std::fs::create_dir_all(runtime.join("elev-1-2.ticket")).expect("a folder with the shape");
+        std::fs::write(root.join("elevation-batch-1.receipts"), "x").expect("old receipts");
+        std::fs::write(root.join("settings.json"), "{}").expect("settings");
+        clear_leftover_result_files(&root);
+        assert!(!runtime.join("elev-12-3.ticket").exists(), "the leftover ticket is deleted");
+        assert!(!root.join("elevation-batch-1.receipts").exists(), "the precedent still sweeps");
+        assert!(runtime.join("elev-12.ticket").exists() && runtime.join("other.txt").exists(), "other names stay");
+        assert!(runtime.join("elev-1-2.ticket").is_dir(), "a folder is never deleted");
+        assert!(root.join("settings.json").exists(), "nothing else is touched");
+        // No runtime folder at all: nothing to do, no error.
+        let bare = crate::test_scratch::scratch("a9-leftover-tickets-bare");
+        clear_leftover_result_files(&bare);
     }
 }

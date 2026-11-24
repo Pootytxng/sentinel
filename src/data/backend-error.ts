@@ -317,6 +317,33 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "Compy couldn't use this change's saved details for an administrator step, so it didn't run the undo. The change stays in your Trust Ledger.",
     key: "app.backendErrors.storedRecordRefusedUndo",
   },
+  // A9 review r1 F4: the typed elevated helper's own refusals and the app's pre-launch refusals (actions.rs). Each
+  // is returned only when nothing was launched or the helper refused before its one mutating run.
+  {
+    rust: "HELPER_REQUEST_REFUSED_MSG",
+    text: "The administrator helper refused this request because it is not one Compy can run, so no command ran.",
+    key: "app.backendErrors.helperRequestRefused",
+  },
+  {
+    rust: "HELPER_SAVED_VALUE_NO_MATCH_MSG",
+    text: "The administrator helper couldn't find or read the setting this change is for on this PC, so it changed nothing.",
+    key: "app.backendErrors.helperSavedValueNoMatch",
+  },
+  {
+    rust: "TYPED_REQUEST_NOT_PREPARED",
+    text: "Compy couldn't put this administrator step into the form its helper accepts, so it didn't start it.",
+    key: "app.backendErrors.typedRequestNotPrepared",
+  },
+  {
+    rust: "BATCH_REQUEST_NOT_PREPARED",
+    text: "Compy couldn't put this batch's administrator step into the form its helper accepts, so it didn't start that step.",
+    key: "app.backendErrors.batchRequestNotPrepared",
+  },
+  {
+    rust: "EXE_REPLACED_REFUSED",
+    text: "Compy was updated while it was running, so it didn't start this administrator step. Restart Compy, then try again.",
+    key: "app.backendErrors.exeReplacedRestart",
+  },
   // C6: the fixed refusals an undo meets in front of the audited one (experiment::rollback_change →
   // gaming_orchestrator::plain_change_gate), so a stopped undo walk can say why in the user's language.
   // Consts in gaming_orchestrator.rs. C8: the Trial/benchmark plan-class refusal is now three fixed sentences
