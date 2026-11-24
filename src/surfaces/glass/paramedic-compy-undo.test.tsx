@@ -212,6 +212,10 @@ describe("B10: Undo this Compy change on the card", () => {
     ["compy-undone-rough", "measured", { at: AT, count: "1" }, true, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A still ran rough on ${day(AT)}.`],
     ["compy-undone-rough", "measured", { at: AT, count: "2" }, true, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A still ran rough in 2 sessions since, the first on ${day(AT)}.`],
     ["compy-undone-clear-once", "measured", { at: AT }, false, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A's session on ${day(AT)} ran in its usual range. One session so far; Compy says a game is back in its usual range after two.${NEXT}`],
+    // b12 item 1: two clear sessions since the undo, then one (or more) Compy couldn't judge. Break check: drop the
+    // compy-undone-clear-unjudged case from evidenceLine -> the line is missing, fails.
+    ["compy-undone-clear-unjudged", "measured", { at: AT, count: "2", later: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A ran in its usual range in 2 sessions since, the latest on ${day(AT)}. The session after that was too short, or Compy couldn't measure enough of it, so Compy can't say it is back in its usual range yet.${NEXT}`],
+    ["compy-undone-clear-unjudged", "measured", { at: AT, count: "3", later: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A ran in its usual range in 3 sessions since, the latest on ${day(AT)}. Each session after that was too short, or Compy couldn't measure enough of it, so Compy can't say it is back in its usual range yet.${NEXT}`],
     ["compy-undone-unread", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 1 Game A session has been recorded since, but it was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge.${NEXT}`],
     ["compy-undone-unread", "unknown", { count: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 2 Game A sessions have been recorded since, but each was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge.${NEXT}`],
     ["compy-undone-between", "unknown", {}, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
@@ -236,6 +240,27 @@ describe("B10: Undo this Compy change on the card", () => {
     expect(screen.queryByTestId("paramedic-undo-compy-done")).toBeNull();
     expect(document.body.textContent).not.toContain("Undone on");
     expect(document.body.textContent).not.toContain("Undo the newest one");
+  });
+
+  // b12 item 1: the user has already played twice since the undo; the stale "Undone on ... play once" line must not
+  // show beside the clear-unjudged line, and the line says it in zh-CN too. Break checks: narrow `readSince` to the
+  // four B10b codes -> "Undone on" shows, fails; drop compyUndoneClearUnjudged_other from zh-CN -> en text, fails.
+  it("two clear sessions then unjudged ones: the 'Undone on' line is not repeated, and zh-CN says it", async () => {
+    const zDayTime = (iso: string) => new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+    const zDay = (iso: string) => new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric" }).format(new Date(iso));
+    try {
+      await show([withLine("compy-undone-clear-unjudged", "measured", { at: AT, count: "2", later: "1" })], [undoneRec()]);
+      expect(screen.queryByTestId("paramedic-undo-compy-done")).toBeNull();
+      expect(document.body.textContent).not.toContain("Undone on");
+      await i18n.changeLanguage("zh-CN");
+      await waitFor(() =>
+        expect(document.body.textContent).toContain(
+          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销，此后 Game A 有 2 次游戏表现在平时的范围内，最近一次在 ${zDay(AT)}。之后的游戏时间太短，或 Compy 没能测量到足够的部分，所以 Compy 还不能说它已恢复到平时的范围。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`,
+        ),
+      );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   // zh-CN literal. Break check: drop compyUndoneRough_other from zh-CN -> falls back to en text, fails.

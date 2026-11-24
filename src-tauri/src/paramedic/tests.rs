@@ -4066,6 +4066,36 @@ mod recovery_f3 {
         assert_eq!(lines[0].args["count"], "2");
     }
 
+    /// b12 item 1: two clear sessions since the undo, then one Compy couldn't judge. The recovery is "can't tell"
+    /// (trailing unjudged sessions are never "back to normal"), so this row says what the two clear ones showed and why
+    /// not yet, as B4's driver-back-clear-unjudged; it is never a support. Break checks: return `None` for
+    /// `Since::Clear { .. }` again -> no line, fails; set `r` (or any support) from it -> the with/without comparison
+    /// fails; count later sessions past a re-apply (drop the `reapplied` bound) -> the re-apply case gives a line, fails.
+    #[test]
+    fn b12_two_clear_sessions_then_one_compy_couldnt_judge_are_said_with_why_not_yet() {
+        let short = || {
+            let mut s = facts(&at_day(12, 10), 30, 30, 100.0, 50.0);
+            s.compy_changes = Some(3);
+            s
+        };
+        let after = || vec![day_count(10, 50.0, 3), day_count(11, 50.0, 3), short()];
+        let d = undo_case(after(), one_undone());
+        let lines = undone_lines(&d);
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-clear-unjudged"], "{lines:?}");
+        assert!(!lines[0].against && lines[0].kind == EvidenceKind::Measured);
+        assert_eq!((lines[0].args["count"].as_str(), lines[0].args["later"].as_str()), ("2", "1"));
+        assert_eq!(lines[0].args["at"], at_day(11, 10));
+        assert_ne!(d.state, DiagnosisState::Recovered, "trailing unjudged sessions are never 'back to normal'");
+        let without = undo_case(after(), Vec::new());
+        let (a, b) = (finding_of(&d, "compy-change"), finding_of(&without, "compy-change"));
+        assert_eq!((a.confidence, a.in_play), (b.confidence, b.in_play), "said, never support");
+        assert!(d.findings.iter().all(|f| f.confidence == Certainty::Possible), "nothing above Possible");
+        // Re-applied (same setting) before the unjudged session: that session ran with the change back on, so it is
+        // not "after" the clear ones since the undo, and the two clear ones are the whole story: no line.
+        let reapplied = vec![record("2026-10-06T12:00:00Z", Some(B10B_UNDONE)), record("2026-10-12T00:00:00Z", None)];
+        assert!(undone_lines(&undo_case(after(), reapplied)).is_empty());
+    }
+
     /// Review r1 FIX 1: once the same setting (same rec_id) was applied again after the undo, later sessions were played
     /// with the change back on and say nothing about the undo. Break check: pass `None` instead of the re-apply time ->
     /// the first case gives compy-undone-rough, fails.

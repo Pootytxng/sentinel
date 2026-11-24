@@ -502,6 +502,10 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.compyUndoneRough", { title: a.title, undone: dates.dayTime(a.undone), game, count: Number(a.count ?? 1), date: dates.day(a.at), ...RAW });
     case "compy-undone-clear-once":
       return t("paramedic.evidence.compyUndoneClearOnce", { title: a.title, undone: dates.dayTime(a.undone), game, date: dates.day(a.at), ...RAW });
+    // b12: two or more clear sessions since the undo, then sessions Compy couldn't judge (as B4's driver-back-clear-
+    // unjudged). `n` is the clear count; `count` (the later, unjudged ones) only picks the plural form.
+    case "compy-undone-clear-unjudged":
+      return t("paramedic.evidence.compyUndoneClearUnjudged", { title: a.title, undone: dates.dayTime(a.undone), game, n: a.count, count: Number(a.later ?? 2), date: dates.day(a.at), ...RAW });
     case "compy-undone-unread":
       return t("paramedic.evidence.compyUndoneUnread", { title: a.title, undone: dates.dayTime(a.undone), game, count: Number(a.count ?? 1), ...RAW });
     case "compy-undone-between":

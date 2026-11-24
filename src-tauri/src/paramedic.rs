@@ -2970,6 +2970,8 @@ fn detect_compy_changes(c: &Ctx, out: &mut Out) {
 ///   NEVER a support (no candidate flag changes);
 /// - two or more clear sessions: no line. The recovery's own compy row (`recovered-compy-back`) answers, so the undo
 ///   is counted at most once;
+/// - `compy-undone-clear-unjudged` (Measured, b12): two or more clear sessions, then sessions Compy couldn't judge.
+///   The recovery is "can't tell" then, so this row says it (as B4's `driver-back-clear-unjudged`); never a support;
 /// - `compy-undone-between` (Unknown): judgeable sessions since, none rough, not all clear.
 fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
     let mut inside = c.inp.compy_records.iter().filter(|r| r.applied >= c.win_start && r.applied < c.win_end);
@@ -2992,7 +2994,28 @@ fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
             Some(ev(EvidenceKind::Measured, "compy-undone-rough", "sessions", true, &with(&[("at", at), ("count", count.to_string())])))
         }
         recovery::Since::Clear { at, count: 1 } => Some(ev(EvidenceKind::Measured, "compy-undone-clear-once", "sessions", false, &with(&[("at", at)]))),
-        recovery::Since::Clear { .. } => None,
+        // b12: two or more clear sessions, then sessions Compy couldn't judge (every session after the newest judged
+        // one is unjudged by construction). The recovery says "can't tell" there (recovery::outcome_within: trailing
+        // unjudged sessions are never "back to normal"), so nothing else would say what the clear ones showed, and
+        // the card would fall back to B10's stale "Undone on ... play once" line. Mirrors B4's
+        // driver-back-clear-unjudged: said, NEVER a support (no candidate flag changes). "Later" stops at a re-apply.
+        recovery::Since::Clear { at, count } => {
+            let newest = ts(&at);
+            let later = c
+                .sess
+                .iter()
+                .filter(|s| s.start().is_some_and(|t| newest.is_some_and(|a| t > a) && reapplied.is_none_or(|u| t < u)))
+                .count();
+            (later > 0).then(|| {
+                ev(
+                    EvidenceKind::Measured,
+                    "compy-undone-clear-unjudged",
+                    "sessions",
+                    false,
+                    &with(&[("at", at), ("count", count.to_string()), ("later", later.to_string())]),
+                )
+            })
+        }
         recovery::Since::Between => Some(ev(EvidenceKind::Unknown, "compy-undone-between", "sessions", false, &with(&[]))),
     }
 }
