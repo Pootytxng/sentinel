@@ -19,6 +19,7 @@ import type { AppliedChange, SessionSummary } from "../types";
 import { ChangedOutsideRemedy } from "./ChangedOutsideRemedy";
 import { backendMessage } from "../data/backend-error";
 import { trialWriteText } from "./trial-error";
+import { refusedBeforeWrite } from "./aborted-row";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import { writeLedger } from "../data/ledger-write";
 import { liveChangeGroups } from "../data/live-changes";
@@ -1905,10 +1906,13 @@ export default function ExperimentBench({
                     reconcile_interrupted_starts_in, mark_failed_apply, abort_start, finish_conclude,
                     restore_experiment, settle_restore) embed raw detail ({e}, {err}, a change id) and
                     stack onto any earlier reason, and older builds wrote others, so the set is not
-                    closed: one fixed line, true on every Aborted path, in the user's language. */}
+                    closed: one fixed line, in the user's language. D7 r1 F2: the one exception is an apply
+                    refused before anything was written (aborted-row.ts): that row says nothing was changed. */}
                 {x.stop_reason && x.status === "aborted" && (
                   <span className="exp-bench-abort" data-testid="exp-aborted-line">
-                    {t("lab.experimentBench.abortedLine")}
+                    {refusedBeforeWrite(x.stop_reason)
+                      ? t("lab.experimentBench.errors.notStarted")
+                      : t("lab.experimentBench.abortedLine")}
                   </span>
                 )}
                 {baselineReceipt(x, t) && (

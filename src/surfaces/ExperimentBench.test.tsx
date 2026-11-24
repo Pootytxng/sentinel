@@ -1376,6 +1376,55 @@ describe("ExperimentBench (armed)", () => {
     }
   });
 
+  // D7 r1 F2: a Trial whose apply was refused before anything was written never moved the setting, so its row says
+  // nothing was changed instead of "...back where it was". Break check: render abortedLine for every aborted row
+  // again (drop the refusedBeforeWrite branch) -> the notStarted expectations fail.
+  const REFUSED_STORED =
+    "start-aborted: the apply reported an error; the setting reads as not changed, but a change that stopped part-way can read that way too, and Compy saved no undo record for it: A setting this action changes is being measured by a Trial right now, so Compy won't run it during the Trial. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.";
+  it.each([
+    ["en", "Compy didn't start this Trial, so nothing was changed."],
+    ["zh-CN", "Compy 没有启动这次试验，所以没有做任何更改。"],
+  ])("%s: an apply refused before any write says nothing was changed", async (lng, line) => {
+    await i18n.changeLanguage(lng);
+    try {
+      state.gate = true;
+      state.experiments = [
+        { ...NOT_COMPARABLE_EXPERIMENT, id: "ab-refused", status: "aborted", verdict: null, treatment: null, noise_evidence: null, stop_reason: REFUSED_STORED },
+      ];
+      render(<ExperimentBench />);
+      const el = await waitFor(() => {
+        const e = document.querySelector('[data-testid="exp-aborted-line"]');
+        expect(e).not.toBeNull();
+        return e!;
+      });
+      expect(el.textContent).toBe(line);
+      expect(document.body.textContent).not.toContain("start-aborted");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  it.each([
+    ["the same head with an unlisted error", "start-aborted: the apply reported an error, and Compy can't read the setting to tell whether it changed: access denied (os error 5)"],
+    [
+      "an older wording of the refusal",
+      "start-aborted: the apply reported an error; the setting reads as not changed, but a change that stopped part-way can read that way too, and Compy saved no undo record for it: A setting this action changes is being tested by a Trial right now, so Compy won't run it on top of the test. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
+    ],
+  ])("%s keeps the fixed line", async (_what, stored) => {
+    state.gate = true;
+    state.experiments = [
+      { ...NOT_COMPARABLE_EXPERIMENT, id: "ab-other", status: "aborted", verdict: null, treatment: null, noise_evidence: null, stop_reason: stored },
+    ];
+    render(<ExperimentBench />);
+    const el = await waitFor(() => {
+      const e = document.querySelector('[data-testid="exp-aborted-line"]');
+      expect(e).not.toBeNull();
+      return e!;
+    });
+    expect(el.textContent).toMatch(/^This Trial ended without Compy confirming its setting is back where it was\./);
+    expect(document.body.textContent).not.toContain("os error");
+  });
+
   // #611 review round 2: a Trial an older Compy started has no baseline id or no apply time, and the
   // backend refuses to conclude it. The bench must not offer a button that can only fail.
   it.each([
