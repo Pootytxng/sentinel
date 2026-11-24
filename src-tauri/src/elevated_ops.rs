@@ -911,7 +911,6 @@ mod tests {
     //! is also in `_train/a8-breaks.json`. UNRUN until the coordinator lets builds resume.
     use super::*;
     use crate::fuzz_support::{hostile_string, mutate_text, Rng, SEEDS};
-    use std::io::Write as _;
     use std::os::windows::process::ExitStatusExt;
     use std::sync::{Arc, Mutex};
 
