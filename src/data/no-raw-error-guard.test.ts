@@ -7,7 +7,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import en from "../i18n/locales/en/app.json";
 import zh from "../i18n/locales/zh-CN/app.json";
-import { BACKEND_SENTENCES, backendSentenceKey } from "./backend-error";
+import { BACKEND_SENTENCES, backendMessages, backendSentenceKey } from "./backend-error";
 import { STACK_APPLY_PREFIX, TRIAL_APPLY_PREFIX, trialErrorText } from "../surfaces/bench-error";
 
 const src = (p: string) => readFileSync(join("src", ...p.split("/")), "utf8");
@@ -31,7 +31,7 @@ describe("B11: these screens never show the backend's raw text", () => {
   }
 
   it("each screen routes a failure through backendMessage", () => {
-    expect(src("surfaces/ExperimentBench.tsx")).toContain('backendMessage(e, t) ?? t("lab.experimentBench.errors.writeFailed")');
+    expect(src("surfaces/ExperimentBench.tsx")).toContain('backendMessages(e, t) ?? t("lab.experimentBench.errors.writeFailed")');
     expect(src("surfaces/ExperimentBench.tsx")).toContain('backendMessage(e, t) ?? t("lab.experimentBench.errors.simulateFailed")');
     expect(src("surfaces/Benchmark.tsx")).toContain('backendMessage(e, t) ?? t("gaming.benchmark.errors.startFailed")');
     expect(src("surfaces/Benchmark.tsx")).toContain('backendMessage(e, t) ?? t("gaming.benchmark.errors.baselineFailed")');
@@ -57,6 +57,52 @@ describe("B11: the benchmark's apply-failed lines", () => {
     expect(trialErrorText(`${STACK_APPLY_PREFIX}access denied (os error 5)`, t)).toBe("T(gaming.benchmark.errors.stackApplyFailed)");
     // Any other trial error is one of benchmark_trial.rs's own sentences and stays as it is.
     expect(trialErrorText("Couldn't collect frames with the change on.", t)).toBe("Couldn't collect frames with the change on.");
+  });
+
+  it("a rollback / change-history outcome shows its mapped sentence, never the detail after it", () => {
+    // Break check: write `{e}` straight into s.error again (no BENCH_* const) -> the card shows raw text and this fails.
+    const s = (rust: string) => BACKEND_SENTENCES.find((x) => x.rust === rust)!;
+    for (const name of [
+      "BENCH_ROLLED_BACK_UNRECORDED",
+      "BENCH_ROLLBACK_FAILED",
+      "BENCH_STACK_ROLLBACK_FAILED",
+      "BENCH_STACK_ROLLED_BACK_UNRECORDED",
+      "BENCH_LEDGER_UNREAD_BEFORE",
+      "BENCH_LEDGER_UNREAD_AFTER",
+    ]) {
+      expect(rust.includes(`{${name}} (`), `${name} is written with its detail in ( )`).toBe(true);
+      expect(trialErrorText(`${s(name).text} (access denied (os error 5))`, t)).toBe(`T(${s(name).key})`);
+    }
+  });
+});
+
+describe("B11: an error that carries several sentences shows all of them, in order", () => {
+  const t = ((k: string) => `T(${k})`) as never;
+  const s = (rust: string) => BACKEND_SENTENCES.find((x) => x.rust === rust)!;
+
+  it("a Trial aborted before measuring says why, then whether the change was put back", () => {
+    const err = `experiment aborted before measuring — ${s("ABORT_NOT_CHANGED").text} ${s("ABORT_RESTORED").text}`;
+    expect(backendMessages(err, t)).toBe(`T(${s("ABORT_NOT_CHANGED").key}) T(${s("ABORT_RESTORED").key})`);
+  });
+
+  it("a failed restore keeps its sentence and drops the OS text", () => {
+    const err = `experiment aborted before measuring — ${s("ABORT_UNREADABLE").text} ${s("RESTORE_NOT_COMPLETED").text} (Access is denied. C:\\Users\\x)`;
+    const shown = backendMessages(err, t)!;
+    expect(shown).toBe(`T(${s("ABORT_UNREADABLE").key}) T(${s("RESTORE_NOT_COMPLETED").key})`);
+    expect(shown).not.toContain("Access");
+  });
+
+  it("no known sentence -> null (the screen's own line)", () => {
+    expect(backendMessages("access denied (os error 5)", t)).toBeNull();
+    expect(backendMessages(undefined, t)).toBeNull();
+  });
+
+  it("experiment.rs writes the restore-failed sentence before its detail on every path", () => {
+    // Break check: put `{e}` back without RESTORE_NOT_COMPLETED in conclude/restore/abort -> fails.
+    const rust = readFileSync(join("src-tauri", "src", "experiment.rs"), "utf8");
+    expect(rust).toContain("{RESTORE_NOT_COMPLETED} ({e})");
+    expect(rust).toContain(`format!("restore did not complete — {RESTORE_NOT_COMPLETED} ({e})")`);
+    expect(rust).not.toMatch(/format!\("restore did not complete — \{e\}"\)/);
   });
 });
 

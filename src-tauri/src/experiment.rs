@@ -960,15 +960,8 @@ fn settle_restore(
     rec.stop_reason = Some(format!(
         "{before}; a read afterwards shows the setting as changed — check it in Test → Applied & history"
     ));
-    Some(if compy_restored {
-        "Compy restored the change, but the setting still reads as changed afterwards — something \
-         else may have set it again. Check it in Test → Applied & history."
-            .into()
-    } else {
-        "The change was already undone outside Compy, but the setting now reads as changed again — \
-         something else is setting it. Check it in Test → Applied & history."
-            .into()
-    })
+    // B11: fixed sentences, mapped in backend-error.ts. Said only here, after a live read that shows it changed.
+    Some(if compy_restored { RESTORED_STILL_READS_CHANGED.into() } else { UNDONE_OUTSIDE_READS_CHANGED.into() })
 }
 
 /// §7 at conclude: the change must still read as applied for its treatment session to be evidence
@@ -1901,32 +1894,19 @@ pub(crate) fn resolve_baseline<'a>(
     id: &str,
 ) -> Result<&'a SessionSummary, String> {
     let session = match session_by_id(sessions, id) {
-        SessionLookup::Missing => {
-            return Err("the baseline session isn't in your session history any more — play a \
-                        monitored session, then try again"
-                .into())
-        }
-        SessionLookup::Ambiguous => {
-            return Err("two sessions in your history share that baseline's start time, so Compy \
-                        can't tell which one to use"
-                .into())
-        }
+        // B11: fixed sentences, mapped in backend-error.ts.
+        SessionLookup::Missing => return Err(BASELINE_MISSING.into()),
+        SessionLookup::Ambiguous => return Err(BASELINE_AMBIGUOUS.into()),
         SessionLookup::Found(s) => s,
     };
     if session.behind_the_whole_time() {
-        return Err("the baseline session measured nothing: another window was in front the whole \
-                    time — play a session with the game in front, then try again"
-            .into());
+        return Err(BASELINE_BEHIND.into());
     }
     if !has_frame_reading(session) {
-        return Err("the baseline session has no frame-rate reading, so there's nothing to compare \
-                    the change against"
-            .into());
+        return Err(BASELINE_NO_READING.into());
     }
     if session.process_name.trim().is_empty() {
-        return Err("the baseline session didn't record which game was running, so there's no game \
-                    to measure the change in"
-            .into());
+        return Err(BASELINE_NO_GAME.into());
     }
     Ok(session)
 }
@@ -2583,85 +2563,50 @@ pub(crate) fn resolve_treatment<'a>(
     sessions: &'a [SessionSummary],
     treatment_id: &str,
 ) -> Result<(&'a SessionSummary, SessionComparability), String> {
-    let game = crate::intelligence::pretty_game_name(&rec.game);
+    // B11: fixed sentences, mapped in backend-error.ts. The game's name is no longer in them ("this game"); detail
+    // that is not part of a sentence (the pairing's reasons) follows in parentheses for the console only.
     let Some(baseline_id) = rec.baseline_session_id.as_deref() else {
-        return Err("this experiment was started before Compy kept a reference to its baseline \
-                    session, so the before/after can't be checked — restore it and start a new one"
-            .into());
+        return Err(TREATMENT_NO_BASELINE_REF.into());
     };
     if treatment_id == baseline_id {
-        return Err("the session picked as the after-reading is the baseline itself".into());
+        return Err(TREATMENT_IS_BASELINE.into());
     }
     let baseline = match session_by_id(sessions, baseline_id) {
         SessionLookup::Found(s) => s,
-        _ => {
-            return Err("the baseline session is no longer in your session history, so the \
-                        before/after can't be checked — restore the experiment and start a new one"
-                .into())
-        }
+        _ => return Err(TREATMENT_BASELINE_GONE.into()),
     };
     let treatment = match session_by_id(sessions, treatment_id) {
-        SessionLookup::Missing => {
-            return Err(format!(
-                "that session isn't in your session history — play a monitored {game} session, \
-                 then conclude"
-            ))
-        }
-        SessionLookup::Ambiguous => {
-            return Err("two sessions in your history share that start time, so Compy can't tell \
-                        which one to judge"
-                .into())
-        }
+        SessionLookup::Missing => return Err(TREATMENT_MISSING.into()),
+        SessionLookup::Ambiguous => return Err(TREATMENT_AMBIGUOUS.into()),
         SessionLookup::Found(s) => s,
     };
     if treatment.behind_the_whole_time() {
-        return Err(format!(
-            "that session measured nothing: another window was in front the whole time — play a \
-             {game} session with the game in front, then conclude"
-        ));
+        return Err(TREATMENT_BEHIND.into());
     }
     if !has_frame_reading(treatment) {
-        return Err("that session has no frame-rate reading to judge".into());
+        return Err(TREATMENT_NO_READING.into());
     }
     if treatment.process_name.trim().is_empty() {
-        return Err(format!(
-            "that session didn't record which game was running, so Compy can't confirm it measured \
-             {game}"
-        ));
+        return Err(TREATMENT_NO_GAME.into());
     }
     // Judged against the moment the apply returned, never `created_at`: that is stamped before the
     // apply, so a session begun while the apply (or its UAC prompt) was pending would pass.
     let Some(applied_at) = rec.applied_at.as_deref() else {
-        return Err("this experiment didn't record when its change took effect, so no session can \
-                    be shown to have been played after it — restore it and start a new one"
-            .into());
+        return Err(TREATMENT_NO_APPLY_TIME.into());
     };
     let Some(played_after) = began_after_apply(treatment, applied_at) else {
-        return Err("Compy can't tell whether that session was played after the change was \
-                    applied, so it can't be the after-reading"
-            .into());
+        return Err(TREATMENT_CANT_TELL_AFTER.into());
     };
     if !played_after {
-        return Err(format!(
-            "that session was played before the change was applied, so it can't measure it — play \
-             a new {game} session, then conclude"
-        ));
+        return Err(TREATMENT_PLAYED_BEFORE.into());
     }
 
     let pairing = crate::comparability::derive(baseline, treatment);
     match pairing.verdict {
         Comparability::NotComparable => {
-            return Err(format!(
-                "the two sessions aren't comparable — {} Play a {game} session under the same \
-                 conditions as the baseline, or restore the experiment.",
-                pairing.reasons.join(" ")
-            ))
+            return Err(format!("{TREATMENT_NOT_COMPARABLE} ({})", pairing.reasons.join(" ")));
         }
-        Comparability::Unknown => {
-            return Err("the two sessions don't share any recorded rig or conditions, so Compy can't \
-                        check they're comparable — restore the experiment and start a new one"
-                .into())
-        }
+        Comparability::Unknown => return Err(TREATMENT_COMPARABILITY_UNKNOWN.into()),
         Comparability::Comparable | Comparability::Partial => {}
     }
     Ok((treatment, pairing))
@@ -4039,6 +3984,83 @@ pub(crate) const TRIAL_START_INTERRUPTED_REFUSAL: &str = "An earlier Trial start
      changes was interrupted and isn't resolved yet, so Compy won't run it now. Check Test → Applied & history, \
      then try again. Nothing was changed.";
 
+// B11 (coordinator decision on 4/6): the Trial bench's refusal and failure reasons are FIXED sentences, each mapped
+// byte-equal in `src/data/backend-error.ts` to words in the user's language, so the bench shows the specific, true
+// reason and never raw text. A variable that was only a game name, a verdict word or raw `{e}` detail is dropped from
+// the sentence (it stays in the record's stop_reason / the console); each sentence is true for every caller. The
+// callers keep their English prefix ("experiment not started — …"); the screen shows only the mapped sentences.
+
+/// resolve_baseline: the start's baseline session.
+pub(crate) const BASELINE_MISSING: &str = "The baseline session isn't in your session history any more. Play a \
+     monitored session, then try again.";
+pub(crate) const BASELINE_AMBIGUOUS: &str = "Two sessions in your history share that baseline's start time, so \
+     Compy can't tell which one to use.";
+pub(crate) const BASELINE_BEHIND: &str = "The baseline session measured nothing: another window was in front the \
+     whole time. Play a session with the game in front, then try again.";
+pub(crate) const BASELINE_NO_READING: &str = "The baseline session has no frame-rate reading, so there's nothing to \
+     compare the change against.";
+pub(crate) const BASELINE_NO_GAME: &str = "The baseline session didn't record which game was running, so there's no \
+     game to measure the change in.";
+
+/// resolve_treatment: the after-reading a conclude is judged on. The Trial stays running; nothing is changed.
+pub(crate) const TREATMENT_NO_BASELINE_REF: &str = "This Trial was started before Compy kept a reference to its \
+     baseline session, so the before and after can't be checked. Restore it and start a new one.";
+pub(crate) const TREATMENT_IS_BASELINE: &str = "The session picked as the after-reading is the baseline itself.";
+pub(crate) const TREATMENT_BASELINE_GONE: &str = "The baseline session is no longer in your session history, so the \
+     before and after can't be checked. Restore the Trial and start a new one.";
+pub(crate) const TREATMENT_MISSING: &str = "That session isn't in your session history. Play a monitored session of \
+     this game, then conclude.";
+pub(crate) const TREATMENT_AMBIGUOUS: &str = "Two sessions in your history share that start time, so Compy can't \
+     tell which one to judge.";
+pub(crate) const TREATMENT_BEHIND: &str = "That session measured nothing: another window was in front the whole \
+     time. Play a session of this game with the game in front, then conclude.";
+pub(crate) const TREATMENT_NO_READING: &str = "That session has no frame-rate reading to judge.";
+pub(crate) const TREATMENT_NO_GAME: &str = "That session didn't record which game was running, so Compy can't \
+     confirm it measured this game.";
+pub(crate) const TREATMENT_NO_APPLY_TIME: &str = "This Trial didn't record when its change took effect, so no \
+     session can be shown to have been played after it. Restore it and start a new one.";
+pub(crate) const TREATMENT_CANT_TELL_AFTER: &str = "Compy can't tell whether that session was played after the \
+     change was applied, so it can't be the after-reading.";
+pub(crate) const TREATMENT_PLAYED_BEFORE: &str = "That session was played before the change was applied, so it \
+     can't measure it. Play a new session of this game, then conclude.";
+/// The pairing's own reasons (which conditions differ) are not part of the sentence: follow-up to pass them as a
+/// typed field. Test shows the two sessions' conditions.
+pub(crate) const TREATMENT_NOT_COMPARABLE: &str = "The two sessions aren't comparable: a recorded condition differs \
+     between them. Play a session of this game under the same conditions as the baseline, or restore the Trial.";
+pub(crate) const TREATMENT_COMPARABILITY_UNKNOWN: &str = "The two sessions don't share any recorded rig or \
+     conditions, so Compy can't check they're comparable. Restore the Trial and start a new one.";
+
+/// abort_start's reasons: a start stopped after its change was applied.
+pub(crate) const ABORT_NOT_CHANGED: &str = "The setting did not read as changed after the apply, so there was \
+     nothing to measure.";
+pub(crate) const ABORT_UNREADABLE: &str = "Compy could not read the setting back after the apply, so it can't show \
+     the change took effect.";
+/// A Trial record that could not be saved (the save's own error stays in the console / support log).
+pub(crate) const TRIAL_RECORD_NOT_SAVED: &str = "Compy could not save this Trial's record.";
+
+/// What happened to the change when a start was stopped after its apply.
+pub(crate) const ABORT_RESTORED: &str = "Compy stopped this Trial before measuring and put the change back.";
+pub(crate) const ABORT_ALREADY_REVERTED: &str = "Compy stopped this Trial before measuring; the change had already \
+     been undone outside Compy.";
+/// A restore (after a stopped start, a conclude that doesn't keep, or "Restore now") that returned an error.
+pub(crate) const RESTORE_NOT_COMPLETED: &str = "Compy tried to put the change back, but the restore did not \
+     complete, so Compy can't confirm the change was undone. Check it in Test → Applied & history and undo it there.";
+/// settle_restore: a live read taken AFTER the restore still shows the setting as changed.
+pub(crate) const RESTORED_STILL_READS_CHANGED: &str = "Compy put the change back, but a read afterwards still \
+     shows the setting as changed; something else may have set it again. Check it in Test → Applied & history.";
+pub(crate) const UNDONE_OUTSIDE_READS_CHANGED: &str = "The change was already undone outside Compy, but a read now \
+     shows the setting as changed again; something else is setting it. Check it in Test → Applied & history.";
+
+/// mark_failed_apply: the apply itself returned an error (no undo record exists), by what the live read showed.
+pub(crate) const APPLY_ERR_READS_UNCHANGED: &str = "The apply reported an error. The setting reads as not changed, \
+     but a change that stopped part-way can read that way too, and Compy saved no undo record for it. If it looks \
+     changed in Windows, set it back there.";
+pub(crate) const APPLY_ERR_READS_CHANGED: &str = "The apply reported an error, and the setting now reads as \
+     changed. Compy saved no undo record for it, so it can't undo it and it won't be listed in Test → Applied & \
+     history. Set it back in Windows.";
+pub(crate) const APPLY_ERR_UNREADABLE: &str = "The apply reported an error, and Compy can't read the setting to \
+     tell whether it changed. Compy saved no undo record for it. Check the setting in Windows.";
+
 /// CR-rp-same-setting-row: the refusal for a plain apply of a setting a Trial is testing right now.
 /// A second ledger row for that setting would snapshot the Trial's own applied state, and when the
 /// Trial puts its change back (a confounded or not-kept result restores the Trial's pre-test
@@ -4715,11 +4737,7 @@ pub(crate) fn start_experiment(
     // Name the change on disk before any further step can fail or crash, so a reconcile matches it
     // by id instead of inferring it. A record that can't be saved can't own a change: restore it.
     if let Err(e) = save_store(&store) {
-        return Err(abort_start(
-            &mut store,
-            idx,
-            &format!("the experiment record could not be saved after the apply ({e})"),
-        ));
+        return Err(abort_start(&mut store, idx, &format!("{TRIAL_RECORD_NOT_SAVED} ({e})")));
     }
 
     // Step 5 (§4.5): the live probe must read the target state straight after the apply. Not
@@ -4728,21 +4746,9 @@ pub(crate) fn start_experiment(
     store.experiments[idx].target_verified = target;
     match target {
         Some(true) => {}
-        Some(false) => {
-            return Err(abort_start(
-                &mut store,
-                idx,
-                "the setting did not read as changed after the apply, so there is nothing to measure",
-            ))
-        }
-        None => {
-            return Err(abort_start(
-                &mut store,
-                idx,
-                "Compy could not read the setting back after the apply, so it can't prove the change \
-                 took effect",
-            ))
-        }
+        // B11: fixed, mapped sentences.
+        Some(false) => return Err(abort_start(&mut store, idx, ABORT_NOT_CHANGED)),
+        None => return Err(abort_start(&mut store, idx, ABORT_UNREADABLE)),
     }
 
     // Watermark AFTER our apply so a LATER external change trips the confound guard, not our own. An
@@ -4757,11 +4763,7 @@ pub(crate) fn start_experiment(
     // A start the caller sees fail must not leave its change applied: restore when the promotion
     // can't be saved.
     if let Err(e) = save_store(&store) {
-        return Err(abort_start(
-            &mut store,
-            idx,
-            &format!("the experiment record could not be saved as running ({e})"),
-        ));
+        return Err(abort_start(&mut store, idx, &format!("{TRIAL_RECORD_NOT_SAVED} ({e})")));
     }
     Ok(store.experiments[idx].clone())
 }
@@ -4781,7 +4783,7 @@ fn settle_failed_apply(
     let message = mark_failed_apply(&mut store.experiments[idx], err, check);
     match save_store(store) {
         Ok(()) => message,
-        Err(e) => format!("{message} (the experiment record could not be saved: {e})"),
+        Err(e) => format!("{message} {TRIAL_RECORD_NOT_SAVED} ({e})"),
     }
 }
 
@@ -4793,21 +4795,18 @@ fn mark_failed_apply(rec: &mut ExperimentRecord, err: &str, check: crate::histor
         (
             "the apply reported an error; the setting reads as not changed, but a change that stopped \
              part-way can read that way too, and Compy saved no undo record for it",
-            "The setting reads as not changed, but a change that stopped part-way can read that way \
-             too, and Compy saved no undo record for it. If it looks changed in Windows, set it back there.",
+            APPLY_ERR_READS_UNCHANGED,
         )
     } else if changed == Some(true) {
         (
             "the apply reported an error, but the setting reads as changed and Compy saved no undo \
              record for it",
-            "the setting now reads as changed, and Compy saved no undo record for it, so it can't undo \
-             it and it won't be listed in Test → Applied & history. Set it back in Windows.",
+            APPLY_ERR_READS_CHANGED,
         )
     } else {
         (
             "the apply reported an error, and Compy can't read the setting to tell whether it changed",
-            "Compy can't read the setting to tell whether it changed, and it saved no undo record for \
-             it. Check the setting in Windows.",
+            APPLY_ERR_UNREADABLE,
         )
     };
     rec.status = ExperimentStatus::Aborted;
@@ -4816,7 +4815,9 @@ fn mark_failed_apply(rec: &mut ExperimentRecord, err: &str, check: crate::histor
     rec.trial_result = Some(TrialResult::Unmeasurable);
     rec.concluded_at = Some(Utc::now().to_rfc3339());
     rec.stop_reason = Some(format!("start-aborted: {why}: {err}"));
-    format!("experiment aborted — the apply reported an error ({err}). {message}")
+    // B11: the sentence is one of the mapped APPLY_ERR_* consts; the apply's own error follows in ( ) for the
+    // console and support log only.
+    format!("experiment aborted — {message} ({err})")
 }
 
 /// Abort a start AFTER its change was applied: restore through the audited boundary and record why.
@@ -4835,38 +4836,36 @@ fn abort_start(store: &mut ExperimentStore, idx: usize, why: &str) -> String {
         Ok(()) => {
             rec.status = ExperimentStatus::Restored;
             rec.stop_reason = Some(format!("start-aborted: {why}; the change was restored"));
-            format!("experiment aborted before measuring — {why}. Compy restored the change.")
+            // B11: `why` is a mapped sentence (ABORT_*, TRIAL_RECORD_NOT_SAVED) where it can be; the outcome is one of
+            // the mapped ABORT_RESTORED / ABORT_ALREADY_REVERTED / RESTORE_NOT_COMPLETED. Raw detail stays in ( ).
+            format!("experiment aborted before measuring — {why} {ABORT_RESTORED}")
         }
         Err(e) if restore_already_reverted(&e) => {
             rec.status = ExperimentStatus::Restored;
             rec.stop_reason = Some(format!(
                 "start-aborted: {why}; the change was already reverted outside Compy"
             ));
-            format!("experiment aborted before measuring — {why}. The change is already reverted.")
+            format!("experiment aborted before measuring — {why} {ABORT_ALREADY_REVERTED}")
         }
         Err(e) => {
             rec.status = ExperimentStatus::Aborted;
             rec.stop_reason = Some(format!(
                 "start-aborted: {why}; automatic restore did not complete — check it in Test → Applied & history: {e}"
             ));
-            format!(
-                "experiment aborted before measuring — {why} — and the automatic restore did not \
-                 complete. Compy could not confirm the change was rolled back; check it in \
-                 Test → Applied & history and undo it there. ({e})"
-            )
+            format!("experiment aborted before measuring — {why} {RESTORE_NOT_COMPLETED} ({e})")
         }
     };
     // §4.10: a restore is only as good as the read that follows it.
     if rec.status == ExperimentStatus::Restored {
         let check = crate::history::probe_rec_target(&rec.rec_id);
         if let Some(still) = settle_restore(rec, compy_restored, check) {
-            message = format!("experiment aborted before measuring — {why}. {still}");
+            message = format!("experiment aborted before measuring — {why} {still}");
         }
     }
     match save_store(store) {
         Ok(()) => message,
         // The record on disk is still Pending; the next reconcile resolves it against the ledger.
-        Err(e) => format!("{message} (the experiment record could not be saved: {e})"),
+        Err(e) => format!("{message} {TRIAL_RECORD_NOT_SAVED} ({e})"),
     }
 }
 
@@ -5254,12 +5253,8 @@ fn finish_conclude(
                 store.experiments[idx].stop_reason =
                     Some(format!("automatic restore did not complete — check it in Test → Applied & history: {e}"));
                 save_store(store)?;
-                return Err(format!(
-                    "experiment concluded '{}' but the automatic restore did not complete — Compy \
-                     could not confirm the change was rolled back; check it in Test → Applied & \
-                     history and undo it there. ({e})",
-                    outcome.verdict
-                ));
+                // B11: the mapped RESTORE_NOT_COMPLETED; the verdict word and the raw error stay for the console.
+                return Err(format!("experiment concluded '{}' — {RESTORE_NOT_COMPLETED} ({e})", outcome.verdict));
             }
         };
         // §4.10: read the setting back after the restore.
@@ -5306,10 +5301,8 @@ pub(crate) fn restore_experiment(experiment_id: String) -> Result<ExperimentReco
                 Some(format!("restore did not complete — check it in Test → Applied & history: {e}"));
             store.experiments[idx].concluded_at = Some(now.to_rfc3339());
             save_store(&store)?;
-            return Err(format!(
-                "restore did not complete — Compy could not confirm the change was rolled back; \
-                 check it in Test → Applied & history and undo it there. ({e})"
-            ));
+            // B11: the mapped RESTORE_NOT_COMPLETED; the raw error stays for the console.
+            return Err(format!("restore did not complete — {RESTORE_NOT_COMPLETED} ({e})"));
         }
     };
     store.experiments[idx].status = ExperimentStatus::Restored;

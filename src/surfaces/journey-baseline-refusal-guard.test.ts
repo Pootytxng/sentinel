@@ -23,10 +23,16 @@ const code = (b: string) =>
     .join("\n");
 // A Rust literal with its `\` line continuations joined, as the user reads it.
 const join = (lit: string) => lit.replace(/\\\n\s*/g, "");
-/** The first literal of each refusal: `Err("…")`, `Err(format!("…"))`, `map_err(|x| format!("…"))`. */
+/** B11: a refusal that is a fixed const (`Err(NAME.into())`, mapped in backend-error.ts) is read as its const's text. */
+function constText(name: string): string {
+  const m = rs.match(new RegExp(`const ${name}: &str =\\s*"((?:[^"\\\\]|\\\\.)*)";`, "s"));
+  expect(m, `const ${name} in experiment.rs`).not.toBeNull();
+  return join(m![1]);
+}
+/** The first literal of each refusal: `Err("…")`, `Err(format!("…"))`, `map_err(|x| format!("…"))`, or a const. */
 function refusals(name: string): string[] {
-  const re = /(?:Err\(|map_err\(\|\w+\|\s*\{?\s*)(?:format!\()?\s*"((?:[^"\\]|\\.)*)"/gs;
-  return [...code(body(name)).matchAll(re)].map((m) => join(m[1]));
+  const re = /(?:Err\(|map_err\(\|\w+\|\s*\{?\s*)(?:(?:format!\()?\s*"((?:[^"\\]|\\.)*)"|([A-Z][A-Z0-9_]+)(?=\.into\(\)|\.to_string\(\)))/gs;
+  return [...code(body(name)).matchAll(re)].map((m) => (m[1] !== undefined ? join(m[1]) : constText(m[2])));
 }
 function literals(name: string): string[] {
   return [...code(body(name)).matchAll(/"((?:[^"\\]|\\.)*)"/gs)].map((m) => join(m[1]));
@@ -35,12 +41,13 @@ function literals(name: string): string[] {
 describe("the journey's baseline-refusal match is pinned to experiment.rs", () => {
   it("every baseline refusal is worded as today and reads as a baseline refusal", () => {
     const pinned: Record<string, string[]> = {
+      // B11: fixed consts (BASELINE_*), mapped in backend-error.ts; each still names the baseline.
       resolve_baseline: [
-        "the baseline session isn't in your session history any more — play a monitored session, then try again",
-        "two sessions in your history share that baseline's start time, so Compy can't tell which one to use",
-        "the baseline session measured nothing: another window was in front the whole time — play a session with the game in front, then try again",
-        "the baseline session has no frame-rate reading, so there's nothing to compare the change against",
-        "the baseline session didn't record which game was running, so there's no game to measure the change in",
+        "The baseline session isn't in your session history any more. Play a monitored session, then try again.",
+        "Two sessions in your history share that baseline's start time, so Compy can't tell which one to use.",
+        "The baseline session measured nothing: another window was in front the whole time. Play a session with the game in front, then try again.",
+        "The baseline session has no frame-rate reading, so there's nothing to compare the change against.",
+        "The baseline session didn't record which game was running, so there's no game to measure the change in.",
       ],
       baseline_is_current: [
         "{why}, so it can't check that nothing else changed since the baseline session",

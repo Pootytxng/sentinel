@@ -17,7 +17,7 @@ import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import type { AppliedChange, SessionSummary } from "../types";
 import { ChangedOutsideRemedy } from "./ChangedOutsideRemedy";
-import { backendMessage } from "../data/backend-error";
+import { backendMessage, backendMessages } from "../data/backend-error";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import { writeLedger } from "../data/ledger-write";
 import { liveChangeGroups } from "../data/live-changes";
@@ -1332,11 +1332,13 @@ export default function ExperimentBench({
       });
     } catch (e) {
       // A loud restore-failed error is never hidden (honesty rail), but never shown raw either (B11, the owner's "no
-      // String(e) in the face" law): a sentence backend-error.ts knows is said in the user's language; anything else
-      // gets the bench's own line, which says the write may have stopped part-way and where to see what is on now.
-      // The raw text goes to the console and to ChangedOutsideRemedy (which only reads it).
+      // String(e) in the face" law): every sentence backend-error.ts knows in it (why a start/conclude was refused,
+      // why a Trial stopped and whether its change was put back, a restore that did not complete) is said in the
+      // user's language, in order; an error with none gets the bench's own line, which says the write may have
+      // stopped part-way and where to see what is on now. The raw text goes to the console and to
+      // ChangedOutsideRemedy (which only reads it).
       console.error("[compy] bench write", e);
-      setError(backendMessage(e, t) ?? t("lab.experimentBench.errors.writeFailed"), String(e));
+      setError(backendMessages(e, t) ?? t("lab.experimentBench.errors.writeFailed"), String(e));
       if (!announced) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       await settle().catch(() => {});
     }

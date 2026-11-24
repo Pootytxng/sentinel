@@ -230,12 +230,20 @@ const pickChange = async (value: string) => {
 const wholeLine = (line: string) => (_: string, el: Element | null) =>
   !!el && el.textContent === line && ![...el.children].some((c) => c.textContent === line);
 
-// B11: a bench write the backend refused or failed shows the bench's own line (a mapped backend sentence when
-// backend-error.ts knows it), never the backend's raw text ("no String(e) in the face"). Break check: put
-// `setError(String(e))` back in runWrite -> the generic line is missing and the raw text appears.
+// B11: a bench write the backend refused or failed shows every sentence backend-error.ts knows in it (the Rust consts
+// in experiment.rs), in the user's language, and only when it carries none the bench's own line; never the backend's
+// raw text ("no String(e) in the face"). Literal en sentences on purpose: a reworded const fails here. Break check:
+// put `setError(String(e))` back in runWrite -> the sentence is wrapped in raw text and these fail.
 const WRITE_FAILED = "Compy couldn't finish that. It may have stopped part-way, so check Test → Applied & history to see what is on now.";
-const expectGeneric = (alert: HTMLElement, raw: string) => {
-  expect(alert.textContent).toBe(WRITE_FAILED);
+const PLAYED_BEFORE = "That session was played before the change was applied, so it can't measure it. Play a new session of this game, then conclude.";
+const BASELINE_MISSING = "The baseline session isn't in your session history any more. Play a monitored session, then try again.";
+const ABORT_NOT_CHANGED = "The setting did not read as changed after the apply, so there was nothing to measure.";
+const ABORT_RESTORED = "Compy stopped this Trial before measuring and put the change back.";
+const RESTORE_NOT_COMPLETED =
+  "Compy tried to put the change back, but the restore did not complete, so Compy can't confirm the change was undone. Check it in Test → Applied & history and undo it there.";
+const OS_DETAIL = "(Access is denied. (os error 5))";
+const expectSaid = (alert: HTMLElement, said: string, raw: string) => {
+  expect(alert.textContent).toBe(said);
   expect(alert.textContent).not.toContain(raw);
 };
 
@@ -1357,14 +1365,31 @@ describe("ExperimentBench (armed)", () => {
     state.gate = true;
     state.experiments = [RUNNING_EXPERIMENT];
     state.sessions = [VALORANT_SESSION];
-    state.refuse = {
-      conclude_experiment: "experiment not concluded — that session was played before the change was applied",
-    };
+    state.refuse = { conclude_experiment: `experiment not concluded — ${PLAYED_BEFORE}` };
     render(<ExperimentBench />);
     fireEvent.click(await screen.findByRole("button", { name: /Conclude with my latest/ }));
-    expectGeneric(await screen.findByRole("alert"), "that session was played before the change was applied");
+    expectSaid(await screen.findByRole("alert"), PLAYED_BEFORE, "experiment not concluded");
     expect(screen.getByTestId("experiment-running")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Restore now" })).toBeInTheDocument();
+  });
+
+  it("says a refused conclude in zh-CN", async () => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    state.refuse = { conclude_experiment: `experiment not concluded — ${PLAYED_BEFORE}` };
+    await i18n.changeLanguage("zh-CN");
+    try {
+      render(<ExperimentBench />);
+      fireEvent.click(await screen.findByRole("button", { name: /用我最近一局/ }));
+      expectSaid(
+        await screen.findByRole("alert"),
+        "那个会话是在应用更改之前玩的，所以无法测量这项更改。请玩一局新的该游戏会话，然后再得出结论。",
+        "experiment not concluded",
+      );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("shows a refused start and starts nothing", async () => {
@@ -1372,14 +1397,14 @@ describe("ExperimentBench (armed)", () => {
     state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
-    state.refuse = { start_experiment: "the baseline session is no longer in your session history" };
+    state.refuse = { start_experiment: `experiment not started — ${BASELINE_MISSING}` };
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
     await pickChange("test-rec");
     const start = await screen.findByRole("button", { name: /Start experiment/ });
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
-    expectGeneric(await screen.findByRole("alert"), "no longer in your session history");
+    expectSaid(await screen.findByRole("alert"), BASELINE_MISSING, "experiment not started");
     expect(screen.queryByTestId("experiment-running")).toBeNull();
   });
 
@@ -1391,7 +1416,7 @@ describe("ExperimentBench (armed)", () => {
     state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     state.sessions = [VALORANT_SESSION];
     state.sim = WORTH_TESTING_SIM;
-    state.refuse = { start_experiment: "experiment aborted — the setting didn't read back as changed; Compy restored it" };
+    state.refuse = { start_experiment: `experiment aborted before measuring — ${ABORT_NOT_CHANGED} ${ABORT_RESTORED}` };
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
     await pickChange("test-rec");
@@ -1403,7 +1428,7 @@ describe("ExperimentBench (armed)", () => {
     window.addEventListener(LEDGER_CHANGED_EVENT, ledger);
     try {
       fireEvent.click(start);
-      expectGeneric(await screen.findByRole("alert"), "Compy restored it");
+      expectSaid(await screen.findByRole("alert"), `${ABORT_NOT_CHANGED} ${ABORT_RESTORED}`, "experiment aborted");
       await waitFor(() => expect(document.querySelectorAll(".exp-bench-row")).toHaveLength(1));
       expect(ledger).toHaveBeenCalled();
     } finally {
@@ -1414,11 +1439,23 @@ describe("ExperimentBench (armed)", () => {
   // Codex r1 on #611: a conclude that doesn't keep restores the change, and a failed conclude or
   // restore may have moved it too — sibling surfaces must re-derive or they show it still applied.
   it.each([
-    ["a conclude", "Conclude with my latest", undefined],
-    ["a failed conclude", "Conclude with my latest", { conclude_experiment: "restore failed — the setting still reads changed" }],
-    ["a restore", "Restore now", undefined],
-    ["a failed restore", "Restore now", { restore_experiment: "restore failed — the setting still reads changed" }],
-  ])("signals the ledger after %s", async (_what, button, refuse) => {
+    ["a conclude", "Conclude with my latest", undefined, undefined],
+    [
+      "a failed conclude",
+      "Conclude with my latest",
+      { conclude_experiment: `experiment concluded 'keep' — ${RESTORE_NOT_COMPLETED} ${OS_DETAIL}` },
+      RESTORE_NOT_COMPLETED,
+    ],
+    ["a restore", "Restore now", undefined, undefined],
+    [
+      "a failed restore",
+      "Restore now",
+      { restore_experiment: `restore did not complete — ${RESTORE_NOT_COMPLETED} ${OS_DETAIL}` },
+      RESTORE_NOT_COMPLETED,
+    ],
+    // An error that carries no sentence backend-error.ts knows gets the bench's own line (the fallback).
+    ["an unmapped failure", "Restore now", { restore_experiment: `something else ${OS_DETAIL}` }, WRITE_FAILED],
+  ])("signals the ledger after %s", async (_what, button, refuse, said) => {
     state.gate = true;
     state.experiments = [RUNNING_EXPERIMENT];
     state.sessions = [VALORANT_SESSION];
@@ -1430,9 +1467,28 @@ describe("ExperimentBench (armed)", () => {
     try {
       fireEvent.click(control);
       await waitFor(() => expect(ledger).toHaveBeenCalled());
-      if (refuse) expectGeneric(await screen.findByRole("alert"), "still reads changed");
+      if (said) expectSaid(await screen.findByRole("alert"), said, "Access is denied");
     } finally {
       window.removeEventListener(LEDGER_CHANGED_EVENT, ledger);
+    }
+  });
+
+  it("says a failed restore in zh-CN, with where to undo it", async () => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    state.refuse = { restore_experiment: `restore did not complete — ${RESTORE_NOT_COMPLETED} ${OS_DETAIL}` };
+    await i18n.changeLanguage("zh-CN");
+    try {
+      render(<ExperimentBench />);
+      fireEvent.click(await screen.findByRole("button", { name: "立即恢复" }));
+      expectSaid(
+        await screen.findByRole("alert"),
+        "Compy 尝试恢复这项更改，但恢复没有完成，所以 Compy 无法确认更改已被撤销。请在「测试 → 已应用与历史记录」中查看并在那里撤销它。",
+        "Access is denied",
+      );
+    } finally {
+      await i18n.changeLanguage("en");
     }
   });
 

@@ -96,6 +96,184 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "A setting this action changes is being measured by the benchmark right now, so Compy won't run it on top of the measurement. Wait until the benchmark finishes and puts its change back, or cancel it. Nothing was changed.",
     key: "app.backendErrors.benchHoldsSetting",
   },
+  // B11 (r2): the fixed reasons a Trial start/conclude/abort/restore and the benchmark's rollback report, so
+  // ExperimentBench/Benchmark show each one in the user's language instead of raw backend text. Consts in
+  // experiment.rs and benchmark_trial.rs; any detail after a sentence (an OS error) stays in the console.
+  {
+    rust: "BASELINE_MISSING",
+    text: "The baseline session isn't in your session history any more. Play a monitored session, then try again.",
+    key: "app.backendErrors.baselineMissing",
+  },
+  {
+    rust: "BASELINE_AMBIGUOUS",
+    text: "Two sessions in your history share that baseline's start time, so Compy can't tell which one to use.",
+    key: "app.backendErrors.baselineAmbiguous",
+  },
+  {
+    rust: "BASELINE_BEHIND",
+    text: "The baseline session measured nothing: another window was in front the whole time. Play a session with the game in front, then try again.",
+    key: "app.backendErrors.baselineBehind",
+  },
+  {
+    rust: "BASELINE_NO_READING",
+    text: "The baseline session has no frame-rate reading, so there's nothing to compare the change against.",
+    key: "app.backendErrors.baselineNoReading",
+  },
+  {
+    rust: "BASELINE_NO_GAME",
+    text: "The baseline session didn't record which game was running, so there's no game to measure the change in.",
+    key: "app.backendErrors.baselineNoGame",
+  },
+  {
+    rust: "TREATMENT_NO_BASELINE_REF",
+    text: "This Trial was started before Compy kept a reference to its baseline session, so the before and after can't be checked. Restore it and start a new one.",
+    key: "app.backendErrors.treatmentNoBaselineRef",
+  },
+  {
+    rust: "TREATMENT_IS_BASELINE",
+    text: "The session picked as the after-reading is the baseline itself.",
+    key: "app.backendErrors.treatmentIsBaseline",
+  },
+  {
+    rust: "TREATMENT_BASELINE_GONE",
+    text: "The baseline session is no longer in your session history, so the before and after can't be checked. Restore the Trial and start a new one.",
+    key: "app.backendErrors.treatmentBaselineGone",
+  },
+  {
+    rust: "TREATMENT_MISSING",
+    text: "That session isn't in your session history. Play a monitored session of this game, then conclude.",
+    key: "app.backendErrors.treatmentMissing",
+  },
+  {
+    rust: "TREATMENT_AMBIGUOUS",
+    text: "Two sessions in your history share that start time, so Compy can't tell which one to judge.",
+    key: "app.backendErrors.treatmentAmbiguous",
+  },
+  {
+    rust: "TREATMENT_BEHIND",
+    text: "That session measured nothing: another window was in front the whole time. Play a session of this game with the game in front, then conclude.",
+    key: "app.backendErrors.treatmentBehind",
+  },
+  {
+    rust: "TREATMENT_NO_READING",
+    text: "That session has no frame-rate reading to judge.",
+    key: "app.backendErrors.treatmentNoReading",
+  },
+  {
+    rust: "TREATMENT_NO_GAME",
+    text: "That session didn't record which game was running, so Compy can't confirm it measured this game.",
+    key: "app.backendErrors.treatmentNoGame",
+  },
+  {
+    rust: "TREATMENT_NO_APPLY_TIME",
+    text: "This Trial didn't record when its change took effect, so no session can be shown to have been played after it. Restore it and start a new one.",
+    key: "app.backendErrors.treatmentNoApplyTime",
+  },
+  {
+    rust: "TREATMENT_CANT_TELL_AFTER",
+    text: "Compy can't tell whether that session was played after the change was applied, so it can't be the after-reading.",
+    key: "app.backendErrors.treatmentCantTellAfter",
+  },
+  {
+    rust: "TREATMENT_PLAYED_BEFORE",
+    text: "That session was played before the change was applied, so it can't measure it. Play a new session of this game, then conclude.",
+    key: "app.backendErrors.treatmentPlayedBefore",
+  },
+  {
+    rust: "TREATMENT_NOT_COMPARABLE",
+    text: "The two sessions aren't comparable: a recorded condition differs between them. Play a session of this game under the same conditions as the baseline, or restore the Trial.",
+    key: "app.backendErrors.treatmentNotComparable",
+  },
+  {
+    rust: "TREATMENT_COMPARABILITY_UNKNOWN",
+    text: "The two sessions don't share any recorded rig or conditions, so Compy can't check they're comparable. Restore the Trial and start a new one.",
+    key: "app.backendErrors.treatmentComparabilityUnknown",
+  },
+  {
+    rust: "ABORT_NOT_CHANGED",
+    text: "The setting did not read as changed after the apply, so there was nothing to measure.",
+    key: "app.backendErrors.abortNotChanged",
+  },
+  {
+    rust: "ABORT_UNREADABLE",
+    text: "Compy could not read the setting back after the apply, so it can't show the change took effect.",
+    key: "app.backendErrors.abortUnreadable",
+  },
+  {
+    rust: "TRIAL_RECORD_NOT_SAVED",
+    text: "Compy could not save this Trial's record.",
+    key: "app.backendErrors.trialRecordNotSaved",
+  },
+  {
+    rust: "ABORT_RESTORED",
+    text: "Compy stopped this Trial before measuring and put the change back.",
+    key: "app.backendErrors.abortRestored",
+  },
+  {
+    rust: "ABORT_ALREADY_REVERTED",
+    text: "Compy stopped this Trial before measuring; the change had already been undone outside Compy.",
+    key: "app.backendErrors.abortAlreadyReverted",
+  },
+  {
+    rust: "RESTORE_NOT_COMPLETED",
+    text: "Compy tried to put the change back, but the restore did not complete, so Compy can't confirm the change was undone. Check it in Test → Applied & history and undo it there.",
+    key: "app.backendErrors.restoreNotCompleted",
+  },
+  {
+    rust: "RESTORED_STILL_READS_CHANGED",
+    text: "Compy put the change back, but a read afterwards still shows the setting as changed; something else may have set it again. Check it in Test → Applied & history.",
+    key: "app.backendErrors.restoredStillReadsChanged",
+  },
+  {
+    rust: "UNDONE_OUTSIDE_READS_CHANGED",
+    text: "The change was already undone outside Compy, but a read now shows the setting as changed again; something else is setting it. Check it in Test → Applied & history.",
+    key: "app.backendErrors.undoneOutsideReadsChanged",
+  },
+  {
+    rust: "APPLY_ERR_READS_UNCHANGED",
+    text: "The apply reported an error. The setting reads as not changed, but a change that stopped part-way can read that way too, and Compy saved no undo record for it. If it looks changed in Windows, set it back there.",
+    key: "app.backendErrors.applyErrReadsUnchanged",
+  },
+  {
+    rust: "APPLY_ERR_READS_CHANGED",
+    text: "The apply reported an error, and the setting now reads as changed. Compy saved no undo record for it, so it can't undo it and it won't be listed in Test → Applied & history. Set it back in Windows.",
+    key: "app.backendErrors.applyErrReadsChanged",
+  },
+  {
+    rust: "APPLY_ERR_UNREADABLE",
+    text: "The apply reported an error, and Compy can't read the setting to tell whether it changed. Compy saved no undo record for it. Check the setting in Windows.",
+    key: "app.backendErrors.applyErrUnreadable",
+  },
+  {
+    rust: "BENCH_ROLLED_BACK_UNRECORDED",
+    text: "Measurement finished and the change was rolled back, but Compy couldn't save that undo to its history, so Test → Applied & history may still list the change as applied.",
+    key: "app.backendErrors.benchRolledBackUnrecorded",
+  },
+  {
+    rust: "BENCH_ROLLBACK_FAILED",
+    text: "Measurement finished, but Compy tried to roll the change back and the rollback failed, so Compy can't confirm it was undone. Check it in Test → Applied & history and undo it there.",
+    key: "app.backendErrors.benchRollbackFailed",
+  },
+  {
+    rust: "BENCH_STACK_ROLLBACK_FAILED",
+    text: "Measurement finished, but Compy tried to roll the changes back and one or more rollbacks failed, so Compy can't confirm they were all undone. Check them in Test → Applied & history and undo them there.",
+    key: "app.backendErrors.benchStackRollbackFailed",
+  },
+  {
+    rust: "BENCH_STACK_ROLLED_BACK_UNRECORDED",
+    text: "The changes were measured and rolled back, but Compy couldn't save some of those undos to its history, so Test → Applied & history may still list them as applied.",
+    key: "app.backendErrors.benchStackRolledBackUnrecorded",
+  },
+  {
+    rust: "BENCH_LEDGER_UNREAD_BEFORE",
+    text: "Compy couldn't read its change history before measuring, so it changed nothing. Try again when it can be read.",
+    key: "app.backendErrors.benchLedgerUnreadBefore",
+  },
+  {
+    rust: "BENCH_LEDGER_UNREAD_AFTER",
+    text: "The changes were applied, but Compy couldn't re-read its change history to roll them back automatically. Undo them in Test → Applied & history.",
+    key: "app.backendErrors.benchLedgerUnreadAfter",
+  },
   // A7: the two power GUID refusals (fixed words, never the saved value).
   {
     rust: "POWER_SETTING_ID_REFUSED",
@@ -196,4 +374,17 @@ export function backendDetail(err: unknown, t: TFunction): string {
   if (known) return known;
   const raw = (err instanceof Error ? err.message : err === null || err === undefined ? "" : String(err)).trim();
   return raw ? t("app.backendErrors.unmapped", { detail: raw }) : t("app.backendErrors.unmappedNoDetail");
+}
+
+/** B11: EVERY known sentence `err` carries, in the order they appear, joined with a space, in the user's
+ *  language; null when it carries none (caller shows its generic line). For reasons that compose a cause and
+ *  an outcome (a Trial aborted before measuring: why, then whether the change was put back), so the screen
+ *  keeps both. Text between and after the sentences (an OS error) is never shown. */
+export function backendMessages(err: unknown, t: TFunction): string | null {
+  if (err === null || err === undefined) return null;
+  const text = String(err);
+  const found = BACKEND_SENTENCES.map((s) => ({ at: text.indexOf(s.text), key: s.key }))
+    .filter((f) => f.at >= 0)
+    .sort((a, b) => a.at - b.at);
+  return found.length ? found.map((f) => t(f.key)).join(" ") : null;
 }

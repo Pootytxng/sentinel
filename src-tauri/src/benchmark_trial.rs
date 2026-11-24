@@ -160,6 +160,29 @@ pub(crate) const BENCH_HOLDS_SETTING_REFUSAL: &str = "A setting this action chan
      benchmark right now, so Compy won't run it on top of the measurement. Wait until the benchmark finishes \
      and puts its change back, or cancel it. Nothing was changed.";
 
+// B11 (coordinator decision on 4/6): the trial card's rollback and ledger errors are FIXED sentences, mapped in
+// `src/data/backend-error.ts`; the raw detail (`{e}`, the setting ids) follows in ( ) for the console / support log.
+
+/// record_rollback_outcome: the undo ran on Windows but couldn't be saved to history (#631).
+pub(crate) const BENCH_ROLLED_BACK_UNRECORDED: &str = "Measurement finished and the change was rolled back, but \
+     Compy couldn't save that undo to its history, so Test → Applied & history may still list the change as applied.";
+/// record_rollback_outcome: the rollback returned an error.
+pub(crate) const BENCH_ROLLBACK_FAILED: &str = "Measurement finished, but Compy tried to roll the change back and \
+     the rollback failed, so Compy can't confirm it was undone. Check it in Test → Applied & history and undo it there.";
+/// record_stack_rollback_outcome: one or more of the stack's rollbacks returned an error.
+pub(crate) const BENCH_STACK_ROLLBACK_FAILED: &str = "Measurement finished, but Compy tried to roll the changes \
+     back and one or more rollbacks failed, so Compy can't confirm they were all undone. Check them in Test → \
+     Applied & history and undo them there.";
+/// record_stack_rollback_outcome: every rollback ran, but some couldn't be saved to history (#631).
+pub(crate) const BENCH_STACK_ROLLED_BACK_UNRECORDED: &str = "The changes were measured and rolled back, but Compy \
+     couldn't save some of those undos to its history, so Test → Applied & history may still list them as applied.";
+/// The stack trial couldn't read the change history before applying anything.
+pub(crate) const BENCH_LEDGER_UNREAD_BEFORE: &str = "Compy couldn't read its change history before measuring, so \
+     it changed nothing. Try again when it can be read.";
+/// The stack was applied, but the change history couldn't be re-read to roll it back automatically.
+pub(crate) const BENCH_LEDGER_UNREAD_AFTER: &str = "The changes were applied, but Compy couldn't re-read its change \
+     history to roll them back automatically. Undo them in Test → Applied & history.";
+
 /// CR-plan-held-refusal (opus r1), PURE: only the plan-class half of [`bench_held_refusal`], for the undo
 /// and the core-parking restore: a change to the plan class while the benchmark measures the other
 /// half. An undo of the held setting itself keeps today's behaviour.
@@ -277,15 +300,12 @@ fn record_rollback_outcome(s: &mut TrialState, result: Result<(), String>) {
         }
         Err(e) if crate::history::is_unrecorded_rollback(&e) => {
             s.rolled_back = true;
-            s.error = Some(format!("Measurement finished and the change was rolled back. {e}"));
+            s.error = Some(format!("{BENCH_ROLLED_BACK_UNRECORDED} ({e})"));
             s.status = "Done — rolled back, but not saved to history.".into();
         }
         Err(e) => {
             s.rolled_back = false;
-            s.error = Some(format!(
-                "Measurement finished, but rolling the change back FAILED: {e}. Undo it \
-                 manually in the Trust Ledger."
-            ));
+            s.error = Some(format!("{BENCH_ROLLBACK_FAILED} ({e})"));
             s.status = "Rollback failed — see the Ledger.".into();
         }
     }
@@ -457,23 +477,16 @@ fn record_stack_rollback_outcome(s: &mut TrialState, results: Vec<(String, Resul
         s.rolled_back = true;
         s.status = "Done — the stack was measured and fully rolled back.".into();
         if !unrecorded.is_empty() {
-            s.error = Some(unrecorded.join(" "));
+            s.error = Some(format!("{BENCH_STACK_ROLLED_BACK_UNRECORDED} ({})", unrecorded.join(" ")));
         }
     } else {
         s.rolled_back = false;
-        let mut msg = format!(
-            "Measurement finished, but rolling {} change(s) back FAILED: {}. Undo them manually \
-             in the Trust Ledger.",
-            failed.len(),
-            failed.join("; ")
-        );
+        // B11: the mapped sentence; which changes failed (ids and errors) and the unrecorded undos follow in ( ).
+        let mut msg = format!("{BENCH_STACK_ROLLBACK_FAILED} ({}", failed.join("; "));
         if !unrecorded.is_empty() {
-            msg.push_str(&format!(
-                " {} other change(s) were undone: {}",
-                unrecorded.len(),
-                unrecorded.join(" ")
-            ));
+            msg.push_str(&format!("; {} other change(s) were undone: {}", unrecorded.len(), unrecorded.join(" ")));
         }
+        msg.push(')');
         s.error = Some(msg);
         s.status = "Rollback failed — see the Ledger.".into();
     }
@@ -569,10 +582,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
                 Err(e) => {
                     set(|s| {
                         s.running = false;
-                        s.error = Some(format!(
-                            "Couldn't read the Trust Ledger before measuring — refusing to change \
-                             anything until it's readable. ({e})"
-                        ));
+                        s.error = Some(format!("{BENCH_LEDGER_UNREAD_BEFORE} ({e})"));
                         s.status = "Ledger unreadable — nothing changed.".into();
                     });
                     return;
@@ -597,10 +607,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
                 Err(e) => {
                     set(|s| {
                         s.running = false;
-                        s.error = Some(format!(
-                            "The stack was applied, but the ledger couldn't be re-read to roll it \
-                             back automatically — undo it in the Trust Ledger. ({e})"
-                        ));
+                        s.error = Some(format!("{BENCH_LEDGER_UNREAD_AFTER} ({e})"));
                         s.status = "Applied — roll back manually in the Ledger.".into();
                     });
                     return;
@@ -878,7 +885,9 @@ mod trial_tests {
         let mut s = TrialState::default();
         record_rollback_outcome(&mut s, Err("access denied".into()));
         assert!(!s.rolled_back);
-        assert!(s.error.unwrap_or_default().contains("FAILED: access denied"));
+        // B11: the mapped sentence, then the raw detail in ( ) for the console only. Break check: put the old
+        // "FAILED: {e}" format back -> fails.
+        assert_eq!(s.error.as_deref(), Some(format!("{BENCH_ROLLBACK_FAILED} (access denied)").as_str()));
         assert_eq!(s.status, "Rollback failed — see the Ledger.");
     }
 
@@ -898,7 +907,8 @@ mod trial_tests {
         );
         let err = s.error.clone().unwrap_or_default();
         assert!(!s.rolled_back);
-        assert!(err.contains("rolling 1 change(s) back FAILED: b: access denied"), "{err}");
+        // B11: the mapped sentence first; which change failed and the unrecorded undo stay in the ( ) detail.
+        assert!(err.starts_with(BENCH_STACK_ROLLBACK_FAILED) && err.contains("b: access denied"), "{err}");
         assert!(err.contains(&unrec), "{err}");
         assert!(!err.contains("c: "), "an unrecorded undo is not listed as failed: {err}");
     }
@@ -909,7 +919,7 @@ mod trial_tests {
         let mut s = TrialState::default();
         record_stack_rollback_outcome(&mut s, vec![("a".into(), Err(unrec.clone()))]);
         assert!(s.rolled_back);
-        assert_eq!(s.error.as_deref(), Some(unrec.as_str()));
+        assert_eq!(s.error.as_deref(), Some(format!("{BENCH_STACK_ROLLED_BACK_UNRECORDED} ({unrec})").as_str()));
         assert!(!s.status.contains("failed"), "{}", s.status);
     }
 
