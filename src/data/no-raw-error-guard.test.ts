@@ -177,7 +177,7 @@ describe("B11: the same-setting refusals are mapped in both languages", () => {
       "TRIAL_HOLDS_SETTING_REFUSAL",
       "trialHoldsSetting",
       "A setting this action changes is being tested by a Trial right now, so Compy won't run it on top of the test. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
-      "这项操作要更改的某项设置正在被一项试验测试，所以 Compy 不会在测试期间叠加执行它。请先等试验完成，或在「测试」中用「立即恢复」结束它。没有做任何更改。",
+      "这项操作要更改的某项设置正在接受一项试验，所以 Compy 不会在试验期间叠加执行它。请先等试验完成，或在「测试」中用「立即恢复」结束它。没有做任何更改。",
     ],
     [
       "TRIAL_START_INTERRUPTED_REFUSAL",
