@@ -645,6 +645,7 @@
     "gpuDriverChange": "显卡驱动：仍是 {{driver}}。",
     "memoryPressure_one": "内存：在出问题的那次游戏中从未达到 {{percent}}% 满。",
     "memoryPressure_other": "内存：在出问题的这几次游戏中从未达到 {{percent}}% 满。",
+    "memoryPressureSingle": "内存：在出问题的那次游戏中从未达到 {{percent}}% 满。",
     "settingDrift": "Compy 监视的设置：没有注意到变化。",
     "compyChange": "Compy 列出的已开启更改数量：仍是 {{count}} 项。",
     "hardwareChange": "显卡和内存容量：没有变化。",

@@ -740,7 +740,10 @@ function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | n
       // Only a recorded figure that was about the same as in the normal sessions is listed here, with its numbers.
       return loadLine(a.kind, { ...a, how: "same" }, t);
     case "memory-pressure":
-      return t("paramedic.checked.memoryPressure", { percent: a.percent, count: Number(a.count ?? 1) });
+      // B11: zh has only the "other" plural form, so one rough session is its own key (as B9 did for ramSince*).
+      return Number(a.count ?? 1) === 1
+        ? t("paramedic.checked.memoryPressureSingle", { percent: a.percent })
+        : t("paramedic.checked.memoryPressure", { percent: a.percent, count: Number(a.count ?? 1) });
     case "memory-as-full":
       // B8: the measurement and Compy's rule, not a conclusion: how many rough sessions were nearly full, of how many,
       // the normal sessions' highest share of their own usable memory, and the line the rule applies.

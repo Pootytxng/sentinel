@@ -645,6 +645,7 @@
     "gpuDriverChange": "Graphics driver: still {{driver}}.",
     "memoryPressure_one": "Memory: never reached {{percent}}% full in the rough session.",
     "memoryPressure_other": "Memory: never reached {{percent}}% full in the rough sessions.",
+    "memoryPressureSingle": "Memory: never reached {{percent}}% full in the rough session.",
     "settingDrift": "Settings Compy watches: no changes noticed.",
     "compyChange": "The number of changes Compy lists as on: still {{count}}.",
     "hardwareChange": "Graphics card and memory size: the same.",
