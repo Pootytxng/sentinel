@@ -1965,7 +1965,7 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
                     ));
                 }
             }
-            recovery::Since::Between => evidence.push(ev(EvidenceKind::Unknown, "driver-back-between", "sessions", false, &[("back", when)])),
+            recovery::Since::Between { .. } => evidence.push(ev(EvidenceKind::Unknown, "driver-back-between", "sessions", false, &[("back", when)])),
         }
     }
     if !x_games.is_empty() {
@@ -3024,7 +3024,10 @@ fn compy_undone_since(c: &Ctx) -> Option<Evidence> {
                 )
             })
         }
-        recovery::Since::Between => Some(ev(EvidenceKind::Unknown, "compy-undone-between", "sessions", false, &with(&[]))),
+        // b12: with how many sessions were judged, so the card says "session" or "sessions".
+        recovery::Since::Between { count } => {
+            Some(ev(EvidenceKind::Unknown, "compy-undone-between", "sessions", false, &with(&[("count", count.to_string())])))
+        }
     }
 }
 
@@ -3195,7 +3198,7 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
             }
             // Two usual-range sessions are the recovery's own answer (`recovery::drift`), said under "since".
             recovery::Since::Clear { .. } => {}
-            recovery::Since::Between => {
+            recovery::Since::Between { .. } => {
                 evidence.push(ev(EvidenceKind::Unknown, "drift-restored-between", "sessions", false, &[("restored", when)]));
             }
         }

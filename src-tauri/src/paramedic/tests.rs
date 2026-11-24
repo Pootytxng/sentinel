@@ -4100,6 +4100,31 @@ mod recovery_f3 {
         assert!(undone_lines(&undo_case(after(), reapplied)).is_empty());
     }
 
+    /// b12 item 3: the between line carries how many sessions were JUDGED since the undo (unjudged ones are not
+    /// counted), so the card can say "session" for one. Ratio 0.42: not rough (fires at 0.40), not clear (below 0.45).
+    /// Break checks: count every session since (`after.len()`) -> the third case reads 2, fails; drop the count arg ->
+    /// fails.
+    #[test]
+    fn b12_the_between_line_counts_only_the_judged_sessions_since_the_undo() {
+        let short = |day: u32| {
+            let mut s = facts(&at_day(day, 10), 30, 30, 100.0, 50.0);
+            s.compy_changes = Some(3);
+            s
+        };
+        let cases = [
+            (vec![day_count(10, 42.0, 3)], "1"),
+            (vec![day_count(10, 42.0, 3), day_count(11, 42.0, 3)], "2"),
+            (vec![day_count(10, 42.0, 3), short(11)], "1"),
+        ];
+        for (after, n) in cases {
+            let d = undo_case(after, one_undone());
+            let lines = undone_lines(&d);
+            assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-undone-between"], "{lines:?}");
+            assert_eq!(lines[0].args["count"], n);
+            assert!(!lines[0].against && lines[0].kind == EvidenceKind::Unknown);
+        }
+    }
+
     /// Review r1 FIX 1: once the same setting (same rec_id) was applied again after the undo, later sessions were played
     /// with the change back on and say nothing about the undo. Break check: pass `None` instead of the re-apply time ->
     /// the first case gives compy-undone-rough, fails.

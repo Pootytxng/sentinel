@@ -219,6 +219,10 @@ describe("B10: Undo this Compy change on the card", () => {
     ["compy-undone-unread", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 1 Game A session has been recorded since, but it was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge.${NEXT}`],
     ["compy-undone-unread", "unknown", { count: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. 2 Game A sessions have been recorded since, but each was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge.${NEXT}`],
     ["compy-undone-between", "unknown", {}, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
+    // b12 item 3: one judged session since: singular. Break check: drop compyUndoneBetween_one (or stop passing
+    // `count`) -> the plural "sessions since weren't" shows, fails.
+    ["compy-undone-between", "unknown", { count: "1" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The one Game A session since that Compy could judge wasn't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
+    ["compy-undone-between", "unknown", { count: "2" }, false, `“${GM}” was undone on ${dayTime(UNDONE)}. The Game A sessions since weren't clearly in its usual range, so Compy can't tell yet.${NEXT}`],
   ] as const)("%s says what was read since the undo, dated from the ledger", async (code, kind, args, against, text) => {
     await show([withLine(code, kind, args, against)], [undoneRec()]);
     expect(document.body.textContent).toContain(text);
@@ -256,6 +260,23 @@ describe("B10: Undo this Compy change on the card", () => {
       await waitFor(() =>
         expect(document.body.textContent).toContain(
           `“${GM}”已于 ${zDayTime(UNDONE)} 撤销，此后 Game A 有 2 次游戏表现在平时的范围内，最近一次在 ${zDay(AT)}。之后的游戏时间太短，或 Compy 没能测量到足够的部分，所以 Compy 还不能说它已恢复到平时的范围。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`,
+        ),
+      );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  // b12 item 3: zh-CN has one plural form (other), so its between line must read right for ONE judged session: no
+  // "几次" ("several"). Break check: put back "此后的几次游戏" in compyUndoneBetween_other -> fails.
+  it("zh-CN: the between line for one judged session says no 'several'", async () => {
+    const zDayTime = (iso: string) => new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+    try {
+      await show([withLine("compy-undone-between", "unknown", { count: "1" })], [undoneRec()]);
+      await i18n.changeLanguage("zh-CN");
+      await waitFor(() =>
+        expect(document.body.textContent).toContain(
+          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后 Game A 有可判断读数的游戏并不明确在平时的范围内，所以 Compy 暂时还无法判断。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`,
         ),
       );
     } finally {

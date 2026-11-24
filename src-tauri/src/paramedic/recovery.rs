@@ -156,8 +156,9 @@ pub(super) enum Since {
     Rough { at: String, count: usize },
     /// Every judgeable session since ran clear (the recovery's own rule): the newest one's start, and how many.
     Clear { at: String, count: usize },
-    /// Judgeable sessions since, none rough, not all clear.
-    Between,
+    /// Judgeable sessions since, none rough, not all clear: how many were judged (b12: the card's "session" /
+    /// "sessions").
+    Between { count: usize },
 }
 
 /// When the same setting was noticed off again after it was read back on at `restored`, if it was: the last time
@@ -196,7 +197,7 @@ pub(super) fn since_restore(c: &Ctx, restored: DateTime<Utc>, until: Option<Date
         Some(b) if judged.iter().all(|&i| clear_session(&c.sess, c.judged, i, b, rough_cap)) => {
             Since::Clear { at: c.sess[newest].started_at.clone(), count: judged.len() }
         }
-        _ => Since::Between,
+        _ => Since::Between { count: judged.len() },
     }
 }
 

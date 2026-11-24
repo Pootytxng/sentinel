@@ -509,7 +509,8 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     case "compy-undone-unread":
       return t("paramedic.evidence.compyUndoneUnread", { title: a.title, undone: dates.dayTime(a.undone), game, count: Number(a.count ?? 1), ...RAW });
     case "compy-undone-between":
-      return t("paramedic.evidence.compyUndoneBetween", { title: a.title, undone: dates.dayTime(a.undone), game, ...RAW });
+      // b12: `count` (the sessions judged since) picks "session" / "sessions"; the _other text prints no number.
+      return t("paramedic.evidence.compyUndoneBetween", { title: a.title, undone: dates.dayTime(a.undone), game, count: Number(a.count ?? 2), ...RAW });
     case "drift-restored-none":
       return t("paramedic.evidence.driftRestoredNone", { game });
     case "drift-restored-unjudged":
