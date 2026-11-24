@@ -78,7 +78,7 @@ Security slices in the order of the hardening design §5 (independent review on 
 
 | # | Slice | Size | Blocks v1.0? |
 |---|---|---|---|
-| 1 | System tools by absolute path; pinned environment for elevated children | 1 d (reviewed, waiting to land) | Yes |
+| 1 | System tools by absolute path; pinned environment for elevated children | 1 d (landed 2026-11-22: b19b886c, 1410d293; follow-ups in docs/QUEUE.md Done) | Yes |
 | 2 | Frame-capture helper over a verified pipe | 2 d | Yes |
 | 3 | Elevated results over stdout; ticket consumed by handle | 1.5 d | Yes |
 | 4a/4b | Closed set of typed elevated operations sized to the Paramedic's fixes; raw entry deleted | 3-4 d | Yes by default; deferring it is an owner decision with a written risk note |
