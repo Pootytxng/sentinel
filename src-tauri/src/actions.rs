@@ -89,7 +89,7 @@ pub(crate) enum KnownBloatTask {
 impl KnownBloatTask {
     /// (TaskPath, TaskName) — fixed, Microsoft-documented telemetry-task identifiers. Both legitimately
     /// contain spaces + backslashes, so they go through `ps_safe_squoted` (single-quoted-literal guard).
-    fn path_and_name(&self) -> (&'static str, &'static str) {
+    pub(crate) fn path_and_name(&self) -> (&'static str, &'static str) {
         match self {
             KnownBloatTask::CompatibilityAppraiser => (
                 "\\Microsoft\\Windows\\Application Experience\\",
@@ -1144,6 +1144,26 @@ pub(crate) const HELPER_CHANNEL_REFUSED: i32 = 0x4350_5335;
 pub(crate) const HELPER_CHANNEL_REFUSED_MSG: &str =
     "The administrator helper could not open Compy's results channel, so no command ran.";
 
+/// A8 (plan a5 v4 §2): exit code of the TYPED elevated helper entry when the request itself is malformed (bad
+/// hex, not UTF-8, an unknown op or field, a value outside its grammar, a bad item count or shape). It refuses
+/// before any read and before PowerShell, so no command ran. Only the typed entry emits it, and that entry is
+/// compiled only behind the `elevated-op-entry` feature until Slice 2.
+pub(crate) const HELPER_REQUEST_REFUSED: i32 = 0x4350_5336;
+
+/// What the parent says for [`HELPER_REQUEST_REFUSED`]. Matched exactly by `elevation_error_nothing_ran`.
+pub(crate) const HELPER_REQUEST_REFUSED_MSG: &str =
+    "The administrator helper refused this request because it is not one Compy can run, so no command ran.";
+
+/// A8 (plan a5 v4 §2, review C3): exit code of the typed helper entry when a well-formed single request's target
+/// no longer matches this PC (the saved adapter setting or task is not there, or its value is outside what the
+/// driver lists, or the helper's own read of it did not finish). Nothing was changed. Distinct from
+/// [`HELPER_REQUEST_REFUSED`] so an undo can say its change stays in the Trust Ledger.
+pub(crate) const HELPER_SAVED_VALUE_NO_MATCH: i32 = 0x4350_5337;
+
+/// What the parent says for [`HELPER_SAVED_VALUE_NO_MATCH`]. Matched exactly by `elevation_error_nothing_ran`.
+pub(crate) const HELPER_SAVED_VALUE_NO_MATCH_MSG: &str =
+    "The administrator helper found that what this change was made on no longer matches this PC, so no command ran.";
+
 /// A5 Part A: the pre-launch refusal when the app cannot create the results pipe (nothing was launched).
 const RESULTS_CHANNEL_NOT_CREATED: &str = "elevated results channel could not be created";
 
@@ -1473,6 +1493,8 @@ pub(crate) fn elevation_outcome(
         Ok(s) if s.code() == Some(HELPER_POWERSHELL_NOT_STARTED) => Err(HELPER_POWERSHELL_NOT_STARTED_MSG.into()),
         Ok(s) if s.code() == Some(HELPER_TICKET_REFUSED) => Err(HELPER_TICKET_REFUSED_MSG.into()),
         Ok(s) if s.code() == Some(HELPER_CHANNEL_REFUSED) => Err(HELPER_CHANNEL_REFUSED_MSG.into()),
+        Ok(s) if s.code() == Some(HELPER_REQUEST_REFUSED) => Err(HELPER_REQUEST_REFUSED_MSG.into()),
+        Ok(s) if s.code() == Some(HELPER_SAVED_VALUE_NO_MATCH) => Err(HELPER_SAVED_VALUE_NO_MATCH_MSG.into()),
         Ok(s) if !s.success() => Err(format!(
             "You approved the elevation, but the operation itself failed (exit code {}) — the prompt was fine; the command hit an error.",
             s.code().map(|c| c.to_string()).unwrap_or_else(|| "?".into())
@@ -1495,6 +1517,8 @@ pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
         || err == HELPER_POWERSHELL_NOT_STARTED_MSG
         || err == HELPER_TICKET_REFUSED_MSG
         || err == HELPER_CHANNEL_REFUSED_MSG
+        || err == HELPER_REQUEST_REFUSED_MSG
+        || err == HELPER_SAVED_VALUE_NO_MATCH_MSG
         || err.starts_with(RESULTS_CHANNEL_NOT_CREATED)
         || err.starts_with("could not launch elevated process")
         || err.starts_with("cannot find own exe")
@@ -1509,7 +1533,7 @@ pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
 /// sets `$ErrorActionPreference` (some apply builders embed it in a multi-statement script) is
 /// returned unchanged, so we never prepend a second, conflicting directive. Mirrors the §4 batch
 /// path's guard in `compose_batch_script`.
-fn with_error_action_stop(command: &str) -> std::borrow::Cow<'_, str> {
+pub(crate) fn with_error_action_stop(command: &str) -> std::borrow::Cow<'_, str> {
     if command.trim_start().starts_with("$ErrorActionPreference") {
         std::borrow::Cow::Borrowed(command)
     } else {
@@ -2996,11 +3020,7 @@ pub(crate) fn apply_service_disable(service: KnownService) -> Result<ApplyResult
     // rollback_enable_scheduled_task_typed — because there the change is already made and must act.)
     let (prior_state, prior_start_mode) =
         require_service_prior(service.name(), service_info(service.name()), "disable")?;
-    let cmd = format!(
-        "Set-Service -Name {0} -StartupType Disabled; Stop-Service -Name {0} -Force -ErrorAction SilentlyContinue",
-        service.name()
-    );
-    run_elevated_powershell(&cmd)?;
+    run_elevated_powershell(&service_disable_script(&service))?;
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableKnownService {
             service: service.clone(),
@@ -3022,12 +3042,58 @@ pub(crate) fn rollback_service_disable_typed(
     ps_safe(service.name())?;
     let startup = ps_service_startup_for_mode(prior_start_mode);
     ps_safe(startup)?;
+    run_elevated_powershell(&service_restore_script(service, startup, prior_state == "Running"))?;
+    Ok(())
+}
+
+// ─── A8: pure service/task script builders (one text, called by the apply/undo here and by the typed
+// elevated set in elevated_ops.rs; the A8 goldens pin the bytes) ─────────────────────────────────────
+
+/// The service disable script. `service` is a `KnownService` (ps_safe names).
+pub(crate) fn service_disable_script(service: &KnownService) -> String {
+    format!(
+        "Set-Service -Name {0} -StartupType Disabled; Stop-Service -Name {0} -Force -ErrorAction SilentlyContinue",
+        service.name()
+    )
+}
+
+/// The service undo script: back to `startup` (one of the words `ps_service_startup_for_mode` returns),
+/// then started again when `start` (the service was running before).
+pub(crate) fn service_restore_script(service: &KnownService, startup: &str, start: bool) -> String {
     let mut cmd = format!("Set-Service -Name {} -StartupType {}", service.name(), startup);
-    if prior_state == "Running" {
+    if start {
         cmd.push_str(&format!("; Start-Service -Name {}", service.name()));
     }
-    run_elevated_powershell(&cmd)?;
-    Ok(())
+    cmd
+}
+
+/// The session service suspend script (stop only; the startup type is left alone).
+pub(crate) fn service_suspend_script(service: &KnownService) -> String {
+    format!(
+        "Stop-Service -Name {} -Force -ErrorAction SilentlyContinue",
+        service.name()
+    )
+}
+
+/// The session service resume script (only composed when the service was running before).
+pub(crate) fn service_resume_script(service: &KnownService) -> String {
+    format!("Start-Service -Name {}", service.name())
+}
+
+/// The scheduled-task disable script. `path` and `name` already passed `ps_safe_squoted` (inside '...').
+pub(crate) fn task_disable_script(path: &str, name: &str) -> String {
+    format!(
+        "Disable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
+        path, name
+    )
+}
+
+/// The scheduled-task enable script. `path` and `name` already passed `ps_safe_squoted` (inside '...').
+pub(crate) fn task_enable_script(path: &str, name: &str) -> String {
+    format!(
+        "Enable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
+        path, name
+    )
 }
 
 // ─── Session-scoped service SUSPEND (Services module, ARMED) ─────────
@@ -3085,10 +3151,7 @@ pub(crate) fn apply_service_suspend(service: KnownService) -> Result<ApplyResult
     // rather than guessing Running/Auto (hardened before the gate was armed; the snapshot must be true).
     let (prior_state, prior_start_mode) =
         require_service_prior(service.name(), service_info(service.name()), "suspend")?;
-    run_elevated_powershell(&format!(
-        "Stop-Service -Name {} -Force -ErrorAction SilentlyContinue",
-        service.name()
-    ))?;
+    run_elevated_powershell(&service_suspend_script(&service))?;
     Ok(ApplyResult {
         applied_action: AppliedAction::SuspendKnownService {
             service: service.clone(),
@@ -3145,7 +3208,7 @@ fn resolve_task_name(path: &str, base: &str) -> Result<Option<String>, TaskUnrea
 }
 
 /// PURE: the one-folder task listing. `path` must already pass `ps_safe_squoted` (it sits inside '...').
-fn task_listing_script(path: &str) -> String {
+pub(crate) fn task_listing_script(path: &str) -> String {
     format!(
         "try {{ Get-ScheduledTask -TaskPath '{}' -ErrorAction Stop | ForEach-Object {{ $_.TaskName }} }} \
          catch {{ if ($_.CategoryInfo.Category -eq 'ObjectNotFound') {{ exit 0 }} else {{ throw }} }}",
@@ -3160,7 +3223,7 @@ pub(crate) struct TaskUnreadable;
 
 /// PURE: a finished task listing → the resolved name (or `Ok(None)` when nothing matches); no
 /// output (spawn failure / timeout) or a non-zero exit → `Err(TaskUnreadable)`, never `Ok(None)`.
-fn task_name_from_read(read: Option<&std::process::Output>, base: &str) -> Result<Option<String>, TaskUnreadable> {
+pub(crate) fn task_name_from_read(read: Option<&std::process::Output>, base: &str) -> Result<Option<String>, TaskUnreadable> {
     let out = read.ok_or(TaskUnreadable)?;
     if !out.status.success() {
         return Err(TaskUnreadable);
@@ -3374,10 +3437,7 @@ pub(crate) fn apply_disable_scheduled_task(task: KnownBloatTask) -> Result<Apply
                     an unconfirmed prior state can't be reliably rolled back. Nothing was changed; try again."
             .to_string());
     }
-    run_elevated_powershell(&format!(
-        "Disable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
-        path, name
-    ))?;
+    run_elevated_powershell(&task_disable_script(path, &name))?;
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableScheduledTask { task: task.clone() },
         rollback_action: RollbackAction::EnableScheduledTask { task },
@@ -3395,7 +3455,7 @@ pub(crate) fn rollback_service_suspend_typed(
 ) -> Result<(), String> {
     ps_safe(service.name())?;
     if prior_state == "Running" {
-        run_elevated_powershell(&format!("Start-Service -Name {}", service.name()))?;
+        run_elevated_powershell(&service_resume_script(service))?;
     }
     Ok(())
 }
@@ -3424,10 +3484,7 @@ pub(crate) fn rollback_enable_scheduled_task_typed(
         Ok(TaskTarget::NameRefused) => return Err(TASK_NAME_REFUSED_UNDO.to_string()),
         Err(TaskUnreadable) => return Err(TASK_UNREADABLE_UNDO.to_string()),
     };
-    run_elevated_powershell(&format!(
-        "Enable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
-        path, name
-    ))?;
+    run_elevated_powershell(&task_enable_script(path, &name))?;
     Ok(())
 }
 
@@ -4111,12 +4168,7 @@ pub(crate) fn apply_power_ultimate() -> Result<ApplyResult, String> {
          Ultimate Performance rather than apply a change that could not be rolled back"
             .to_string()
     })?;
-    let ps = "$ult = powercfg /list | Select-String 'Ultimate Performance' | Select-Object -First 1; \
-              if ($ult -match 'GUID: ([0-9a-f-]{36})') { powercfg /setactive $matches[1]; if ($?) { exit 0 }; exit 1 } \
-              $dup = powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>&1; \
-              if ($dup -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { powercfg /setactive $matches[1]; if ($?) { exit 0 }; exit 1 } \
-              exit 1";
-    run_elevated_powershell(ps)?;
+    run_elevated_powershell(ULTIMATE_APPLY_SCRIPT)?;
     Ok(ApplyResult {
         applied_action: AppliedAction::SetUltimatePerformancePlan,
         rollback_action: RollbackAction::RestorePowerPlanFromSnapshot,
@@ -4124,6 +4176,14 @@ pub(crate) fn apply_power_ultimate() -> Result<ApplyResult, String> {
         elevation_used: true,
     })
 }
+
+/// The Ultimate Performance apply: find the plan or duplicate it, then setactive. Multi-step with its own
+/// exit codes, so it never rides a batch (A8: the typed op is single-only). A8: named so the typed set reuses it.
+pub(crate) const ULTIMATE_APPLY_SCRIPT: &str = "$ult = powercfg /list | Select-String 'Ultimate Performance' | Select-Object -First 1; \
+              if ($ult -match 'GUID: ([0-9a-f-]{36})') { powercfg /setactive $matches[1]; if ($?) { exit 0 }; exit 1 } \
+              $dup = powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>&1; \
+              if ($dup -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { powercfg /setactive $matches[1]; if ($?) { exit 0 }; exit 1 } \
+              exit 1";
 
 /// A7: the Ultimate undo's refusal when the saved plan id is not exactly GUID-shaped. Fixed words, without
 /// the saved value (it used to be guid_exact's developer text with the raw value).
@@ -4134,11 +4194,19 @@ pub(crate) fn rollback_power_ultimate_typed(prior_guid: &str) -> Result<(), Stri
     // A7: one plain refusal for every shape problem.
     guid_exact(prior_guid).map_err(|_| POWER_PLAN_ID_REFUSED_UNDO.to_string())?;
     ps_safe(prior_guid)?; // implied by the GUID shape; kept as the guard every elevated token passes
-    run_elevated_powershell(&format!("powercfg /setactive {}", prior_guid))?;
+    run_elevated_powershell(&ultimate_undo_script(prior_guid))?;
     Ok(())
 }
 
+/// The Ultimate undo: back to the recorded plan. `prior_guid` already passed `guid_exact`.
+pub(crate) fn ultimate_undo_script(prior_guid: &str) -> String {
+    format!("powercfg /setactive {}", prior_guid)
+}
+
 // ─── Reserved Storage off (PowerShell cmdlet, admin) ─────────────────────
+
+/// The Reserved Storage apply (A8: named so the typed set reuses it).
+pub(crate) const RESERVED_STORAGE_OFF_SCRIPT: &str = "Set-WindowsReservedStorageState -State Disabled";
 
 pub(crate) fn apply_reserved_storage_off() -> Result<ApplyResult, String> {
     // Refuse on an unreadable prior rather than letting reserved_storage_enabled()'s infallible
@@ -4146,7 +4214,7 @@ pub(crate) fn apply_reserved_storage_off() -> Result<ApplyResult, String> {
     // default-ON feature disabled instead of restoring the user's true Enabled state.
     let prior_enabled = reserved_storage_enabled_checked()
         .map_err(|e| format!("{e}; refusing to apply rather than record a guessed prior value"))?;
-    run_elevated_powershell("Set-WindowsReservedStorageState -State Disabled")?;
+    run_elevated_powershell(RESERVED_STORAGE_OFF_SCRIPT)?;
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableReservedStorage,
         rollback_action: RollbackAction::RestoreReservedStorageFromSnapshot,
@@ -4158,8 +4226,14 @@ pub(crate) fn apply_reserved_storage_off() -> Result<ApplyResult, String> {
 pub(crate) fn rollback_reserved_storage_off_typed(prior_enabled: bool) -> Result<(), String> {
     let state = if prior_enabled { "Enabled" } else { "Disabled" };
     ps_safe(state)?;
-    run_elevated_powershell(&format!("Set-WindowsReservedStorageState -State {}", state))?;
+    run_elevated_powershell(&reserved_storage_restore_script(prior_enabled))?;
     Ok(())
+}
+
+/// The Reserved Storage undo: back to the recorded state.
+pub(crate) fn reserved_storage_restore_script(prior_enabled: bool) -> String {
+    let state = if prior_enabled { "Enabled" } else { "Disabled" };
+    format!("Set-WindowsReservedStorageState -State {}", state)
 }
 
 // ─── Power-plan setting subgroups (USB Selective Suspend, PCIe ASPM) ─────
@@ -5054,7 +5128,7 @@ mod output_within_tests {
 /// different plan at rollback time). `reactivate` re-commits the change live
 /// only when that plan is the active one — restoring a non-active plan writes
 /// its saved value without yanking the user onto it.
-fn build_power_setting_restore_cmd(
+pub(crate) fn build_power_setting_restore_cmd(
     plan_guid: &str,
     subgroup_guid: &str,
     setting_guid: &str,
@@ -5537,6 +5611,72 @@ pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<
     Ok(())
 }
 
+// ─── A8 (plan a5 v4 §2, v3 review C1): EEE under the closed grammar ─────────────────────────────────────
+//
+// Used only by the typed elevated set (elevated_ops.rs) behind the `elevated-op-entry` feature until Slice 2
+// moves the EEE callers; today's two builders above stay as they are. The helper reads every adapter and every
+// advanced property with ONE constant script (no `-Name`, no `-DisplayName`: nothing is ever a wildcard), picks
+// the one property in Rust by byte-equal strings, and sets it through the ONE exact advanced-property object,
+// re-selected by an exact (`-ceq`) comparison on its InstanceID. No adapter or driver string enters a script.
+
+/// The EEE registry keywords the typed set accepts: today's keyword pattern
+/// (`^\*?EEE$|EEELink|GigaEEE|EnergyEfficientEthernet|AdvancedEEE`) written out as a closed list.
+pub(crate) const EEE_KEYWORDS: [&str; 6] =
+    ["*EEE", "EEE", "EEELinkAdvertisement", "GigaEEE", "EnergyEfficientEthernet", "AdvancedEEE"];
+
+/// The helper's one EEE read: every adapter and every advanced property of every adapter, as one JSON document
+/// (UTF-8, no byte-order mark). Constant: it takes no value at all.
+pub(crate) const EEE_LISTING_SCRIPT: &str = "$ErrorActionPreference = 'Stop'; \
+     [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; \
+     $compyA = @(Get-NetAdapter | ForEach-Object { [pscustomobject]@{ g = [string]$_.InterfaceGuid; n = [string]$_.Name; s = [string]$_.Status; m = [string]$_.PhysicalMediaType } }); \
+     $compyP = @(Get-NetAdapterAdvancedProperty -AllProperties | ForEach-Object { $compyX = $_; [pscustomobject]@{ \
+     i = [string]$compyX.InstanceID; n = [string]$compyX.Name; d = [string]$compyX.DisplayName; k = [string]$compyX.RegistryKeyword; v = [string]$compyX.DisplayValue; \
+     dv = @(if ($compyX.ValidDisplayValues) { $compyX.ValidDisplayValues | ForEach-Object { [string]$_ } }); \
+     rv = @(if ($compyX.ValidRegistryValues) { $compyX.ValidRegistryValues | ForEach-Object { [string]$_ } }) } }); \
+     ConvertTo-Json -InputObject ([pscustomobject]@{ a = $compyA; p = $compyP }) -Compress -Depth 4";
+
+/// A braced adapter GUID `{8-4-4-4-12}` (the form `InterfaceGuid` and an advanced property's InstanceID use).
+pub(crate) fn braced_guid_exact(token: &str) -> Result<(), String> {
+    let shaped = token.len() == 38 && token.starts_with('{') && token.ends_with('}') && guid_exact(&token[1..37]).is_ok();
+    if shaped {
+        Ok(())
+    } else {
+        Err(format!("refusing to build a Windows command with a value that is not a braced GUID: {token:?}"))
+    }
+}
+
+/// A registry value the EEE set may write: `-?[0-9]{1,10}`.
+pub(crate) fn eee_registry_value_ok(value: &str) -> bool {
+    let digits = value.strip_prefix('-').unwrap_or(value);
+    !digits.is_empty() && digits.len() <= 10 && digits.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// The EEE set script for `(braced InterfaceGuid, keyword, registry value)` targets: per target, the ONE advanced
+/// property whose InstanceID is exactly `{GUID}::<keyword>` is passed as `-InputObject` (never a NetAdapter object,
+/// which would bind to `-Name` by property name, a wildcard). Each write is isolated and the exit is deterministic,
+/// as in today's builders (issue 617 assessment). Refuses (nothing composed) unless every GUID is braced and exact,
+/// every keyword is in [`EEE_KEYWORDS`] and every value is `-?[0-9]{1,10}`.
+pub(crate) fn build_eee_set_by_instance_script(targets: &[(&str, &str, &str)]) -> Result<String, String> {
+    if targets.is_empty() {
+        return Err("nothing to set".to_string());
+    }
+    let mut ps = String::new();
+    for (guid, keyword, value) in targets {
+        braced_guid_exact(guid)?;
+        if !EEE_KEYWORDS.contains(keyword) {
+            return Err(format!("refusing an EEE keyword outside the closed list: {keyword:?}"));
+        }
+        if !eee_registry_value_ok(value) {
+            return Err(format!("refusing an EEE registry value that is not an integer: {value:?}"));
+        }
+        ps.push_str(&format!(
+            "$compyP = @(Get-NetAdapterAdvancedProperty -AllProperties -ErrorAction SilentlyContinue | Where-Object {{ $_.InstanceID -ceq '{guid}::{keyword}' }}); if ($compyP.Count -eq 1) {{ Set-NetAdapterAdvancedProperty -InputObject $compyP[0] -RegistryValue '{value}' -NoRestart -ErrorAction SilentlyContinue }}; "
+        ));
+    }
+    ps.push_str("$null = 0");
+    Ok(ps)
+}
+
 #[cfg(test)]
 mod eee_script_tests {
     use super::*;
@@ -5847,6 +5987,10 @@ mod eee_script_tests {
             ("-Path '{path}' -Name 'TCPNoDelay'", "interface key, nic_interface_safe"),
             ("-Path '{}' -Name 'TcpAckFrequency'", "interface key, nic_interface_safe"),
             ("-Path '{}' -Name 'TCPNoDelay'", "interface key, nic_interface_safe"),
+            (
+                "-ceq '{guid}::{keyword}'",
+                "A8 EEE set: braced_guid_exact + the closed EEE_KEYWORDS; '{value}' passes eee_registry_value_ok",
+            ),
         ];
         let src = include_str!("actions.rs").replace("\r\n", "\n");
         let mut lines = src.lines().peekable();
@@ -5889,9 +6033,7 @@ pub(crate) fn apply_fast_startup_off() -> Result<ApplyResult, String> {
     // Fast Startup on a rig that had it explicitly off. A genuinely-absent value stays Ok(None) and
     // rollback-delete remains the faithful inverse. Mirrors the power-setting refuse discipline.
     let prior_hiberboot = fast_startup_state_checked()?;
-    run_elevated_powershell(
-        "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value 0 -Type DWord",
-    )?;
+    run_elevated_powershell(FAST_STARTUP_OFF_SCRIPT)?;
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableFastStartup,
         rollback_action: RollbackAction::RestoreFastStartupFromSnapshot,
@@ -5900,16 +6042,24 @@ pub(crate) fn apply_fast_startup_off() -> Result<ApplyResult, String> {
     })
 }
 
+/// The Fast Startup apply (A8: named so the typed set reuses it).
+pub(crate) const FAST_STARTUP_OFF_SCRIPT: &str =
+    "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value 0 -Type DWord";
+
 pub(crate) fn rollback_fast_startup_off_typed(prior_hiberboot: Option<u32>) -> Result<(), String> {
-    let cmd = match prior_hiberboot {
+    run_elevated_powershell(&fast_startup_restore_script(prior_hiberboot))?;
+    Ok(())
+}
+
+/// The Fast Startup undo: the recorded value back, or the value removed when there was none.
+pub(crate) fn fast_startup_restore_script(prior_hiberboot: Option<u32>) -> String {
+    match prior_hiberboot {
         Some(v) => format!(
             "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value {} -Type DWord",
             v
         ),
         None => "Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -ErrorAction SilentlyContinue".to_string(),
-    };
-    run_elevated_powershell(&cmd)?;
-    Ok(())
+    }
 }
 
 // ─── Game Bar / Game DVR off (HKCU, no admin) ────────────────────────────
@@ -5989,9 +6139,7 @@ pub(crate) fn apply_hags_enable() -> Result<ApplyResult, String> {
     // (e.g. HAGS deliberately off) and let the driver default take over. A genuinely-absent value
     // stays Ok(None) and rollback-delete remains faithful. Mirrors apply_fast_startup_off.
     let prior = hags_state_checked()?;
-    run_elevated_powershell(
-        "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 2 -Type DWord",
-    )?;
+    run_elevated_powershell(HAGS_ENABLE_SCRIPT)?;
     Ok(ApplyResult {
         applied_action: AppliedAction::EnableHardwareGpuScheduling,
         rollback_action: RollbackAction::RestoreHwSchModeFromSnapshot,
@@ -6000,16 +6148,24 @@ pub(crate) fn apply_hags_enable() -> Result<ApplyResult, String> {
     })
 }
 
+/// The HAGS apply (A8: named so the typed set reuses it).
+pub(crate) const HAGS_ENABLE_SCRIPT: &str =
+    "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 2 -Type DWord";
+
 pub(crate) fn rollback_hags_enable_typed(prior: Option<u32>) -> Result<(), String> {
-    let cmd = match prior {
+    run_elevated_powershell(&hags_restore_script(prior))?;
+    Ok(())
+}
+
+/// The HAGS undo: the recorded value back, or the value removed when there was none.
+pub(crate) fn hags_restore_script(prior: Option<u32>) -> String {
+    match prior {
         Some(v) => format!(
             "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value {} -Type DWord",
             v
         ),
         None => "Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -ErrorAction SilentlyContinue".to_string(),
-    };
-    run_elevated_powershell(&cmd)?;
-    Ok(())
+    }
 }
 
 // ─── Leftovers v2 restore resolvers (R2-5 — ARMED 2026-07-16) ──────────────────
@@ -6276,9 +6432,7 @@ pub(crate) fn restore_memory_compression_with(prior: Option<bool>) -> Result<App
     };
     // State-aware: MMAgent cmdlets are non-idempotent (live QA 2026-07-16 — Disable throws
     // ERROR_SERVICE_DISABLED when compression is already off; guard both directions uniformly).
-    run_elevated_powershell(
-        "if (-not (Get-MMAgent).MemoryCompression) { Enable-MMAgent -MemoryCompression }",
-    )?;
+    run_elevated_powershell(MEMCOMPRESS_ENABLE_SCRIPT)?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreMemoryCompressionDefault,
         rollback_action: RollbackAction::RestoreMemoryCompressionFromSnapshot,
@@ -6396,17 +6550,20 @@ pub(crate) fn rollback_memory_compression_typed(prior_enabled: Option<bool>) -> 
         // Idempotent-by-check: Disable-MMAgent throws ERROR_SERVICE_DISABLED when compression is
         // already off (live QA 2026-07-16), so a drifted rig must not fail its own rollback —
         // "already at prior" is success, verified in-elevation.
-        Some(true) => run_elevated_powershell(
-            "if (-not (Get-MMAgent).MemoryCompression) { Enable-MMAgent -MemoryCompression }",
-        ),
-        Some(false) => run_elevated_powershell(
-            "if ((Get-MMAgent).MemoryCompression) { Disable-MMAgent -MemoryCompression }",
-        ),
+        Some(true) => run_elevated_powershell(MEMCOMPRESS_ENABLE_SCRIPT),
+        Some(false) => run_elevated_powershell(MEMCOMPRESS_DISABLE_SCRIPT),
         // Unreachable for entries this code writes (the apply refuses a None prior) — but a
         // hand-edited/corrupt entry must fail LOUD, never guess a security-of-state direction.
         None => Err("This entry has no recorded prior state — cannot roll back blind.".to_string()),
     }
 }
+
+/// Memory compression on, only when it is off (A8: named so the apply, the undo and the typed set share it).
+pub(crate) const MEMCOMPRESS_ENABLE_SCRIPT: &str =
+    "if (-not (Get-MMAgent).MemoryCompression) { Enable-MMAgent -MemoryCompression }";
+/// Memory compression off, only when it is on.
+pub(crate) const MEMCOMPRESS_DISABLE_SCRIPT: &str =
+    "if ((Get-MMAgent).MemoryCompression) { Disable-MMAgent -MemoryCompression }";
 
 pub(crate) fn restore_mmcss_defaults() -> Result<ApplyResult, String> {
     let (sr, nti) = read_mmcss_priors()?; // refuses on an unreadable key
@@ -7105,18 +7262,8 @@ pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
     // each write keeps apply all-recorded: we snapshot EXACTLY what we target and rollback is an
     // idempotent restore, so over-recording an interface that failed to write is a harmless no-op —
     // strictly safer than orphaning. Mirrors the EEE script's per-item isolation.
-    let mut ps = String::new();
-    for s in &nic_snapshots {
-        // The name came from enum_keys() here, but validate anyway so the invariant is enforced at
-        // the interpolation site (the snapshot we persist must never contain an unsafe key).
-        nic_interface_safe(&s.interface)?;
-        let path = format!(
-            "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{}",
-            s.interface
-        );
-        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; "));
-        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TCPNoDelay' -Value 1 -Type DWord -ErrorAction SilentlyContinue; "));
-    }
+    let keys: Vec<&str> = nic_snapshots.iter().map(|s| s.interface.as_str()).collect();
+    let ps = nagle_apply_script(&keys)?;
     if !ps.is_empty() {
         run_elevated_powershell(&ps)?;
     }
@@ -7133,6 +7280,32 @@ pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
 pub(crate) fn rollback_nagle_disable_typed(
     interfaces: &[NagleInterfaceSnapshot],
 ) -> Result<(), String> {
+    run_elevated_powershell(&nagle_rollback_script(interfaces)?)?;
+    Ok(())
+}
+
+/// The Nagle apply script: ack frequency 1 and no-delay 1 on each interface key, each write isolated
+/// (`-ErrorAction SilentlyContinue`, see `apply_nagle_disable`). Every key passes `nic_interface_safe`
+/// first. Empty for no keys. A8: one text for the apply and the typed set.
+pub(crate) fn nagle_apply_script(interfaces: &[&str]) -> Result<String, String> {
+    let mut ps = String::new();
+    for interface in interfaces {
+        // The name came from enum_keys() here, but validate anyway so the invariant is enforced at
+        // the interpolation site (the snapshot we persist must never contain an unsafe key).
+        nic_interface_safe(interface)?;
+        let path = format!(
+            "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{}",
+            interface
+        );
+        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; "));
+        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TCPNoDelay' -Value 1 -Type DWord -ErrorAction SilentlyContinue; "));
+    }
+    Ok(ps)
+}
+
+/// The Nagle undo script from the recorded interfaces (refuses an empty record, an unsafe key, or a record
+/// with nothing usable). A8: one text for the undo and the typed set.
+pub(crate) fn nagle_rollback_script(interfaces: &[NagleInterfaceSnapshot]) -> Result<String, String> {
     if interfaces.is_empty() {
         return Err("no interfaces recorded in snapshot".into());
     }
@@ -7178,8 +7351,7 @@ pub(crate) fn rollback_nagle_disable_typed(
     if ps.is_empty() {
         return Err("snapshot had interfaces but none usable for rollback".into());
     }
-    run_elevated_powershell(&ps)?;
-    Ok(())
+    Ok(ps)
 }
 
 pub(crate) fn rollback_visual_effects_typed(

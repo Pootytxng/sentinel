@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 mod actions;
+mod elevated_ops; // A8 (plan a5 v4, Slice 1): the CLOSED set of typed elevated operations (no script-text variant; every field grammar-checked in the helper; scripts composed by actions.rs's builders). Its helper entry is reachable only with the `elevated-op-entry` cargo feature, which no normal build enables, until Slice 2 moves the callers.
 mod install_location; // A3: where this compy.exe runs from (Program Files vs the user's own folder) and whether an old per-user copy is left; read-only, one support-log line per launch.
 mod sys_exe; // The ONE resolver for Windows system tools (absolute path from the real system dir) + pinned child environment. Hardening slice 1.
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
