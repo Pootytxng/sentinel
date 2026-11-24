@@ -184,9 +184,28 @@ pub(crate) fn run_helper_script<W: std::io::Write + Send + 'static>(command: &st
             if let Some(r) = relay {
                 let _ = r.join();
             }
-            helper_exit_code(Started::Ran(waited))
+            typed_child_code(helper_exit_code(Started::Ran(waited)))
         }
         Err(_) => helper_exit_code(Started::NeverStarted),
+    }
+}
+
+/// A8 review r1 (hardening): a child that RAN and exited with one of the helper's own "nothing ran" codes is reported
+/// as 1 ("ran and failed"), so a script's exit code can never be misread as a refusal (the parent may drop staged
+/// contract entries on "nothing ran"). No closed-set script exits with one; this makes it structural.
+#[cfg_attr(not(feature = "elevated-op-entry"), allow(dead_code))]
+fn typed_child_code(code: i32) -> i32 {
+    const OWN: [i32; 5] = [
+        actions::HELPER_POWERSHELL_NOT_STARTED,
+        actions::HELPER_TICKET_REFUSED,
+        actions::HELPER_CHANNEL_REFUSED,
+        actions::HELPER_REQUEST_REFUSED,
+        actions::HELPER_SAVED_VALUE_NO_MATCH,
+    ];
+    if OWN.contains(&code) {
+        1
+    } else {
+        code
     }
 }
 
@@ -3010,6 +3029,28 @@ mod elevated_helper_tests {
         for banned in ["quiet_command", "sys_command", "Command::new", ".status()"] {
             assert!(!body.contains(banned), "{banned} in {body}");
         }
+    }
+
+    /// A8 review r1 (hardening): a child that ran and exited with one of the helper's own "nothing ran" codes reads
+    /// as 1 ("ran and failed"), never as a refusal; every other code passes through. Break: return `code` unchanged
+    /// from `typed_child_code` (or drop the wrap in `run_helper_script`) and this fails.
+    #[test]
+    fn a_child_exit_equal_to_a_helper_sentinel_reads_as_ran_and_failed() {
+        use crate::actions::{HELPER_CHANNEL_REFUSED, HELPER_REQUEST_REFUSED, HELPER_SAVED_VALUE_NO_MATCH, HELPER_TICKET_REFUSED};
+        use std::os::windows::process::ExitStatusExt;
+        for own in [HELPER_POWERSHELL_NOT_STARTED, HELPER_TICKET_REFUSED, HELPER_CHANNEL_REFUSED, HELPER_REQUEST_REFUSED, HELPER_SAVED_VALUE_NO_MATCH] {
+            let code = super::typed_child_code(own);
+            assert_eq!(code, 1, "{own:#x}");
+            let err = elevation_outcome(Ok(std::process::ExitStatus::from_raw(code as u32))).unwrap_err();
+            assert!(!elevation_error_nothing_ran(&err), "{err}");
+        }
+        for other in [0, 1, 2, 3, 1223, -1] {
+            assert_eq!(super::typed_child_code(other), other);
+        }
+        let src = include_str!("lib.rs").replace("\r\n", "\n");
+        let f = src.find(concat!("pub(crate) fn run_helper_", "script<")).expect("run_helper_script");
+        let body = &src[f..f + src[f..].find("\n}\n").expect("end")];
+        assert!(body.contains("typed_child_code(helper_exit_code(Started::Ran(waited)))"), "{body}");
     }
 
     /// Hardening 1b: PowerShell that cannot be STARTED (NotFound: what a missing powershell.exe or the
