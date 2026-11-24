@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import { backendMessages } from "../data/backend-error";
+import { BACKEND_SENTENCES, backendMessages } from "../data/backend-error";
 
 // B11 (the owner's "no String(e) in the face" law): what a Trial write that failed says on screen. Every sentence
 // backend-error.ts knows in the error is said in the user's language; an error with none gets a line chosen by the
@@ -34,4 +34,11 @@ export function trialWriteText(err: unknown, t: TFunction): string {
 export function sayableReason(reason: string, t: TFunction, own: readonly string[]): string | null {
   if (reason && own.includes(reason)) return reason;
   return backendMessages(reason, t);
+}
+
+/** B11 r2: true when a mapped sentence in `reason` already says nothing was changed (the apply refusals that
+ *  mark_failed_apply passes on after the not-started prefix), so the journey says that sentence alone instead
+ *  of saying "nothing was changed" twice. Read from the pinned English const, never from the user's language. */
+export function saysNothingChanged(reason: string): boolean {
+  return BACKEND_SENTENCES.some((s) => /nothing was changed/i.test(s.text) && reason.includes(s.text));
 }

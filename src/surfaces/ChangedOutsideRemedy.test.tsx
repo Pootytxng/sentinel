@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import i18n from "../i18n";
 import { ChangedOutsideRemedy, isUnconfirmedRefusal } from "./ChangedOutsideRemedy";
 import { LEDGER_CHANGED_EVENT } from "../types";
+import { BACKEND_SENTENCES } from "../data/backend-error";
 
 // CR-unconfirmed-remedy: the second choice beside "undo it" on the owner's Synez-shaped ledger.
 const offersMock = vi.hoisted(() => ({
@@ -19,8 +20,10 @@ vi.mock("@tauri-apps/api/core", () => ({
   }),
 }));
 
-const REFUSAL =
-  "experiment not started — another setting Compy changed earlier can't be confirmed as still in place, so a test couldn't show that its result is this setting's alone — undo it in Test → Applied & history, then start the test again";
+// B11 r2: the refusal as the start writes it, its sentence the mapped const (pinned byte-equal to the Rust), so the
+// offer keys on the words the backend really sends. Break check: drop "can't be confirmed as still in place" from
+// UNVERIFIED_OTHERS_START_REFUSAL -> isUnconfirmedRefusal(REFUSAL) is false -> fails.
+const REFUSAL = `experiment not started — ${BACKEND_SENTENCES.find((s) => s.rust === "UNVERIFIED_OTHERS_START_REFUSAL")!.text}`;
 
 afterEach(() => {
   cleanup();

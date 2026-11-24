@@ -2219,17 +2219,20 @@ pub(crate) fn with_unverified_changes(outcome: ConcludeOutcome, unverified: usiz
 /// §3 at start — the same rule as [`with_unverified_changes`], applied before anything is recorded or
 /// changed. Another applied setting not confirmed in place now would leave any result unjudged at
 /// the conclude, so the user is told the remedy before playing a test session for nothing.
+/// B11 r2: ONE fixed sentence, whatever the count, so `src/data/backend-error.ts` maps it byte-equal to the
+/// user's language (a counted sentence could not be mapped, so the screen said only "not started"). The count
+/// is dropped from the words. It keeps "can't be confirmed as still in place": ChangedOutsideRemedy
+/// (UNCONFIRMED_REFUSAL) keys its offer on those words.
 pub(crate) fn unverified_start_refusal(unverified: usize) -> Option<String> {
-    let (what, undo) = match unverified {
-        0 => return None,
-        1 => ("another setting Compy changed earlier can't be confirmed as still in place".to_string(), "undo it"),
-        n => (format!("{n} other settings Compy changed earlier can't be confirmed as still in place"), "undo them"),
-    };
-    Some(format!(
-        "{what}, so a test couldn't show that its result is this setting's alone — {undo} in \
-         Test → Applied & history, then start the test again"
-    ))
+    (unverified > 0).then(|| UNVERIFIED_OTHERS_START_REFUSAL.to_string())
 }
+
+/// [`unverified_start_refusal`]'s sentence (mapped en + zh in backend-error.ts). Its callers write it after
+/// "experiment not started — ": start_experiment returns it before its Pending record is saved or anything is
+/// applied, and precheck_refusal is read-only.
+pub(crate) const UNVERIFIED_OTHERS_START_REFUSAL: &str = "One or more other settings Compy changed earlier can't \
+     be confirmed as still in place, so a Trial couldn't show that its result is this setting's alone. Undo them \
+     in Test → Applied & history, then start the Trial again.";
 
 /// CR-refuse-early: the start's §3 other-changes check, asked when the user starts the journey (or a
 /// real-play Trial) for `rec_id`, BEFORE any as-is session is asked for, so a refusal known now is
@@ -8537,11 +8540,16 @@ mod experiment_tests {
         // #611 in-house review: the conclude would leave such a Trial unjudged anyway, so it is turned
         // down before the user plays a test session for nothing, with the remedy named.
         assert_eq!(unverified_start_refusal(0), None, "all read back: the start goes ahead");
-        for (n, says, undo) in [(1, "another setting", "undo it in"), (3, "3 other settings", "undo them in")] {
+        // B11 r2: one fixed sentence for any count (so backend-error.ts can map it); the count is not in it.
+        // Break check: put a count or "another setting" back into the sentence -> fails.
+        for n in [1, 3] {
             let why = unverified_start_refusal(n).expect("refused");
-            assert!(why.contains(says) && why.contains("can't be confirmed as still in place"), "{why}");
-            assert!(why.contains(undo) && why.contains("Test → Applied & history"), "{why}");
+            assert_eq!(why, UNVERIFIED_OTHERS_START_REFUSAL, "{n}");
         }
+        let s = UNVERIFIED_OTHERS_START_REFUSAL;
+        assert!(s.contains("can't be confirmed as still in place"), "the remedy keys on these words: {s}");
+        assert!(s.contains("Undo them in Test → Applied & history, then start the Trial again."), "{s}");
+        assert!(!s.chars().any(|c| c.is_ascii_digit()) && !s.contains("another setting"), "{s}");
     }
 
     #[test]

@@ -9,7 +9,7 @@ import en from "../i18n/locales/en/app.json";
 import zh from "../i18n/locales/zh-CN/app.json";
 import { BACKEND_SENTENCES, backendMessages, backendSentenceKey } from "./backend-error";
 import { STACK_APPLY_PREFIX, TRIAL_APPLY_PREFIX, trialErrorText } from "../surfaces/bench-error";
-import { NOT_CONCLUDED_PREFIX, NOT_STARTED_PREFIX, sayableReason, trialWriteText } from "../surfaces/trial-error";
+import { NOT_CONCLUDED_PREFIX, NOT_STARTED_PREFIX, sayableReason, saysNothingChanged, trialWriteText } from "../surfaces/trial-error";
 import enLab from "../i18n/locales/en/lab.json";
 import zhLab from "../i18n/locales/zh-CN/lab.json";
 
@@ -153,7 +153,7 @@ describe("B11 r1 F3: a Trial write with no mapped sentence is said by its prefix
   it("a mapped sentence wins; else the prefix picks the line; else the bench's own line", () => {
     const missing = BACKEND_SENTENCES.find((x) => x.rust === "BASELINE_MISSING")!;
     expect(trialWriteText(`${NOT_STARTED_PREFIX}${missing.text}`, t)).toBe(`T(${missing.key})`);
-    expect(trialWriteText(`${NOT_STARTED_PREFIX}2 other settings can't be confirmed`, t)).toBe("T(lab.experimentBench.errors.notStarted)");
+    expect(trialWriteText(`${NOT_STARTED_PREFIX}helper did not launch`, t)).toBe("T(lab.experimentBench.errors.notStarted)");
     expect(trialWriteText(new Error(`${NOT_CONCLUDED_PREFIX}Compy is still collecting: 2 sessions`), t)).toBe(
       "T(lab.experimentBench.errors.notConcluded)",
     );
@@ -262,9 +262,48 @@ describe("B11 r1: the safety-relevant zh sentences can't be swapped between keys
     ["benchRolledBackUnrecorded", "无法把这次撤销保存"],
     ["benchLedgerUnreadBefore", "在测量前无法读取"],
     ["benchLedgerUnreadAfter", "已执行应用"],
+    ["unverifiedOthersStart", "无法确认仍然生效"],
   ];
   it.each(DISTINGUISHING)("%s says its own case, and only it does", (key, phrase) => {
     expect(zhKeys[key], key).toContain(phrase);
     for (const [other] of DISTINGUISHING) if (other !== key) expect(zhKeys[other], `${other} vs ${key}`).not.toContain(phrase);
+  });
+});
+
+// B11 r2: the other-changes start refusal (experiment::unverified_start_refusal) used to carry a count, so it was
+// unmapped and both the bench and the journey said only "not started", with no reason and nothing to do. It is
+// now one fixed sentence. Break check: put a count back into UNVERIFIED_OTHERS_START_REFUSAL (Rust) -> the
+// byte-equal pin in backend-error.test fails; drop its backend-error.ts entry -> these fail.
+describe("B11 r2: the other-changes start refusal is said in both languages", () => {
+  const t = ((k: string) => `T(${k})`) as never;
+  const s = BACKEND_SENTENCES.find((x) => x.rust === "UNVERIFIED_OTHERS_START_REFUSAL")!;
+  const EN =
+    "One or more other settings Compy changed earlier can't be confirmed as still in place, so a Trial couldn't show that its result is this setting's alone. Undo them in Test → Applied & history, then start the Trial again.";
+  const ZH =
+    "Compy 之前更改的一项或多项其他设置无法确认仍然生效，所以试验无法证明结果只来自这项设置。请在「测试 → 已应用与历史记录」中撤销它们，然后重新开始试验。";
+
+  it("en + zh literals, and the words the changed-outside remedy keys on", () => {
+    expect(s.key).toBe("app.backendErrors.unverifiedOthersStart");
+    expect(s.text).toBe(EN);
+    expect((en.backendErrors as Record<string, string>).unverifiedOthersStart).toBe(EN);
+    expect((zh.backendErrors as Record<string, string>).unverifiedOthersStart).toBe(ZH);
+    // ChangedOutsideRemedy's UNCONFIRMED_REFUSAL.
+    expect(EN).toContain("can't be confirmed as still in place");
+    expect(EN).not.toMatch(/\d/);
+  });
+
+  it("the bench start line and the journey both say it, after the not-started prefix", () => {
+    const err = `${NOT_STARTED_PREFIX}${s.text}`;
+    expect(trialWriteText(err, t)).toBe(`T(${s.key})`);
+    expect(sayableReason(err, t, [])).toBe(`T(${s.key})`);
+  });
+
+  it("the journey says a refusal that already says nothing was changed once (mark_failed_apply's case)", () => {
+    // Break check: drop the saysNothingChanged branch in GuidedJourney -> "nothing was changed" twice.
+    const held = BACKEND_SENTENCES.find((x) => x.rust === "TRIAL_HOLDS_SETTING_REFUSAL")!;
+    expect(saysNothingChanged(`${NOT_STARTED_PREFIX}${held.text}`)).toBe(true);
+    expect(saysNothingChanged(`${NOT_STARTED_PREFIX}${s.text}`)).toBe(false);
+    expect(saysNothingChanged(`${NOT_STARTED_PREFIX}helper did not launch`)).toBe(false);
+    expect(src("surfaces/GuidedJourney.tsx")).toContain("saysNothingChanged(p.reason)");
   });
 });

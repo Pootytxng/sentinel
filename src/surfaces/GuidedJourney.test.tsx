@@ -256,16 +256,19 @@ const finalLine = () =>
 
 describe("CR-refuse-early: a start refusal known now is said before any session", () => {
   const SYNEZ_REFUSAL =
-    "experiment not started — another setting Compy changed earlier can't be confirmed as still in place, so a test couldn't show that its result is this setting's alone — undo it in Test → Applied & history, then start the test again";
+    "experiment not started — One or more other settings Compy changed earlier can't be confirmed as still in place, so a Trial couldn't show that its result is this setting's alone. Undo them in Test → Applied & history, then start the Trial again.";
 
   it("the Synez-shaped ledger refuses on the press: no as-is session, nothing started; once recorded, the journey proceeds", async () => {
     state.precheck = SYNEZ_REFUSAL;
     render(<ExperimentBench />);
     await press();
     const line = await finalLine();
-    // B11 r1: the refusal carries a count, so it isn't a mapped sentence: the line says its own words, never the
-    // backend's text; the remedy (undo / record it as changed outside Compy) is offered below it.
-    expect(line).toBe("Compy didn't start the test, and nothing was changed.");
+    // B11 r2: the refusal is one fixed, mapped sentence (UNVERIFIED_OTHERS_START_REFUSAL), so the line says its
+    // reason and what to do; the remedy (undo / record it as changed outside Compy) is offered below it.
+    // Break check: drop its entry from backend-error.ts -> unmapped -> the plain line -> fails.
+    expect(line).toBe(
+      "Compy didn't start the test, and nothing was changed: One or more other settings Compy changed earlier can't be confirmed as still in place, so a Trial couldn't show that its result is this setting's alone. Undo them in Test → Applied & history, then start the Trial again.",
+    );
     expect(calls("trial_start_precheck")).toEqual([{ recId: "hags" }]);
     expect(calls("start_fps_capture")).toHaveLength(0);
     expect(calls("start_experiment")).toHaveLength(0);
@@ -1105,16 +1108,20 @@ describe("P5-realplay: the change stays on while you play", () => {
   // CR-refuse-early: real play asks the start's other-changes check before its first as-is session.
   it("a start refusal known now is said on the tap, before any as-is session", async () => {
     const why =
-      "experiment not started — another setting Compy changed earlier can't be confirmed as still in place, so a test couldn't show that its result is this setting's alone — undo it in Test → Applied & history, then start the test again";
+      "experiment not started — One or more other settings Compy changed earlier can't be confirmed as still in place, so a Trial couldn't show that its result is this setting's alone. Undo them in Test → Applied & history, then start the Trial again.";
     state.precheck = why;
     state.rpProgress = backendLike();
     state.sessions = [OLD, AS_IS[0]];
     render(<ExperimentBench />);
     fireEvent.click(await enabled("Test it while I play normally"));
-    // B11 r1: a refusal with a count isn't a mapped sentence, so the line says its own words, never the text.
-    await waitFor(() => expect(screen.getByTestId("journey-line").textContent).toBe("Compy didn't start the test, and nothing was changed."), {
-      timeout: 3000,
-    });
+    // B11 r2: the refusal is one fixed, mapped sentence, so the line says its reason and what to do.
+    await waitFor(
+      () =>
+        expect(screen.getByTestId("journey-line").textContent).toBe(
+          "Compy didn't start the test, and nothing was changed: One or more other settings Compy changed earlier can't be confirmed as still in place, so a Trial couldn't show that its result is this setting's alone. Undo them in Test → Applied & history, then start the Trial again.",
+        ),
+      { timeout: 3000 },
+    );
     expect(calls("trial_start_precheck")).toEqual([{ recId: "hags" }]);
     expect(calls("start_fps_capture")).toHaveLength(0);
     expect(calls("start_experiment")).toHaveLength(0);

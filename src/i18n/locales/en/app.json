@@ -77,6 +77,7 @@
     "trialHoldsSetting": "A setting this action changes is being tested by a Trial right now, so Compy won't run it on top of the test. Let the Trial finish, or end it with Restore now in Test, first. Nothing was changed.",
     "trialStartInterrupted": "An earlier Trial start of a setting this action changes was interrupted and isn't resolved yet, so Compy won't run it now. Check Test → Applied & history, then try again. Nothing was changed.",
     "benchHoldsSetting": "A setting this action changes is being measured by the benchmark right now, so Compy won't run it on top of the measurement. Wait until the benchmark finishes and puts its change back, or cancel it. Nothing was changed.",
+    "unverifiedOthersStart": "One or more other settings Compy changed earlier can't be confirmed as still in place, so a Trial couldn't show that its result is this setting's alone. Undo them in Test → Applied & history, then start the Trial again.",
     "baselineMissing": "The baseline session isn't in your session history any more. Play a monitored session, then try again.",
     "baselineAmbiguous": "Two sessions in your history share that baseline's start time, so Compy can't tell which one to use.",
     "baselineBehind": "The baseline session measured nothing: another window was in front the whole time. Play a session with the game in front, then try again.",

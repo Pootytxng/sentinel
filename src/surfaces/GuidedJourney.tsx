@@ -77,7 +77,7 @@ import type { SessionSummary } from "../types";
 import { allBackground, usableReading } from "../lib/session-metrics";
 import { writeLedger } from "../data/ledger-write";
 import { ChangedOutsideRemedy } from "./ChangedOutsideRemedy";
-import { NOT_STARTED_PREFIX, sayableReason } from "./trial-error";
+import { NOT_STARTED_PREFIX, sayableReason, saysNothingChanged } from "./trial-error";
 import { prettyGameName } from "./game-name";
 import { fullAfterSessionsFirst, gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
@@ -1366,7 +1366,14 @@ export function GuidedJourney({
       // after its apply ("experiment aborted …") says its own sentences, which tell what happened to the change.
       const said = sayable(p.reason);
       const before = p.before || p.reason.startsWith(NOT_STARTED_PREFIX) || (said != null && own.includes(said));
-      if (before) line = said ? t(`${k}.notStarted`, { reason: said }) : t(`${k}.notStartedPlain`);
+      // A mapped refusal that already says nothing was changed (an apply refusal passed on by mark_failed_apply)
+      // is said alone, so the line doesn't say it twice.
+      if (before)
+        line = said
+          ? saysNothingChanged(p.reason)
+            ? said
+            : t(`${k}.notStarted`, { reason: said })
+          : t(`${k}.notStartedPlain`);
       else line = said ?? t("lab.experimentBench.errors.writeFailed");
       break;
     }

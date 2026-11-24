@@ -96,6 +96,14 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "A setting this action changes is being measured by the benchmark right now, so Compy won't run it on top of the measurement. Wait until the benchmark finishes and puts its change back, or cancel it. Nothing was changed.",
     key: "app.backendErrors.benchHoldsSetting",
   },
+  // B11 r2: a Trial start refused because other Compy changes can't be confirmed in place
+  // (experiment::unverified_start_refusal; one fixed sentence, the count dropped). Written after
+  // "experiment not started — " by start_experiment and the journey's precheck.
+  {
+    rust: "UNVERIFIED_OTHERS_START_REFUSAL",
+    text: "One or more other settings Compy changed earlier can't be confirmed as still in place, so a Trial couldn't show that its result is this setting's alone. Undo them in Test → Applied & history, then start the Trial again.",
+    key: "app.backendErrors.unverifiedOthersStart",
+  },
   // B11 (r2): the fixed reasons a Trial start/conclude/abort/restore and the benchmark's rollback report, so
   // ExperimentBench/Benchmark show each one in the user's language instead of raw backend text. Consts in
   // experiment.rs and benchmark_trial.rs; any detail after a sentence (an OS error) stays in the console.
