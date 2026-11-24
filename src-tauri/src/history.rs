@@ -21,7 +21,7 @@ use crate::data_root::MutationRoot;
 use crate::{
     eee_disabled_on_any_eligible_adapter_checked, fast_startup_state_checked,
     game_bar_disabled, game_mode_enabled, hags_state_checked, mouse_accel_disabled,
-    nagle_disabled_on_any_nic, pcie_aspm_off_on_ac_checked, reserved_storage_enabled_checked,
+    nagle_disabled_on_any_nic_checked, pcie_aspm_off_on_ac_checked, reserved_storage_enabled_checked,
     service_running_checked, startup_approval_value, usb_selective_suspend_off_on_ac_checked,
     visual_effects_for_best_performance,
 };
@@ -734,9 +734,11 @@ pub(crate) fn probe_rec_target_with(rec_id: &str, reads: &LiveReads) -> ActiveCh
     // merely idle used to read On, as if Compy had made the change. The start types come from one WMI
     // query per pass through `reads` (CR-service-batch, 2026-11-04).
     let disabled = |svc: &str| reads.service_disabled(svc);
-    // The registry readers without a checked variant (game mode, visual effects, mouse, game bar,
-    // Nagle, EEE) treat an absent key as the Windows default, which IS their "off" answer, so they
-    // stay plain reads here.
+    // The registry readers without a checked variant (game mode, visual effects, mouse, game bar)
+    // treat an absent key as the Windows default, which IS their "off" answer, so they stay plain
+    // reads here. D4 r1 (FIX 2): Nagle reads its CHECKED form, the same read the catalog's
+    // `nagle-disabled-any-nic` kind uses, so a failed read is Unreadable here too, never "changed
+    // outside Compy" while the catalog card says it couldn't read.
     match rec_id {
         "game-mode" => read(Some(game_mode_enabled())),
         "visual-effects" => read(Some(visual_effects_for_best_performance())),
@@ -746,7 +748,7 @@ pub(crate) fn probe_rec_target_with(rec_id: &str, reads: &LiveReads) -> ActiveCh
         // Ultimate (a new GUID) still reads by its English words, as before (CR-localized-reads).
         // CR-kept-plan-read-once: the pass's one scheme read (the same GUID-then-words class).
         "power-ultimate" => read(reads.scheme().map(|seen| seen.class == crate::PowerPlanClass::Ultimate)),
-        "nagle-disable" => read(Some(nagle_disabled_on_any_nic())),
+        "nagle-disable" => read(nagle_disabled_on_any_nic_checked()),
         "hags-enable" => read(hags_state_checked().ok().map(|v| v == Some(2))),
         "mouse-accel-off" => read(Some(mouse_accel_disabled())),
         "game-bar-disable" => read(Some(game_bar_disabled())),

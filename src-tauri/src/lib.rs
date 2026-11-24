@@ -853,30 +853,13 @@ pub(crate) fn mouse_accel_disabled() -> bool {
     speed == "0"
 }
 
-pub(crate) fn nagle_disabled_on_any_nic() -> bool {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let Ok(interfaces) =
-        hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces")
-    else {
-        return false;
-    };
-    for adapter_name in interfaces.enum_keys().filter_map(|r| r.ok()) {
-        let Ok(adapter) = interfaces.open_subkey(&adapter_name) else {
-            continue;
-        };
-        if adapter.get_value::<u32, _>("TcpAckFrequency").ok() == Some(1)
-            && adapter.get_value::<u32, _>("TCPNoDelay").ok() == Some(1)
-        {
-            return true;
-        }
-    }
-    false
-}
-
-/// D4: [`nagle_disabled_on_any_nic`] for the rec catalog's state read, `None` when it could not
-/// read: the Interfaces key would not open (any error but "not found"), or no adapter reads as
-/// disabled while one or more adapter keys would not open. An absent Interfaces key, or absent
-/// values on an adapter, stay the Windows default ("not disabled"), as before.
+/// D4: whether any adapter has Nagle disabled (TcpAckFrequency = 1 and TCPNoDelay = 1), `None` when
+/// it could not read: the Interfaces key would not open (any error but "not found"), or no adapter
+/// reads as disabled while one or more adapter keys would not open. An absent Interfaces key, or
+/// absent values on an adapter, stay the Windows default ("not disabled"). D4 r1 (FIX 2): the one
+/// Nagle read; the rec catalog's state kind and the ledger's live check
+/// (`history::probe_rec_target_with`) both read it, so they cannot disagree on a failed read. The
+/// unchecked `nagle_disabled_on_any_nic` (a failed read was "not disabled") had no caller left.
 pub(crate) fn nagle_disabled_on_any_nic_checked() -> Option<bool> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let interfaces = match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces") {
