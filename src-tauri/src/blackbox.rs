@@ -2911,6 +2911,24 @@ mod blackbox_tests {
         assert_eq!(one[0].id, 1000);
     }
 
+    /// A6 review r1 F4: the shared five-quote escape is fallible (`filter_map(.ok())`), so a refused channel would
+    /// vanish from the read without a word. Every channel of EVENT_LOG_SOURCES must reach the script, once.
+    #[test]
+    fn every_event_log_channel_reaches_the_script() {
+        let script = event_log_script();
+        let mut channels: Vec<&str> = Vec::new();
+        for (channel, _, _) in EVENT_LOG_SOURCES {
+            if !channels.contains(channel) {
+                channels.push(*channel);
+            }
+        }
+        assert_eq!(script.matches("Get-WinEvent -FilterXml").count(), channels.len(), "{script}");
+        for channel in channels {
+            let head = format!("<QueryList><Query Id=''0'' Path=''{channel}''>");
+            assert_eq!(script.matches(&head).count(), 1, "{channel} is read once: {script}");
+        }
+    }
+
     /// #544 bug→guard: the Event Log reader asks only for provider-scoped pairs the classifier
     /// recognizes, reaches every Event-Log incident family, and caps each channel on its own.
     #[test]

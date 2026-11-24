@@ -1561,7 +1561,10 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
         // command-line quoting for commands with spaces / quotes / backslashes (e.g. scheduled-task
         // paths) that -Command mangles. Test-only; cleaned up after. (Production hex-encodes instead.)
         let tmp = std::env::temp_dir().join(format!("compy-qa-{}.ps1", std::process::id()));
-        std::fs::write(&tmp, command).map_err(|e| format!("qa seam: temp write failed: {e}"))?;
+        // A6 review r1: with a UTF-8 BOM, so Windows PowerShell 5.1 reads it as UTF-8, not ANSI (cp1252 would
+        // turn bytes 0x91/0x92 of a non-ASCII character into a quote, unlike the shipped -Command transport).
+        let bytes = [&[0xEFu8, 0xBB, 0xBF][..], command.as_bytes()].concat();
+        std::fs::write(&tmp, bytes).map_err(|e| format!("qa seam: temp write failed: {e}"))?;
         let ps_exe = crate::sys_exe::sys_tool_path(SysTool::PowerShell);
         let out = elevation_outcome(elevate_and_wait(
             ps_exe.as_os_str(),
@@ -1863,6 +1866,10 @@ pub(crate) fn ps_squote_value(value: &str) -> Result<String, String> {
     Ok(out)
 }
 
+/// A6: the power-setting undo's refusal when a recorded plan/subgroup/setting id is not GUID-shaped.
+pub(crate) const POWER_SETTING_ID_REFUSED: &str =
+    "This entry's recorded power plan setting isn't a plan/setting id - cannot roll back blind.";
+
 /// A6: a GUID that reaches a Windows command (powercfg plan/subgroup/setting ids read back from
 /// history.json) must be exactly `8-4-4-4-12` hex digits: no braces, no spaces, nothing else. `ps_safe`
 /// alone admitted any `[A-Za-z0-9_.-]` token, which is not GUID-shaped.
@@ -1905,11 +1912,14 @@ mod guid_shape_tests {
         let _force = ForceElevationError::begin();
         reset_elevation_dispatch_count();
         let not_hex = "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz";
-        assert!(rollback_power_ultimate_typed(not_hex).is_err());
-        assert!(rollback_power_plan_setting_typed(not_hex, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1).is_err());
+        // Review r1 F1: the EXACT refusal, so a removed check fails on every PC (with it gone, the call would end
+        // at the plan list, the active-plan read or the forced decline, each with other text).
+        assert_eq!(rollback_power_ultimate_typed(not_hex), Err(guid_exact(not_hex).unwrap_err()));
+        let refused = Err(POWER_SETTING_ID_REFUSED.to_string());
+        assert_eq!(rollback_power_plan_setting_typed(not_hex, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1), refused);
         let balanced = "381b4222-f694-41f0-9685-ff5bb260df2e";
-        assert!(rollback_power_plan_setting_typed(balanced, not_hex, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1).is_err());
-        assert!(rollback_power_plan_setting_typed(balanced, PWR_SUBGROUP_USB, not_hex, 1, 1).is_err());
+        assert_eq!(rollback_power_plan_setting_typed(balanced, not_hex, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1, 1), refused);
+        assert_eq!(rollback_power_plan_setting_typed(balanced, PWR_SUBGROUP_USB, not_hex, 1, 1), refused);
         assert_eq!(elevation_dispatch_count(), 0, "refused before any elevation");
     }
 }
@@ -5137,9 +5147,7 @@ pub(crate) fn rollback_power_plan_setting_typed(
     // A6: and each exactly GUID-shaped (8-4-4-4-12 hex). The refusal names the plan, so the existing
     // "the plan is gone" wording test still reads a plan sentence.
     for g in [plan_guid, subgroup_guid, setting_guid] {
-        guid_exact(g).map_err(|_| {
-            "This entry's recorded power plan setting isn't a plan/setting id - cannot roll back blind.".to_string()
-        })?;
+        guid_exact(g).map_err(|_| POWER_SETTING_ID_REFUSED.to_string())?;
     }
     // Restore AC/DC to the EXACT plan this was applied to. If that plan no
     // longer exists (deleted, or never captured), fail safe with a clear
@@ -5654,6 +5662,62 @@ mod eee_script_tests {
                     );
                 }
             }
+        }
+    }
+
+    /// A6 review r1 F3: a REAL Windows PowerShell (the system one, through the elevated helper's own command
+    /// shape: `elevated_command(PowerShell)` + `-NoProfile -NonInteractive -Command`, run here UNelevated) reads
+    /// every curly-quote breakout as data. `Set-NetAdapterAdvancedProperty` is a stub that only echoes its three
+    /// arguments, so nothing touches an adapter. Each composed script (rollback and apply, every field, every
+    /// quote character) sits on its own line. Two payloads: the reviewer's `x’; Write-Output PWNED; ’`, and one
+    /// ending in `#` that would PARSE if it escaped (so a leak prints PWNED instead of only failing to parse).
+    #[test]
+    fn real_powershell_reads_every_curly_quote_breakout_as_data() {
+        const STUB: &str = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false\nfunction Set-NetAdapterAdvancedProperty { [CmdletBinding()] param($Name, $DisplayName, $DisplayValue, [switch]$NoRestart) Write-Output \"$Name|$DisplayName|$DisplayValue\" }\n";
+        let base = ["Ethernet", "Energy Efficient Ethernet", "Enabled"];
+        for tail in ["{q}", "#"] {
+            let mut script = String::from(STUB);
+            let mut expected: Vec<String> = Vec::new();
+            for q in CURLY {
+                let payload = format!("x{q}; Write-Output PWNED; {}", tail.replace("{q}", &q.to_string()));
+                for field in [0usize, 1, 2] {
+                    let mut raw = base.map(String::from);
+                    raw[field] = payload.clone();
+                    let rollback = build_eee_rollback_script(&[EeeNicSnapshot {
+                        adapter_name: raw[0].clone(),
+                        property_display_name: raw[1].clone(),
+                        prior_value: raw[2].clone(),
+                    }])
+                    .expect("composes");
+                    let apply = build_eee_apply_script(&[(
+                        EeeProperty {
+                            adapter_name: raw[0].clone(),
+                            display_name: raw[1].clone(),
+                            current_value: "On".into(),
+                            valid_values: vec![],
+                        },
+                        raw[2].clone(),
+                    )])
+                    .expect("composes");
+                    for s in [rollback, apply] {
+                        script.push_str(&s);
+                        script.push('\n');
+                        expected.push(raw.join("|"));
+                    }
+                }
+            }
+            let mut cmd = crate::sys_exe::elevated_command(SysTool::PowerShell);
+            cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+            let out = output_within(cmd, std::time::Duration::from_secs(120)).expect("PowerShell answered");
+            let text = String::from_utf8(out.stdout).expect("UTF-8 output");
+            let lines: Vec<&str> = text.lines().map(|l| l.trim_end_matches('\r')).filter(|l| !l.is_empty()).collect();
+            assert!(!lines.contains(&"PWNED"), "a payload ran as a statement (tail {tail}): {lines:?}");
+            assert_eq!(
+                lines,
+                expected.iter().map(String::as_str).collect::<Vec<_>>(),
+                "tail {tail}: stderr {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
         }
     }
 
@@ -8079,15 +8143,24 @@ mod ipc_input_fuzz_tests {
     // see a U+2019 closing the literal, which is how the rollback hole passed this fuzz.
     #[test]
     fn eee_scripts_never_break_out_of_their_quotes() {
+        // A6 review r1 F2: every PowerShell single-quote character is fuzzed, and each must actually occur.
+        let mut seen_quotes = std::collections::HashSet::new();
         for seed in SEEDS {
             let mut rng = Rng::seeded(seed);
             for case in 0..300 {
                 let tok = |rng: &mut Rng| -> String {
-                    if rng.flag() {
+                    let mut s = if rng.flag() {
                         hostile_string(rng, 4)
                     } else {
                         mutate_text(rng, "Realtek PCIe GbE Family Controller")
+                    };
+                    if rng.flag() {
+                        let q = *rng.pick(&PS_SINGLE_QUOTES[..]);
+                        s.push(q);
+                        s.push_str("; Stop-Computer; ");
+                        s.push(q);
                     }
+                    s
                 };
                 // 1..=3 adapters, because a rig with two eligible NICs is the shape the mutation
                 // path actually emits — several `Set-NetAdapterAdvancedProperty ...; ` statements
@@ -8128,6 +8201,7 @@ mod ipc_input_fuzz_tests {
                     .iter()
                     .flat_map(|(a, b, c)| [a.clone(), b.clone(), c.clone()])
                     .collect();
+                seen_quotes.extend(expected.iter().flat_map(|t| t.chars()).filter(|c| PS_SINGLE_QUOTES.contains(c)));
                 // A6: a token with a control character refuses the whole script (nothing composed).
                 let refusable = expected.iter().any(|t| t.chars().any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}')));
                 if refusable {
@@ -8146,6 +8220,9 @@ mod ipc_input_fuzz_tests {
                     );
                 }
             }
+        }
+        for q in PS_SINGLE_QUOTES {
+            assert!(seen_quotes.contains(&q), "the fuzz never produced {q:?}");
         }
     }
 
