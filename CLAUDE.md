@@ -57,7 +57,7 @@ Complete 2026-11-24 (82 `.rs` files, counted by name; the count lives only here)
 (mutation, rollback & gates) — scope any mutation-gate change against these first:** `lib.rs`
 (command surface) · `actions.rs` · `history.rs` · `gaming_orchestrator.rs` · `gaming_session.rs` ·
 `game_mode_persist.rs` · `services.rs` · `gpu_profile.rs` · `remote_rules.rs` · `receipts.rs` ·
-`license.rs` · `drift.rs` · `data_root.rs` · `race_seam.rs`. Entries: ★ half in
+`license.rs` · `drift.rs` · `data_root.rs` · `race_seam.rs` · `elevated_ops.rs`. Entries: ★ half in
 `.claude/rules/rust-safety-boundary.md`, read-only half in `src-tauri/CLAUDE.md`; both load only for
 `src-tauri/` work. **No gate checks the map (its guard was removed in `397cfe72`): run
 `node scripts/verify-module-map.mjs` by hand before trusting it; red means the map is stale.**

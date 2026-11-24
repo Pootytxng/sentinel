@@ -18,11 +18,12 @@ Line counts are rough. **Mutation/rollback + gate-relevant modules are starred �
 mutation-gate change against these first.**
 
 **Core wiring & entry**
-- `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); else `run()`. Runs BEFORE any window.
+- `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); `--run-elevated-op <hex JSON>` (only with the `elevated-op-entry` cargo feature, off in every normal build) → the typed helper (`elevated_ops.rs`); else `run()`. Runs BEFORE any window.
 - ★ `lib.rs` (~1870) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:558`), `safety_tests`. ★ for the command surface only — the `set_startup_entry_enabled` exception closed 2026-08-03; it lives in `history.rs` and mutates through `actions::apply_startup_entry_enabled` like every other apply.
 
 **★ Mutation, rollback & gates (the safety boundary)**
 - ★ `actions.rs` (~5404) — THE Windows-mutation + rollback boundary, no exceptions: typed `AppliedAction`/`RollbackAction`/`Snapshot`, all `apply_*`/`rollback_*_typed`, `dispatch_rollback`, `resolve_rollback`, `synthesize_legacy_rollback`, `run_elevated_powershell`.
+- ★ `elevated_ops.rs` (~1650) — A8 Slice 1 (plan `_train/a5-closed-elevated-set-plan-v4.md`): the CLOSED set of typed elevated operations (`ElevatedOp`, no script-text variant; every field a grammar-checked newtype re-checked in the helper) and the typed helper entry: request parse, the helper-side ELEVATED reads (task name, EEE listing, parsed in Rust), the batch/single wrappers and the call to the one mutating run (`lib.rs` `run_helper_script`). Every script it runs is composed by `actions.rs`'s builders. Its entry (`--run-elevated-op`) is compiled only with the `elevated-op-entry` cargo feature, which no normal build enables, until Slice 2 moves the callers and makes it the only elevated entry.
 - ★ `history.rs` (~2416) — Trust Ledger: `AppliedChange`, persistence (`load/save_history`), `apply_recommendation`/`rollback_change`/`get_applied_changes`. Rollback resolves from local history ALONE.
 - ★ `gaming_orchestrator.rs` (~1660) — Gaming Mode session lifecycle: start/stop/keeper, orphan detection + recovery, staged-change commit. Mutation-boundary.
 - ★ `gaming_session.rs` (~513) — Gaming Mode session model + atomic persistence (`gaming-session.json`, `SESSION_SCHEMA_VERSION`).
