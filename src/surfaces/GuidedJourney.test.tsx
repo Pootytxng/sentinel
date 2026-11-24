@@ -931,7 +931,9 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     await press();
     expect(await finalLine()).toBe("Put HAGS back: it made no difference Compy could measure.");
     fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
-    await lineIs(/^Compy can't use your last session as the before-reading \(.*baseline session.*\), so it needs a new one\. Session 1 of 2: play Valorant/);
+    // B11 r1: this refusal (baseline_is_current) is not a mapped sentence, so the line says its own plain words,
+    // never the backend's text.
+    await lineIs(/^Compy can't use your last session as the before-reading, so it needs a new one\. Session 1 of 2: play Valorant/);
     await waitFor(() => expect(calls("start_experiment")).toHaveLength(3), { timeout: 3000 });
     const starts = calls("start_experiment");
     expect(starts[1]).toMatchObject({ recId: "game-mode", baselineSessionId: asIs.started_at });

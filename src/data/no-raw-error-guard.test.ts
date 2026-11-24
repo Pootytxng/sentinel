@@ -110,7 +110,9 @@ describe("B11: the benchmark's apply-failed lines", () => {
 
 describe("B11 r1 F3: a Trial write with no mapped sentence is said by its prefix", () => {
   const rust = readFileSync(join("src-tauri", "src", "experiment.rs"), "utf8");
-  const code = rust.slice(0, rust.indexOf("#[cfg(test)]"));
+  // Production code: the file minus each `#[cfg(test)] mod … { … }` (closed by a `}` at column 0). Slicing at the
+  // first `#[cfg(test)]` cut at a test-only const near the top and left almost nothing to check.
+  const code = rust.replace(/#\[cfg\(test\)\]\r?\nmod [a-z_0-9]+ \{[\s\S]*?\r?\n\}(?:\r?\n|$)/g, "");
   const t = ((k: string) => `T(${k})`) as never;
 
   it("the prefixes are the ones experiment.rs writes", () => {
