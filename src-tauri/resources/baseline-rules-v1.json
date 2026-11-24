@@ -80,7 +80,7 @@
       "title": "Disable Windows Search indexer (HDD-only systems)",
       "category": "Windows",
       "severity": "moderate",
-      "description": "On systems with only spinning hard drives, the Windows Search service (WSearch) constantly indexes files and causes meaningful disk thrash that you can hear and feel. On NVMe / SSD systems the indexing cost is small and the speed savings are real, so unless Compy reads every drive as an HDD, it holds this recommendation back under \"Not for this rig\". If that drive read is wrong, \"My hardware supports this\" brings it back into your list, and you can apply it from there.",
+      "description": "On systems with only spinning hard drives, the Windows Search service (WSearch) constantly indexes files and causes meaningful disk thrash that you can hear and feel. On NVMe / SSD systems the indexing cost is small and the speed savings are real, so unless Compy reads every drive as an HDD, it holds this recommendation back under \"Not for this rig\". If that drive read is wrong, \"My hardware supports this — show it anyway\" puts it back in your list.",
       "impact": "Lower idle disk activity · less HDD thrash · ~50–150 MB RAM back",
       "provenance": "measured-signal",
       "downside": "Start menu / File Explorer search becomes slower and less complete — it falls back to live filesystem walking instead of pre-built indexes. You can re-enable any time.",

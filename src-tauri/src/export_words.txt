@@ -168,7 +168,6 @@ brand
 breaks
 brief
 brightness
-brings
 broadcom
 broader
 broken
@@ -466,6 +465,7 @@ engaged
 enhance
 enhancements
 enough
+entirely
 entries
 entry
 enumdisplaysettings
@@ -668,6 +668,7 @@ here
 hibernate
 hibernates
 hidden
+hides
 high
 higher
 highlights
