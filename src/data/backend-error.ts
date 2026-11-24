@@ -211,7 +211,7 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   },
   {
     rust: "ABORT_ALREADY_REVERTED",
-    text: "Compy stopped this Trial before measuring; the change had already been undone outside Compy.",
+    text: "Compy stopped this Trial before measuring; its change history already showed the change as undone, so there was nothing to put back.",
     key: "app.backendErrors.abortAlreadyReverted",
   },
   {
@@ -221,13 +221,13 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   },
   {
     rust: "RESTORED_STILL_READS_CHANGED",
-    text: "Compy put the change back, but a read afterwards still shows the setting as changed; something else may have set it again. Check it in Test → Applied & history.",
+    text: "Compy put the change back, but a read afterwards still shows the setting as changed. Check it in Test → Applied & history.",
     key: "app.backendErrors.restoredStillReadsChanged",
   },
   {
-    rust: "UNDONE_OUTSIDE_READS_CHANGED",
-    text: "The change was already undone outside Compy, but a read now shows the setting as changed again; something else is setting it. Check it in Test → Applied & history.",
-    key: "app.backendErrors.undoneOutsideReadsChanged",
+    rust: "ALREADY_UNDONE_READS_CHANGED",
+    text: "The change history already showed the change as undone, but a read now shows the setting as changed. Check it in Test → Applied & history.",
+    key: "app.backendErrors.alreadyUndoneReadsChanged",
   },
   {
     rust: "APPLY_ERR_READS_UNCHANGED",

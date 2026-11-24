@@ -961,7 +961,7 @@ fn settle_restore(
         "{before}; a read afterwards shows the setting as changed — check it in Test → Applied & history"
     ));
     // B11: fixed sentences, mapped in backend-error.ts. Said only here, after a live read that shows it changed.
-    Some(if compy_restored { RESTORED_STILL_READS_CHANGED.into() } else { UNDONE_OUTSIDE_READS_CHANGED.into() })
+    Some(if compy_restored { RESTORED_STILL_READS_CHANGED.into() } else { ALREADY_UNDONE_READS_CHANGED.into() })
 }
 
 /// §7 at conclude: the change must still read as applied for its treatment session to be evidence
@@ -4040,16 +4040,19 @@ pub(crate) const TRIAL_RECORD_NOT_SAVED: &str = "Compy could not save this Trial
 
 /// What happened to the change when a start was stopped after its apply.
 pub(crate) const ABORT_RESTORED: &str = "Compy stopped this Trial before measuring and put the change back.";
-pub(crate) const ABORT_ALREADY_REVERTED: &str = "Compy stopped this Trial before measuring; the change had already \
-     been undone outside Compy.";
+/// ABORT_ALREADY_REVERTED: the restore met the ledger's "already rolled back" (restore_already_reverted). That row
+/// can have been undone by Compy itself (Applied & history, a walk, FirstWin), so it never says "outside Compy".
+pub(crate) const ABORT_ALREADY_REVERTED: &str = "Compy stopped this Trial before measuring; its change history \
+     already showed the change as undone, so there was nothing to put back.";
 /// A restore (after a stopped start, a conclude that doesn't keep, or "Restore now") that returned an error.
 pub(crate) const RESTORE_NOT_COMPLETED: &str = "Compy tried to put the change back, but the restore did not \
      complete, so Compy can't confirm the change was undone. Check it in Test → Applied & history and undo it there.";
-/// settle_restore: a live read taken AFTER the restore still shows the setting as changed.
+/// settle_restore: a live read taken AFTER the restore still shows the setting as changed. The code can't tell
+/// why (the restore not taking effect, something setting it again, a misread), so the sentences don't guess.
 pub(crate) const RESTORED_STILL_READS_CHANGED: &str = "Compy put the change back, but a read afterwards still \
-     shows the setting as changed; something else may have set it again. Check it in Test → Applied & history.";
-pub(crate) const UNDONE_OUTSIDE_READS_CHANGED: &str = "The change was already undone outside Compy, but a read now \
-     shows the setting as changed again; something else is setting it. Check it in Test → Applied & history.";
+     shows the setting as changed. Check it in Test → Applied & history.";
+pub(crate) const ALREADY_UNDONE_READS_CHANGED: &str = "The change history already showed the change as undone, \
+     but a read now shows the setting as changed. Check it in Test → Applied & history.";
 
 /// mark_failed_apply: the apply itself returned an error (no undo record exists), by what the live read showed.
 pub(crate) const APPLY_ERR_READS_UNCHANGED: &str = "The apply reported an error. The setting reads as not changed, \
@@ -6950,17 +6953,19 @@ mod experiment_tests {
         use crate::history::ActiveCheck;
         let mut r = restored();
         let msg = settle_restore(&mut r, true, ActiveCheck::On).expect("a still-changed read is never silent");
-        assert!(msg.contains("Applied & history") && msg.starts_with("Compy restored"), "{msg}");
+        assert_eq!(msg, RESTORED_STILL_READS_CHANGED);
         assert_eq!(r.status, ExperimentStatus::Aborted);
         assert!(!r.kept);
         assert_eq!(r.final_state_verified, Some(false));
         let why = r.stop_reason.unwrap();
         assert!(why.starts_with("user-restored; ") && why.contains("Applied & history"), "{why}");
 
-        // Reverted outside Compy, then set again: loud too, but never claims Compy restored it.
+        // The ledger row was already undone (by Compy or not), then the setting reads changed: loud too, but never
+        // claims Compy put it back, and never guesses who undid it or what set it again.
         let mut outside = restored();
         let msg = settle_restore(&mut outside, false, ActiveCheck::On).expect("never silent");
-        assert!(!msg.contains("Compy restored") && msg.contains("outside Compy") && msg.contains("Applied & history"), "{msg}");
+        assert_eq!(msg, ALREADY_UNDONE_READS_CHANGED);
+        assert!(!msg.contains("put the change back") && !msg.contains("outside Compy") && !msg.contains("something else"), "{msg}");
         assert_eq!((outside.status, outside.final_state_verified), (ExperimentStatus::Aborted, Some(false)));
     }
 
@@ -10277,7 +10282,7 @@ mod experiment_tests {
         let mut after = ExperimentRecord { prior_state_verified: true, ..rp_running() };
         let loud = settle_restore(&mut after, false, crate::history::ActiveCheck::On);
         assert_eq!(after.status, ExperimentStatus::Aborted);
-        assert!(loud.is_some_and(|m| m.contains("already undone outside Compy")));
+        assert_eq!(loud.as_deref(), Some(ALREADY_UNDONE_READS_CHANGED));
     }
 
     #[test]
