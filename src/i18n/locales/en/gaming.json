@@ -127,6 +127,11 @@
       "rollingBackStack": "Rolling the stack back…",
       "working": "Working…"
     },
+    "verdictMetric": {
+      "onePercentLow": "1% low",
+      "pointOnePercentLow": "0.1% low",
+      "unknown": "measured value"
+    },
     "baselineLabel": "Baseline",
     "latestRunLabel": "Latest run",
     "baselineSavedPrefix": "Baseline saved",

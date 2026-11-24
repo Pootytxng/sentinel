@@ -32,6 +32,21 @@ export const WINDOW_LABELS = ["Calibrating", "Baseline", "Settling", "Treatment"
 export const STACK_ROLLBACK_HEAD = "Rolling back the ";
 export const STACK_ROLLBACK_TAIL = "-tweak stack…";
 
+// D8: a Trial verdict's metric (Verdict::Keep / Revert `metric`, also stored in each scoreboard award) is the `name`
+// benchmark_verdict.rs passes to eval_metric: "1% low" or "0.1% low", the only two since that file was written (git
+// history read 2026-11-24). Each is said through its own literal t(); anything else (a later build's name, an edited
+// file) is the fixed "measured value" line, never the raw English. bench-metric-words.test.ts pins the two names to the
+// Rust.
+export function verdictMetricText(metric: string, t: TFunction): string {
+  switch (metric) {
+    case "1% low":
+      return t("gaming.benchmark.verdictMetric.onePercentLow");
+    case "0.1% low":
+      return t("gaming.benchmark.verdictMetric.pointOnePercentLow");
+  }
+  return t("gaming.benchmark.verdictMetric.unknown");
+}
+
 export function trialStatusText(status: string, kind: string, t: TFunction): string {
   switch (status) {
     case "Starting…":

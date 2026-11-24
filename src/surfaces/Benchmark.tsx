@@ -7,7 +7,7 @@ import { Card, StatusPill, SectionHeader } from "../design";
 import i18n from "../i18n";
 import { humanizeWhen } from "../data/humanize-when";
 import { backendMessage } from "../data/backend-error";
-import { trialErrorText, trialStatusText } from "./bench-error";
+import { trialErrorText, trialStatusText, verdictMetricText } from "./bench-error";
 import { Term } from "../design/Term";
 import { WhatsThis } from "../design/WhatsThis";
 import { Picker } from "../design/Picker";
@@ -555,7 +555,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
               <>— {trialReasonText(trial.verdict.reason, t)}.</>
             ) : (
               <>
-                — {trial.verdict.metric} {fmtDelta(trial.verdict.effect_pct)} ({t("gaming.benchmark.ciLabel")}{" "}
+                — {verdictMetricText(trial.verdict.metric, t)} {fmtDelta(trial.verdict.effect_pct)} ({t("gaming.benchmark.ciLabel")}{" "}
                 {fmtDelta(trial.verdict.ci_lo_pct)}…{fmtDelta(trial.verdict.ci_hi_pct)}).
               </>
             )}
@@ -610,13 +610,13 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
                         <span>
                           <strong className="bench-award-pts">+{a.points}</strong> · {a.rec_title}{" "}
                           {t("gaming.benchmark.awardArcadeBoost", {
-                            metric: a.metric,
+                            metric: verdictMetricText(a.metric, t),
                             delta: fmtDelta(a.effect_pct),
                           })}
                         </span>
                       ) : (
                         <span>
-                          <strong>{a.rec_title}</strong> — {a.metric} {fmtDelta(a.effect_pct)} (
+                          <strong>{a.rec_title}</strong> — {verdictMetricText(a.metric, t)} {fmtDelta(a.effect_pct)} (
                           {t("gaming.benchmark.ciLabel")}{" "}
                           {fmtDelta(a.ci_lo_pct)}…{fmtDelta(a.ci_hi_pct)}) ·{" "}
                           {t("gaming.benchmark.pointsSuffix", { points: a.points })} ·{" "}
@@ -639,7 +639,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
                           </div>
                           <div>
                             <dt>{t("gaming.benchmark.certifiedMetricLabel")}</dt>
-                            <dd>{a.metric}</dd>
+                            <dd>{verdictMetricText(a.metric, t)}</dd>
                           </div>
                           <div>
                             <dt>{t("gaming.benchmark.measuredEffectLabel")}</dt>

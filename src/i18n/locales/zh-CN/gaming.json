@@ -124,6 +124,11 @@
       "rollingBackStack": "正在回滚这组更改…",
       "working": "处理中…"
     },
+    "verdictMetric": {
+      "onePercentLow": "1% 低帧",
+      "pointOnePercentLow": "0.1% 低帧",
+      "unknown": "测量值"
+    },
     "baselineLabel": "基准",
     "latestRunLabel": "最近一次测量",
     "baselineSavedPrefix": "基准已保存",
