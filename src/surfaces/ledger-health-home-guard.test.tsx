@@ -240,7 +240,7 @@ const FACES: Face[] = [
     card: ".hud-module",
     key: ".hud-eyebrow",
     num: ".hud-reading",
-    activeLabel: "Active changes",
+    activeLabel: "Settings in effect",
     ledgerLabel: "Trust ledger",
   },
   {
@@ -250,7 +250,7 @@ const FACES: Face[] = [
     card: ".hv2-stat",
     key: ".hv2-stat-k",
     num: ".hv2-stat-n",
-    activeLabel: "Changes active",
+    activeLabel: "Settings in effect",
     ledgerLabel: "Trust ledger",
   },
 ];
@@ -415,7 +415,7 @@ describe.each(FACES)("$name may not report a ledger it can't read as an untouche
     const active = cardFor(container, face, face.activeLabel);
     expect(active.querySelector(face.num)?.textContent).toContain("1");
     // CHANGE carries no live check, so the footer's words call it unchecked; never an absolute.
-    expect(active.textContent).toContain("1 not checked");
+    expect(active.textContent).toContain("1 setting not checked");
     expect(active.textContent).not.toContain(REVERSIBLE_NOTE);
     expect(active.textContent).not.toContain(UNVOUCHED);
     expect(container.querySelector(".ledger-health")).toBeNull();
@@ -440,12 +440,12 @@ describe.each(FACES)("$name may not report a ledger it can't read as an untouche
 
     const active = cardFor(container, face, face.activeLabel);
     expect(active.textContent).toContain(
-      "1 change can be undone · 1 has no saved undo · 1 changed outside Compy, no undo",
+      "1 setting can be undone · 1 setting has no saved undo · 1 setting changed outside Compy, no undo",
     );
     expect(active.textContent).not.toContain(REVERSIBLE_NOTE);
     // The footer says the same about the same rows.
     expect(container.querySelector(".v2-undo-state")?.textContent).toContain(
-      "1 change can be undone · 1 has no saved undo · 1 changed outside Compy, no undo",
+      "1 setting can be undone · 1 setting has no saved undo · 1 setting changed outside Compy, no undo",
     );
   });
 
@@ -470,9 +470,9 @@ describe.each(FACES)("$name may not report a ledger it can't read as an untouche
 
     const active = cardFor(container, face, face.activeLabel);
     expect(active.querySelector(face.num)?.textContent?.trim()).toBe("1");
-    expect(active.textContent).toContain("1 more couldn't be checked just now");
-    // CR-home-unchecked-once: the ledger's own "2 not checked" never sits beside the model's count.
-    expect(active.textContent).not.toMatch(/\d+ not checked/);
+    expect(active.textContent).toContain("1 more setting couldn't be checked just now");
+    // CR-home-unchecked-once: the ledger's own "2 settings not checked" never sits beside the model's count.
+    expect(active.textContent).not.toMatch(/\d+ settings? not checked/);
     expect(active.textContent).not.toContain("Nothing in effect to undo");
   });
 

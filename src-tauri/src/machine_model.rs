@@ -1073,9 +1073,12 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
     // say how many of the active changes were stamped for another rig or not stamped at all.
     // `src/data/live-changes.ts` `liveChangeGroups` is the same rule for Optimize and History, and
     // `active_and_unknown_counts_match_the_shared_ts_fixture` pins both to one fixture.
+    // C7: the per-setting partition is `history::open_settings`, the one count the footer, Home's note and Your
+    // data share (`src/test/fixtures/open-settings-parity.json`); only the rig attribution is counted here.
+    let open = crate::history::open_settings_of_views(inp.applied_changes);
     let live = live_change_groups(inp.applied_changes);
-    let active_now = live.iter().filter(|c| c.active_check == Some(ActiveCheck::On)).count();
-    let in_effect_unknown = live.len() - active_now;
+    let active_now = open.in_effect;
+    let in_effect_unknown = open.cant_confirm;
     let in_effect_other_rig = live
         .iter()
         .filter(|c| c.active_check == Some(ActiveCheck::On) && c.on_this_rig == Some(false))
@@ -1085,18 +1088,11 @@ fn compose_compy_changes(inp: &MachineModelInputs) -> (CompyChangeTruth, Vec<Com
         .filter(|c| c.active_check == Some(ActiveCheck::On) && c.on_this_rig.is_none())
         .count();
     // The rest of the per-change partition (#453 review): a change with no live row is "no longer
-    // in effect" while any of its rows is still applied, and "rolled back" only when all of them are.
-    let live_recs: std::collections::HashSet<&str> = live.iter().map(|c| c.rec_id.as_str()).collect();
-    let mut applied_recs: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    let mut all_recs: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    for c in inp.applied_changes {
-        all_recs.insert(c.rec_id.as_str());
-        if c.status != "rolled_back" {
-            applied_recs.insert(c.rec_id.as_str());
-        }
-    }
-    let applied_but_not_in_effect = applied_recs.difference(&live_recs).count();
-    let rolled_back = all_recs.len() - live_recs.len() - applied_but_not_in_effect;
+    // in effect" while any of its rows is still applied (read off, or never read), and "rolled back" only
+    // when all of them are.
+    let all_recs: std::collections::HashSet<&str> = inp.applied_changes.iter().map(|c| c.rec_id.as_str()).collect();
+    let applied_but_not_in_effect = open.changed_outside + open.unchecked;
+    let rolled_back = all_recs.len() - open.settings;
 
     // EVERY row, newest first — deliberately NOT the capped display list. Capping here made the
     // evidence pass walk 25 rows while the counts above walked the whole ledger, so a ledger whose
@@ -2296,6 +2292,59 @@ mod machine_model_tests {
         assert_eq!(t.in_effect_other_rig, want("otherRig"));
         assert_eq!(t.in_effect_rig_unknown, want("rigUnknown"));
         assert_eq!(t.total_recorded, fx["rows"].as_array().map_or(0, Vec::len));
+    }
+
+    /// C7: Health's per-setting numbers are `history::open_settings` on the shared C7 fixture (re-applies, an
+    /// undone setting, changed outside, no saved undo, a kept Trial, a row nobody read), the same numbers the
+    /// footer, Home's note (`src/open-settings-parity.test.ts`) and Your data's list (data_clear) print.
+    /// Break check: count `applied_but_not_in_effect` as `open.changed_outside` alone -> 2, not 3, fails.
+    #[test]
+    fn health_counts_come_from_open_settings() {
+        let fx: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/test/fixtures/open-settings-parity.json"))
+                .expect("C7 fixture parses");
+        let mut f = Fixture::new();
+        f.changes = fx["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .map(|r| {
+                let s = |k: &str| r[k].as_str().expect(k).to_string();
+                let check = match r["active_check"].as_str() {
+                    Some("on") => Some(ActiveCheck::On),
+                    Some("off") => Some(ActiveCheck::Off),
+                    Some("unreadable") => Some(ActiveCheck::Unreadable),
+                    Some("unrecognised") => Some(ActiveCheck::Unrecognised),
+                    _ => None,
+                };
+                let mut v = crate::history::test_view(
+                    &s("id"),
+                    &s("rec_id"),
+                    &s("rec_title"),
+                    &s("applied_at"),
+                    &s("status"),
+                    check.is_some_and(|c| c != ActiveCheck::Off),
+                    None,
+                    None,
+                    true,
+                );
+                v.active_check = check;
+                v.undo_contract = r["undo_contract"].as_bool().expect("undo_contract");
+                v
+            })
+            .collect();
+        let want = |k: &str| fx["expected"][k].as_u64().expect(k) as usize;
+        let t = &f.model().compy_changes;
+        assert_eq!(t.active_now, want("in_effect"), "Health's in-effect count is open_settings.in_effect");
+        assert_eq!(t.in_effect_unknown, want("cant_confirm"));
+        assert_eq!(t.applied_but_not_in_effect, want("changed_outside") + want("unchecked"));
+        assert_eq!(t.rolled_back, want("rolled_back_settings"));
+        assert_eq!(
+            t.active_now + t.in_effect_unknown + t.applied_but_not_in_effect,
+            want("settings"),
+            "every setting not undone, once"
+        );
+        assert_eq!(t.total_recorded, want("ledger_records"), "total_recorded is ROWS (records), never settings");
     }
 
     /// REPAIR 4. "History starts" is the earliest evidence Compy STILL RETAINS. Deriving it from

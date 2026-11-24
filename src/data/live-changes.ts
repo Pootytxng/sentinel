@@ -69,35 +69,54 @@ export function hasUndo(c: Pick<AppliedChange, "undo_contract">): boolean {
   return c.undo_contract !== false;
 }
 
+/** Every count here is of SETTINGS (one per `rec_id`), except `records`, which counts ledger rows. */
 export type UndoTally = {
-  /** Changes (one per `rec_id`) with an Undo button that can run: the Applied cards. */
+  /** Settings with an Undo button that can run: the Applied cards. */
   undoable: number;
-  /** Live changes whose stored history resolves to no undo (`undo_contract` false). */
+  /** Live settings whose stored history resolves to no undo (`undo_contract` false). */
   noSavedUndo: number;
-  /** Changes Compy applied that read off now without being undone (changed outside Compy, incl.
+  /** Settings Compy applied that read off now without being undone (changed outside Compy, incl.
    *  a "Keep <plan>" record): no Applied card, so no Undo. */
   offOutside: number;
-  /** Applied changes with no live-check verdict at all (an older payload; history.rs checks every
-   *  applied row). Named, so "Nothing in effect to undo" is never said over a row nobody read. */
+  /** Settings with an open record and no live-check verdict on any of them (an older payload;
+   *  history.rs checks every applied row). Named, so "Nothing in effect to undo" is never said over
+   *  a row nobody read. Never also counted in `offOutside`. */
   unchecked: number;
+  /** C7: every setting with a record not undone: `undoable + noSavedUndo + offOutside + unchecked`. */
+  settings: number;
+  /** C7: the records (rows) behind `settings`: every row that is not rolled back. */
+  records: number;
 };
 
 /**
  * CR-footer-reversible: what the ledger can undo, counted from `liveChangeGroups`, the same groups
  * the Applied cards (and so every Undo button) are drawn from, so the footer and the buttons can't
  * disagree. Rolled-back rows count nowhere: they are already undone.
+ *
+ * C7: the TS mirror of history.rs `open_settings` (Health and Your data count through it), pinned to
+ * the same numbers by `src/test/fixtures/open-settings-parity.json` (`src/open-settings-parity.test.ts`).
+ * A setting whose open records are one read off and one never read is changed outside, counted once
+ * (it was counted in both `offOutside` and `unchecked` before C7).
  */
 export function undoTally(changes: readonly AppliedChange[]): UndoTally {
   const { active, cantConfirm } = liveChangeGroups(changes);
   const live = [...active, ...cantConfirm];
   const liveRecs = new Set(live.map((c) => c.rec_id));
   const undoable = live.filter(hasUndo).length;
-  const off = new Set<string>();
-  const unchecked = new Set<string>();
+  // rec_id -> whether any of its open records read off.
+  const open = new Map<string, boolean>();
+  let records = 0;
   for (const c of changes) {
-    if (c.status !== "applied" || liveRecs.has(c.rec_id)) continue;
-    if (c.active_check === "off") off.add(c.rec_id);
-    else if (c.active_check == null) unchecked.add(c.rec_id);
+    if (c.status === "rolled_back") continue;
+    records += 1;
+    open.set(c.rec_id, (open.get(c.rec_id) ?? false) || c.active_check === "off");
   }
-  return { undoable, noSavedUndo: live.length - undoable, offOutside: off.size, unchecked: unchecked.size };
+  let offOutside = 0;
+  let unchecked = 0;
+  for (const [rec, readOff] of open) {
+    if (liveRecs.has(rec)) continue;
+    if (readOff) offOutside += 1;
+    else unchecked += 1;
+  }
+  return { undoable, noSavedUndo: live.length - undoable, offOutside, unchecked, settings: open.size, records };
 }

@@ -140,7 +140,7 @@ describe("ShellV2 rail", () => {
   it("footer: outbound-honesty line + reversibility line with the measured ledger count", () => {
     render(shell());
     expect(screen.getByText("Outbound: signed update check only")).toBeTruthy();
-    expect(screen.getByText("ledger 41")).toBeTruthy();
+    expect(screen.getByText("ledger records: 41")).toBeTruthy();
   });
 
   // CR-view-1111d-wording (view-1111d/11-test-zh-CN.png): the outbound line stayed English in zh-CN.
@@ -192,7 +192,7 @@ describe("ShellV2 footer may not promise reversibility off a ledger it can't rea
     // there are more. Withdrawing a real measurement would be its own dishonesty.
     expect(foot(container)).toContain("at least 41");
     expect(foot(container)).not.toContain("Every change reversible");
-    expect(foot(container)).not.toContain("ledger 41");
+    expect(foot(container)).not.toContain("ledger records: 41");
     // The outbound-honesty line is a separate promise and stays put.
     expect(screen.getByText("Outbound: signed update check only")).toBeTruthy();
   });
@@ -205,7 +205,7 @@ describe("ShellV2 footer may not promise reversibility off a ledger it can't rea
 
     await waitFor(() => expect(container.querySelector(".v2-ledger-state")).toBeTruthy());
     expect(foot(container)).toContain("count unknown");
-    expect(foot(container)).not.toContain("ledger 0");
+    expect(foot(container)).not.toContain("ledger records: 0");
     expect(foot(container)).not.toContain("Every change reversible");
   });
 
@@ -221,7 +221,7 @@ describe("ShellV2 footer may not promise reversibility off a ledger it can't rea
     const { container } = render(shell());
     // Settle the probe before asserting nothing moved — asserting on an unsettled render would
     // pass for the wrong reason.
-    await waitFor(() => expect(screen.getByText("ledger 41")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("ledger records: 41")).toBeTruthy());
     expect(container.querySelector(".v2-foot")!.outerHTML).toBe(before);
     expect(container.querySelector(".v2-ledger-state")).toBeNull();
   });
@@ -391,9 +391,9 @@ describe("ShellV2 footer states only what the ledger it read can undo", () => {
   it("counts the undoable changes and names a change that reads off with no undo", async () => {
     // rec-1 and rec-2 on (Applied cards with Undo), rec-3 applied but reading off: no card.
     const { container } = render(shell({ ledger: ledgerOf(41, { 1: ON, 2: ON, 3: OFF }) }));
-    await waitFor(() => expect(undoLine(container)).toContain("ledger 41"));
-    expect(undoLine(container)).toContain("2 changes can be undone");
-    expect(undoLine(container)).toContain("1 changed outside Compy, no undo");
+    await waitFor(() => expect(undoLine(container)).toContain("ledger records: 41"));
+    expect(undoLine(container)).toContain("2 settings can be undone");
+    expect(undoLine(container)).toContain("1 setting changed outside Compy, no undo");
     expect(undoLine(container)).not.toContain("Every change reversible");
   });
 
@@ -406,48 +406,48 @@ describe("ShellV2 footer states only what the ledger it read can undo", () => {
     };
     const ledger = ledgerOf(6, { 0: { ...ON, rec_id: "game-mode" }, 1: { ...ON, rec_id: "game-mode" }, 2: keptOutside });
     const { container } = render(shell({ ledger }));
-    expect(undoLine(container)).toContain("1 change can be undone");
-    expect(undoLine(container)).toContain("1 changed outside Compy, no undo");
+    expect(undoLine(container)).toContain("1 setting can be undone");
+    expect(undoLine(container)).toContain("1 setting changed outside Compy, no undo");
   });
 
   it("a live change whose record resolves to no undo is named, never counted as undoable", () => {
     const { container } = render(shell({ ledger: ledgerOf(5, { 0: ON, 1: { ...ON, undo_contract: false } }) }));
-    expect(undoLine(container)).toContain("1 change can be undone");
-    expect(undoLine(container)).toContain("1 has no saved undo");
+    expect(undoLine(container)).toContain("1 setting can be undone");
+    expect(undoLine(container)).toContain("1 setting has no saved undo");
   });
 
   it("a change in effect with no saved undo is never 'nothing in effect to undo' (r2)", () => {
     const { container } = render(shell({ ledger: ledgerOf(3, { 0: { ...ON, undo_contract: false } }) }));
-    expect(undoLine(container)).toBe("1 has no saved undo · ledger 3");
+    expect(undoLine(container)).toBe("1 setting has no saved undo · ledger records: 3");
   });
 
   it("everything undone: nothing in effect to undo, still with the measured count", () => {
     const { container } = render(shell({ ledger: ledgerOf(41) }));
-    expect(undoLine(container)).toBe("Nothing in effect to undo · ledger 41");
+    expect(undoLine(container)).toBe("Nothing in effect to undo · ledger records: 41");
   });
 
   it("an applied row with no live-check verdict is named, and 'nothing to undo' is not said over it", () => {
     const { container } = render(shell({ ledger: ledgerOf(4, { 2: { status: "applied", is_still_active: true, active_check: null } }) }));
-    expect(undoLine(container)).toBe("1 not checked · ledger 4");
+    expect(undoLine(container)).toBe("1 setting not checked · ledger records: 4");
   });
 
   // CR-footer-ledger-unknown: a rejected ledger read says so (App retries it).
   it("a rejected ledger read says so (App retries it), never 'not read yet' forever", () => {
     const { container } = render(shell({ ledger: null, ledgerReadFailed: true }));
     expect(undoLine(container)).toBe("Couldn't read the ledger · trying again");
-    expect(foot(container)).not.toMatch(/ledger \d|can be undone|Nothing in effect/);
+    expect(foot(container)).not.toMatch(/ledger records: \d|can be undone|Nothing in effect/);
   });
 
   it("a rejected RE-read withdraws the rows read before it (review r1)", () => {
     const { container } = render(shell({ ledger: ledgerOf(41, { 1: ON }), ledgerReadFailed: true }));
     expect(undoLine(container)).toBe("Couldn't read the ledger · trying again");
-    expect(foot(container)).not.toMatch(/ledger \d|can be undone|Nothing in effect/);
+    expect(foot(container)).not.toMatch(/ledger records: \d|can be undone|Nothing in effect/);
   });
 
   it("rows not read yet print no count and no claim", () => {
     const { container } = render(shell({ ledger: null }));
     expect(undoLine(container)).toBe("Ledger not read yet");
-    expect(foot(container)).not.toMatch(/ledger \d|can be undone|reversible|Nothing in effect/);
+    expect(foot(container)).not.toMatch(/ledger records: \d|can be undone|reversible|Nothing in effect/);
   });
 
   it("zh-CN says the same, never the old absolute", async () => {
@@ -457,9 +457,9 @@ describe("ShellV2 footer states only what the ledger it read can undo", () => {
     });
     try {
       const { container } = render(shell({ ledger: ledgerOf(41, { 1: ON, 3: OFF }) }));
-      expect(undoLine(container)).toContain("1 项更改可撤销");
-      expect(undoLine(container)).toContain("1 项已在 Compy 之外更改，无法撤销");
-      expect(undoLine(container)).toContain("台账 41");
+      expect(undoLine(container)).toContain("1 项设置可撤销");
+      expect(undoLine(container)).toContain("1 项设置已在 Compy 之外更改，无法撤销");
+      expect(undoLine(container)).toContain("台账记录：41 条");
       expect(foot(container)).not.toContain("每一项更改均可撤销");
       cleanup();
       expect(undoLine(render(shell({ ledger: null })).container)).toBe("台账尚未读取");

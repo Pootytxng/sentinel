@@ -425,7 +425,7 @@ describe("attribution off the Machine Model — the line says what it does not k
       />,
     );
     expect(c.container.querySelector(".bench-change")!.textContent).toContain(
-      "Compy's model lists only its newest 25 of 40 recorded changes",
+      "Compy's model lists only its newest 25 of 40 ledger records",
     );
   });
 });

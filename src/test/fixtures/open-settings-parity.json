@@ -1,0 +1,32 @@
+{
+  "_about": "C7: one ledger, every count of settings not undone. Read by history.rs open_settings_tests (the shared Rust count), machine_model.rs health_counts_come_from_open_settings (Health), data_clear.rs the_your_data_list_counts_the_same_settings_and_records (Your data) and src/open-settings-parity.test.ts (footer and Home note, undoTally). Settings = rec_ids with a record not rolled back; records = those rows. A setting re-applied 3 times is 1 setting and 3 records.",
+  "rows": [
+    { "id": "gm-0", "rec_id": "game-mode", "rec_title": "Enable Windows Game Mode", "applied_at": "2026-06-01T10:00:00+00:00", "status": "rolled_back", "active_check": null, "undo_contract": true, "note": "an earlier apply, undone" },
+    { "id": "gm-1", "rec_id": "game-mode", "rec_title": "Enable Windows Game Mode", "applied_at": "2026-06-02T10:00:00+00:00", "status": "applied", "active_check": "on", "undo_contract": true, "note": "re-apply 1" },
+    { "id": "gm-2", "rec_id": "game-mode", "rec_title": "Enable Windows Game Mode", "applied_at": "2026-07-02T10:00:00+00:00", "status": "applied", "active_check": "on", "undo_contract": true, "note": "re-apply 2" },
+    { "id": "gm-3", "rec_id": "game-mode", "rec_title": "Enable Windows Game Mode", "applied_at": "2026-08-02T10:00:00+00:00", "status": "applied", "active_check": "on", "undo_contract": true, "note": "re-apply 3" },
+    { "id": "hags-1", "rec_id": "hags-enable", "rec_title": "Enable HAGS", "applied_at": "2026-06-03T10:00:00+00:00", "status": "rolled_back", "active_check": null, "undo_contract": true, "note": "a setting fully undone: not counted" },
+    { "id": "vfx-1", "rec_id": "visual-effects", "rec_title": "Trim Windows visual effects", "applied_at": "2026-06-04T10:00:00+00:00", "status": "applied", "active_check": "off", "undo_contract": true, "note": "changed outside Compy" },
+    { "id": "trial-1", "rec_id": "sysmain-disable", "rec_title": "Disable SysMain", "applied_at": "2026-06-05T10:00:00+00:00", "status": "applied", "active_check": "on", "undo_contract": true, "note": "a Trial the user kept: an ordinary open record" },
+    { "id": "nagle-1", "rec_id": "nagle-disable", "rec_title": "Disable Nagle", "applied_at": "2026-06-06T10:00:00+00:00", "status": "applied", "active_check": "on", "undo_contract": false, "note": "in effect, no saved undo" },
+    { "id": "ceip-1", "rec_id": "bloat-task:ceip-usb", "rec_title": "Disable telemetry task: CEIP USB", "applied_at": "2026-06-07T10:00:00+00:00", "status": "applied", "active_check": "unreadable", "undo_contract": true, "note": "can't confirm" },
+    { "id": "old-1", "rec_id": "old-rec", "rec_title": "A row nobody read", "applied_at": "2026-06-08T10:00:00+00:00", "status": "applied", "active_check": null, "undo_contract": true, "note": "not checked" },
+    { "id": "usb-1", "rec_id": "usb-selective-suspend-off", "rec_title": "Turn off USB selective suspend", "applied_at": "2026-06-09T10:00:00+00:00", "status": "applied", "active_check": "off", "undo_contract": true, "note": "an older record reads off" },
+    { "id": "usb-2", "rec_id": "usb-selective-suspend-off", "rec_title": "Turn off USB selective suspend", "applied_at": "2026-06-10T10:00:00+00:00", "status": "applied", "active_check": "on", "undo_contract": true, "note": "a newer record reads on: the setting is in effect, never also changed outside" },
+    { "id": "aspm-1", "rec_id": "pcie-aspm-off", "rec_title": "Turn off PCIe power management", "applied_at": "2026-06-11T10:00:00+00:00", "status": "applied", "active_check": "off", "undo_contract": true, "note": "one record read off" },
+    { "id": "aspm-2", "rec_id": "pcie-aspm-off", "rec_title": "Turn off PCIe power management", "applied_at": "2026-06-12T10:00:00+00:00", "status": "applied", "active_check": null, "undo_contract": true, "note": "one record not read: the setting is changed outside (a read came back off), counted once" }
+  ],
+  "expected": {
+    "settings": 8,
+    "records": 12,
+    "in_effect": 4,
+    "cant_confirm": 1,
+    "changed_outside": 2,
+    "unchecked": 1,
+    "no_saved_undo": 1,
+    "undoable": 4,
+    "ledger_records": 14,
+    "rolled_back_settings": 1,
+    "recs": ["bloat-task:ceip-usb", "game-mode", "nagle-disable", "old-rec", "pcie-aspm-off", "sysmain-disable", "usb-selective-suspend-off", "visual-effects"]
+  }
+}

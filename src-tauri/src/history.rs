@@ -3369,6 +3369,103 @@ fn summarize_checked(
     s
 }
 
+/// One ledger row as [`open_settings`] reads it: which setting, its status and time, what its live check read
+/// (`None` when nothing was read: a rolled-back row, or an applied row no check ran on), and whether its stored
+/// history resolves to an undo (`AppliedChangeView::undo_contract`).
+pub(crate) struct OpenSettingRow<'a> {
+    pub(crate) rec_id: &'a str,
+    pub(crate) status: &'a str,
+    pub(crate) applied_at: &'a str,
+    pub(crate) check: Option<ActiveCheck>,
+    pub(crate) undo_contract: bool,
+}
+
+/// C7: the ONE count of what Compy changed and has not undone, by SETTING (`rec_id`), with the records
+/// (ledger rows) behind it counted apart. A setting applied 27 times without an undo is 1 setting and 27 records.
+/// `settings == in_effect + cant_confirm + changed_outside + unchecked`, always.
+/// `records`, `no_saved_undo` and `recs` have no Rust reader yet outside the tests: they are the numbers the TS
+/// mirror (`undoTally`) prints, pinned here by the shared fixture.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) struct OpenSettings {
+    /// Settings with at least one record that is not rolled back.
+    pub(crate) settings: usize,
+    /// The records (rows) behind them: every row that is not rolled back.
+    pub(crate) records: usize,
+    /// Of `settings`: the newest live record reads On ([`live_change_groups`]).
+    pub(crate) in_effect: usize,
+    /// Of `settings`: the newest live record could not be read, or has no live check.
+    pub(crate) cant_confirm: usize,
+    /// Of `settings`: no record reads on or can't-confirm, and a read came back off (something outside Compy
+    /// changed it, including a "Keep <plan>" record). No Undo card.
+    pub(crate) changed_outside: usize,
+    /// Of `settings`: no record was read at all. Named apart, never counted as off or as nothing.
+    pub(crate) unchecked: usize,
+    /// Of `in_effect + cant_confirm`: the record an undo would target has no saved undo.
+    pub(crate) no_saved_undo: usize,
+    /// The `settings`' rec ids, sorted.
+    pub(crate) recs: Vec<String>,
+}
+
+/// C7: [`OpenSettings`] over `rows` in file order. Pure: no read, no write. The footer and Home's note
+/// (`src/data/live-changes.ts` `undoTally`), Health ([`crate::machine_model`] `compose_compy_changes`) and Your
+/// data's list (`data_clear::group_open_rows`) all count this; `src/test/fixtures/open-settings-parity.json`
+/// pins every one of them to the same numbers.
+pub(crate) fn open_settings(rows: &[OpenSettingRow<'_>]) -> OpenSettings {
+    let live_rows: Vec<LiveRow<'_>> = rows
+        .iter()
+        .map(|r| LiveRow { rec_id: r.rec_id, status: r.status, applied_at: r.applied_at, check: r.check })
+        .collect();
+    let mut s = OpenSettings::default();
+    let mut live_recs: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for i in live_change_groups(&live_rows) {
+        live_recs.insert(rows[i].rec_id);
+        if rows[i].check == Some(ActiveCheck::On) {
+            s.in_effect += 1;
+        } else {
+            s.cant_confirm += 1;
+        }
+        if !rows[i].undo_contract {
+            s.no_saved_undo += 1;
+        }
+    }
+    // rec_id -> whether any of its open records read off.
+    let mut open: std::collections::BTreeMap<&str, bool> = std::collections::BTreeMap::new();
+    for r in rows.iter().filter(|r| r.status != "rolled_back") {
+        s.records += 1;
+        *open.entry(r.rec_id).or_insert(false) |= r.check == Some(ActiveCheck::Off);
+    }
+    for (&rec, &read_off) in &open {
+        if live_recs.contains(rec) {
+            continue;
+        }
+        if read_off {
+            s.changed_outside += 1;
+        } else {
+            s.unchecked += 1;
+        }
+    }
+    s.settings = open.len();
+    s.recs = open.keys().map(|r| (*r).to_string()).collect();
+    s
+}
+
+/// [`open_settings`] over the ledger views a surface already holds (`get_applied_changes`,
+/// [`applied_change_views`]).
+pub(crate) fn open_settings_of_views(views: &[AppliedChangeView]) -> OpenSettings {
+    let rows: Vec<OpenSettingRow<'_>> = views
+        .iter()
+        .map(|v| OpenSettingRow {
+            rec_id: &v.rec_id,
+            status: &v.status,
+            applied_at: &v.applied_at,
+            check: v.active_check,
+            undo_contract: v.undo_contract,
+        })
+        .collect();
+    open_settings(&rows)
+}
+
 // ─── CR-unconfirmed-remedy: "changed outside Compy" ─────────────────────
 //
 // A ledger-only transition: nothing below runs a command, writes the registry or dispatches an
@@ -8764,5 +8861,87 @@ mod ultimate_identity_tests {
         // The rollback contract is the apply's own, untouched.
         assert!(matches!(got.rollback_action, Some(RollbackAction::RestorePowerPlanFromSnapshot)));
         assert_eq!(got.snapshot, serde_json::json!({ "kind": "power-plan", "prior_guid": PRIOR }));
+    }
+}
+
+#[cfg(test)]
+mod open_settings_tests {
+    use super::*;
+
+    /// The shared C7 fixture as owned rows: (rec_id, status, applied_at, check, undo_contract).
+    fn fixture() -> (serde_json::Value, Vec<(String, String, String, Option<ActiveCheck>, bool)>) {
+        let fx: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/test/fixtures/open-settings-parity.json")).expect("C7 fixture parses");
+        let rows = fx["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .map(|r| {
+                let s = |k: &str| r[k].as_str().expect(k).to_string();
+                let check = match r["active_check"].as_str() {
+                    Some("on") => Some(ActiveCheck::On),
+                    Some("off") => Some(ActiveCheck::Off),
+                    Some("unreadable") => Some(ActiveCheck::Unreadable),
+                    Some("unrecognised") => Some(ActiveCheck::Unrecognised),
+                    _ => None,
+                };
+                (s("rec_id"), s("status"), s("applied_at"), check, r["undo_contract"].as_bool().expect("undo_contract"))
+            })
+            .collect();
+        (fx, rows)
+    }
+
+    fn count(rows: &[(String, String, String, Option<ActiveCheck>, bool)]) -> OpenSettings {
+        let rows: Vec<OpenSettingRow<'_>> = rows
+            .iter()
+            .map(|(rec, status, at, check, undo)| OpenSettingRow { rec_id: rec, status, applied_at: at, check: *check, undo_contract: *undo })
+            .collect();
+        open_settings(&rows)
+    }
+
+    /// C7: the one count, from the fixture every surface reads. Break checks: count rolled-back rows as open (drop
+    /// the status filter) -> settings 9, records 14, fails; drop the live-group exclusion -> usb also counted changed
+    /// outside, fails; drop the undo_contract check -> no_saved_undo 0, fails; count unchecked whenever a row was
+    /// not read (the TS double count) -> pcie-aspm-off in both, fails.
+    #[test]
+    fn open_settings_counts_settings_and_records_from_the_shared_fixture() {
+        let (fx, rows) = fixture();
+        let want = |k: &str| fx["expected"][k].as_u64().expect(k) as usize;
+        let s = count(&rows);
+        assert_eq!(s.settings, want("settings"), "a setting re-applied 3 times is one setting");
+        assert_eq!(s.records, want("records"), "every record not rolled back");
+        assert_eq!(s.in_effect, want("in_effect"));
+        assert_eq!(s.cant_confirm, want("cant_confirm"));
+        assert_eq!(s.changed_outside, want("changed_outside"));
+        assert_eq!(s.unchecked, want("unchecked"));
+        assert_eq!(s.no_saved_undo, want("no_saved_undo"));
+        assert_eq!(s.in_effect + s.cant_confirm - s.no_saved_undo, want("undoable"), "what the footer's Undo cards can undo");
+        assert_eq!(s.settings, s.in_effect + s.cant_confirm + s.changed_outside + s.unchecked, "each setting once");
+        let recs: Vec<String> =
+            fx["expected"]["recs"].as_array().expect("recs").iter().map(|r| r.as_str().expect("rec").to_string()).collect();
+        assert_eq!(s.recs, recs);
+        assert!(!s.recs.contains(&"hags-enable".to_string()), "a setting fully undone counts nowhere");
+    }
+
+    /// The same numbers through the view adapter Health uses.
+    #[test]
+    fn the_view_adapter_counts_the_same() {
+        let (_, rows) = fixture();
+        let views: Vec<AppliedChangeView> = rows
+            .iter()
+            .enumerate()
+            .map(|(i, (rec, status, at, check, undo))| {
+                let mut v = test_view(&format!("r{i}"), rec, rec, at, status, check.is_some_and(|c| c != ActiveCheck::Off), None, None, true);
+                v.active_check = *check;
+                v.undo_contract = *undo;
+                v
+            })
+            .collect();
+        assert_eq!(open_settings_of_views(&views), count(&rows));
+    }
+
+    #[test]
+    fn an_empty_ledger_counts_nothing() {
+        assert_eq!(open_settings(&[]), OpenSettings::default());
     }
 }

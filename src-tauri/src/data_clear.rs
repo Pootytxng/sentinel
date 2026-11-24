@@ -2583,6 +2583,41 @@ mod tests {
         assert_eq!(v["applied_settings"][0]["unconfirmed_records"], 0, "nothing here was recorded unconfirmed");
     }
 
+    /// C7: Your data's "Not undone yet" list counts the same settings and records as `history::open_settings` (the
+    /// footer, Home's note and Health), from the shared fixture written as a real ledger file. The list reads no live
+    /// state, and needs none: which settings and how many records are open does not depend on a read.
+    /// Break check: count every row in `group_open_rows`' input including rolled-back ones (drop the
+    /// `status != "rolled_back"` filter in `history::open_rows_at`) -> 9 settings, 14 records, fails.
+    #[test]
+    fn c7_the_your_data_list_counts_the_same_settings_and_records() {
+        let fx: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/test/fixtures/open-settings-parity.json")).expect("C7 fixture parses");
+        let rows: Vec<serde_json::Value> = fx["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "id": r["id"], "rec_id": r["rec_id"], "rec_title": r["rec_title"],
+                    "applied_at": r["applied_at"], "snapshot": {}, "status": r["status"],
+                })
+            })
+            .collect();
+        let t = Tmp::new("c7open");
+        seed(&t);
+        t.put("history.json", &serde_json::to_string(&rows).unwrap());
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        let want = |k: &str| fx["expected"][k].as_u64().expect(k) as usize;
+        assert_eq!(plan.applied_settings.len(), want("settings"), "one entry per setting not undone");
+        assert_eq!(plan.applied_settings.iter().map(|s| s.records).sum::<usize>(), want("records"));
+        let mut recs: Vec<&str> = plan.applied_settings.iter().map(|s| s.rec_id.as_str()).collect();
+        recs.sort_unstable();
+        let expected: Vec<&str> = fx["expected"]["recs"].as_array().expect("recs").iter().map(|r| r.as_str().expect("rec")).collect();
+        assert_eq!(recs, expected);
+        let gm = plan.applied_settings.iter().find(|s| s.rec_id == "game-mode").expect("game-mode listed");
+        assert_eq!(gm.records, 3, "three re-applies are one setting with three records");
+    }
+
     /// A5 Part A: an open row recorded without the admin step's own result is counted on its setting, so the
     /// Your data list shows the check-and-undo warning; a rolled-back one no longer counts.
     #[test]
