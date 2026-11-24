@@ -225,6 +225,17 @@
     "powerFeaturesSummary": "Power features — Gaming Mode (advanced, with an undo)",
     "powerFeaturesIntro": "Bigger changes you can make and prove here. Compy saves the setting before each one, so you can undo it — apply one, then run the Benchmark station to measure what it did on your rig."
   },
+  "tuningOff": {
+    "stationName": "Your changes",
+    "stationLine": "What Compy changed on this PC, and its undo.",
+    "eyebrow": "Changes and records",
+    "headline": "Compy's changes and this PC's records",
+    "sub": "See what Compy changed and undo it, read this PC's parts, or see what Windows recorded about a crash.",
+    "action": "See your changes",
+    "note": "Here are Compy's changes and their undo. The tuning tools (the Optimize switches, Trials, Benchmark, Latency, Tuning) are off; Settings → Tuning tools turns them on, which changes nothing on your PC by itself.",
+    "openSettings": "Open Settings",
+    "offOutsideTitle": "Turned off outside Compy"
+  },
   "stations": {
     "optimize": {
       "name": "Optimize",

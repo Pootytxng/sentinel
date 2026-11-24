@@ -17,6 +17,7 @@ import type { HardwareInfo } from "../App";
 import type { Recommendation } from "../types";
 import { MACHINE_MODEL_PROBE_KEY, readMachineModel } from "../data/machine-model";
 import { invalidateProbe } from "../data/probe-cache";
+import { useTuningTools } from "../data/tuning-tools";
 import "./lab-v2.css";
 
 // LabGround — the Lab as ONE cohesive PROVING GROUND (spec 2026-07-08-lab-proving-ground, ★ PRIMARY
@@ -55,6 +56,7 @@ export function LabGround(props: LabFastPathProps & {
   } = props;
   const reduced = useReducedMotion();
   const hud = useHudFlag();
+  const tools = useTuningTools();
 
   // The fixes-state verdict still drives the LED (a real room state) — but under the HUD the
   // HEADER carries a title only (owner title-header law 2026-07-10 round 2: "the header just
@@ -135,9 +137,12 @@ export function LabGround(props: LabFastPathProps & {
           />
         )
       }
-      classicFixLabel={classicFixLabel}
+      classicFixLabel={tools ? classicFixLabel : undefined}
+      /* D6 (owner decision 2026-11-24): the GPU profile captures and the Trials bench are tuning tools; with
+         the Tuning tools off they stand down. Turning the tools off is refused while a Trial runs, so a
+         Trial's Restore now is never hidden (data/tuning-tools.ts tuningToolsOffRefusal). */
       below={
-        <>
+        !tools ? undefined : <>
           {/* C-14 — the GPU profile surface, ADVISORY ONLY. It can never be anything but advisory:
               LOCKED rule 6 makes GPU-profile APPLY structurally impossible, because AMD profile
               state is not user-mode readable and so rollback-first cannot be satisfied. Nothing

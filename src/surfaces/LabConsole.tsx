@@ -17,6 +17,8 @@ import { incidentFocus } from "./rig/incident-part";
 import { newestAssessedIncident } from "./care-next-step";
 import { rigPartReadings, subsystemForRigPart, type LabReadingKey, type LabSubsystem } from "./lab-evidence-map";
 import { OptimizeStation, safeStackOf, type LabFastPathProps } from "./lab/OptimizeStation";
+import { ChangesFace } from "./lab/ChangesFace";
+import { TUNING_STATIONS, useTuningTools } from "../data/tuning-tools";
 import {
   LAB_STATION_ORDER,
   labStations,
@@ -157,9 +159,24 @@ export function LabConsole({
 }) {
   const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
+  // D6 (owner decision 2026-11-24, §38 layer 3 opt-in): with the Tuning tools off, station 1 is Compy's
+  // changes (ChangesFace) instead of the Optimize switches, the measure stations are Diagnostics and Crash &
+  // Freeze Rescue only, and the bench's summary tiles stand down. The room, its rail entry and its label stay.
+  const tools = useTuningTools();
   // Station name lookup, translated — the SAME shape Lab/LabBento build from their own `t`, so a
-  // station's name can never disagree across the three faces.
-  const stations = labStations(t);
+  // station's name can never disagree across the three faces. With the tools off, station 1 is named for
+  // what it holds then (the same key, so every route into it still lands on it).
+  const allStations = labStations(t);
+  const stations = tools
+    ? allStations
+    : {
+        ...allStations,
+        optimize: {
+          ...allStations.optimize,
+          name: t("lab.tuningOff.stationName"),
+          dockLine: t("lab.tuningOff.stationLine"),
+        },
+      };
 
   // Cursor-follow accent spotlight on the stage — a border-masked glow that tracks the pointer
   // (the JARVIS "alive" the owner missed). Custom props only; skipped entirely under reduced motion.
@@ -258,7 +275,11 @@ export function LabConsole({
   // The measure/prove stations this rig actually has, in the §B diagnostic order (Tuning and
   // Diagnostics gate on vendor + slot content — the SAME gates the classic path uses).
   const measureKeys = LAB_STATION_ORDER.filter(
-    (k) => (k !== "tuning" || !!tuningGuide) && (k !== "diagnostics" || !!diagnostics),
+    (k) =>
+      (k !== "tuning" || !!tuningGuide) &&
+      (k !== "diagnostics" || !!diagnostics) &&
+      // D6: with the Tuning tools off only the read-only stations stay (owner decision 1).
+      (tools || !TUNING_STATIONS.has(k)),
   );
 
   const facts: LabStationFacts = {
@@ -605,7 +626,8 @@ export function LabConsole({
       name: stations.optimize.name,
       icon: STATION_ICON.optimize,
       primary: true,
-      measured: stackApplied || safeReady > 0,
+      // D6: with the Tuning tools off this node is Compy's changes, which has no reading to mark.
+      measured: tools && (stackApplied || safeReady > 0),
       hint: stations.optimize.dockLine,
     },
     ...measureKeys.map((k) => ({
@@ -668,7 +690,7 @@ export function LabConsole({
         hud && !ws ? (
           <RoomEyebrow
             dot={ledState}
-            label={t("lab.labConsole.narrative.eyebrow")}
+            label={tools ? t("lab.labConsole.narrative.eyebrow") : t("lab.tuningOff.eyebrow")}
             dateline={dateline}
           />
         ) : undefined
@@ -692,7 +714,9 @@ export function LabConsole({
           /* The room's title in BOTH shells (#547). The classic failsafe used to put the fixes
              verdict here, which is how "1 change you applied was turned off outside Compy." ended
              up standing as the page's one heading; that sentence now leads the sub line below. */
-          <span className="lc-headline">{t("lab.labConsole.narrative.headline")}</span>
+          <span className="lc-headline">
+            {tools ? t("lab.labConsole.narrative.headline") : t("lab.tuningOff.headline")}
+          </span>
         )
       }
       /* The station's EXISTING purpose sentence — its dockLine, the same string its list row
@@ -701,7 +725,7 @@ export function LabConsole({
         ws ? (
           ws.dockLine
         ) : hud ? (
-          t("lab.labConsole.narrative.sub")
+          tools ? t("lab.labConsole.narrative.sub") : t("lab.tuningOff.sub")
         ) : (
           <>
             {classicVerdict}
@@ -743,9 +767,9 @@ export function LabConsole({
               className="lc-start v2-primary"
               onClick={() => openFrom("optimize", "primary")}
             >
-              {t("lab.labConsole.narrative.action")}
+              {tools ? t("lab.labConsole.narrative.action") : t("lab.tuningOff.action")}
             </button>
-            <p className="lc-action-note">{t("lab.labConsole.narrative.actionNote")}</p>
+            {tools && <p className="lc-action-note">{t("lab.labConsole.narrative.actionNote")}</p>}
           </>
         ) : undefined
       }
@@ -753,7 +777,7 @@ export function LabConsole({
          one measured result, restore by default. It is the room's standing contract, so it sits at
          the foot of the story column rather than inside the one station it would otherwise look
          like it only qualified. */
-      footnote={hud ? t("lab.labConsole.narrative.safety") : undefined}
+      footnote={hud && tools ? t("lab.labConsole.narrative.safety") : undefined}
       /* THE EVIDENCE COLUMN — the real rig on the bench, and under it the four readings this bench
          can actually vouch for. The corner gauges LEFT the canvas: the handoff says not to cover it
          with click targets or diagrams, and four rings floating over the hologram were doing
@@ -802,7 +826,10 @@ export function LabConsole({
                 count") are gone from the first viewport; the honest states they sat beside —
                 NOT YET, NO READING, MEASURED — all survive untouched. */}
             <div className="lc-readings">
-              <div className="lc-reading">
+              {/* D6: Proven, Noise floor and Safe stack are the tuning bench's own readings; with the
+                  Tuning tools off they stand down (owner decision 1). Instruments read stays. */}
+              {tools && (
+              <div className="lc-reading" data-testid="lc-reading-proven">
                 {/* Proven — the room's entire payoff: how many changes this bench has verified
                     before/after (awards ledger, Keep verdicts only). Full ring once N > 0. No unit
                     word: the label already says what the number counts, and the comp's arcs carry
@@ -816,7 +843,9 @@ export function LabConsole({
                   measured={provenCount != null}
                 />
               </div>
-              <div className="lc-reading">
+              )}
+              {tools && (
+              <div className="lc-reading" data-testid="lc-reading-noise">
                 {/* Noise floor — the bench's own instrument constant: how big an effect this rig can
                     even resolve. A magnitude, so it prints as a numeral; the ± unit stays, because
                     dropping it would turn a tolerance into a score. */}
@@ -833,6 +862,7 @@ export function LabConsole({
                   emptyNote={noiseTooVariedNote}
                 />
               </div>
+              )}
               <div className="lc-reading">
                 {/* Instruments read — how far through the bench this rig has gone. Same
                     stationHasReading the dock uses to mark nodes measured, so this and the dock can
@@ -850,7 +880,8 @@ export function LabConsole({
                   note={t("lab.labConsole.instrumentsReadNote", { read: instrumentsRead, total: instrumentsTotal })}
                 />
               </div>
-              <div className="lc-reading">
+              {tools && (
+              <div className="lc-reading" data-testid="lc-reading-safe-stack">
                 {/* Two honest states over the same recs: work left → "N ready" (as before); nothing
                     left → "N on" with a full ring and an "all N applied" note. recs not loaded →
                     NOT-YET, never a fabricated 0 (bug→guard 2026-07-09, unchanged). */}
@@ -872,6 +903,7 @@ export function LabConsole({
                   }
                 />
               </div>
+              )}
             </div>
             {/* THE RIG'S ANSWER — what the selected part reads right now. It left the bento with
                 the grid but not the bench: it sits directly under the hologram that fills it, and
@@ -951,10 +983,14 @@ export function LabConsole({
            and a box around all of them is the box-in-box this sheet has removed twice before. */
         <div className="lc-workspace">
           <div className="lc-detail" id="lab-console-detail" ref={detailRef}>
-            {openStation === "optimize" && (
+            {openStation === "optimize" && tools && (
               <p className="lc-detail-note">{t("lab.labConsole.optimizeReassurance")}</p>
             )}
-            {openStation === "optimize" ? <OptimizeStation {...fast} onOpenCare={openCare} /> : stationBody(openStation!)}
+            {openStation === "optimize" ? (
+              tools ? <OptimizeStation {...fast} onOpenCare={openCare} /> : <ChangesFace {...fast} />
+            ) : (
+              stationBody(openStation!)
+            )}
           </div>
         </div>
       ) : hud ? (
@@ -1063,6 +1099,9 @@ export function LabConsole({
           </BentoTile>
           <BentoTile span="hero" title={t("lab.labConsole.tiles.stage")}>
             <div className="lc-stage" data-motion={reduced ? "reduced" : "full"} ref={stageRef}>
+              {/* D6: the tuning bench's readings stand down with the Tuning tools off (as in the HUD strip). */}
+              {tools && (
+              <>
               <div className="lc-corner lc-tl">
                 {/* Proven — the room's entire payoff: how many changes this bench has verified
                     before/after (awards ledger, Keep verdicts only). Full ring once N > 0. */}
@@ -1122,6 +1161,8 @@ export function LabConsole({
                   }
                 />
               </div>
+              </>
+              )}
               <div className="lc-corner lc-br">
                 {/* Instruments read — how far through the bench this rig has gone. Same
                     stationHasReading the dock uses to mark nodes measured, so this and the dock can
@@ -1183,7 +1224,7 @@ export function LabConsole({
           }
         >
           <div className="lc-detail" id="lab-console-detail" ref={detailRef}>
-            {openStation === "optimize" && (
+            {openStation === "optimize" && tools && (
               /* The room's reassurance, relocated from the header (owner header-slop law 2026-07-10)
                  to its context. This note does NOT census which stations mutate — the Lab has several
                  mutators (this Optimize station, Benchmark's "Measure this tweak" tweak-trial, and the
@@ -1198,7 +1239,11 @@ export function LabConsole({
                 {t("lab.labConsole.optimizeReassurance")}
               </p>
             )}
-            {openStation === "optimize" ? <OptimizeStation {...fast} onOpenCare={openCare} /> : stationBody(openStation)}
+            {openStation === "optimize" ? (
+              tools ? <OptimizeStation {...fast} onOpenCare={openCare} /> : <ChangesFace {...fast} />
+            ) : (
+              stationBody(openStation)
+            )}
           </div>
         </BentoTile>
       )}

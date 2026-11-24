@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import type { HomeRailId, HomeRailItem } from "./homeRail";
 import { labStations, LAB_STATION_ORDER, type LabStationKey } from "../surfaces/lab-guided-data";
+import { TUNING_STATIONS, useTuningTools } from "../data/tuning-tools";
 import { KNOWLEDGE } from "../data/knowledge";
 import { paletteIntents, type InterviewFindingId } from "../surfaces/home-interview-data";
 import {
@@ -67,6 +68,7 @@ export function CommandPalette({
   onOpenIntent,
 }: CommandPaletteProps) {
   const { t } = useTranslation();
+  const tools = useTuningTools();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -80,13 +82,18 @@ export function CommandPalette({
         // The SAME crumb the topbar prints for that room — the palette describes a door exactly the
         // way the room itself does. Read through t() rather than importing ShellV2's ROOM_CRUMB
         // constant, which would be a circular import (ShellV2 renders this component).
-        roomHint: (id) => t(`common.shellV2.crumb.${id}`),
+        // D6: with the Tuning tools off, Test holds no benchmarks or latency tools, so its hint says what it does hold.
+        roomHint: (id) => (id === "lab" && !tools ? t("common.palette.labHintToolsOff") : t(`common.shellV2.crumb.${id}`)),
         stations: onOpenStation
           ? (() => {
               const all = labStations(t);
               // "optimize" first: it is the fixes station, the one people are most often sent to,
               // and it sits outside LAB_STATION_ORDER (that list is the dock's own order).
-              const keys: LabStationKey[] = ["optimize", ...LAB_STATION_ORDER];
+              // D6: with the Tuning tools off the palette offers the stations Test shows then (Diagnostics,
+              // Crash & Freeze Rescue), never a door to a hidden tool.
+              const keys: LabStationKey[] = tools
+                ? ["optimize", ...LAB_STATION_ORDER]
+                : LAB_STATION_ORDER.filter((k) => !TUNING_STATIONS.has(k));
               return keys
                 .filter((k, i) => keys.indexOf(k) === i && all[k] && (k !== "tuning" || tuningStation))
                 .map((key) => ({ key, info: all[key] }));
@@ -98,7 +105,7 @@ export function CommandPalette({
         intents: onOpenIntent ? paletteIntents(t) : undefined,
         intentHint: t("common.palette.intentHint"),
       }),
-    [rail, railLabel, onOpenStation, tuningStation, onOpenEntry, onOpenSettings, onOpenIntent, t],
+    [rail, railLabel, onOpenStation, tuningStation, tools, onOpenEntry, onOpenSettings, onOpenIntent, t],
   );
 
   const results = useMemo(() => filterPalette(index, query), [index, query]);

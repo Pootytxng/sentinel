@@ -221,6 +221,17 @@
     "powerFeaturesSummary": "进阶功能——游戏模式(进阶,可以撤销)",
     "powerFeaturesIntro": "在这里可以进行力度更大、且能被验证效果的更改。每次更改前 Compy 都会先保存这项设置，所以你可以撤销——应用一项后,运行基准测试站,即可测出它对这台主机的实际效果。"
   },
+  "tuningOff": {
+    "stationName": "你的更改",
+    "stationLine": "Compy 在这台电脑上做过的更改，以及如何撤销。",
+    "eyebrow": "更改与记录",
+    "headline": "Compy 的更改与这台电脑的记录",
+    "sub": "查看 Compy 做过的更改并撤销，读取这台电脑的硬件，或查看 Windows 记录的崩溃信息。",
+    "action": "查看你的更改",
+    "note": "这里是 Compy 做过的更改及其撤销。调校工具（优化开关、试验、基准测试、延迟、调校）已关闭；可在“设置 → 调校工具”中打开，打开本身不会改动你电脑上的任何东西。",
+    "openSettings": "打开设置",
+    "offOutsideTitle": "在 Compy 之外被关闭"
+  },
   "stations": {
     "optimize": {
       "name": "优化",

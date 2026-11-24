@@ -45,6 +45,7 @@
     "settingsLabel": "设置",
     "settingsHint": "语言、更新,以及 Compy 被允许做什么",
     "intentHint": "Compy 会根据这台电脑自己的读数来回答",
+    "labHintToolsOff": "你的更改、诊断、崩溃记录",
     "group": {
       "intent": "你的问题或目标",
       "room": "房间",
