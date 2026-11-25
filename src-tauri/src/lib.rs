@@ -1306,6 +1306,37 @@ pub(crate) fn eee_disabled_from(res: &crate::actions::EeeResolution) -> Option<b
     }
 }
 
+/// PURE (a11): whether ONE applied EEE record's own change is still in place, read from the pass's one
+/// adapter listing (`listing`, `None` = the listing did not finish). Only the (adapter, property) pairs
+/// in the record's saved snapshot are consulted, so another adapter's EEE state never changes this
+/// record's answer. `Some(true)` = every saved pair is listed exactly once and reads disabled;
+/// `Some(false)` = every saved pair is listed exactly once and at least one reads not disabled (the
+/// "turned off outside Compy" evidence, about the record's own adapter only). Anything else is `None`
+/// ("couldn't read"), never on or off: a failed listing, a record with no saved pairs, or a saved pair
+/// whose adapter or property is not in the listing (unplugged, disabled, renamed, removed, or listed
+/// twice). The listing names only Up, wired adapters, so an unplugged adapter is "not listed".
+/// Names compare byte-equal: the snapshot was written from the same enumeration's trimmed fields.
+pub(crate) fn eee_record_disabled_in(
+    listing: Option<&[crate::actions::EeeProperty]>,
+    saved: &[crate::actions::EeeNicSnapshot],
+) -> Option<bool> {
+    let props = listing?;
+    if saved.is_empty() {
+        return None;
+    }
+    let mut all_disabled = true;
+    for s in saved {
+        let mut hits = props
+            .iter()
+            .filter(|p| p.adapter_name == s.adapter_name && p.display_name == s.property_display_name);
+        let (Some(p), None) = (hits.next(), hits.next()) else {
+            return None;
+        };
+        all_disabled &= crate::actions::eee_value_is_disabled(p);
+    }
+    Some(all_disabled)
+}
+
 
 // ─── Startup apps (HKCU Run) ─────────────────────────────────────────────
 //

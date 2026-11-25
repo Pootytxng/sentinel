@@ -4817,7 +4817,9 @@ mod unreadable_outcome_tests {
     fn an_adapter_with_no_properties_is_skipped_not_unread() {
         let src = include_str!("actions.rs").replace("\r\n", "\n");
         // Split so this test's own text is never the first match (the D1e source pin finds by name too).
-        let at = src.find(concat!("pub(crate) fn resolve_", "eee() -> EeeResolution {")).expect("resolve_eee");
+        // a11: the enumeration script moved from `resolve_eee` into `read_eee_properties` (which
+        // `resolve_eee` now classifies), so the pin follows the script.
+        let at = src.find(concat!("pub(crate) fn read_eee_", "properties() -> Option<Vec<EeeProperty>> {")).expect("read_eee_properties");
         let body = &src[at..at + src[at..].find("\n}\n").expect("end")];
         let skip = body.find("if ($_.CategoryInfo.Category -eq 'ObjectNotFound') {{ continue }}").expect("skips ObjectNotFound");
         let mark = body.find("Write-Output '{unread}'").expect("marks other errors");
@@ -4910,12 +4912,17 @@ mod output_within_tests {
             "read_core_parking_priors",
             "read_tcp_autotuning_disabled",
             "resolve_task_name",
-            "resolve_eee",
+            // a11: the EEE enumeration's script and its read live here now; `resolve_eee` classifies it.
+            "read_eee_properties",
         ] {
             let b = body(&src, name);
             assert!(b.contains("output_within("), "{name} reads through output_within");
             assert!(!b.contains(".output()"), "{name} must not wait on a child with no limit");
         }
+        // a11: `resolve_eee` spawns nothing itself; it reads only through `read_eee_properties`.
+        let b = body(&src, "resolve_eee");
+        assert!(b.contains("read_eee_properties()"), "resolve_eee reads through read_eee_properties");
+        assert!(!b.contains(".output()") && !b.contains("quiet_command("), "resolve_eee spawns nothing of its own");
     }
 
     // Hardening slice 1: the shared probe constructor never hands std a bare name (std would search
@@ -5189,18 +5196,26 @@ const EEE_UNREAD_MARKER: &str = "!UNREAD";
 
 /// PURE: a finished enumeration → its classification; no output (spawn failure / timeout), a non-zero
 /// exit, or an adapter whose properties could not be listed → `Unreadable`, never `NoEligibleAdapter`.
+/// a11: production now classifies through [`read_eee_properties`] + [`resolve_eee_from`] (the same two
+/// steps); this composition stays as the tests' pinned form of them.
+#[cfg(test)]
 pub(crate) fn resolve_eee_from_read(read: Option<&std::process::Output>) -> EeeResolution {
-    let Some(out) = read else {
-        return EeeResolution::Unreadable;
-    };
+    eee_properties_from_read(read).map_or(EeeResolution::Unreadable, resolve_eee_from)
+}
+
+/// PURE (a11): a finished enumeration → every EEE-shaped property it listed, unfiltered (the per-record
+/// Trust Ledger check needs the properties that have no recognized "off" value too). `None` exactly where
+/// [`resolve_eee_from_read`] says `Unreadable`: no output, a non-zero exit, or the unread marker.
+pub(crate) fn eee_properties_from_read(read: Option<&std::process::Output>) -> Option<Vec<EeeProperty>> {
+    let out = read?;
     if !out.status.success() {
-        return EeeResolution::Unreadable;
+        return None;
     }
     let stdout = String::from_utf8_lossy(&out.stdout);
     if stdout.lines().any(|l| l.trim() == EEE_UNREAD_MARKER) {
-        return EeeResolution::Unreadable;
+        return None;
     }
-    resolve_eee_from(parse_eee_property_lines(&stdout))
+    Some(parse_eee_property_lines(&stdout))
 }
 
 // Test-only: stands in for the EEE enumeration on this thread (`Some(None)` = it did not finish).
@@ -5313,9 +5328,16 @@ pub(crate) fn resolve_eee_from(props: Vec<EeeProperty>) -> EeeResolution {
 /// empty list under SilentlyContinue, which read as "no adapter"); one adapter whose properties can't
 /// be listed prints the unread marker; the whole read is bounded by [`QUERY_READ_LIMIT`].
 pub(crate) fn resolve_eee() -> EeeResolution {
+    read_eee_properties().map_or(EeeResolution::Unreadable, resolve_eee_from)
+}
+
+/// a11: the live enumeration behind [`resolve_eee`], unclassified: every EEE-shaped property of every Up,
+/// wired adapter, or `None` when the read did not finish. One PowerShell spawn; the Trust Ledger pass takes
+/// it once (`history::LiveReads`) and answers each EEE record from it.
+pub(crate) fn read_eee_properties() -> Option<Vec<EeeProperty>> {
     #[cfg(test)]
     if let Some(forced) = FORCE_EEE_READ.with(|f| f.borrow().clone()) {
-        return resolve_eee_from_read(forced.as_ref());
+        return eee_properties_from_read(forced.as_ref());
     }
     let ps = format!(
         r#"
@@ -5344,7 +5366,7 @@ foreach ($a in $adapters) {{
     );
     let mut cmd = quiet_command(SysTool::PowerShell);
     cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps]);
-    resolve_eee_from_read(output_within(cmd, QUERY_READ_LIMIT).as_ref())
+    eee_properties_from_read(output_within(cmd, QUERY_READ_LIMIT).as_ref())
 }
 
 /// PURE: build the apply script from (property, picked-disabled-value) pairs. The trailing

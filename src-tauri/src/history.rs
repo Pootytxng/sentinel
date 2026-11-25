@@ -19,8 +19,7 @@ use crate::actions::*;
 use crate::compy_data_dir;
 use crate::data_root::MutationRoot;
 use crate::{
-    eee_disabled_on_any_eligible_adapter_checked, fast_startup_state_checked,
-    game_bar_disabled, game_mode_enabled, hags_state_checked, mouse_accel_disabled,
+    fast_startup_state_checked, game_bar_disabled, game_mode_enabled, hags_state_checked, mouse_accel_disabled,
     nagle_disabled_on_any_nic_checked, pcie_aspm_off_on_ac_checked, reserved_storage_enabled_checked,
     service_running_checked, startup_approval_value, usb_selective_suspend_off_on_ac_checked,
     visual_effects_for_best_performance,
@@ -487,13 +486,24 @@ pub(crate) fn check_row_state(c: &AppliedChange, reads: &LiveReads) -> ActiveChe
     if c.rec_id == "power-ultimate" && compys_plan_guid(c).is_some() {
         return ActiveCheck::from_read(reads.scheme().map(|seen| is_compys_ultimate(c, &seen)));
     }
-    check_change_state(&c.rec_id, c.applied_action.as_ref(), reads)
+    // a11: an EEE row is read through its own saved snapshot (which adapters and properties it changed).
+    // A row whose snapshot does not parse has no adapters to read: `eee_row_check` gives Unreadable.
+    let snapshot = if c.rec_id == "eee-disable" {
+        serde_json::from_value::<Snapshot>(c.snapshot.clone()).ok()
+    } else {
+        None
+    };
+    check_change_state(&c.rec_id, c.applied_action.as_ref(), snapshot.as_ref(), reads)
 }
 
-/// [`check_row_state`] from a rec id and its typed action, without a ledger row. The rollback-first
-/// commit (#616) also reads an undone change back through this, because by then its receipt was
-/// never saved. Read-only, and takes no lock.
-fn check_change_state(rec_id: &str, action: Option<&AppliedAction>, reads: &LiveReads) -> ActiveCheck {
+/// [`check_row_state`] from a rec id, its typed action and its typed snapshot, without a ledger row.
+/// The rollback-first commit (#616) also reads an undone change back through this, because by then its
+/// receipt was never saved. Only an `eee-disable` change reads `snapshot` (a11). Read-only, and takes no
+/// lock.
+fn check_change_state(rec_id: &str, action: Option<&AppliedAction>, snapshot: Option<&Snapshot>, reads: &LiveReads) -> ActiveCheck {
+    if rec_id == "eee-disable" {
+        return eee_row_check(snapshot, reads);
+    }
     if let Some(name) = rec_id.strip_prefix("startup-entry:") {
         return startup_row_check(name, action, startup_approval_value);
     }
@@ -528,15 +538,16 @@ pub(crate) struct LiveReads {
     /// `current_fingerprint` (a hardware-snapshot clone plus live RAM and disk refresh) once, not N
     /// times. Nothing is cached across passes.
     fingerprint: std::cell::OnceCell<crate::hardware::HwFingerprint>,
-    /// a10: whether Energy-Efficient Ethernet reads off on every eligible adapter, read once per pass
-    /// the first time an `eee-disable` row asks. The read is one PowerShell adapter listing (seconds
-    /// on a cold PC) and was taken once PER ROW, on the UI thread: 6-7 applied EEE rows held the
-    /// applied-changes list ~34 s in the VM run (f342f3ce). The value is the same for every row (it
-    /// reads every eligible adapter, not the row's own), so sharing it changes no row's answer. A
-    /// failed or timed-out read (`None`) is remembered for the pass, so every EEE row reads
-    /// `Unreadable` together, never "off"; the next pass reads again.
-    read_eee: fn() -> Option<bool>,
-    eee: std::cell::OnceCell<Option<bool>>,
+    /// a10: the EEE adapter listing, read once per pass the first time an `eee-disable` row asks. The
+    /// read is one PowerShell adapter listing (seconds on a cold PC) and was taken once PER ROW, on the
+    /// UI thread: 6-7 applied EEE rows held the applied-changes list ~34 s in the VM run (f342f3ce).
+    /// a11: the pass keeps the listing itself (every EEE-shaped property of every Up, wired adapter),
+    /// not one answer for all rows, so each applied record is answered from the adapters its own
+    /// snapshot names ([`crate::eee_record_disabled_in`]). A failed or timed-out read (`None`) is
+    /// remembered for the pass, so every EEE row reads `Unreadable` together, never "off"; the next pass
+    /// reads again.
+    read_eee: fn() -> Option<Vec<EeeProperty>>,
+    eee: std::cell::OnceCell<Option<Vec<EeeProperty>>>,
 }
 
 /// One row per service a [`disable_service_listing`] read returned: (name, state, start mode), as
@@ -573,20 +584,33 @@ impl LiveReads {
             read_scheme: crate::current_power_scheme,
             scheme: std::cell::OnceCell::new(),
             fingerprint: std::cell::OnceCell::new(),
-            read_eee: eee_disabled_on_any_eligible_adapter_checked,
+            read_eee: read_eee_properties,
             eee: std::cell::OnceCell::new(),
         }
     }
 
-    /// The same pass with its EEE adapter read replaced. Tests pass a counting fake.
+    /// The same pass with its EEE adapter listing replaced. Tests pass a counting fake.
     #[cfg(test)]
-    pub(crate) fn with_eee_read(self, read_eee: fn() -> Option<bool>) -> Self {
+    pub(crate) fn with_eee_read(self, read_eee: fn() -> Option<Vec<EeeProperty>>) -> Self {
         LiveReads { read_eee, ..self }
     }
 
-    /// a10: the pass's one EEE read (`None` = couldn't read), taken at most once.
+    /// a10/a11: the pass's one EEE adapter listing (`None` = couldn't read), taken at most once.
+    fn eee_listing(&self) -> Option<&[EeeProperty]> {
+        self.eee.get_or_init(self.read_eee).as_deref()
+    }
+
+    /// The setting with no record to answer for (a Trial's or the catalog's read): EEE off on every
+    /// eligible adapter, exactly as `eee_disabled_on_any_eligible_adapter_checked` reads it, from the
+    /// pass's one listing.
     fn eee_disabled(&self) -> Option<bool> {
-        *self.eee.get_or_init(self.read_eee)
+        self.eee_listing().and_then(|props| crate::eee_disabled_from(&resolve_eee_from(props.to_vec())))
+    }
+
+    /// a11: one applied EEE record's own change, from the pass's one listing and only the adapters
+    /// and properties `saved` names. An adapter or property that is not listed is `None`.
+    fn eee_record_disabled(&self, saved: &[EeeNicSnapshot]) -> Option<bool> {
+        crate::eee_record_disabled_in(self.eee_listing(), saved)
     }
 
     /// This rig's fingerprint for this pass, read at most once.
@@ -728,6 +752,18 @@ fn service_row_check(
     }
 }
 
+/// a11: an applied EEE change's live re-check, from the pass's one adapter listing and ONLY the
+/// adapters and properties its own snapshot saved ([`crate::eee_record_disabled_in`]). Another
+/// adapter's EEE state never decides it. A failed listing, a saved adapter or property that is not
+/// listed (unplugged, disabled, renamed, removed), or a change with no EEE snapshot is `Unreadable`
+/// ("couldn't read"), never `Off` ("turned off outside Compy") and never `On`.
+fn eee_row_check(snapshot: Option<&Snapshot>, reads: &LiveReads) -> ActiveCheck {
+    match snapshot {
+        Some(Snapshot::EeeNicProperty { adapters }) => ActiveCheck::from_read(reads.eee_record_disabled(adapters)),
+        _ => ActiveCheck::Unreadable,
+    }
+}
+
 /// Pure: a startup-app row's live re-check. The rec id `startup-entry:<name>` doesn't say which way
 /// Compy flipped the entry; the typed action does, so a row without one, or whose name disagrees with
 /// its rec id, is `Unrecognised`. `read` is the registry read: an absent value is Windows' default,
@@ -809,6 +845,8 @@ pub(crate) fn probe_rec_target_with(rec_id: &str, reads: &LiveReads) -> ActiveCh
         "pcie-aspm-off" => read(pcie_aspm_off_on_ac_checked()),
         // D2b r1 (F1): an EEE read that did not finish is Unreadable, never "turned off outside Compy".
         // a10: through the pass's one adapter listing, not one PowerShell spawn per row.
+        // a11: this is the read with NO record (a Trial, the catalog): every eligible adapter. An applied
+        // record never reaches here; `check_change_state` answers it from its own snapshot's adapters.
         "eee-disable" => read(reads.eee_disabled()),
         _ => ActiveCheck::Unrecognised,
     }
@@ -1820,8 +1858,9 @@ impl Made {
 /// fakes, so they never touch Windows.
 struct UndoEffects<'a> {
     rollback: &'a dyn Fn(&RollbackAction, &Snapshot) -> Result<(), String>,
-    /// The rec id and the typed action the row carries (`None` for a legacy row without one).
-    probe: &'a dyn Fn(&str, Option<&AppliedAction>) -> ActiveCheck,
+    /// The rec id and the typed action the row carries (`None` for a legacy row without one), and the
+    /// typed snapshot of the undo (a11: an EEE change reads back only the adapters it saved).
+    probe: &'a dyn Fn(&str, Option<&AppliedAction>, &Snapshot) -> ActiveCheck,
 }
 
 /// [`UndoEffects`] for the user's undo ([`commit_rollback`]): production passes
@@ -1829,7 +1868,7 @@ struct UndoEffects<'a> {
 /// (CR-core-parking-plan-gone).
 struct RollbackEffects<'a> {
     rollback: &'a dyn Fn(&RollbackAction, &Snapshot) -> Result<UndoDone, String>,
-    probe: &'a dyn Fn(&str, Option<&AppliedAction>) -> ActiveCheck,
+    probe: &'a dyn Fn(&str, Option<&AppliedAction>, &Snapshot) -> ActiveCheck,
 }
 
 /// Rollback-first receipt commit (#616), the ONLY way an apply gateway records what it did.
@@ -1912,7 +1951,7 @@ fn undo_unrecorded(undos: &[Undo], why: &str, effects: &UndoEffects) -> String {
         .rev()
         .map(|u| {
             let undone = (effects.rollback)(&u.action, &u.snapshot);
-            let outcome = undo_outcome(&undone, (effects.probe)(&u.rec_id, Some(&u.applied)));
+            let outcome = undo_outcome(&undone, (effects.probe)(&u.rec_id, Some(&u.applied), &u.snapshot));
             if undos.len() == 1 {
                 outcome
             } else {
@@ -1988,8 +2027,8 @@ fn record_receipts(
     let rollback = |a: &RollbackAction, s: &Snapshot| {
         dispatch_rollback(root, a, s).inspect_err(|_| undo_failed.set(true))
     };
-    let probe = |rec_id: &str, applied: Option<&AppliedAction>| {
-        check_change_state(rec_id, applied, &LiveReads::default())
+    let probe = |rec_id: &str, applied: Option<&AppliedAction>, snapshot: &Snapshot| {
+        check_change_state(rec_id, applied, Some(snapshot), &LiveReads::default())
     };
     let effects = UndoEffects { rollback: &rollback, probe: &probe };
     commit_receipts(history, made, &save, &effects).inspect_err(|e| {
@@ -2782,8 +2821,8 @@ fn rollback_change_inner(change_id: &str, cite: Option<CiteTrial>) -> Result<(),
 
     let save = |h: &[AppliedChange]| save_history(&root, h);
     let rollback = |a: &RollbackAction, s: &Snapshot| dispatch_rollback_outcome(&root, a, s);
-    let probe = |rec_id: &str, applied: Option<&AppliedAction>| {
-        check_change_state(rec_id, applied, &LiveReads::default())
+    let probe = |rec_id: &str, applied: Option<&AppliedAction>, snapshot: &Snapshot| {
+        check_change_state(rec_id, applied, Some(snapshot), &LiveReads::default())
     };
     commit_rollback(&mut history, idx, justified_by, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
 }
@@ -2826,7 +2865,7 @@ fn commit_rollback(
             history[idx] = change;
             return RollbackError::Failed(nothing_to_restore_unsaved_message(&why));
         }
-        let read = (effects.probe)(&change.rec_id, change.applied_action.as_ref());
+        let read = (effects.probe)(&change.rec_id, change.applied_action.as_ref(), &snapshot);
         history[idx] = change;
         RollbackError::Unrecorded(rollback_unrecorded_message(&why, read))
     })
@@ -4099,7 +4138,7 @@ mod receipt_commit_tests {
             seen.rollbacks.borrow_mut().push(contract(a, s));
             undo(a)
         };
-        let probe = |rec_id: &str, _: Option<&AppliedAction>| {
+        let probe = |rec_id: &str, _: Option<&AppliedAction>, _: &crate::actions::Snapshot| {
             seen.probes.borrow_mut().push(rec_id.to_string());
             read
         };
@@ -4370,7 +4409,7 @@ mod receipt_commit_tests {
             seen.rollbacks.borrow_mut().push(contract(a, s));
             undo.clone().map(|()| UndoDone::Restored)
         };
-        let probe = |rec_id: &str, _: Option<&AppliedAction>| {
+        let probe = |rec_id: &str, _: Option<&AppliedAction>, _: &crate::actions::Snapshot| {
             seen.probes.borrow_mut().push(rec_id.to_string());
             read
         };
@@ -4404,7 +4443,7 @@ mod receipt_commit_tests {
             }
             _ => panic!("wrong contract"),
         } };
-        let probe = |_: &str, _: Option<&AppliedAction>| -> ActiveCheck { panic!("no probe on a failed undo") };
+        let probe = |_: &str, _: Option<&AppliedAction>, _: &crate::actions::Snapshot| -> ActiveCheck { panic!("no probe on a failed undo") };
         let err = commit_rollback(&mut history, 0, None, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
             .expect_err("refused");
         let RollbackError::Failed(msg) = err else { panic!("a failed undo, not an unrecorded one") };
@@ -4455,16 +4494,21 @@ mod receipt_commit_tests {
         build_applied_change("eee-disable", "Turn off Energy-Efficient Ethernet", result, None).expect("build")
     }
 
-    // Break check: in `probe_rec_target_with`, read `eee-disable` through
-    // `eee_disabled_on_any_eligible_adapter_checked()` again (or make `LiveReads::eee_disabled` call
-    // `self.read_eee` without the OnceCell) -> READS is 7 and this fails.
+    /// a11: a finished adapter listing from enumeration text (`adapter|display|current|valid~values`).
+    fn eee_listing(text: &str) -> Option<Vec<crate::actions::EeeProperty>> {
+        Some(crate::actions::parse_eee_property_lines(text))
+    }
+
+    // Break check (a11): make `LiveReads::eee_listing` call `(self.read_eee)()` without the OnceCell
+    // -> READS is 7 and this fails.
     #[test]
     fn a_pass_with_many_eee_rows_lists_the_adapters_once() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static READS: AtomicUsize = AtomicUsize::new(0);
-        fn fake() -> Option<bool> {
+        fn fake() -> Option<Vec<crate::actions::EeeProperty>> {
             READS.fetch_add(1, Ordering::SeqCst);
-            Some(true)
+            let text: String = (0..7).map(|i| format!("Ethernet {i}|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\n")).collect();
+            eee_listing(&text)
         }
         let reads = LiveReads::default().with_eee_read(fake);
         let rows: Vec<AppliedChange> = (0..7).map(|i| applied_eee(&format!("Ethernet {i}"))).collect();
@@ -4478,13 +4522,13 @@ mod receipt_commit_tests {
         assert!(body.contains("let reads = LiveReads::default();") && body.contains("into_view_with(c, &reads)"));
     }
 
-    // Break check: make `LiveReads::eee_disabled` read a failed listing (`None`) as `Some(false)` ->
-    // the rows read Off ("turned off outside Compy") and this fails.
+    // Break check (a11): in `crate::eee_record_disabled_in`, answer a failed listing (`None`) with
+    // `Some(false)` instead of `listing?` -> the rows read Off ("turned off outside Compy") and this fails.
     #[test]
     fn a_failed_eee_listing_gives_every_row_the_unread_state() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static READS: AtomicUsize = AtomicUsize::new(0);
-        fn failed() -> Option<bool> {
+        fn failed() -> Option<Vec<crate::actions::EeeProperty>> {
             READS.fetch_add(1, Ordering::SeqCst);
             None
         }
@@ -4501,35 +4545,133 @@ mod receipt_commit_tests {
         }
     }
 
-    // What a10 keeps, stated plainly: the EEE row check was never per adapter. It reads whether EEE is
-    // off on EVERY eligible adapter (`eee_disabled_on_any_eligible_adapter_checked`), so rows naming
-    // different adapters always got the same answer. The shared read must give each row exactly what
-    // its own read would have, from the real adapter listing. Break check: give the production pass
-    // a read that is not the adapter listing (`read_eee: || Some(true)` in `with_listings`) -> the
-    // one-adapter-still-on case reads On and this fails.
+    // ── a11: an applied EEE record is checked on the adapters its own snapshot names, nothing else ──
+    // (Before a11 every EEE row read "EEE off on EVERY eligible adapter", so a record for adapter A read
+    // "turned off outside Compy" when a different adapter had EEE on, or when A was unplugged.)
+
+    /// An applied EEE record whose snapshot saved these (adapter, property) pairs.
+    fn applied_eee_pairs(pairs: &[(&str, &str)]) -> AppliedChange {
+        let mut c = applied_eee("unused");
+        let adapters: Vec<crate::actions::EeeNicSnapshot> = pairs
+            .iter()
+            .map(|(a, p)| crate::actions::EeeNicSnapshot {
+                adapter_name: (*a).into(),
+                property_display_name: (*p).into(),
+                prior_value: "Enabled".into(),
+            })
+            .collect();
+        c.snapshot = serde_json::to_value(Snapshot::EeeNicProperty { adapters }).expect("snapshot");
+        c
+    }
+
+    // Break check (a11-1): make `eee_row_check` ignore the snapshot and answer
+    // `ActiveCheck::from_read(reads.eee_disabled())` (every eligible adapter, as before a11) -> the record
+    // for "Ethernet" reads Off while "Ethernet 2" has EEE on, and this fails.
     #[test]
-    fn rows_for_different_adapters_get_the_same_answer_their_own_read_would_give() {
-        use std::os::windows::process::ExitStatusExt;
-        let listing = |text: &str| std::process::Output {
-            status: std::process::ExitStatus::from_raw(0),
-            stdout: text.as_bytes().to_vec(),
-            stderr: Vec::new(),
-        };
-        let rows = ["Ethernet", "Ethernet 2"].map(applied_eee);
+    fn a_record_for_one_adapter_is_unaffected_by_another_adapters_eee() {
+        let a = applied_eee("Ethernet");
         for (text, want) in [
-            // One adapter still has EEE on: the setting is not off everywhere, so every row reads Off.
-            ("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n", ActiveCheck::Off),
-            // Both off: every row reads On.
-            ("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet 2|Green Ethernet|Off|On~Off\r\n", ActiveCheck::On),
+            // A is off as Compy set it; B has EEE on: A's record is still in effect.
+            ("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n", ActiveCheck::On),
+            // B's driver offers no value Compy recognizes as off: still A's own answer.
+            ("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|On|On~Max\r\n", ActiveCheck::On),
+            // A reads on again, B off: A's record is no longer in effect.
+            ("Ethernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\n", ActiveCheck::Off),
         ] {
-            let _read = crate::actions::ForceEeeRead::begin(Some(listing(text)));
-            let shared = LiveReads::default();
-            for c in &rows {
-                let own = check_row_state(c, &LiveReads::default());
-                assert_eq!(check_row_state(c, &shared), own, "shared read = the row's own read");
-                assert_eq!(own, want, "{text}");
-            }
+            let reads = LiveReads::default().with_eee_read(|| None);
+            let _ = reads.eee.set(eee_listing(text));
+            assert_eq!(check_row_state(&a, &reads), want, "{text}");
         }
+        // A record that saved two properties of A: both must read off for On; one on again is Off.
+        let two = applied_eee_pairs(&[("Ethernet", "Energy-Efficient Ethernet"), ("Ethernet", "Green Ethernet")]);
+        for (text, want) in [
+            ("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet|Green Ethernet|Off|On~Off\r\nEthernet 2|Green Ethernet|On|On~Off\r\n", ActiveCheck::On),
+            ("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet|Green Ethernet|On|On~Off\r\n", ActiveCheck::Off),
+        ] {
+            let reads = LiveReads::default().with_eee_read(|| None);
+            let _ = reads.eee.set(eee_listing(text));
+            assert_eq!(check_row_state(&two, &reads), want, "{text}");
+        }
+    }
+
+    // Break check (a11-2): in `crate::eee_record_disabled_in`, answer a saved pair with no listed match
+    // as `Some(false)` (`let Some(p) = hits.next() else { return Some(false) };`) -> the unplugged
+    // adapter reads Off ("turned off outside Compy") and this fails.
+    #[test]
+    fn a_record_whose_adapter_is_not_listed_reads_unreadable_never_off_or_on() {
+        let a = applied_eee("Ethernet");
+        for (text, why) in [
+            // A finished listing with no adapter at all (A unplugged, nothing else wired): was Off before a11.
+            ("", "no adapter listed"),
+            // Only another adapter is listed; it has EEE off: was On before a11 if all others read off.
+            ("Ethernet 2|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\n", "A not listed, B off"),
+            ("Ethernet 2|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n", "A not listed, B on"),
+            // A is listed but not the property the record saved (driver update renamed it).
+            ("Ethernet|Green Ethernet|Off|On~Off\r\n", "A listed without the saved property"),
+            // The saved pair is listed twice: Compy can't tell which one is its change.
+            ("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n", "listed twice"),
+        ] {
+            let reads = LiveReads::default().with_eee_read(|| None);
+            let _ = reads.eee.set(eee_listing(text));
+            assert_eq!(check_row_state(&a, &reads), ActiveCheck::Unreadable, "{why}");
+        }
+        // One of two saved pairs missing, the other still off: Unreadable, not On.
+        let two = applied_eee_pairs(&[("Ethernet", "Energy-Efficient Ethernet"), ("Ethernet 2", "Energy-Efficient Ethernet")]);
+        let reads = LiveReads::default().with_eee_read(|| None);
+        let _ = reads.eee.set(eee_listing("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\n"));
+        assert_eq!(check_row_state(&two, &reads), ActiveCheck::Unreadable);
+        // A record with no saved pairs, or whose snapshot is not an EEE snapshot, has nothing to read.
+        let none = applied_eee_pairs(&[]);
+        let mut garbled = applied_eee("Ethernet");
+        garbled.snapshot = serde_json::json!({ "not": "a snapshot" });
+        for c in [&none, &garbled] {
+            let reads = LiveReads::default().with_eee_read(|| None);
+            let _ = reads.eee.set(eee_listing("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\n"));
+            assert_eq!(check_row_state(c, &reads), ActiveCheck::Unreadable);
+        }
+        // Through the real enumeration seam: a finished, empty listing (no Up wired adapter).
+        use std::os::windows::process::ExitStatusExt;
+        let _read = crate::actions::ForceEeeRead::begin(Some(std::process::Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        }));
+        assert_eq!(check_row_state(&a, &LiveReads::default()), ActiveCheck::Unreadable);
+    }
+
+    // Break check (a11-3): give `eee_row_check` one answer for every record (for example
+    // `crate::eee_record_disabled_in(self.eee_listing(), &saved[..1])` with the FIRST record's pairs
+    // remembered in the pass, or `reads.eee_disabled()`) -> "Ethernet 2" no longer reads its own Off, or
+    // "Ethernet" its own On, and this fails.
+    #[test]
+    fn two_records_for_different_adapters_get_their_own_answers_from_one_listing() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static READS: AtomicUsize = AtomicUsize::new(0);
+        fn listing() -> Option<Vec<crate::actions::EeeProperty>> {
+            READS.fetch_add(1, Ordering::SeqCst);
+            eee_listing("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n")
+        }
+        let reads = LiveReads::default().with_eee_read(listing);
+        let a = applied_eee("Ethernet");
+        let b = applied_eee("Ethernet 2");
+        assert_eq!(check_row_state(&a, &reads), ActiveCheck::On, "A's own adapter reads off");
+        assert_eq!(check_row_state(&b, &reads), ActiveCheck::Off, "B's own adapter reads on");
+        // The undo read-back (commit_rollback / commit_receipts) asks with the typed snapshot: same answers.
+        let typed = |c: &AppliedChange| serde_json::from_value::<Snapshot>(c.snapshot.clone()).expect("typed");
+        let applied = AppliedAction::DisableEnergyEfficientEthernet;
+        let action = Some(&applied);
+        assert_eq!(check_change_state("eee-disable", action, Some(&typed(&a)), &reads), ActiveCheck::On);
+        assert_eq!(check_change_state("eee-disable", action, Some(&typed(&b)), &reads), ActiveCheck::Off);
+        assert_eq!(check_change_state("eee-disable", action, None, &reads), ActiveCheck::Unreadable);
+        // A view pass over both rows too.
+        let views: Vec<AppliedChangeView> = [a, b].into_iter().map(|c| into_view_with(c, &reads)).collect();
+        assert_eq!(views[0].active_check, Some(ActiveCheck::On));
+        assert_eq!(views[1].active_check, Some(ActiveCheck::Off));
+        assert_eq!(READS.load(Ordering::SeqCst), 1, "two records, one adapter listing for the whole pass");
+        // With no record (a Trial's or the catalog's read), the setting still reads across every
+        // eligible adapter, from the same one listing: not off everywhere.
+        assert_eq!(probe_rec_target_with("eee-disable", &reads), ActiveCheck::Off);
+        assert_eq!(READS.load(Ordering::SeqCst), 1);
     }
 
     // ── CR-core-parking-plan-gone: an undo whose power plan no longer exists ──
@@ -4606,7 +4748,7 @@ mod receipt_commit_tests {
         let rollback = |a: &RollbackAction, s: &Snapshot| {
             dispatch_rollback_outcome_with(&crate::data_root::test_mutation_root(), a, s, &fx)
         };
-        let probe = |_: &str, _: Option<&AppliedAction>| ActiveCheck::Unrecognised;
+        let probe = |_: &str, _: Option<&AppliedAction>, _: &crate::actions::Snapshot| ActiveCheck::Unrecognised;
         commit_rollback(history, 0, None, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
     }
 
@@ -5085,7 +5227,7 @@ mod receipt_commit_tests {
             seen.rollbacks.borrow_mut().push(contract(a, s));
             Ok(())
         };
-        let probe = |rec_id: &str, _: Option<&AppliedAction>| {
+        let probe = |rec_id: &str, _: Option<&AppliedAction>, _: &crate::actions::Snapshot| {
             seen.probes.borrow_mut().push(rec_id.to_string());
             ActiveCheck::Off
         };
@@ -7955,7 +8097,7 @@ mod ledger_backup_tests {
             dispatched.borrow_mut().push((matches!(a, RollbackAction::RestorePowerPlanFromSnapshot), prior));
             Ok(UndoDone::Restored)
         };
-        let probe = |_: &str, _: Option<&AppliedAction>| ActiveCheck::Off;
+        let probe = |_: &str, _: Option<&AppliedAction>, _: &crate::actions::Snapshot| ActiveCheck::Off;
         commit_rollback(&mut back, 0, None, &save, &RollbackEffects { rollback: &rollback, probe: &probe }).expect("undo");
         assert_eq!(*dispatched.borrow(), vec![(true, GUID.to_string())], "one rollback, the prior value only");
         assert_eq!(back[0].status, "rolled_back");
