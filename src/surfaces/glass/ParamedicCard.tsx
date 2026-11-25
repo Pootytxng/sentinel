@@ -530,6 +530,10 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     // clear-unjudged lines). `n` is the clear count; `count` (the later, unjudged ones) only picks the plural form.
     case "drift-restored-clear-unjudged":
       return t("paramedic.evidence.driftRestoredClearUnjudged", { game, n: a.count, count: Number(a.later ?? 2), date: dates.day(a.at) });
+    // b13 review r1: the same setting was noticed off again after it was back on; the record's own times. Said in place
+    // of every "since it was back on" line except rough; restoredAt() then gives no "read it back on ... play once" step.
+    case "drift-restored-off-again":
+      return t("paramedic.evidence.driftRestoredOffAgain", { game, restored: dates.dayTime(a.restored), noticed: dates.dayTime(a.noticed), until: dates.dayTime(a.until) });
     case "drift-restored-between":
       // b12: `count` (sessions read since) picks "One ... session" / "The sessions"; the _other text prints no number.
       return t("paramedic.evidence.driftRestoredBetween", { game, count: Number(a.count ?? 2) });
@@ -1111,6 +1115,9 @@ function appliedOnly(f: ParamedicFinding): boolean {
 
 /** When Compy read the setting back on, when every setting the row lists came back (the latest of them); else undefined. */
 function restoredAt(f: ParamedicFinding): string | undefined {
+  // b13 review r1: noticed off again after it was back on: "read it back on ... play once" would ask for a session
+  // that can no longer follow the restore, so the row's ordinary setting-drift steps show instead.
+  if (f.evidence.some((e) => e.code === "drift-restored-off-again")) return undefined;
   const drift = f.evidence.filter((e) => e.code === "drift-noticed");
   if (drift.length === 0 || !drift.every((e) => !!e.args.restored)) return undefined;
   const all = drift.map((e) => e.args.restored).sort();

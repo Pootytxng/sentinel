@@ -3108,7 +3108,8 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
     // The settings noticed off in the window that Compy has since read ready again, with when.
     // Each with the time the same setting was noticed off again, when it was: the sessions "after it was back on"
     // end there.
-    let mut restored: Vec<(DateTime<Utc>, Option<DateTime<Utc>>)> = Vec::new();
+    // b13 r1: with the `noticed_at` of that later notice, for the off-again line.
+    let mut restored: Vec<(DateTime<Utc>, Option<(DateTime<Utc>, String)>)> = Vec::new();
     // How many of the listed settings had a rough session after Compy read them back on. The row is weakened
     // only when that is every one: a setting still off in that session is not contradicted by it.
     let mut contradicted = 0usize;
@@ -3182,24 +3183,19 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
                 args.push(("titles", n.titles.iter().map(|k| k.title.as_str()).collect::<Vec<_>>().join("\u{1f}")));
                 args.push(("seen", n.titles.iter().map(|k| k.at.as_str()).collect::<Vec<_>>().join("\u{1f}")));
             }
-            restored.push((b, recovery::off_again_at(c, &n.id, b)));
+            restored.push((b, recovery::off_again(c, &n.id, b).map(|(u, at)| (u, at.to_string()))));
         }
         evidence.push(ev(EvidenceKind::Known, "drift-noticed", "drift", false, &args));
     }
     // What the sessions after it was back on say: dated facts, never "the reason". A rough one is a contradiction
     // (kept visibly, never removed); one usual-range session is "measured once"; the rest say what is missing.
     let listed = evidence.len();
-    for (r, until) in &restored {
+    for (r, off) in &restored {
         let when = iso(*r);
-        match recovery::since_restore(c, *r, *until) {
-            recovery::Since::Nothing => evidence.push(ev(EvidenceKind::Unknown, "drift-restored-none", "sessions", false, &[("restored", when)])),
-            recovery::Since::Unjudged { count } => evidence.push(ev(
-                EvidenceKind::Unknown,
-                "drift-restored-unjudged",
-                "sessions",
-                false,
-                &[("restored", when), ("count", count.to_string())],
-            )),
+        let until = off.as_ref().map(|(u, _)| *u);
+        match recovery::since_restore(c, *r, until) {
+            // Rough keeps its line whatever came later: a dated rough session with the setting back on is a
+            // contradiction, true whatever happened after it.
             recovery::Since::Rough { at, count } => {
                 contradicted += 1;
                 evidence.push(ev(
@@ -3210,6 +3206,30 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
                     &[("restored", when), ("at", at), ("count", count.to_string())],
                 ));
             }
+            // b13 review r1 (F1): the same setting was noticed off again. Every other line would speak of "since it
+            // was back on" while later sessions ran with it off (the recovery outcome reads those too), and the row's
+            // "play once" step would ask for a session that can no longer follow the restore. This dated line (the
+            // record's own times) is said in place of none / unjudged / clear / clear-unjudged / between. Known,
+            // never against, not counted in `contradicted`.
+            _ if off.is_some() => {
+                if let Some((u, noticed)) = off {
+                    evidence.push(ev(
+                        EvidenceKind::Known,
+                        "drift-restored-off-again",
+                        "sessions",
+                        false,
+                        &[("restored", when), ("noticed", noticed.clone()), ("until", iso(*u))],
+                    ));
+                }
+            }
+            recovery::Since::Nothing => evidence.push(ev(EvidenceKind::Unknown, "drift-restored-none", "sessions", false, &[("restored", when)])),
+            recovery::Since::Unjudged { count } => evidence.push(ev(
+                EvidenceKind::Unknown,
+                "drift-restored-unjudged",
+                "sessions",
+                false,
+                &[("restored", when), ("count", count.to_string())],
+            )),
             recovery::Since::Clear { at, count: 1 } => {
                 evidence.push(ev(EvidenceKind::Measured, "drift-restored-clear", "sessions", false, &[("restored", when), ("at", at)]));
             }

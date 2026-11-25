@@ -165,15 +165,21 @@ pub(super) enum Since {
 /// it read fine (when that is not before the restore), else the notice time. Sessions from then on are not
 /// "after it was back on".
 pub(super) fn off_again_at(c: &Ctx, id: &str, restored: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    off_again(c, id, restored).map(|(u, _)| u)
+}
+
+/// b13 r1: `off_again_at`, with the `noticed_at` of the notice that time came from (the card's "noticed it off again on").
+pub(super) fn off_again<'a>(c: &'a Ctx, id: &str, restored: DateTime<Utc>) -> Option<(DateTime<Utc>, &'a str)> {
     c.inp
         .drift
         .iter()
         .filter(|m| m.id == id)
         .filter_map(|m| {
             let noticed = ts(&m.noticed_at).filter(|n| *n > restored)?;
-            Some(m.last_ready_at.as_deref().and_then(ts).filter(|r| *r >= restored && *r < noticed).unwrap_or(noticed))
+            let at = m.last_ready_at.as_deref().and_then(ts).filter(|r| *r >= restored && *r < noticed).unwrap_or(noticed);
+            Some((at, m.noticed_at.as_str()))
         })
-        .min()
+        .min_by_key(|(at, _)| *at)
 }
 
 /// The game's sessions that started at or after `restored` (and before `until`, the time the setting went off

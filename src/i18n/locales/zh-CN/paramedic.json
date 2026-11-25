@@ -401,6 +401,7 @@
     "driftRestoredBetween_other": "它重新开启之后，{{game}} 测量充分的游戏中，至少有一次并不明确在平时的范围内，所以 Compy 暂时还无法判断。",
     "driftRestoredClearUnjudged_one": "它重新开启之后，{{game}} 有 {{n}} 次游戏表现在平时的范围内，最近一次在 {{date}}。之后的游戏时间太短，或 Compy 没能测量到足够的部分，所以 Compy 还不能说 {{game}} 已恢复到平时的范围。",
     "driftRestoredClearUnjudged_other": "它重新开启之后，{{game}} 有 {{n}} 次游戏表现在平时的范围内，最近一次在 {{date}}。之后的游戏时间太短，或 Compy 没能测量到足够的部分，所以 Compy 还不能说 {{game}} 已恢复到平时的范围。",
+    "driftRestoredOffAgain": "Compy 在 {{restored}} 前读到它已重新开启，之后又于 {{noticed}} 发现它再次关闭。从 {{until}} 起的 {{game}} 游戏，Compy 不算作它重新开启之后的游戏。",
     "recoveredDriftBack": "Compy 读到那项设置在 {{restored}} 已重新开启，早于运行正常的那几次游戏。这与那项设置有关的说法相符，但并不能证明。",
     "compyChangesRestore": "在卡顿的游戏和运行正常的那几次之间，Compy 已开启的更改数量从 {{from}} 项变成 {{to}} 项。把那项设置重新开启，正是会出现这样的变化。",
     "recoveredCompyExplained": "在卡顿的游戏和运行正常的游戏之间，也就是那项设置被读到重新开启的那段时间里，Compy 已开启的更改数量从 {{from}} 项变成 {{to}} 项，所以不算另一项更改。",
