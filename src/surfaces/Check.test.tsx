@@ -560,11 +560,45 @@ describe("Check", () => {
     };
     render(ui);
     fireEvent.click(screen.getByRole("button", { name: "Check this PC for old tweaks" }));
-    expect(await screen.findByText(/1 couldn't be read, so nothing is claimed/)).toBeInTheDocument();
+    // a10: "checked", not "read" — the same lines also hold a setting that WAS read but can't be judged.
+    expect(await screen.findByText(/1 couldn't be checked, so nothing is claimed/)).toBeInTheDocument();
     expect(
       screen.getByText(/Couldn't check Boot timer flags \(bcdedit\) — needs admin to check\./),
     ).toBeInTheDocument();
     expect(screen.queryByText(/matches stock where it matters/)).not.toBeInTheDocument();
+  });
+
+  // a10 r1: a setting that was read but can't be judged (core parking at a per-processor default) sits under
+  // the same "couldn't be checked" head, says it in its own sentence (never "Couldn't check ... — ..."), and
+  // nothing on the screen says it couldn't be READ. Break: render `{u.reason}` for every row again, or put
+  // "couldn't be read" back in uncheckedHead -> fails.
+  it("a read-but-undecided core-parking row says it was read, under a head that is true for it", async () => {
+    leftoversMock.report = {
+      findings: [],
+      checked: 8,
+      unavailable: [
+        {
+          id: "core-parking-forced",
+          title: "Core parking override",
+          reason:
+            "Compy can read this setting (100% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.",
+        },
+      ],
+    };
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Check this PC for old tweaks" }));
+    expect(await screen.findByText(/1 setting couldn't be checked this pass/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Core parking override — Compy can read this setting (100% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't be read/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Couldn't check Core parking/)).not.toBeInTheDocument();
   });
 
   it("NIC driver win-source: a stale network driver gets the honest maybe + copyable Realtek link", async () => {
