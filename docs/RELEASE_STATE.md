@@ -155,7 +155,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
   Owner GO given 2026-08-03. **Open sub-item:** the spec's per-command main-window caller check
   (defense in depth behind the ACL) is deliberately deferred — see the PR for the reasoning.
 - Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:7527`).
-- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:1586`).
+- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:1609`).
 - Elevation (in source since A9; the installed build is per the rows above): every admin step relaunches
   `compy.exe --run-elevated-op <hex JSON>` (windowless) with one request of the closed typed set
   (`run_elevated_op` — `actions.rs:1613`; helper `run_request` — `elevated_ops.rs:917`); the generic
