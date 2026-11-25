@@ -528,6 +528,15 @@ pub(crate) struct LiveReads {
     /// `current_fingerprint` (a hardware-snapshot clone plus live RAM and disk refresh) once, not N
     /// times. Nothing is cached across passes.
     fingerprint: std::cell::OnceCell<crate::hardware::HwFingerprint>,
+    /// a10: whether Energy-Efficient Ethernet reads off on every eligible adapter, read once per pass
+    /// the first time an `eee-disable` row asks. The read is one PowerShell adapter listing (seconds
+    /// on a cold PC) and was taken once PER ROW, on the UI thread: 6-7 applied EEE rows held the
+    /// applied-changes list ~34 s in the VM run (f342f3ce). The value is the same for every row (it
+    /// reads every eligible adapter, not the row's own), so sharing it changes no row's answer. A
+    /// failed or timed-out read (`None`) is remembered for the pass, so every EEE row reads
+    /// `Unreadable` together, never "off"; the next pass reads again.
+    read_eee: fn() -> Option<bool>,
+    eee: std::cell::OnceCell<Option<bool>>,
 }
 
 /// One row per service a [`disable_service_listing`] read returned: (name, state, start mode), as
@@ -564,7 +573,20 @@ impl LiveReads {
             read_scheme: crate::current_power_scheme,
             scheme: std::cell::OnceCell::new(),
             fingerprint: std::cell::OnceCell::new(),
+            read_eee: eee_disabled_on_any_eligible_adapter_checked,
+            eee: std::cell::OnceCell::new(),
         }
+    }
+
+    /// The same pass with its EEE adapter read replaced. Tests pass a counting fake.
+    #[cfg(test)]
+    pub(crate) fn with_eee_read(self, read_eee: fn() -> Option<bool>) -> Self {
+        LiveReads { read_eee, ..self }
+    }
+
+    /// a10: the pass's one EEE read (`None` = couldn't read), taken at most once.
+    fn eee_disabled(&self) -> Option<bool> {
+        *self.eee.get_or_init(self.read_eee)
     }
 
     /// This rig's fingerprint for this pass, read at most once.
@@ -786,7 +808,8 @@ pub(crate) fn probe_rec_target_with(rec_id: &str, reads: &LiveReads) -> ActiveCh
         "usb-selective-suspend-off" => read(usb_selective_suspend_off_on_ac_checked()),
         "pcie-aspm-off" => read(pcie_aspm_off_on_ac_checked()),
         // D2b r1 (F1): an EEE read that did not finish is Unreadable, never "turned off outside Compy".
-        "eee-disable" => read(eee_disabled_on_any_eligible_adapter_checked()),
+        // a10: through the pass's one adapter listing, not one PowerShell spawn per row.
+        "eee-disable" => read(reads.eee_disabled()),
         _ => ActiveCheck::Unrecognised,
     }
 }
@@ -4378,6 +4401,100 @@ mod receipt_commit_tests {
             matches!(probe_rec_target_with("eee-disable", &LiveReads::default()), ActiveCheck::Unreadable),
             "an unread EEE state must not read as Off (\"turned off outside Compy\")"
         );
+    }
+
+    // ── a10: the applied-changes pass reads the EEE adapters once, not once per row ──
+
+    fn applied_eee(adapter: &str) -> AppliedChange {
+        let result = ApplyResult {
+            applied_action: AppliedAction::DisableEnergyEfficientEthernet,
+            rollback_action: RollbackAction::RestoreEnergyEfficientEthernetFromSnapshot,
+            snapshot: Snapshot::EeeNicProperty {
+                adapters: vec![crate::actions::EeeNicSnapshot {
+                    adapter_name: adapter.into(),
+                    property_display_name: "Energy-Efficient Ethernet".into(),
+                    prior_value: "Enabled".into(),
+                }],
+            },
+            elevation_used: true,
+        };
+        build_applied_change("eee-disable", "Turn off Energy-Efficient Ethernet", result, None).expect("build")
+    }
+
+    // Break check: in `probe_rec_target_with`, read `eee-disable` through
+    // `eee_disabled_on_any_eligible_adapter_checked()` again (or make `LiveReads::eee_disabled` call
+    // `self.read_eee` without the OnceCell) -> READS is 7 and this fails.
+    #[test]
+    fn a_pass_with_many_eee_rows_lists_the_adapters_once() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static READS: AtomicUsize = AtomicUsize::new(0);
+        fn fake() -> Option<bool> {
+            READS.fetch_add(1, Ordering::SeqCst);
+            Some(true)
+        }
+        let reads = LiveReads::default().with_eee_read(fake);
+        let rows: Vec<AppliedChange> = (0..7).map(|i| applied_eee(&format!("Ethernet {i}"))).collect();
+        let views: Vec<AppliedChangeView> = rows.into_iter().map(|c| into_view_with(c, &reads)).collect();
+        assert!(views.iter().all(|v| v.active_check == Some(ActiveCheck::On)), "every row read the one listing");
+        assert_eq!(READS.load(Ordering::SeqCst), 1, "seven EEE rows, one adapter listing");
+        // The production pass shares one LiveReads across its rows (the view the UI reads).
+        let src = include_str!("history.rs");
+        let body = src.split_once("pub(crate) fn applied_change_views(").map(|(_, r)| r).expect("views");
+        let body = &body[..body.find("\n}\n").expect("end")];
+        assert!(body.contains("let reads = LiveReads::default();") && body.contains("into_view_with(c, &reads)"));
+    }
+
+    // Break check: make `LiveReads::eee_disabled` read a failed listing (`None`) as `Some(false)` ->
+    // the rows read Off ("turned off outside Compy") and this fails.
+    #[test]
+    fn a_failed_eee_listing_gives_every_row_the_unread_state() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static READS: AtomicUsize = AtomicUsize::new(0);
+        fn failed() -> Option<bool> {
+            READS.fetch_add(1, Ordering::SeqCst);
+            None
+        }
+        let reads = LiveReads::default().with_eee_read(failed);
+        for c in ["Ethernet", "Ethernet 2", "Ethernet 3"].map(applied_eee) {
+            assert_eq!(check_row_state(&c, &reads), ActiveCheck::Unreadable, "never Off for a read that failed");
+        }
+        assert_eq!(READS.load(Ordering::SeqCst), 1, "a failed read is remembered for the pass, not retried per row");
+        // Through the real resolution too: a read that did not finish is unread for every row.
+        let _read = crate::actions::ForceEeeRead::begin(None);
+        let reads = LiveReads::default();
+        for c in ["Ethernet", "Ethernet 2"].map(applied_eee) {
+            assert_eq!(check_row_state(&c, &reads), ActiveCheck::Unreadable);
+        }
+    }
+
+    // What a10 keeps, stated plainly: the EEE row check was never per adapter. It reads whether EEE is
+    // off on EVERY eligible adapter (`eee_disabled_on_any_eligible_adapter_checked`), so rows naming
+    // different adapters always got the same answer. The shared read must give each row exactly what
+    // its own read would have. Break check: cache the first row's value under its adapter name and
+    // answer other adapters `None` -> the per-row comparison fails.
+    #[test]
+    fn rows_for_different_adapters_get_the_same_answer_their_own_read_would_give() {
+        use std::os::windows::process::ExitStatusExt;
+        let listing = |text: &str| std::process::Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: text.as_bytes().to_vec(),
+            stderr: Vec::new(),
+        };
+        let rows = ["Ethernet", "Ethernet 2"].map(applied_eee);
+        for (text, want) in [
+            // One adapter still has EEE on: the setting is not off everywhere, so every row reads Off.
+            ("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n", ActiveCheck::Off),
+            // Both off: every row reads On.
+            ("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet 2|Green Ethernet|Off|On~Off\r\n", ActiveCheck::On),
+        ] {
+            let _read = crate::actions::ForceEeeRead::begin(Some(listing(text)));
+            let shared = LiveReads::default();
+            for c in &rows {
+                let own = check_row_state(c, &LiveReads::default());
+                assert_eq!(check_row_state(c, &shared), own, "shared read = the row's own read");
+                assert_eq!(own, want, "{text}");
+            }
+        }
     }
 
     // ── CR-core-parking-plan-gone: an undo whose power plan no longer exists ──
