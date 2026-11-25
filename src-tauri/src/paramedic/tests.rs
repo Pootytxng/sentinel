@@ -3304,6 +3304,58 @@ mod recovery_f3 {
         assert_eq!(f.evidence.iter().find(|e| e.code == "drift-restored-between").unwrap().args.get("count").map(String::as_str), Some("1"));
     }
 
+    /// b13: two clear sessions after it was back on, then one Compy couldn't judge. The recovery is "can't tell"
+    /// (trailing unjudged sessions are never "back to normal"), so this row says what the two clear ones showed and
+    /// why not yet, as B4's driver-back-clear-unjudged and b12's compy-undone-clear-unjudged; it is never a support.
+    /// Break checks: give no line for `Since::Clear { .. }` again -> no line, fails; push it with against = true -> the
+    /// against assert fails; count it in `contradicted` -> the row leaves play, the (Possible, in play) assert fails;
+    /// count only the first later session -> the later = 2 case gives "1", fails; drop the `until` bound from `later`
+    /// -> the went-off-again case gives a line, fails; count judged later sessions too (drop nothing, but filter on
+    /// start >= restored instead of > at) -> the control gives a line, fails.
+    #[test]
+    fn b13_two_clear_sessions_after_it_was_back_on_then_one_compy_couldnt_judge_are_said_with_why_not_yet() {
+        let short = |day: u32| {
+            let mut s = calm(day);
+            s.duration_secs = 30;
+            s.samples = 30;
+            s
+        };
+        let restored_codes = |d: &Diagnosis| -> Vec<&'static str> { drift_codes(d).into_iter().filter(|c| c.starts_with("drift-restored")).collect() };
+        let d = follow(with_extra(episode(), vec![calm(13), calm(14), short(15)]));
+        // The only follow-through line: no "One session so far" (drift-restored-clear) or between line beside it.
+        assert_eq!(restored_codes(&d), ["drift-restored-clear-unjudged"], "{:?}", drift_codes(&d));
+        let f = finding_of(&d, "setting-drift");
+        let line = f.evidence.iter().find(|e| e.code == "drift-restored-clear-unjudged").unwrap();
+        assert!(!line.against && line.kind == EvidenceKind::Measured);
+        assert_eq!(line.args["restored"], BACK_ON);
+        assert_eq!(line.args["at"], at_day(14, 10));
+        assert_eq!((line.args["count"].as_str(), line.args["later"].as_str()), ("2", "1"));
+        assert_ne!(d.state, DiagnosisState::Recovered, "trailing unjudged sessions are never 'back to normal'");
+        assert_eq!((f.confidence, f.in_play), (Certainty::Possible, true), "said, never support, never a contradiction");
+        // Nothing rises: the same sessions with the setting read back on only after all of them (so no session is
+        // "since", and the line is drift-restored-none) give every finding the same confidence and place.
+        let rank = |d: &Diagnosis| -> Vec<(&'static str, Certainty, bool)> { d.findings.iter().map(|f| (f.id, f.confidence, f.in_play)).collect() };
+        let without = follow_with(with_extra(episode(), vec![calm(13), calm(14), short(15)]), vec![fact("applied-changes", NOTICED, Some("2026-10-16T18:00:00Z"))]);
+        assert!(drift_codes(&without).contains(&"drift-restored-none"), "{:?}", drift_codes(&without));
+        assert_eq!(rank(&d), rank(&without), "the line changes no finding's confidence");
+        // later = 2: two unjudged sessions after the two clear ones.
+        let d = follow(with_extra(episode(), vec![calm(13), calm(14), short(15), short(16)]));
+        assert_eq!(restored_codes(&d), ["drift-restored-clear-unjudged"], "{:?}", drift_codes(&d));
+        let line = finding_of(&d, "setting-drift").evidence.iter().find(|e| e.code == "drift-restored-clear-unjudged").unwrap();
+        assert_eq!((line.args["count"].as_str(), line.args["later"].as_str()), ("2", "2"));
+        assert_eq!(finding_of(&d, "setting-drift").confidence, Certainty::Possible);
+        // Control: the session after the unjudged one was judged (and clear). The two newest judged sessions are clear,
+        // the recovery answers, and no follow-through line repeats it.
+        let d = follow(with_extra(episode(), vec![calm(13), calm(14), short(15), calm(16)]));
+        assert_eq!(d.state, DiagnosisState::Recovered);
+        assert!(restored_codes(&d).is_empty(), "{:?}", drift_codes(&d));
+        // Went off again (read fine last on the 14th at 19:00, noticed off at 20:00) before the unjudged session: that
+        // session is not "after it was back on" (as every driftRestored line ends there), so no line counts it.
+        let standing = DriftFact { last_ready_at: Some("2026-10-14T19:00:00Z".into()), ..fact("applied-changes", "2026-10-14T20:00:00Z", None) };
+        let d = follow_with(with_extra(episode(), vec![calm(13), calm(14), short(15)]), vec![standing, fact("applied-changes", NOTICED, Some(BACK_ON))]);
+        assert!(restored_codes(&d).is_empty(), "{:?}", drift_codes(&d));
+    }
+
     #[test]
     fn two_settings_one_contradicted_one_still_off_keeps_the_row_in_play_with_the_contradiction_shown() {
         // A was read back on the 12th and the 13th ran rough. B was noticed off on the 7th and is still off.

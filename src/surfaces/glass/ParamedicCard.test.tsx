@@ -3067,6 +3067,41 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     for (const k of ["driftRestoredBetween", "driftRestoredUnjudged"]) expect(zh[`${k}_one`], k).toBe(zh[`${k}_other`]);
   });
 
+  // b13: two or more clear sessions since it was back on, then sessions Compy couldn't judge: said by the number of
+  // later sessions (as B4's and b12's clear-unjudged lines). "One session so far" never shows beside it, and the one
+  // next step is the row's own stepBackOn (still true: a judged session is what Compy needs). Break checks: drop the
+  // drift-restored-clear-unjudged case from evidenceLine -> the line is missing, fails; stop passing `count` (later)
+  // -> the key has no base form, fails; put back "can't say it is back" (an "it" that can read as the setting) ->
+  // fails.
+  it("two clear sessions since it was back on, then one Compy couldn't judge: said, with why not yet", async () => {
+    const unclearNow = { kind: "cant-tell", why: { kind: "recovery-unclear", partial: true, one_clear: false, cap_changed: false } } as const;
+    const both = ev("drift-restored-clear-unjudged", { restored: BACK, at: "2026-11-22T12:00:00Z", count: "2", later: "1" }, { kind: "measured", source: "sessions" });
+    let text = await open({ state: unclearNow, findings: [suspect([both])] });
+    expect(text).toMatch(
+      /After it was back on, Game A ran in its usual range in 2 sessions, the latest on [A-Z][a-z]{2} \d{1,2}\. The session after that was too short, or Compy couldn't measure enough of it, so Compy can't say Game A is back in its usual range yet\./,
+    );
+    expect(text).not.toContain("One session so far");
+    expect(text).toMatch(/Compy read it back on by [^.]*\d[^.]*\. Play Game A once, then press Something's wrong again\./);
+    expect(text).not.toMatch(/the reason|fixed|caused|probably/i);
+    expect(screen.queryAllByText("Weakens this").length).toBe(0);
+    cleanup();
+    const more = ev("drift-restored-clear-unjudged", { restored: BACK, at: "2026-11-22T12:00:00Z", count: "3", later: "2" }, { kind: "measured", source: "sessions" });
+    text = await open({ state: unclearNow, findings: [suspect([more])] });
+    expect(text).toMatch(
+      /After it was back on, Game A ran in its usual range in 3 sessions, the latest on [A-Z][a-z]{2} \d{1,2}\. Each session after that was too short, or Compy couldn't measure enough of it, so Compy can't say Game A is back in its usual range yet\./,
+    );
+  });
+
+  // b13: the zh-CN line, word for word (zh uses only the _other form; _one is the same sentence). Break check: put back
+  // "还不能说它已恢复" (a 它 that reads as the setting here) -> fails.
+  it("zh-CN: the drift clear-unjudged line says the same in Chinese", () => {
+    const zh = loadKeys("zh-CN").evidence as Record<string, string>;
+    expect(zh.driftRestoredClearUnjudged_other).toBe(
+      "它重新开启之后，{{game}} 有 {{n}} 次游戏表现在平时的范围内，最近一次在 {{date}}。之后的游戏时间太短，或 Compy 没能测量到足够的部分，所以 Compy 还不能说 {{game}} 已恢复到平时的范围。",
+    );
+    expect(zh.driftRestoredClearUnjudged_one).toBe(zh.driftRestoredClearUnjudged_other);
+  });
+
   it("two clear sessions: the recovery says it is consistent with the setting and does not prove it", async () => {
     const f = suspect([], { in_play: true, now: "points-to", now_evidence: [backLine] });
     const text = await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery({ kind: "points-to", id: "setting-drift" }) });
@@ -3371,6 +3406,8 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       ["evidence", "driftRestoredClear"],
       ["evidence", "driftRestoredBetween_one"],
       ["evidence", "driftRestoredBetween_other"],
+      ["evidence", "driftRestoredClearUnjudged_one"],
+      ["evidence", "driftRestoredClearUnjudged_other"],
       ["evidence", "driftRestoredItem"],
       ["evidence", "driftRestoredNamed_one"],
       ["evidence", "driftRestoredNamed_other"],
