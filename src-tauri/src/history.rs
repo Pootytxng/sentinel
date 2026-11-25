@@ -4470,8 +4470,9 @@ mod receipt_commit_tests {
     // What a10 keeps, stated plainly: the EEE row check was never per adapter. It reads whether EEE is
     // off on EVERY eligible adapter (`eee_disabled_on_any_eligible_adapter_checked`), so rows naming
     // different adapters always got the same answer. The shared read must give each row exactly what
-    // its own read would have. Break check: cache the first row's value under its adapter name and
-    // answer other adapters `None` -> the per-row comparison fails.
+    // its own read would have, from the real adapter listing. Break check: give the production pass
+    // a read that is not the adapter listing (`read_eee: || Some(true)` in `with_listings`) -> the
+    // one-adapter-still-on case reads On and this fails.
     #[test]
     fn rows_for_different_adapters_get_the_same_answer_their_own_read_would_give() {
         use std::os::windows::process::ExitStatusExt;
