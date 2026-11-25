@@ -385,7 +385,10 @@ pub(crate) enum ElevatedOp {
     /// The MPO default (`value` absent: OverlayTestMode removed) and its undo (the recorded value).
     Mpo { value: Option<u32> },
     // Row 19.
-    CoreParkingDefault { plan: PlanGuid, prior_ac: Percent, prior_dc: Option<Percent> },
+    /// a10 r1 (F2): `target_ac` / `target_dc` are the plan's own provisioned default the app read from the
+    /// registry (never a fixed 0/0); both required, both a `Percent` (0..=100, checked when the app builds the
+    /// op and again when the helper parses it).
+    CoreParkingDefault { plan: PlanGuid, prior_ac: Percent, prior_dc: Option<Percent>, target_ac: Percent, target_dc: Percent },
     CoreParkingRestore { ac: Percent, dc: Percent, target: CoreParkingTarget },
     // Rows 20-22.
     PagefileAutomatic {},
@@ -518,9 +521,13 @@ impl ElevatedOp {
             Op::PrioritySeparationDefault {} => actions::priority_separation_restore_script(),
             Op::PrioritySeparationRestore { prior } => actions::priority_separation_rollback_script(*prior),
             Op::Mpo { value } => actions::mpo_rollback_script(*value),
-            Op::CoreParkingDefault { plan, prior_ac, prior_dc } => {
-                actions::core_parking_apply_script(plan.as_str(), prior_ac.get(), prior_dc.map(Percent::get))
-            }
+            Op::CoreParkingDefault { plan, prior_ac, prior_dc, target_ac, target_dc } => actions::core_parking_default_script(
+                plan.as_str(),
+                target_ac.get(),
+                target_dc.get(),
+                prior_ac.get(),
+                prior_dc.map(Percent::get),
+            ),
             Op::CoreParkingRestore { ac, dc, target } => match target {
                 CoreParkingTarget::Current {} => actions::core_parking_script(ac.get(), dc.get()),
                 CoreParkingTarget::Plan { plan, reactivate } => {
@@ -1231,6 +1238,48 @@ mod tests {
             assert!(gaming.contains(line), "gaming_orchestrator.rs no longer has {line:?}: update ItemId with it");
         }
         assert_eq!(gaming.matches("tier.push(ElevatedItem {").count(), 3, "a new tier item needs its id in ItemId");
+    }
+
+    /// a10 r1 (F2): the core-parking restore op carries the plan's own default as `target_ac` / `target_dc`.
+    /// Both are required and both are a Percent when the helper parses the request, so a forged request
+    /// without them, or with a value outside 0..=100, is refused at the parse, before anything is composed or
+    /// run (the helper parses before it connects or runs: `helper_argv_with`). The script is the one the app
+    /// pins (`actions::core_parking_default_script`). Break: give `target_ac` `#[serde(default)]` (or make it a
+    /// plain u32) and this fails.
+    #[test]
+    fn the_core_parking_default_op_requires_its_targets_within_0_to_100() {
+        let item = |fields: &str| {
+            format!(r#"{{"ops":[{{"op":"core-parking-default","plan":"11111111-2222-3333-4444-555555555555","prior_ac":100,"prior_dc":90{fields}}}]}}"#)
+        };
+        let good = parse_request_hex(&hex(&request_json("single", &item(r#","target_ac":10,"target_dc":5"#)))).expect("valid");
+        let op = &good.items[0].ops[0];
+        let pct = |v| Percent::parse(v).expect("pct");
+        assert_eq!(
+            op,
+            &ElevatedOp::CoreParkingDefault {
+                plan: PlanGuid::parse("11111111-2222-3333-4444-555555555555").expect("plan"),
+                prior_ac: pct(100),
+                prior_dc: Some(pct(90)),
+                target_ac: pct(10),
+                target_dc: pct(5),
+            }
+        );
+        assert_eq!(
+            script_of(op),
+            actions::core_parking_default_script("11111111-2222-3333-4444-555555555555", 10, 5, 100, Some(90))
+        );
+        for (why, fields) in [
+            ("no targets (the old shape)", ""),
+            ("no target_dc", r#","target_ac":10"#),
+            ("no target_ac", r#","target_dc":5"#),
+            ("target_ac above 100", r#","target_ac":101,"target_dc":5"#),
+            ("target_dc above 100", r#","target_ac":10,"target_dc":4294967295"#),
+            ("negative", r#","target_ac":-1,"target_dc":5"#),
+            ("text", r#","target_ac":"10","target_dc":5"#),
+            ("null", r#","target_ac":null,"target_dc":5"#),
+        ] {
+            assert!(parse_request_hex(&hex(&request_json("single", &item(fields)))).is_err(), "{why}: refused before anything runs");
+        }
     }
 
     /// Break: put `#[serde(deny_unknown_fields)]` off `ElevatedOp` (or `RequestItem`) and this fails.

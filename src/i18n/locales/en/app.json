@@ -142,6 +142,7 @@
     "benchStackNothingAppliable": "No appliable starter tweaks to measure as a stack.",
     "benchStackNothingApplied": "The stack didn't apply — nothing was changed, so there's nothing to measure.",
     "benchRunCancelled": "Run cancelled.",
+    "coreParkingDefaultUnread": "Compy couldn't read this power plan's own default for core parking from Windows, so it won't guess a value to put back. Nothing was changed.",
     "unmapped": "Compy couldn't finish this. Details: {{detail}}",
     "unmappedNoDetail": "Compy couldn't finish this."
   },

@@ -434,6 +434,13 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "Run cancelled.",
     key: "app.backendErrors.benchRunCancelled",
   },
+  // a10 r1 (F2): the core-parking restore refuses before any prompt when it can't read the plan's own
+  // default (actions.rs CORE_PARKING_DEFAULT_UNREAD); it never writes a guessed value.
+  {
+    rust: "CORE_PARKING_DEFAULT_UNREAD",
+    text: "Compy couldn't read this power plan's own default for core parking from Windows, so it won't guess a value to put back. Nothing was changed.",
+    key: "app.backendErrors.coreParkingDefaultUnread",
+  },
 ];
 
 /** The i18n key for a backend error/reason that carries one of the sentences above, else null. */

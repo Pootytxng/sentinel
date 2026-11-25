@@ -6643,28 +6643,53 @@ pub(crate) fn rollback_mpo_typed(prior: Option<u32>) -> Result<(), String> {
 /// ([`setactive_if_still_active_step`]), so a plan switched outside Compy while the UAC prompt was
 /// open never gets the write while the row records the old plan.
 /// Kill-mid-apply residual: the AC (and DC) index may stay 0 with no receipt.
+/// a10 r1 (F2): TEST-ONLY now. No production path writes a fixed 0/0 any more; this is
+/// [`core_parking_default_script`] at 0/0, kept so the A8 goldens (`G_CORE_PARKING_APPLY*`) and the
+/// real-PowerShell tests keep pinning the script's shape byte-for-byte.
+#[cfg(test)]
 pub(crate) fn core_parking_apply_script(plan_guid: &str, prior_ac: u32, prior_dc: Option<u32>) -> String {
+    core_parking_default_script(plan_guid, 0, 0, prior_ac, prior_dc)
+}
+
+/// a10 r1 (F2): the core-parking restore's all-or-nothing script, writing `target_ac` / `target_dc` (the
+/// plan's own provisioned default, read from Windows) instead of the old fixed 0/0. Rendered by the typed
+/// helper op `elevated_ops::ElevatedOp::CoreParkingDefault`, which carries the targets.
+pub(crate) fn core_parking_default_script(
+    plan_guid: &str,
+    target_ac: u32,
+    target_dc: u32,
+    prior_ac: u32,
+    prior_dc: Option<u32>,
+) -> String {
     let idx = |side: &str, v: u32| {
         format!("powercfg -set{side}valueindex {plan_guid} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {v}")
     };
     ps_all_or_restore(&[
-        PsStep { write: idx("ac", 0), undo: idx("ac", prior_ac), native: true },
+        PsStep { write: idx("ac", target_ac), undo: idx("ac", prior_ac), native: true },
         // No DC prior (never read back): the DC undo writes the AC prior, as the rollback does.
-        PsStep { write: idx("dc", 0), undo: idx("dc", prior_dc.unwrap_or(prior_ac)), native: true },
+        PsStep { write: idx("dc", target_dc), undo: idx("dc", prior_dc.unwrap_or(prior_ac)), native: true },
         PsStep { write: setactive_if_still_active_step(plan_guid), undo: String::new(), native: false },
     ])
 }
 
-// ── Core parking: re-allow parking (min unparked → 0% AC+DC) so the override is lifted ──
+/// a10 r1 (F2): the restore refuses before any prompt when the plan's own default can't be read.
+/// Mirrored in `src/data/backend-error.ts` (pinned by `backend-error.test.ts`).
+pub(crate) const CORE_PARKING_DEFAULT_UNREAD: &str = "Compy couldn't read this power plan's own default for core parking from Windows, so it won't guess a value to put back. Nothing was changed.";
+
+// ── Core parking: put the plan's own provisioned default back (AC + DC) so the override is lifted ──
+// a10 r1 (F2): it used to write a fixed 0/0 ("re-allow parking"), which is neither the recorded prior
+// nor Windows' default (the VM's stock was AC 100 / DC 10). It now writes the default it just read
+// from the registry (`crate::cpmincores_plan_defaults`, the same read the detector's support uses).
 pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
-    restore_core_parking_default_with(&current_power_plan_guid, &read_core_parking_priors, &run_elevated_op)
+    restore_core_parking_default_with(&current_power_plan_guid, &read_core_parking_priors, &crate::cpmincores_plan_defaults, &run_elevated_op)
 }
 
 /// [`restore_core_parking_default`] with its machine reads and the elevated run passed in (tests pass
-/// fakes).
+/// fakes). `read_defaults` is the plan's own default (AC, DC) for the plan GUID it is given.
 pub(crate) fn restore_core_parking_default_with(
     active_plan: &dyn Fn() -> Option<String>,
     read_priors: &dyn Fn() -> Result<(Option<u32>, Option<u32>), String>,
+    read_defaults: &dyn Fn(&str) -> (Option<u32>, Option<u32>),
     run_elevated: &dyn Fn(ElevatedOp) -> Result<(), String>,
 ) -> Result<ApplyResult, String> {
     // CR-core-parking-plan-guid: the plan SCHEME_CURRENT names right now, recorded with the priors
@@ -6699,7 +6724,21 @@ pub(crate) fn restore_core_parking_default_with(
         .map(crate::elevated_ops::Percent::parse)
         .transpose()
         .map_err(|_| "the core-parking DC value Compy read is outside 0-100 — refusing to restore blind".to_string())?;
-    run_elevated(ElevatedOp::CoreParkingDefault { plan: typed_plan, prior_ac: typed_ac, prior_dc: typed_dc })?;
+    // a10 r1 (F2): the value written is the plan's own default, read now for the recorded plan; either
+    // side unread, or not a percentage, stops here, before any prompt, never a guessed value (and never
+    // the old fixed 0/0).
+    let (Some(default_ac), Some(default_dc)) = read_defaults(&plan) else {
+        return Err(CORE_PARKING_DEFAULT_UNREAD.to_string());
+    };
+    let target_ac = crate::elevated_ops::Percent::parse(default_ac).map_err(|_| CORE_PARKING_DEFAULT_UNREAD.to_string())?;
+    let target_dc = crate::elevated_ops::Percent::parse(default_dc).map_err(|_| CORE_PARKING_DEFAULT_UNREAD.to_string())?;
+    run_elevated(ElevatedOp::CoreParkingDefault {
+        plan: typed_plan,
+        prior_ac: typed_ac,
+        prior_dc: typed_dc,
+        target_ac,
+        target_dc,
+    })?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreCoreParkingDefault,
         rollback_action: RollbackAction::RestoreCoreParkingFromSnapshot,
@@ -6724,14 +6763,15 @@ mod core_parking_restore_tests {
             Ok(())
         };
         let priors = || -> Result<(Option<u32>, Option<u32>), String> { Ok((Some(100), Some(100))) };
-        match restore_core_parking_default_with(&|| None, &priors, &run) {
+        let defaults = |_: &str| -> (Option<u32>, Option<u32>) { (Some(10), Some(5)) };
+        match restore_core_parking_default_with(&|| None, &priors, &defaults, &run) {
             Err(e) => assert!(e.contains("Nothing was changed"), "{e}"),
             Ok(_) => panic!("an unread plan must not apply"),
         }
         assert_eq!(ran.get(), 0, "nothing runs elevated on an unread plan");
 
         let plan = "11111111-2222-3333-4444-555555555555";
-        let done = restore_core_parking_default_with(&|| Some(plan.to_string()), &priors, &run);
+        let done = restore_core_parking_default_with(&|| Some(plan.to_string()), &priors, &defaults, &run);
         assert_eq!(ran.get(), 1);
         match done {
             Ok(r) => match r.snapshot {
@@ -6760,25 +6800,79 @@ mod core_parking_restore_tests {
             Ok(())
         };
         let priors = || -> Result<(Option<u32>, Option<u32>), String> { Ok((Some(100), Some(90))) };
-        restore_core_parking_default_with(&|| Some(plan.to_string()), &priors, &run).expect("a read plan applies");
+        // a10 r1 (F2): the writes are the plan's own default, read for the recorded plan.
+        let asked = RefCell::new(Vec::<String>::new());
+        let defaults = |p: &str| -> (Option<u32>, Option<u32>) {
+            asked.borrow_mut().push(p.to_string());
+            (Some(10), Some(5))
+        };
+        restore_core_parking_default_with(&|| Some(plan.to_string()), &priors, &defaults, &run).expect("a read plan applies");
+        assert_eq!(asked.borrow().as_slice(), [plan.to_string()], "the default is read for the recorded plan");
         let scripts = seen.borrow().clone();
         assert_eq!(scripts.len(), 1);
         let s = &scripts[0];
         assert!(!s.contains("SCHEME_CURRENT"), "{s}");
-        assert!(s.contains(&format!("-setacvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 0")), "{s}");
-        assert!(s.contains(&format!("-setdcvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 0")), "{s}");
+        assert!(s.contains(&format!("-setacvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 10")), "{s}");
+        assert!(s.contains(&format!("-setdcvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 5")), "{s}");
         // The undo inside the script puts the priors back on that same plan.
         assert!(s.contains(&format!("-setacvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 100")), "{s}");
         assert!(s.contains(&format!("-setdcvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 90")), "{s}");
 
         for bad in ["SCHEME_CURRENT", "scheme_max", "", "11111111-2222-3333-4444-555555555555-x", "11111111-2222-3333-4444-555555555555; calc"] {
             let before = seen.borrow().len();
-            match restore_core_parking_default_with(&|| Some(bad.to_string()), &priors, &run) {
+            match restore_core_parking_default_with(&|| Some(bad.to_string()), &priors, &defaults, &run) {
                 Err(e) => assert!(e.contains("Nothing was changed"), "{bad}: {e}"),
                 Ok(_) => panic!("{bad:?} must not apply"),
             }
             assert_eq!(seen.borrow().len(), before, "nothing runs elevated for {bad:?}");
         }
+    }
+
+    const G_PLAN: &str = "11111111-2222-3333-4444-555555555555";
+
+    /// a10 r1 (F2) golden: the restore script with a plan default of AC 10 / DC 5 and priors 100 / 90.
+    /// Break check: write `0` instead of `target_ac` in `core_parking_default_script` -> fails.
+    #[test]
+    fn golden_core_parking_restore_writes_the_plans_own_default() {
+        let s = core_parking_default_script(G_PLAN, 10, 5, 100, Some(90));
+        let idx = |side: &str, v: u32| format!("powercfg -set{side}valueindex {G_PLAN} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {v}");
+        let expected = ps_all_or_restore(&[
+            PsStep { write: idx("ac", 10), undo: idx("ac", 100), native: true },
+            PsStep { write: idx("dc", 5), undo: idx("dc", 90), native: true },
+            PsStep { write: setactive_if_still_active_step(G_PLAN), undo: String::new(), native: false },
+        ]);
+        assert_eq!(s, expected);
+        assert!(s.contains(&idx("ac", 10)) && s.contains(&idx("dc", 5)), "{s}");
+        assert!(!s.contains(&idx("ac", 0)) && !s.contains(&idx("dc", 0)), "no fixed 0/0: {s}");
+        // The test-only 0/0 template (pinned by the A8 goldens) is this script at 0/0, byte-for-byte.
+        assert_eq!(core_parking_apply_script(G_PLAN, 100, Some(90)), core_parking_default_script(G_PLAN, 0, 0, 100, Some(90)));
+    }
+
+    /// a10 r1 (F2): a plan default that can't be read (either side, or not a percentage) stops the
+    /// restore before anything runs elevated: no prompt, no ApplyResult, no ledger row. Break check:
+    /// fall back to `unwrap_or(0)` for an unread default -> fails.
+    #[test]
+    fn an_unread_plan_default_refuses_the_core_parking_restore_before_any_prompt() {
+        let ran = Cell::new(0);
+        let run = |_: ElevatedOp| -> Result<(), String> {
+            ran.set(ran.get() + 1);
+            Ok(())
+        };
+        let priors = || -> Result<(Option<u32>, Option<u32>), String> { Ok((Some(100), Some(10))) };
+        let cases: [(&str, (Option<u32>, Option<u32>)); 4] = [
+            ("both unread", (None, None)),
+            ("AC unread", (None, Some(5))),
+            ("DC unread", (Some(10), None)),
+            ("AC not a percentage", (Some(101), Some(5))),
+        ];
+        for (why, read) in cases {
+            let defaults = move |_: &str| read;
+            match restore_core_parking_default_with(&|| Some(G_PLAN.to_string()), &priors, &defaults, &run) {
+                Err(e) => assert_eq!(e, CORE_PARKING_DEFAULT_UNREAD, "{why}"),
+                Ok(_) => panic!("{why}: must not restore"),
+            }
+        }
+        assert_eq!(ran.get(), 0, "nothing runs elevated without a read default");
     }
 }
 pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan_guid: Option<&str>) -> Result<UndoDone, String> {
@@ -9550,6 +9644,28 @@ mod elevated_goldens {
         "if ($compyDone -ge 1) { try { powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: undo 1 failed' } } catch { $compyUndoFailed=$true } }; ",
         "if (-not $compyUndoFailed) { throw $compyErr } }"
     );
+    // a10 r1 (F2): the restore as it now runs: the plan's own default (AC 10 / DC 5) written, priors 100 / 90
+    // (and 100 / no DC) as the in-elevation undo. Same shape as G_CORE_PARKING_APPLY, other write values.
+    pub(super) const G_CORE_PARKING_DEFAULT: &str = concat!(
+        "$compyDone=0; $compyUndoFailed=$false; try { ",
+        "powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 10; if (-not $?) { throw 'compy: step 1 failed' }; $compyDone=1; ",
+        "powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 5; if (-not $?) { throw 'compy: step 2 failed' }; $compyDone=2; ",
+        setactive_step!(), "; $compyDone=3; ",
+        "} catch { $compyErr=$_; ",
+        "if ($compyDone -ge 2) { try { powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 90; if (-not $?) { throw 'compy: undo 2 failed' } } catch { $compyUndoFailed=$true } }; ",
+        "if ($compyDone -ge 1) { try { powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: undo 1 failed' } } catch { $compyUndoFailed=$true } }; ",
+        "if (-not $compyUndoFailed) { throw $compyErr } }"
+    );
+    pub(super) const G_CORE_PARKING_DEFAULT_NO_DC: &str = concat!(
+        "$compyDone=0; $compyUndoFailed=$false; try { ",
+        "powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 10; if (-not $?) { throw 'compy: step 1 failed' }; $compyDone=1; ",
+        "powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 5; if (-not $?) { throw 'compy: step 2 failed' }; $compyDone=2; ",
+        setactive_step!(), "; $compyDone=3; ",
+        "} catch { $compyErr=$_; ",
+        "if ($compyDone -ge 2) { try { powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: undo 2 failed' } } catch { $compyUndoFailed=$true } }; ",
+        "if ($compyDone -ge 1) { try { powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: undo 1 failed' } } catch { $compyUndoFailed=$true } }; ",
+        "if (-not $compyUndoFailed) { throw $compyErr } }"
+    );
     pub(super) const G_CORE_PARKING_RESTORE_ACTIVE: &str = concat!(
         "powercfg -setacvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 100; if (-not $?) { throw 'compy: restore step 1 failed' }; ",
         "powercfg -setdcvalueindex ", plan!(), " ", cp_sub!(), " ", cp_set!(), " 90; if (-not $?) { throw 'compy: restore step 2 failed' }; ",
@@ -9838,6 +9954,10 @@ mod elevated_goldens {
     fn golden_core_parking() {
         assert_eq!(core_parking_apply_script(PLAN, 100, Some(90)), G_CORE_PARKING_APPLY);
         assert_eq!(core_parking_apply_script(PLAN, 100, None), G_CORE_PARKING_APPLY_NO_DC);
+        // a10 r1 (F2): the script the restore now runs, with the plan's own default as the write.
+        // Break: write `prior_ac` instead of `target_ac` in `core_parking_default_script` and this fails.
+        assert_eq!(core_parking_default_script(PLAN, 10, 5, 100, Some(90)), G_CORE_PARKING_DEFAULT);
+        assert_eq!(core_parking_default_script(PLAN, 10, 5, 100, None), G_CORE_PARKING_DEFAULT_NO_DC);
         assert_eq!(core_parking_plan_script(PLAN, 100, 90, true), G_CORE_PARKING_RESTORE_ACTIVE);
         assert_eq!(core_parking_plan_script(PLAN, 100, 90, false), G_CORE_PARKING_RESTORE_INACTIVE);
         assert_eq!(core_parking_script(100, 90), G_CORE_PARKING_RESTORE_LEGACY);
@@ -9989,8 +10109,15 @@ mod elevated_goldens {
             (r#"{"op":"priority-separation-restore","prior":null}"#, G_PRIORITY_RESTORE_NONE),
             (r#"{"op":"mpo","value":null}"#, G_MPO_DEFAULT),
             (r#"{"op":"mpo","value":5}"#, G_MPO_RESTORE_5),
-            (concat!(r#"{"op":"core-parking-default","plan":""#, plan!(), r#"","prior_ac":100,"prior_dc":90}"#), G_CORE_PARKING_APPLY),
-            (concat!(r#"{"op":"core-parking-default","plan":""#, plan!(), r#"","prior_ac":100,"prior_dc":null}"#), G_CORE_PARKING_APPLY_NO_DC),
+            // a10 r1 (F2): the op carries the plan's own default (here AC 10 / DC 5), never a fixed 0/0.
+            (
+                concat!(r#"{"op":"core-parking-default","plan":""#, plan!(), r#"","prior_ac":100,"prior_dc":90,"target_ac":10,"target_dc":5}"#),
+                G_CORE_PARKING_DEFAULT,
+            ),
+            (
+                concat!(r#"{"op":"core-parking-default","plan":""#, plan!(), r#"","prior_ac":100,"prior_dc":null,"target_ac":10,"target_dc":5}"#),
+                G_CORE_PARKING_DEFAULT_NO_DC,
+            ),
             (
                 concat!(r#"{"op":"core-parking-restore","ac":100,"dc":90,"target":{"kind":"plan","plan":""#, plan!(), r#"","reactivate":true}}"#),
                 G_CORE_PARKING_RESTORE_ACTIVE,
@@ -10359,11 +10486,19 @@ mod a9_caller_tests {
             seen.borrow_mut().push(op);
             Ok(())
         };
-        restore_core_parking_default_with(&|| Some(plan.to_string()), &|| Ok((Some(100), Some(90))), &run).expect("applies");
+        // a10 r1 (F2): the op also carries the plan's own default (the read below), never 0/0.
+        restore_core_parking_default_with(&|| Some(plan.to_string()), &|| Ok((Some(100), Some(90))), &|_| (Some(10), Some(5)), &run)
+            .expect("applies");
         let pct = |v| Percent::parse(v).expect("pct");
         assert_eq!(
             seen.borrow().clone(),
-            vec![ElevatedOp::CoreParkingDefault { plan: PlanGuid::parse(plan).expect("plan"), prior_ac: pct(100), prior_dc: Some(pct(90)) }]
+            vec![ElevatedOp::CoreParkingDefault {
+                plan: PlanGuid::parse(plan).expect("plan"),
+                prior_ac: pct(100),
+                prior_dc: Some(pct(90)),
+                target_ac: pct(10),
+                target_dc: pct(5),
+            }]
         );
         let legacy = core_parking_undo_step(Some(40), Some(30), None, &|_| panic!("not read"), &|_| panic!("not read"), &|| panic!("not read"));
         assert_eq!(legacy, Ok(CoreParkingUndo::Run(ElevatedOp::CoreParkingRestore { ac: pct(40), dc: pct(30), target: CoreParkingTarget::Current {} })));
@@ -10379,7 +10514,10 @@ mod a9_caller_tests {
         );
         // The production wiring: the apply runs `run_elevated_op`, the undo `run_elevated_undo_op`.
         let src = include_str!("actions.rs").replace("\r\n", "\n");
-        assert!(src.contains(concat!("restore_core_parking_default_with(&current_power_plan_guid, &read_core_parking_priors, &run_", "elevated_op)")));
+        assert!(src.contains(concat!(
+            "restore_core_parking_default_with(&current_power_plan_guid, &read_core_parking_priors, &crate::cpmincores_plan_defaults, &run_",
+            "elevated_op)"
+        )));
         assert!(src.contains(concat!("        run_elevated: &run_", "elevated_undo_op,")));
     }
 

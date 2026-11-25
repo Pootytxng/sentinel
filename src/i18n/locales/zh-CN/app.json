@@ -142,6 +142,7 @@
     "benchStackNothingAppliable": "没有可以作为一组来测量的入门优化项。",
     "benchStackNothingApplied": "这组更改没有被应用——没有做任何更改，所以没有可测量的内容。",
     "benchRunCancelled": "这次运行已取消。",
+    "coreParkingDefaultUnread": "Compy 无法从 Windows 读取这个电源计划自己的核心停放默认值，所以不会猜一个值写回去。没有做任何更改。",
     "unmapped": "Compy 没能完成这项操作。详细信息：{{detail}}",
     "unmappedNoDetail": "Compy 没能完成这项操作。"
   },
