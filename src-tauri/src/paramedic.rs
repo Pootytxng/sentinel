@@ -3213,8 +3213,31 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
             recovery::Since::Clear { at, count: 1 } => {
                 evidence.push(ev(EvidenceKind::Measured, "drift-restored-clear", "sessions", false, &[("restored", when), ("at", at)]));
             }
-            // Two usual-range sessions are the recovery's own answer (`recovery::drift`), said under "since".
-            recovery::Since::Clear { .. } => {}
+            // Two usual-range sessions are the recovery's own answer (`recovery::drift`), said under "since", unless
+            // sessions Compy couldn't judge came after them. Then the card is "can't tell" (recovery::outcome_within:
+            // trailing unjudged sessions are never "back to normal") and nothing else would say what the clear ones
+            // showed. b13: this row says it, as B4's driver-back-clear-unjudged and b12's compy-undone-clear-unjudged
+            // do: said, NEVER a support (no candidate flag changes, not against). "Later" counts sessions by START
+            // after the newest clear one and stops where "since it was back on" stops: at `until`, the time the same
+            // setting was noticed off again (`recovery::off_again_at`), exclusive, as since_restore does. Every session
+            // in there is unjudged by construction (the newest judged one since is `at`).
+            recovery::Since::Clear { at, count } => {
+                let newest = ts(&at);
+                let later = c
+                    .sess
+                    .iter()
+                    .filter(|s| s.start().is_some_and(|t| newest.is_some_and(|a| t > a) && until.is_none_or(|u| t < u)))
+                    .count();
+                if later > 0 {
+                    evidence.push(ev(
+                        EvidenceKind::Measured,
+                        "drift-restored-clear-unjudged",
+                        "sessions",
+                        false,
+                        &[("restored", when), ("at", at), ("count", count.to_string()), ("later", later.to_string())],
+                    ));
+                }
+            }
             // b12: with how many sessions were judged (CapChanged ones included), so the card says "session" or "sessions".
             recovery::Since::Between { count } => {
                 evidence.push(ev(EvidenceKind::Unknown, "drift-restored-between", "sessions", false, &[("restored", when), ("count", count.to_string())]));

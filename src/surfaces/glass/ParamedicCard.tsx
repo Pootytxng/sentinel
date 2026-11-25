@@ -526,6 +526,10 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.driftRestoredRough", { game, count: Number(a.count ?? 1), restored: dates.dayTime(a.restored), date: dates.day(a.at) });
     case "drift-restored-clear":
       return t("paramedic.evidence.driftRestoredClear", { game, date: dates.day(a.at) });
+    // b13: two or more clear sessions since it was back on, then sessions Compy couldn't judge (as B4's and b12's
+    // clear-unjudged lines). `n` is the clear count; `count` (the later, unjudged ones) only picks the plural form.
+    case "drift-restored-clear-unjudged":
+      return t("paramedic.evidence.driftRestoredClearUnjudged", { game, n: a.count, count: Number(a.later ?? 2), date: dates.day(a.at) });
     case "drift-restored-between":
       // b12: `count` (sessions read since) picks "One ... session" / "The sessions"; the _other text prints no number.
       return t("paramedic.evidence.driftRestoredBetween", { game, count: Number(a.count ?? 2) });

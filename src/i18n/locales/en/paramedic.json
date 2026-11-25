@@ -399,6 +399,8 @@
     "driftRestoredClear": "After it was back on, {{game}}'s session on {{date}} ran in its usual range. One session so far; Compy says a game is back in its usual range after two.",
     "driftRestoredBetween_one": "One {{game}} session since it was back on was measured well enough to read, and it wasn't clearly in its usual range, so Compy can't tell yet.",
     "driftRestoredBetween_other": "Of the {{game}} sessions since it was back on, at least one wasn't clearly in its usual range, so Compy can't tell yet.",
+    "driftRestoredClearUnjudged_one": "After it was back on, {{game}} ran in its usual range in {{n}} sessions, the latest on {{date}}. The session after that was too short, or Compy couldn't measure enough of it, so Compy can't say {{game}} is back in its usual range yet.",
+    "driftRestoredClearUnjudged_other": "After it was back on, {{game}} ran in its usual range in {{n}} sessions, the latest on {{date}}. Each session after that was too short, or Compy couldn't measure enough of it, so Compy can't say {{game}} is back in its usual range yet.",
     "recoveredDriftBack": "Compy read that setting back on at {{restored}}, before the sessions that ran normally. That is consistent with that setting, but it doesn't prove it.",
     "compyChangesRestore": "Compy's count of changes that are on went from {{from}} to {{to}} between the rough sessions and the ones that ran normally. That is what turning that setting back on would do.",
     "recoveredCompyExplained": "Compy's count of changes that are on went from {{from}} to {{to}} between the rough sessions and the normal ones, the same stretch in which that setting was read back on, so it isn't counted as another change.",
