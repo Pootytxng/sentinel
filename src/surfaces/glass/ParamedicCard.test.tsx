@@ -3102,6 +3102,25 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     expect(zh.driftRestoredClearUnjudged_one).toBe(zh.driftRestoredClearUnjudged_other);
   });
 
+  // b13 review r1: the setting was noticed off again after it was back on. The dated line says so, and the row no longer
+  // says "Compy read it back on by ... Play once" (restoredAt gives undefined). Break checks: drop the
+  // drift-restored-off-again case from evidenceLine -> the line is missing, fails; drop the restoredAt check ->
+  // stepBackOn shows, fails; drop driftRestoredOffAgain from zh-CN -> the zh literal fails.
+  it("noticed off again after it was back on: the dated line, and no 'read it back on ... play once' step", async () => {
+    const offAgain = ev(
+      "drift-restored-off-again",
+      { restored: BACK, noticed: "2026-11-23T20:00:00Z", until: "2026-11-23T19:00:00Z" },
+      { kind: "known", source: "sessions" },
+    );
+    const text = await open({ findings: [suspect([offAgain])] });
+    expect(text).toMatch(/Compy read it back on by .+?, then noticed it off again on .+?\. Compy doesn't count Game A sessions from .+? on as after it was back on\./);
+    // Only the evidence line says "Compy read it back on by": stepBackOn (which starts the same way) is not shown.
+    expect(text.split("Compy read it back on by").length - 1).toBe(1);
+    expect(screen.queryAllByText("Weakens this").length).toBe(0);
+    const zh = loadKeys("zh-CN").evidence as Record<string, string>;
+    expect(zh.driftRestoredOffAgain).toBe("Compy 在 {{restored}} 前读到它已重新开启，之后又于 {{noticed}} 发现它再次关闭。从 {{until}} 起的 {{game}} 游戏，Compy 不算作它重新开启之后的游戏。");
+  });
+
   it("two clear sessions: the recovery says it is consistent with the setting and does not prove it", async () => {
     const f = suspect([], { in_play: true, now: "points-to", now_evidence: [backLine] });
     const text = await open({ state: { kind: "recovered" }, findings: [f], recovery: recovery({ kind: "points-to", id: "setting-drift" }) });
@@ -3408,6 +3427,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       ["evidence", "driftRestoredBetween_other"],
       ["evidence", "driftRestoredClearUnjudged_one"],
       ["evidence", "driftRestoredClearUnjudged_other"],
+      ["evidence", "driftRestoredOffAgain"],
       ["evidence", "driftRestoredItem"],
       ["evidence", "driftRestoredNamed_one"],
       ["evidence", "driftRestoredNamed_other"],

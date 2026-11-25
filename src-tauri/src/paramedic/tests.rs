@@ -3350,10 +3350,69 @@ mod recovery_f3 {
         assert_eq!(d.state, DiagnosisState::Recovered);
         assert!(restored_codes(&d).is_empty(), "{:?}", drift_codes(&d));
         // Went off again (read fine last on the 14th at 19:00, noticed off at 20:00) before the unjudged session: that
-        // session is not "after it was back on" (as every driftRestored line ends there), so no line counts it.
+        // session is not "after it was back on". b13 review r1: the off-again line is said in place of the clear one.
         let standing = DriftFact { last_ready_at: Some("2026-10-14T19:00:00Z".into()), ..fact("applied-changes", "2026-10-14T20:00:00Z", None) };
         let d = follow_with(with_extra(episode(), vec![calm(13), calm(14), short(15)]), vec![standing, fact("applied-changes", NOTICED, Some(BACK_ON))]);
-        assert!(restored_codes(&d).is_empty(), "{:?}", drift_codes(&d));
+        assert_eq!(restored_codes(&d), ["drift-restored-off-again"], "{:?}", drift_codes(&d));
+    }
+
+    /// b13 review r1 (F1): the same setting noticed off again after it was back on. Every "since it was back on" line
+    /// except rough gives way to one dated line (restored, the later notice's own noticed_at, and `until`, the time
+    /// sessions stop counting); Known, never against, never a contradiction. Break checks: drop the
+    /// `_ if off.is_some()` arm -> the none / between / clear-unjudged lines come back, fails; move it above the Rough
+    /// arm -> the rough control loses its line, fails; drop ("noticed", ...) or ("until", ...) from its args -> the
+    /// args assert fails; count it in `contradicted` -> the row leaves play, fails.
+    #[test]
+    fn b13_a_setting_noticed_off_again_gives_the_off_again_line_in_place_of_the_since_lines() {
+        let short = |day: u32| {
+            let mut s = calm(day);
+            s.duration_secs = 30;
+            s.samples = 30;
+            s
+        };
+        let restored_codes = |d: &Diagnosis| -> Vec<&'static str> { drift_codes(d).into_iter().filter(|c| c.starts_with("drift-restored")).collect() };
+        // Read fine last on the 14th at 19:00, noticed off on the 14th at 20:00.
+        let off = || DriftFact { last_ready_at: Some("2026-10-14T19:00:00Z".into()), ..fact("applied-changes", "2026-10-14T20:00:00Z", None) };
+        let back = || fact("applied-changes", NOTICED, Some(BACK_ON));
+        // Restored, 2 clear, 1 unjudged, off again, 2 clear: the card is Recovered (it reads every session), so "can't
+        // say it is back yet" would contradict it. Only the off-again line.
+        let off_later = DriftFact { last_ready_at: Some("2026-10-15T19:00:00Z".into()), ..fact("applied-changes", "2026-10-15T20:00:00Z", None) };
+        let d = follow_with(with_extra(episode(), vec![calm(13), calm(14), short(15), calm(16), calm(17)]), vec![off_later, back()]);
+        assert_eq!(d.state, DiagnosisState::Recovered);
+        assert_eq!(restored_codes(&d), ["drift-restored-off-again"], "{:?}", drift_codes(&d));
+        let f = finding_of(&d, "setting-drift");
+        let line = f.evidence.iter().find(|e| e.code == "drift-restored-off-again").unwrap();
+        assert!(!line.against && line.kind == EvidenceKind::Known);
+        assert_eq!(
+            (line.args["restored"].as_str(), line.args["noticed"].as_str(), line.args["until"].as_str()),
+            (BACK_ON, "2026-10-15T20:00:00Z", "2026-10-15T19:00:00Z")
+        );
+        // None with a re-drift: no session yet; the off-again line, not "No session has been recorded since".
+        let d = follow_with(episode(), vec![off(), back()]);
+        assert_eq!(restored_codes(&d), ["drift-restored-off-again"], "{:?}", drift_codes(&d));
+        let f = finding_of(&d, "setting-drift");
+        assert_eq!((f.confidence, f.in_play), (Certainty::Possible, true), "never a contradiction");
+        // With no last ready time after the restore, `until` is the notice time itself.
+        let bare = DriftFact { last_ready_at: None, ..fact("applied-changes", "2026-10-14T20:00:00Z", None) };
+        let d = follow_with(episode(), vec![bare, back()]);
+        let line = finding_of(&d, "setting-drift").evidence.iter().find(|e| e.code == "drift-restored-off-again").unwrap_or_else(|| panic!("{:?}", drift_codes(&d)));
+        assert_eq!((line.args["noticed"].as_str(), line.args["until"].as_str()), ("2026-10-14T20:00:00Z", "2026-10-14T20:00:00Z"));
+        // Between with a re-drift (ratio 0.42 on the 13th, before it went off again).
+        let d = follow_with(with_extra(episode(), vec![on(13, 42.0, Some("2.0"))]), vec![off(), back()]);
+        assert_eq!(restored_codes(&d), ["drift-restored-off-again"], "{:?}", drift_codes(&d));
+        // Control: a rough session before it went off again keeps its dated contradiction (and no off-again line).
+        let d = follow_with(with_extra(episode(), vec![on(13, 30.0, Some("2.0"))]), vec![off(), back()]);
+        assert_eq!(restored_codes(&d), ["drift-restored-rough"], "{:?}", drift_codes(&d));
+        // Two restored notices, each with its own `until` (only applied-changes has a "back on" story, so both are
+        // applied-changes notices): the first was back on the 12th and went off again on the 14th; the second was
+        // back on the 14th at 21:00, after that, so nothing counts as "off again" for it and its session on the 15th
+        // is said as clear.
+        let second = fact("applied-changes", "2026-10-07T12:00:00Z", Some("2026-10-14T21:00:00Z"));
+        let d = follow_with(with_extra(episode(), vec![calm(15)]), vec![back(), second, off()]);
+        let lines: Vec<&Evidence> = finding_of(&d, "setting-drift").evidence.iter().filter(|e| e.code.starts_with("drift-restored")).collect();
+        assert_eq!(lines.iter().map(|e| e.code).collect::<Vec<_>>(), ["drift-restored-off-again", "drift-restored-clear"], "{lines:?}");
+        assert_eq!((lines[0].args["restored"].as_str(), lines[0].args["until"].as_str()), (BACK_ON, "2026-10-14T19:00:00Z"));
+        assert_eq!(lines[1].args["restored"], "2026-10-14T21:00:00Z");
     }
 
     #[test]
