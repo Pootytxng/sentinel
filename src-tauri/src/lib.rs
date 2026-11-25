@@ -722,16 +722,22 @@ pub(crate) fn hags_state_checked() -> Result<Option<u32>, String> {
 // class as CPU temp). Unreadable → None / "Unknown", never guessed.
 pub(crate) fn core_parking_min_cores_ac() -> Option<u32> {
     let output = crate::actions::quiet_command(crate::sys_exe::SysTool::Powercfg)
-        .args([
-            "/q",
-            "SCHEME_CURRENT",
-            "SUB_PROCESSOR",
-            "0cc5b647-c1df-4637-891a-dec35c318583", // CPMINCORES
-        ])
+        .args(CPMINCORES_QUERY_ARGS)
         .output()
         .ok()?;
     parse_powercfg_ac_index(&String::from_utf8_lossy(&output.stdout))
 }
+
+/// a10 (VM run f342f3ce): the ONE CPMINCORES read, shared by the readiness row above, the leftover
+/// detector (`leftovers::probe_core_parking`) and the restore's prior snapshot
+/// (`actions::read_core_parking_priors`). `/qh`, not `/q`: `/q` leaves HIDDEN settings out, and
+/// CPMINCORES is hidden on a stock install, so `/q` printed no index lines and all three reads came
+/// back unread (the detector said "couldn't read this setting", the restore refused). `/qh` prints the
+/// same lines for a setting that is not hidden and adds hidden ones. Read-only; the parsers are
+/// unchanged and still refuse anything they cannot read. The setting is named by GUID, the alias
+/// `CPMINCORES` and the GUID being the same setting.
+pub(crate) const CPMINCORES_QUERY_ARGS: [&str; 4] =
+    ["/qh", "SCHEME_CURRENT", "SUB_PROCESSOR", "0cc5b647-c1df-4637-891a-dec35c318583"];
 
 /// The AC value of a single-setting `powercfg /q <scheme> <subgroup> <setting>` read, as a number.
 /// The English label ("Current AC Power Setting Index") is taken when it is there; otherwise the
@@ -791,6 +797,68 @@ pub(crate) fn core_parking_label(min_cores_pct: Option<u32>) -> String {
 #[cfg(test)]
 mod core_parking_tests {
     use super::{core_parking_label, parse_powercfg_ac_index};
+
+    /// a10: a `powercfg /qh SCHEME_CURRENT SUB_PROCESSOR CPMINCORES` read on a PC where CPMINCORES is
+    /// HIDDEN. Provenance, stated exactly: the two "Current" lines (AC 0x64, DC 0x0a) are the VM run's
+    /// captured `/qh` output (`_train\vm\out\state-lo-cp-pre.txt`, filtered to "Current" lines by the
+    /// run's own script); the lines above them are powercfg's documented single-setting shape (en-US
+    /// labels, the Balanced plan, the processor subgroup), NOT captured, since the run kept no full dump.
+    pub(crate) const CPMINCORES_QH_FIXTURE: &str = "\
+Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)\r\n\
+  GUID Alias: SCHEME_BALANCED\r\n\
+  Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00  (Processor power management)\r\n\
+    GUID Alias: SUB_PROCESSOR\r\n\
+    Power Setting GUID: 0cc5b647-c1df-4637-891a-dec35c318583  (Processor performance core parking min cores)\r\n\
+      GUID Alias: CPMINCORES\r\n\
+      Minimum Possible Setting: 0x00000000\r\n\
+      Maximum Possible Setting: 0x00000064\r\n\
+      Possible Settings increment: 0x00000001\r\n\
+      Possible Settings units: %\r\n\
+    Current AC Power Setting Index: 0x00000064\r\n\
+    Current DC Power Setting Index: 0x0000000a\r\n";
+
+    /// a10: what `/q` printed for the same read with the setting hidden: the scheme and subgroup, and
+    /// no setting block (the VM's own `/q` read printed no "Current" line, results.md check 1; these
+    /// two header lines are the documented shape, not captured).
+    pub(crate) const CPMINCORES_Q_HIDDEN_FIXTURE: &str = "\
+Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)\r\n\
+  GUID Alias: SCHEME_BALANCED\r\n\
+  Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00  (Processor power management)\r\n\
+    GUID Alias: SUB_PROCESSOR\r\n";
+
+    // a10. Break check: change `CPMINCORES_QUERY_ARGS[0]` back to "/q" -> the first assert fails.
+    #[test]
+    fn every_cpmincores_read_asks_for_hidden_settings_too() {
+        assert_eq!(super::CPMINCORES_QUERY_ARGS[0], "/qh", "/q leaves hidden settings out");
+        assert_eq!(super::CPMINCORES_QUERY_ARGS[3], "0cc5b647-c1df-4637-891a-dec35c318583", "CPMINCORES");
+        // All three reads go through the one constant, none keeps its own `/q` argument list.
+        let q_args = format!("[\"/{}\", \"SCHEME_CURRENT\"", "q");
+        for (file, src, reader) in [
+            ("lib.rs", include_str!("lib.rs"), "fn core_parking_min_cores_ac("),
+            ("leftovers.rs", include_str!("leftovers.rs"), "fn probe_core_parking("),
+            ("actions.rs", include_str!("actions.rs"), "fn read_core_parking_priors("),
+        ] {
+            let body = src.split_once(reader).map(|(_, r)| r).unwrap_or_else(|| panic!("{file}: {reader}"));
+            let body = &body[..body.find("\n}\n").expect("end")];
+            assert!(body.contains("CPMINCORES_QUERY_ARGS"), "{file}: {reader} reads through the shared /qh args");
+            assert!(!body.contains(&q_args), "{file}: {reader} has its own /q list");
+        }
+    }
+
+    // a10. Break checks: in `parse_powercfg_ac_index` require `guid_lines.len() == 2` (the /qh shape no
+    // longer reads by shape) -> the `unlabeled` assert fails; make it return `Some(0)` when no number
+    // is found (a guess) -> the `/q` assert fails.
+    #[test]
+    fn a_qh_read_of_the_hidden_setting_parses_and_a_q_read_without_it_still_refuses() {
+        assert_eq!(parse_powercfg_ac_index(CPMINCORES_QH_FIXTURE), Some(100));
+        assert_eq!(crate::actions::parse_powercfg_ac_dc_index(CPMINCORES_QH_FIXTURE), (Some(0x64), Some(0x0a)));
+        // The same read with the English labels gone still reads by shape (three GUID lines, five 0x lines).
+        let unlabeled = CPMINCORES_QH_FIXTURE.replace("Current AC Power Setting Index", "x").replace("Current DC Power Setting Index", "y");
+        assert_eq!(parse_powercfg_ac_index(&unlabeled), Some(100));
+        // `/q` with the setting hidden: nothing to read, so unread, never a guessed value.
+        assert_eq!(parse_powercfg_ac_index(CPMINCORES_Q_HIDDEN_FIXTURE), None);
+        assert_eq!(crate::actions::parse_powercfg_ac_dc_index(CPMINCORES_Q_HIDDEN_FIXTURE), (None, None));
+    }
 
     #[test]
     fn parses_cpmincores_ac_index_hex() {

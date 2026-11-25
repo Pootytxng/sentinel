@@ -747,23 +747,32 @@ fn probe_bcdedit() -> Value {
     }
 }
 
-/// powercfg /q for the core-parking min-cores override (READ-ONLY). Parses the AC index; the
+/// powercfg /qh for the core-parking min-cores override (READ-ONLY). Parses the AC index; the
 /// plan name and class ride along so the evaluator flags only the stock Balanced plan.
+/// a10: `/qh` through the shared [`crate::CPMINCORES_QUERY_ARGS`] (CPMINCORES is hidden on a stock
+/// install, and `/q` leaves hidden settings out, so the probe always read "couldn't read").
 fn probe_core_parking() -> Value {
     let out = crate::actions::quiet_command(crate::sys_exe::SysTool::Powercfg)
-        .args(["/q", "SCHEME_CURRENT", "SUB_PROCESSOR", "CPMINCORES"])
+        .args(crate::CPMINCORES_QUERY_ARGS)
         .output();
-    let Ok(o) = out else { return json!({ "readable": false }) };
-    if !o.status.success() {
-        return json!({ "readable": false });
-    }
+    let read = out.ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
+    core_parking_probe_from(read.as_deref(), crate::current_power_plan)
+}
+
+/// PURE (a10): the core-parking probe from a finished powercfg read (`None` = it couldn't start or
+/// exited non-zero) and the plan read, asked only once the number parsed.
+fn core_parking_probe_from(
+    stdout: Option<&str>,
+    current_plan: impl FnOnce() -> Option<(crate::PowerPlanClass, String)>,
+) -> Value {
+    let Some(stdout) = stdout else { return json!({ "readable": false }) };
     // One parser with the readiness check (`lib.rs`): the English label when present, else the
     // output's shape, so a localized Windows reads its number too (CR-localized-reads).
-    let ac = crate::parse_powercfg_ac_index(&String::from_utf8_lossy(&o.stdout));
+    let ac = crate::parse_powercfg_ac_index(stdout);
     match ac {
         None => json!({ "readable": false }), // format miss — honest, never guessed
         Some(pct) => {
-            let plan = crate::current_power_plan();
+            let plan = current_plan();
             json!({
                 "readable": true,
                 "min_cores_ac_pct": pct,
@@ -1283,6 +1292,29 @@ mod leftovers_tests {
                 "{name} ({class}) is not known to park by default"
             );
         }
+    }
+
+    // a10 (VM run f342f3ce): CPMINCORES is hidden on a stock install, so the probe's old `/q` read
+    // printed no index and the detector said "couldn't read this setting". Through `/qh` the read
+    // has the number. Break checks: make `core_parking_probe_from` return `{"readable": false}` for
+    // every read -> the first two asserts fail; make it read a missing number as 100 -> the `/q`
+    // assert fails.
+    #[test]
+    fn a_qh_read_of_the_hidden_setting_is_no_longer_unread_and_a_q_read_without_it_still_is() {
+        use crate::core_parking_tests::{CPMINCORES_QH_FIXTURE, CPMINCORES_Q_HIDDEN_FIXTURE};
+        let balanced = || Some((crate::PowerPlanClass::Balanced, "Balanced".to_string()));
+        let read = core_parking_probe_from(Some(CPMINCORES_QH_FIXTURE), balanced);
+        assert_eq!(read["readable"], json!(true));
+        assert_eq!(read["min_cores_ac_pct"], json!(100));
+        let r = evaluate_leftovers(&with(probes(Some(true), json!([]), Some(true), Some(31)), "core_parking", read), &no_endorsements());
+        assert!(r.unavailable.iter().all(|u| u.id != "core-parking-forced"), "read, not unchecked");
+        assert!(find(&r, "core-parking-forced").is_some(), "100% on stock Balanced is the guide override");
+        // The plan read is asked only once the number parsed; an unread number stays unread.
+        let unread = core_parking_probe_from(Some(CPMINCORES_Q_HIDDEN_FIXTURE), || panic!("no plan read without a number"));
+        assert_eq!(unread, json!({ "readable": false }));
+        let r = evaluate_leftovers(&with(probes(Some(true), json!([]), Some(true), Some(31)), "core_parking", unread), &no_endorsements());
+        assert!(r.unavailable.iter().any(|u| u.id == "core-parking-forced"), "/q without the setting: couldn't read");
+        assert_eq!(core_parking_probe_from(None, || panic!("no plan read")), json!({ "readable": false }));
     }
 
     #[test]

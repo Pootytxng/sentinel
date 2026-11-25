@@ -4179,6 +4179,20 @@ mod powercfg_parse_tests {
             (None, None)
         );
     }
+
+    // a10. Break check: in `core_parking_priors_from`, fall back to `Ok((Some(100), Some(100)))` (or any
+    // value) when the AC index is missing -> the `/q` assert fails; drop the DC from the Ok -> the
+    // `/qh` assert fails.
+    #[test]
+    fn the_core_parking_restore_reads_the_hidden_setting_and_still_refuses_blind() {
+        use super::core_parking_priors_from;
+        use crate::core_parking_tests::{CPMINCORES_QH_FIXTURE, CPMINCORES_Q_HIDDEN_FIXTURE};
+        assert_eq!(core_parking_priors_from(CPMINCORES_QH_FIXTURE), Ok((Some(0x64), Some(0x0a))));
+        let refused = core_parking_priors_from(CPMINCORES_Q_HIDDEN_FIXTURE).expect_err("no AC index: refuse");
+        assert!(refused.contains("refusing to restore blind"), "{refused}");
+        assert!(core_parking_priors_from("").is_err());
+        assert!(core_parking_priors_from("    Current DC Power Setting Index: 0x0000000a\r\n").is_err(), "DC alone is no snapshot");
+    }
 }
 
 pub(crate) fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Result<ApplyResult, String> {
@@ -6531,11 +6545,14 @@ fn read_mpo_prior() -> Result<Option<u32>, String> {
     }
 }
 
-/// Parse `powercfg /q SCHEME_CURRENT SUB_PROCESSOR CPMINCORES` for the AC + DC index values.
+/// Parse `powercfg /qh SCHEME_CURRENT SUB_PROCESSOR CPMINCORES` for the AC + DC index values.
 /// Reuses the shared `parse_powercfg_ac_dc_index` so this and the USB/PCIe reader can't drift.
+/// a10: `/qh` through the shared [`crate::CPMINCORES_QUERY_ARGS`]: CPMINCORES is hidden on a stock
+/// install and `/q` leaves it out, so this refused every restore there. Read-only: only the read
+/// changed; the restore's writes (`core_parking_script` and the plan-pinned form) are untouched.
 fn read_core_parking_priors() -> Result<(Option<u32>, Option<u32>), String> {
     let mut cmd = quiet_command(SysTool::Powercfg);
-    cmd.args(["/q", "SCHEME_CURRENT", "SUB_PROCESSOR", "CPMINCORES"]);
+    cmd.args(crate::CPMINCORES_QUERY_ARGS);
     // D1e: bounded; a read that doesn't answer in time refuses, like one that can't start.
     let out = output_within(cmd, POWERCFG_READ_LIMIT).ok_or_else(|| {
         format!("cannot read core parking: powercfg could not be started or did not answer within {} seconds", POWERCFG_READ_LIMIT.as_secs())
@@ -6543,8 +6560,13 @@ fn read_core_parking_priors() -> Result<(Option<u32>, Option<u32>), String> {
     if !out.status.success() {
         return Err("powercfg core-parking query failed".to_string());
     }
-    let text = String::from_utf8_lossy(&out.stdout);
-    let (ac, dc) = parse_powercfg_ac_dc_index(&text);
+    core_parking_priors_from(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// PURE (a10): the restore's prior snapshot from a finished CPMINCORES read. Exactly as strict as
+/// before: no AC index, no snapshot (refuse); never a guessed value.
+pub(crate) fn core_parking_priors_from(text: &str) -> Result<(Option<u32>, Option<u32>), String> {
+    let (ac, dc) = parse_powercfg_ac_dc_index(text);
     // At least the AC index must parse, or we don't have a snapshot to reverse against.
     if ac.is_none() {
         return Err("could not parse the core-parking AC index — refusing to restore blind".to_string());
