@@ -6,7 +6,8 @@ import { PER_CPU_DEFAULT_REASON, perCpuDefaultPct } from "./leftover-reason";
 // a10 r1 (F1): the core-parking "read, but can't tell" reason, from Rust to the screen in both languages.
 const rust = readFileSync(join("src-tauri", "src", "leftovers.rs"), "utf8");
 const json = (lang: string) =>
-  JSON.parse(readFileSync(join("src", "i18n", "locales", lang, "optimize.json"), "utf8")).optimize.check;
+  // The file is the `optimize` namespace: `optimize.check.x` is its top-level `check.x`.
+  JSON.parse(readFileSync(join("src", "i18n", "locales", lang, "optimize.json"), "utf8")).check;
 
 describe("a10 r1: the per-processor core-parking reason", () => {
   // Break check: reword REASON_PER_CPU_DEFAULT in leftovers.rs (or here) -> fails.
