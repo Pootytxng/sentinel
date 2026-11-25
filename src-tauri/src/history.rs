@@ -4594,9 +4594,9 @@ mod receipt_commit_tests {
         }
     }
 
-    // Break check (a11-2): in `crate::eee_record_disabled_in`, answer a saved pair with no listed match
-    // as `Some(false)` (`let Some(p) = hits.next() else { return Some(false) };`) -> the unplugged
-    // adapter reads Off ("turned off outside Compy") and this fails.
+    // Break check (a11-2): in `crate::eee_record_disabled_in`, answer a saved pair that is not listed
+    // exactly once with `Some(false)` instead of `None` -> the unplugged adapter reads Off ("turned off
+    // outside Compy") and this fails.
     #[test]
     fn a_record_whose_adapter_is_not_listed_reads_unreadable_never_off_or_on() {
         let a = applied_eee("Ethernet");
@@ -4639,10 +4639,9 @@ mod receipt_commit_tests {
         assert_eq!(check_row_state(&a, &LiveReads::default()), ActiveCheck::Unreadable);
     }
 
-    // Break check (a11-3): give `eee_row_check` one answer for every record (for example
-    // `crate::eee_record_disabled_in(self.eee_listing(), &saved[..1])` with the FIRST record's pairs
-    // remembered in the pass, or `reads.eee_disabled()`) -> "Ethernet 2" no longer reads its own Off, or
-    // "Ethernet" its own On, and this fails.
+    // Break checks: (a11-4) make `LiveReads::eee_record_disabled` give every record the pass's one
+    // all-adapter answer (`self.eee_disabled()`) -> "Ethernet" no longer reads its own On and this fails;
+    // (a11-7) make `record_receipts`' read-back pass `None` for the snapshot -> the source pin fails.
     #[test]
     fn two_records_for_different_adapters_get_their_own_answers_from_one_listing() {
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -4672,6 +4671,11 @@ mod receipt_commit_tests {
         // eligible adapter, from the same one listing: not off everywhere.
         assert_eq!(probe_rec_target_with("eee-disable", &reads), ActiveCheck::Off);
         assert_eq!(READS.load(Ordering::SeqCst), 1);
+        // Both production undo read-backs (`record_receipts`, `rollback_change_inner`) hand the check the
+        // undo's own snapshot. Split so this test's own text never matches.
+        let src = include_str!("history.rs").replace("\r\n", "\n");
+        let wired = concat!("check_change_state(rec_id, applied, ", "Some(snapshot), &LiveReads::default())");
+        assert_eq!(src.matches(wired).count(), 2, "both undo read-backs pass the snapshot");
     }
 
     // ── CR-core-parking-plan-gone: an undo whose power plan no longer exists ──
