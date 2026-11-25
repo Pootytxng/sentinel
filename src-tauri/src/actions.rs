@@ -6684,12 +6684,15 @@ pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
     restore_core_parking_default_with(&current_power_plan_guid, &read_core_parking_priors, &crate::cpmincores_plan_defaults, &run_elevated_op)
 }
 
+/// a10 r1 (F2): a plan's CPMINCORES default as read, (AC, DC); each `None` when unread.
+pub(crate) type CoreParkingDefaults = (Option<u32>, Option<u32>);
+
 /// [`restore_core_parking_default`] with its machine reads and the elevated run passed in (tests pass
 /// fakes). `read_defaults` is the plan's own default (AC, DC) for the plan GUID it is given.
 pub(crate) fn restore_core_parking_default_with(
     active_plan: &dyn Fn() -> Option<String>,
     read_priors: &dyn Fn() -> Result<(Option<u32>, Option<u32>), String>,
-    read_defaults: &dyn Fn(&str) -> (Option<u32>, Option<u32>),
+    read_defaults: &dyn Fn(&str) -> CoreParkingDefaults,
     run_elevated: &dyn Fn(ElevatedOp) -> Result<(), String>,
 ) -> Result<ApplyResult, String> {
     // CR-core-parking-plan-guid: the plan SCHEME_CURRENT names right now, recorded with the priors
@@ -6859,7 +6862,7 @@ mod core_parking_restore_tests {
             Ok(())
         };
         let priors = || -> Result<(Option<u32>, Option<u32>), String> { Ok((Some(100), Some(10))) };
-        let cases: [(&str, (Option<u32>, Option<u32>)); 4] = [
+        let cases: [(&str, CoreParkingDefaults); 4] = [
             ("both unread", (None, None)),
             ("AC unread", (None, Some(5))),
             ("DC unread", (Some(10), None)),
