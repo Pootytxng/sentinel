@@ -739,6 +739,43 @@ pub(crate) fn core_parking_min_cores_ac() -> Option<u32> {
 pub(crate) const CPMINCORES_QUERY_ARGS: [&str; 4] =
     ["/qh", "SCHEME_CURRENT", "SUB_PROCESSOR", "0cc5b647-c1df-4637-891a-dec35c318583"];
 
+/// Windows' stock Balanced plan (the only plan the core-parking detector judges).
+pub(crate) const BALANCED_PLAN_GUID: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+
+/// a10 r1 (F1/F2): the HKLM key holding a plan's provisioned CPMINCORES defaults
+/// (`ACSettingIndex` / `DCSettingIndex`), under the processor subgroup and the CPMINCORES setting.
+/// `None` unless `plan_guid` is one whole GUID (never an alias or anything around it), so nothing from
+/// outside can steer the path. NEEDS A REAL MACHINE: that this key holds the per-processor value
+/// Windows provisioned, not a generic one.
+pub(crate) fn cpmincores_defaults_key(plan_guid: &str) -> Option<String> {
+    let g = plan_guid.trim();
+    if !scheme_guid_of(g).is_some_and(|s| s.eq_ignore_ascii_case(g)) {
+        return None;
+    }
+    Some(format!(
+        r"SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583\DefaultPowerSchemeValues\{}",
+        g.to_ascii_lowercase()
+    ))
+}
+
+/// PURE (a10 r1): a stored default index as a percentage. Only 0..=100 is a percentage; anything else
+/// is unread, never clamped.
+pub(crate) fn cpmincores_pct(raw: Option<u32>) -> Option<u32> {
+    raw.filter(|v| *v <= 100)
+}
+
+/// a10 r1 (F1/F2): `plan_guid`'s provisioned CPMINCORES defaults (AC, DC), read-only from the registry.
+/// Each side is `None` when the key or value is missing, unreadable, or not a percentage: unread,
+/// never guessed.
+pub(crate) fn cpmincores_plan_defaults(plan_guid: &str) -> (Option<u32>, Option<u32>) {
+    let Some(path) = cpmincores_defaults_key(plan_guid) else { return (None, None) };
+    let Ok(k) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(&path) else { return (None, None) };
+    (
+        cpmincores_pct(k.get_value::<u32, _>("ACSettingIndex").ok()),
+        cpmincores_pct(k.get_value::<u32, _>("DCSettingIndex").ok()),
+    )
+}
+
 /// The AC value of a single-setting `powercfg /q <scheme> <subgroup> <setting>` read, as a number.
 /// The English label ("Current AC Power Setting Index") is taken when it is there; otherwise the
 /// shape of the output decides (CR-localized-reads, 2026-11-04): a single-setting query prints the
@@ -825,6 +862,24 @@ Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)\r\n\
   GUID Alias: SCHEME_BALANCED\r\n\
   Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00  (Processor power management)\r\n\
     GUID Alias: SUB_PROCESSOR\r\n";
+
+    // a10 r1 (F1/F2). Break checks: drop the whole-GUID check in `cpmincores_defaults_key` -> the alias
+    // and injection asserts fail; let `cpmincores_pct` pass 101 -> the range assert fails.
+    #[test]
+    fn the_plan_default_read_names_one_whole_plan_and_only_takes_percentages() {
+        assert_eq!(
+            super::cpmincores_defaults_key("381B4222-F694-41F0-9685-FF5BB260DF2E").as_deref(),
+            Some(r"SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583\DefaultPowerSchemeValues\381b4222-f694-41f0-9685-ff5bb260df2e")
+        );
+        assert_eq!(super::BALANCED_PLAN_GUID, "381b4222-f694-41f0-9685-ff5bb260df2e");
+        for bad in ["SCHEME_CURRENT", "", "381b4222-f694-41f0-9685-ff5bb260df2e\\..\\x", "381b4222-f694-41f0-9685-ff5bb260df2e x"] {
+            assert_eq!(super::cpmincores_defaults_key(bad), None, "{bad:?}");
+        }
+        assert_eq!(super::cpmincores_pct(Some(10)), Some(10));
+        assert_eq!(super::cpmincores_pct(Some(100)), Some(100));
+        assert_eq!(super::cpmincores_pct(Some(101)), None, "not a percentage: unread, never clamped");
+        assert_eq!(super::cpmincores_pct(None), None);
+    }
 
     // a10. Break check: change `CPMINCORES_QUERY_ARGS[0]` back to "/q" -> the first assert fails.
     #[test]

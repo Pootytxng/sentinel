@@ -64,10 +64,22 @@ enum Outcome {
     Clean,
     /// The probe couldn't be read; the reason is honest and user-facing.
     Unavailable(&'static str),
+    /// a10 r1 (F1): the probe was read, but Compy can't judge it (a value Windows chooses per
+    /// processor); the reason is a filled-in fixed sentence.
+    Undecidable(String),
 }
 
 const REASON_UNREADABLE: &str = "couldn't read this setting";
 const REASON_NEEDS_ADMIN: &str = "needs admin to check";
+/// a10 r1 (F1): the core-parking value was read, but with no second support (the plan's own default
+/// reading below 100) Compy can't tell a tweak from Windows' per-processor choice. `{pct}` is the
+/// read value. Mirrored byte-for-byte in `src/data/leftover-reason.ts` (pinned by its test), which
+/// shows it in the user's language (`optimize.check.perCpuDefault`, en + zh-CN).
+pub(crate) const REASON_PER_CPU_DEFAULT: &str = "Compy can read this setting ({pct}% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.";
+
+fn per_cpu_default_reason(pct: u64) -> String {
+    REASON_PER_CPU_DEFAULT.replace("{pct}", &pct.to_string())
+}
 
 struct Detector {
     id: &'static str,
@@ -118,6 +130,11 @@ fn evaluate_with(
                 id: d.id.to_string(),
                 title: d.title.to_string(),
                 reason: reason.to_string(),
+            }),
+            Outcome::Undecidable(reason) => unavailable.push(UnavailableProbe {
+                id: d.id.to_string(),
+                title: d.title.to_string(),
+                reason,
             }),
         }
     }
@@ -444,18 +461,28 @@ fn detect_core_parking(probes: &Value) -> Outcome {
     if min_pct < 100 || !stock_balanced {
         return Outcome::Clean;
     }
+    // a10 r1 (F1): 100 on stock Balanced is NOT evidence on its own: Windows provisions this value per
+    // processor, and many ship 100 on AC. The second, independent support is the plan's own default
+    // (registry, read by the probe) reading BELOW 100: only then is the live 100 an override. A
+    // default of 100 or more, missing or unread is no finding, and not Clean either (that would claim
+    // "no override"): Compy says it can't tell.
+    let default_ac = match pu32(p, "default_ac_pct") {
+        Some(d) if d < 100 => d,
+        _ => return Outcome::Undecidable(per_cpu_default_reason(min_pct)),
+    };
     Outcome::Finding(Leftover {
         id: "core-parking-forced".into(),
         title: "Core parking forced off".into(),
         current_value: format!("Minimum unparked cores = 100% on the \"{}\" plan", p.get("plan_name").and_then(Value::as_str).unwrap_or("current")),
-        stock_default: "Plan-managed (Balanced parks idle cores to save power and heat)".into(),
+        stock_default: format!("{default_ac}% minimum unparked cores (this plan's own default on this PC, read from Windows)"),
         matched_tweak: "\"Disable core parking\" — unpark-utility / registry guides".into(),
         mechanism_cost:
             "Keeps every core awake at all times: more idle heat and power for a scheduler decision Windows already makes well per-load."
                 .into(),
         verdict: "Modern Windows unparks cores in microseconds when load arrives — the forced override spends watts on a solved problem.".into(),
         uncertain_source: true,
-        restore_note: "Compy can remove the override (powercfg); takes effect immediately.".into(),
+        // a10 r1 (F2): the restore writes this plan's own default (AC and DC, the same registry read).
+        restore_note: "Compy can put this plan's own default back (powercfg); takes effect immediately.".into(),
     })
 }
 
@@ -756,14 +783,19 @@ fn probe_core_parking() -> Value {
         .args(crate::CPMINCORES_QUERY_ARGS)
         .output();
     let read = out.ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
-    core_parking_probe_from(read.as_deref(), crate::current_power_plan)
+    core_parking_probe_from(read.as_deref(), crate::current_power_plan, || {
+        crate::cpmincores_plan_defaults(crate::BALANCED_PLAN_GUID)
+    })
 }
 
 /// PURE (a10): the core-parking probe from a finished powercfg read (`None` = it couldn't start or
-/// exited non-zero) and the plan read, asked only once the number parsed.
+/// exited non-zero) and the plan read, asked only once the number parsed. a10 r1 (F1): on the stock
+/// Balanced plan the plan's own provisioned default (`balanced_defaults`, AC and DC, registry,
+/// read-only) rides along as the second support the detector needs; any other plan reads none.
 fn core_parking_probe_from(
     stdout: Option<&str>,
     current_plan: impl FnOnce() -> Option<(crate::PowerPlanClass, String)>,
+    balanced_defaults: impl FnOnce() -> (Option<u32>, Option<u32>),
 ) -> Value {
     let Some(stdout) = stdout else { return json!({ "readable": false }) };
     // One parser with the readiness check (`lib.rs`): the English label when present, else the
@@ -773,9 +805,16 @@ fn core_parking_probe_from(
         None => json!({ "readable": false }), // format miss — honest, never guessed
         Some(pct) => {
             let plan = current_plan();
+            let (default_ac, default_dc) = if matches!(plan, Some((crate::PowerPlanClass::Balanced, _))) {
+                balanced_defaults()
+            } else {
+                (None, None)
+            };
             json!({
                 "readable": true,
                 "min_cores_ac_pct": pct,
+                "default_ac_pct": default_ac,
+                "default_dc_pct": default_dc,
                 "plan_name": plan.as_ref().map(|(_, name)| name.clone()),
                 "plan_class": plan.map(|(class, _)| match class {
                     crate::PowerPlanClass::Balanced => "balanced",
@@ -1260,8 +1299,9 @@ mod leftovers_tests {
     #[test]
     fn core_parking_flags_only_stock_balanced_at_100() {
         let base = || probes(Some(true), json!([]), Some(true), Some(31));
+        // a10 r1 (F1): forced = 100 while the plan's own default parks (the second support).
         let forced = with(base(), "core_parking",
-            json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "Balanced" }));
+            json!({ "readable": true, "min_cores_ac_pct": 100, "default_ac_pct": 10, "plan_name": "Balanced" }));
         assert!(find(&evaluate_leftovers(&forced, &no_endorsements()), "core-parking-forced").is_some());
         // Vendor/high-perf plans ship unparked — flagging them would be a false positive
         // (the dev rig's own AMD Ryzen plan is the precedent).
@@ -1280,7 +1320,7 @@ mod leftovers_tests {
             json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "高性能", "plan_class": "high-performance" }));
         assert!(find(&evaluate_leftovers(&zh_high, &no_endorsements()), "core-parking-forced").is_none(), "高性能 ships unparked");
         let zh_balanced = with(base(), "core_parking",
-            json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "平衡", "plan_class": "balanced" }));
+            json!({ "readable": true, "min_cores_ac_pct": 100, "default_ac_pct": 10, "plan_name": "平衡", "plan_class": "balanced" }));
         assert!(find(&evaluate_leftovers(&zh_balanced, &no_endorsements()), "core-parking-forced").is_some(), "平衡 at 100 is forced");
         // CR-1102-left: a custom plan (the owner's "Synez Power Plan", class other) may ship unparked
         // as its own default, and an unread plan is unknown: neither is called a leftover.
@@ -1296,25 +1336,73 @@ mod leftovers_tests {
 
     // a10 (VM run f342f3ce): CPMINCORES is hidden on a stock install, so the probe's old `/q` read
     // printed no index and the detector said "couldn't read this setting". Through `/qh` the read
-    // has the number. Break checks: make `core_parking_probe_from` return `{"readable": false}` for
-    // every read -> the first two asserts fail; make it read a missing number as 100 -> the `/q`
-    // assert fails.
+    // has the number. a10 r1 (F1): the VM's own value (100 on stock Balanced) is a Windows default on
+    // many processors, so with no second support it is NOT a finding: Compy says it can't tell.
+    // Break checks: make `core_parking_probe_from` return `{"readable": false}` for every read -> the
+    // first asserts fail; make it read a missing number as 100 -> the `/q` assert fails.
     #[test]
-    fn a_qh_read_of_the_hidden_setting_is_no_longer_unread_and_a_q_read_without_it_still_is() {
+    fn a_qh_read_of_the_hidden_setting_is_read_but_not_a_finding_without_a_second_support() {
         use crate::core_parking_tests::{CPMINCORES_QH_FIXTURE, CPMINCORES_Q_HIDDEN_FIXTURE};
         let balanced = || Some((crate::PowerPlanClass::Balanced, "Balanced".to_string()));
-        let read = core_parking_probe_from(Some(CPMINCORES_QH_FIXTURE), balanced);
+        let read = core_parking_probe_from(Some(CPMINCORES_QH_FIXTURE), balanced, || (None, None));
         assert_eq!(read["readable"], json!(true));
         assert_eq!(read["min_cores_ac_pct"], json!(100));
         let r = evaluate_leftovers(&with(probes(Some(true), json!([]), Some(true), Some(31)), "core_parking", read), &no_endorsements());
-        assert!(r.unavailable.iter().all(|u| u.id != "core-parking-forced"), "read, not unchecked");
-        assert!(find(&r, "core-parking-forced").is_some(), "100% on stock Balanced is the guide override");
+        assert!(find(&r, "core-parking-forced").is_none(), "100% on stock Balanced alone is no evidence of a tweak");
+        let u = r.unavailable.iter().find(|u| u.id == "core-parking-forced").expect("named as undecided, not Clean");
+        assert_ne!(u.reason, REASON_UNREADABLE, "it WAS read");
         // The plan read is asked only once the number parsed; an unread number stays unread.
-        let unread = core_parking_probe_from(Some(CPMINCORES_Q_HIDDEN_FIXTURE), || panic!("no plan read without a number"));
+        let unread = core_parking_probe_from(Some(CPMINCORES_Q_HIDDEN_FIXTURE), || panic!("no plan read without a number"), || panic!("no default read"));
         assert_eq!(unread, json!({ "readable": false }));
         let r = evaluate_leftovers(&with(probes(Some(true), json!([]), Some(true), Some(31)), "core_parking", unread), &no_endorsements());
-        assert!(r.unavailable.iter().any(|u| u.id == "core-parking-forced"), "/q without the setting: couldn't read");
-        assert_eq!(core_parking_probe_from(None, || panic!("no plan read")), json!({ "readable": false }));
+        let u = r.unavailable.iter().find(|u| u.id == "core-parking-forced").expect("/q without the setting: couldn't read");
+        assert_eq!(u.reason, REASON_UNREADABLE);
+        assert_eq!(core_parking_probe_from(None, || panic!("no plan read"), || panic!("no default read")), json!({ "readable": false }));
+    }
+
+    fn core_parking_report(probe: Value) -> LeftoversReport {
+        evaluate_leftovers(&with(probes(Some(true), json!([]), Some(true), Some(31)), "core_parking", probe), &no_endorsements())
+    }
+
+    // a10 r1 (F1): the plan's own default reading below 100 is the second support. Break check: in
+    // `core_parking_probe_from`, never call `balanced_defaults` (both defaults null) -> the first
+    // assert fails and no finding is raised.
+    #[test]
+    fn core_parking_at_100_is_a_finding_only_when_the_plans_own_default_parks() {
+        let balanced = || Some((crate::PowerPlanClass::Balanced, "Balanced".to_string()));
+        let fixture = crate::core_parking_tests::CPMINCORES_QH_FIXTURE;
+        let probe = core_parking_probe_from(Some(fixture), balanced, || (Some(10), Some(5)));
+        assert_eq!((probe["default_ac_pct"].clone(), probe["default_dc_pct"].clone()), (json!(10), json!(5)));
+        let r = core_parking_report(probe);
+        let f = find(&r, "core-parking-forced").expect("default 10, live 100: an override");
+        assert!(f.stock_default.contains("10%"), "{}", f.stock_default);
+        assert!(r.unavailable.iter().all(|u| u.id != "core-parking-forced"));
+        // The default is read only on the stock Balanced plan.
+        let high = core_parking_probe_from(Some(fixture), || Some((crate::PowerPlanClass::HighPerformance, "High performance".into())), || panic!("no default read off Balanced"));
+        assert_eq!(high["default_ac_pct"], Value::Null);
+    }
+
+    // a10 r1 (F1). Break check: return `Outcome::Clean` instead of `Undecidable` when the support is
+    // missing -> the "named as undecided" asserts fail; word the reason differently -> the sentence
+    // assert fails (and src/data/leftover-reason.test.ts, which pins the TS copy to the Rust const).
+    #[test]
+    fn core_parking_without_a_parking_default_is_undecided_with_the_one_sentence() {
+        let sentence = "Compy can read this setting (100% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.";
+        for (why, default) in [("default 100", json!(100)), ("default missing or unread", Value::Null), ("default above 100", json!(101))] {
+            let r = core_parking_report(json!({
+                "readable": true, "min_cores_ac_pct": 100, "default_ac_pct": default,
+                "plan_name": "Balanced", "plan_class": "balanced",
+            }));
+            assert!(find(&r, "core-parking-forced").is_none(), "{why}: no finding");
+            let u = r.unavailable.iter().find(|u| u.id == "core-parking-forced").unwrap_or_else(|| panic!("{why}: named as undecided"));
+            assert_eq!(u.reason, sentence, "{why}");
+        }
+        // A probe without the field at all (an older build) is undecided the same way.
+        let r = core_parking_report(json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "Balanced" }));
+        assert_eq!(r.unavailable.iter().find(|u| u.id == "core-parking-forced").map(|u| u.reason.as_str()), Some(sentence));
+        // Below 100 stays Clean, as before (nothing to judge).
+        let r = core_parking_report(json!({ "readable": true, "min_cores_ac_pct": 40, "plan_name": "Balanced", "plan_class": "balanced" }));
+        assert!(find(&r, "core-parking-forced").is_none() && r.unavailable.iter().all(|u| u.id != "core-parking-forced"));
     }
 
     #[test]
@@ -1370,8 +1458,10 @@ mod leftovers_tests {
         );
         assert!(r.findings.len() <= r.checked);
         for u in &r.unavailable {
+            // a10 r1 (F1): the core-parking detector's "read, but can't tell" sentence is in the set too.
+            let per_cpu = u.id == "core-parking-forced" && (0..=100u64).any(|p| u.reason == per_cpu_default_reason(p));
             assert!(
-                u.reason == REASON_UNREADABLE || u.reason == REASON_NEEDS_ADMIN,
+                u.reason == REASON_UNREADABLE || u.reason == REASON_NEEDS_ADMIN || per_cpu,
                 "unknown reason: {}",
                 u.reason
             );
@@ -1390,7 +1480,8 @@ mod leftovers_tests {
         );
         p["bcdedit"] = json!({ "readable": true, "needs_admin": false, "useplatformclock": true, "disabledynamictick": false });
         p["mmcss"] = json!({ "readable": true, "system_responsiveness": 0, "network_throttling": 4294967295u64 });
-        p["core_parking"] = json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "Balanced" });
+        // a10 r1 (F1): rotted = forced to 100 while the plan's own default parks (10).
+        p["core_parking"] = json!({ "readable": true, "min_cores_ac_pct": 100, "default_ac_pct": 10, "plan_name": "Balanced" });
         p["defender_policy"] = json!({ "readable": true, "disable_realtime": 1, "disable_antispyware": null });
         p["mpo"] = json!({ "readable": true, "overlay_test_mode": 5 });
         p["tcp"] = json!({ "readable": true, "autotuning_disabled": true });

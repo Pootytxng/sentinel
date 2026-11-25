@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { isMeasuredRow } from "../data/confidence-word";
 import { writeLedger } from "../data/ledger-write";
 import { turnBackOn } from "../data/turn-back-on";
+import { perCpuDefaultPct } from "../data/leftover-reason";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Priorities, PriorityItem, SessionSummary, StartupEntry, UpgradePath, UpgradeSuggestion } from "../types";
@@ -1129,15 +1130,30 @@ export default function Check({
               {t("optimize.check.uncheckedHead", { count: leftovers.unavailable.length })}
             </p>
             <ul className="check-unchecked-list">
-              {leftovers.unavailable.map((u) => (
-                <li key={u.id}>
-                  {t("optimize.check.couldntCheckPre")}
-                  {u.title}
-                  {t("optimize.check.couldntCheckMid")}
-                  {u.reason}
-                  {t("optimize.check.couldntCheckPost")}
-                </li>
-              ))}
+              {leftovers.unavailable.map((u) => {
+                // a10 r1 (F1): a setting that WAS read but can't be judged says so in its own
+                // sentence (not "Couldn't check ... — ...."), in the user's language.
+                const pct = perCpuDefaultPct(u.reason);
+                return (
+                  <li key={u.id}>
+                    {pct !== null ? (
+                      <>
+                        {u.title}
+                        {t("optimize.check.couldntCheckMid")}
+                        {t("optimize.check.perCpuDefault", { pct })}
+                      </>
+                    ) : (
+                      <>
+                        {t("optimize.check.couldntCheckPre")}
+                        {u.title}
+                        {t("optimize.check.couldntCheckMid")}
+                        {u.reason}
+                        {t("optimize.check.couldntCheckPost")}
+                      </>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
             {leftovers.unavailable.some((u) => /admin/i.test(u.reason)) && (
               <p className="check-unchecked-note">

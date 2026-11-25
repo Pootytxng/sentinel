@@ -219,6 +219,7 @@
     "couldntCheckPre": "Couldn't check ",
     "couldntCheckMid": " — ",
     "couldntCheckPost": ".",
+    "perCpuDefault": "Compy can read this setting ({{pct}}% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.",
     "adminRightsNote": "Reading those needs admin rights — Compy doesn't ask for them just to look."
   },
   "fix": {

@@ -195,6 +195,7 @@
     "couldntCheckPre": "未能检查 ",
     "couldntCheckMid": " — ",
     "couldntCheckPost": "。",
+    "perCpuDefault": "Compy 能读取此设置（始终保持唤醒的核心为 {{pct}}%），但 Windows 会按处理器选择此值，因此 Compy 无法判断它是否被优化工具改过。",
     "adminRightsNote": "读取这些项需要管理员权限——Compy 不会仅仅为了查看就申请权限。"
   },
   "fix": {
