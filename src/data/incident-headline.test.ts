@@ -83,13 +83,12 @@ describe("what is shown when the code can't be worded", () => {
   // Break check: make incidentHeadline return src.headline for an unknown code -> fails.
   it("an unknown code shows the fixed plain sentence, never the backend's text", () => {
     const newer = rec("a_code_from_a_newer_build", null, null, "Something Rust said in English — Jun 12, 9:42 PM");
-    expect(incidentHeadline(newer, en, "en")).toBe(
-      "Windows recorded something this version of Compy has no sentence for — Jun 12, 9:42 PM",
-    );
-    expect(incidentHeadline(newer, zh, "zh-CN")).toBe(`Windows 记录了此版本 Compy 没有对应说明的内容 — ${zhWhen}`);
-    expect(incidentWording(newer, zh)).toBe("Windows 记录了此版本 Compy 没有对应说明的内容");
+    expect(incidentHeadline(newer, en, "en")).toBe("A record this version of Compy can't describe — Jun 12, 9:42 PM");
+    expect(incidentWording(newer, en)).toBe("A record this version of Compy can't describe");
+    expect(incidentHeadline(newer, zh, "zh-CN")).toBe(`一条此版本 Compy 无法描述的记录 — ${zhWhen}`);
+    expect(incidentWording(newer, zh)).toBe("一条此版本 Compy 无法描述的记录");
     // An app code that arrived without its app is not guessed at either.
-    expect(incidentHeadline(rec("app_crash", null), en, "en")).toMatch(/^Windows recorded something/);
+    expect(incidentHeadline(rec("app_crash", null), en, "en")).toMatch(/^A record this version of Compy can't describe/);
   });
 
   // Break check: make incidentHeadline word a record without parts from `when` alone -> fails.

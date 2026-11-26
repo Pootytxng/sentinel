@@ -83,9 +83,9 @@ describe("careHeadline", () => {
   it("an unknown code, an unreadable stamp or an empty old sentence fall back honestly", () => {
     // An unknown code gets the fixed plain sentence, never the backend's English.
     const newer = { ...crash, headline_parts: { code: "a_newer_code", app: null, while_game: null } };
-    expect(careHeadline(newer, zh, "zh-CN")).toMatch(/^Windows 记录了此版本 Compy 没有对应说明的内容 — 11月11日/);
+    expect(careHeadline(newer, zh, "zh-CN")).toMatch(/^一条此版本 Compy 无法描述的记录 — 11月11日/);
     expect(careHeadline(newer, zh, "zh-CN")).not.toContain("stopped working");
-    expect(careHeadline(newer, en, "en")).toBe("Windows recorded something this version of Compy has no sentence for — Nov 11, 2:36 PM");
+    expect(careHeadline(newer, en, "en")).toBe("A record this version of Compy can't describe — Nov 11, 2:36 PM");
     expect(careHeadline({ ...crash, occurred_at: "garbage" }, zh, "zh-CN")).toContain("Nov 11, 2:36 PM");
     expect(careHeadline({ ...crash, headline_parts: null, summary: "  " }, zh, "zh-CN")).toBe("");
   });

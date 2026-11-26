@@ -455,7 +455,7 @@
       "unexpectedShutdown": "Your PC shut down unexpectedly or hard-froze — {{when}}",
       "blueScreen": "Your PC blue-screened and restarted — {{when}}",
       "hardwareError": "Windows logged a hardware-level error — {{when}}",
-      "unknown": "Windows recorded something this version of Compy has no sentence for — {{when}}",
+      "unknown": "A record this version of Compy can't describe — {{when}}",
       "whileGame": ", during or just after a {{game}} session Compy recorded"
     },
     "headlineWhat": {
@@ -467,7 +467,7 @@
       "unexpectedShutdown": "Your PC shut down unexpectedly or hard-froze",
       "blueScreen": "Your PC blue-screened and restarted",
       "hardwareError": "Windows logged a hardware-level error",
-      "unknown": "Windows recorded something this version of Compy has no sentence for"
+      "unknown": "A record this version of Compy can't describe"
     },
     "applied": {
       "on": "On",
