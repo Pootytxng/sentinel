@@ -718,8 +718,8 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
     // A5 Part A: the receipts come back over the dispatch's own pipe, each line carrying this random
     // nonce, so every receipt read afterwards is this run's (this replaces the A3a "clear the file
     // first" rule: there is no file). A nonce or compose failure refuses before anything is staged.
-    let nonce = crate::fps_pipe::random_hex()
-        .map_err(|e| format!("the elevated step was not started: its results key could not be made ({e})"))?;
+    // a12: the random source failing refuses with the one fixed sentence (no fallback value), before anything is staged.
+    let nonce = crate::fps_pipe::random_hex().map_err(|_| actions::RANDOM_KEY_UNAVAILABLE.to_string())?;
     // A9: a typed batch request (each item its id and its closed ops); refused here, before anything is
     // staged or launched, when the helper would refuse it.
     let request = crate::elevated_ops::ElevatedRequest::batch(request_items, &nonce).map_err(|_| {

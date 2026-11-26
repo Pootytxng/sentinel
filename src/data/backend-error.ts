@@ -344,6 +344,13 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "The Compy program file changed, or couldn't be checked, since Compy started, so it didn't start this administrator step. Restart Compy, then try again.",
     key: "app.backendErrors.exeReplacedRestart",
   },
+  // a12: Windows' random number generator failed while Compy made an administrator step's results key or pipe name
+  // (actions.rs RANDOM_KEY_UNAVAILABLE). Fails closed: no fallback value, nothing launched.
+  {
+    rust: "RANDOM_KEY_UNAVAILABLE",
+    text: "Windows couldn't give Compy the random number this administrator step needs, so Compy didn't start that step.",
+    key: "app.backendErrors.randomKeyUnavailable",
+  },
   // C6: the fixed refusals an undo meets in front of the audited one (experiment::rollback_change →
   // gaming_orchestrator::plain_change_gate), so a stopped undo walk can say why in the user's language.
   // Consts in gaming_orchestrator.rs. C8: the Trial/benchmark plan-class refusal is now three fixed sentences

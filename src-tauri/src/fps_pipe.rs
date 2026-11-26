@@ -110,16 +110,62 @@ pub(crate) fn pipe_name_from(bytes: [u8; 16]) -> String {
     format!("{PIPE_PREFIX}{hex}")
 }
 
+/// a12: the error [`random_16`] returns when the system random number generator fails (its NTSTATUS). Callers that
+/// start an administrator step recognise it with [`is_random_unavailable`] and refuse with one fixed sentence.
+#[derive(Debug)]
+pub(crate) struct RandomUnavailable(i32);
+
+impl std::fmt::Display for RandomUnavailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "the system random number generator failed (status {:#x})", self.0)
+    }
+}
+
+impl std::error::Error for RandomUnavailable {}
+
+/// a12: whether `e` is [`RandomUnavailable`] (the system random number generator failed).
+pub(crate) fn is_random_unavailable(e: &std::io::Error) -> bool {
+    e.get_ref().is_some_and(|inner| inner.is::<RandomUnavailable>())
+}
+
+// Test-only (a12): while set, this thread's `random_16` fails as BCryptGenRandom failing would. Never shipped.
+#[cfg(test)]
+thread_local! {
+    static FORCE_RANDOM_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Test-only (a12): make this thread's random source fail until the guard drops.
+#[cfg(test)]
+pub(crate) struct ForceRandomFailure(());
+
+#[cfg(test)]
+impl ForceRandomFailure {
+    pub(crate) fn begin() -> Self {
+        FORCE_RANDOM_FAILURE.with(|f| f.set(true));
+        ForceRandomFailure(())
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForceRandomFailure {
+    fn drop(&mut self) {
+        FORCE_RANDOM_FAILURE.with(|f| f.set(false));
+    }
+}
+
 /// 16 bytes from the system's random number generator, or an error (never a weak fallback).
 fn random_16() -> std::io::Result<[u8; 16]> {
     let mut b = [0u8; 16];
     const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x2;
     // SAFETY: `b` is a writable 16-byte buffer and its length is passed with it.
     let status = unsafe { BCryptGenRandom(std::ptr::null_mut(), b.as_mut_ptr(), b.len() as u32, BCRYPT_USE_SYSTEM_PREFERRED_RNG) };
+    // Test-only: the failure BCryptGenRandom would report (STATUS_UNSUCCESSFUL).
+    #[cfg(test)]
+    let status = if FORCE_RANDOM_FAILURE.with(|f| f.get()) { 0xC000_0001_u32 as i32 } else { status };
     if status == 0 {
         Ok(b)
     } else {
-        Err(std::io::Error::other(format!("the system random number generator failed (status {status:#x})")))
+        Err(std::io::Error::other(RandomUnavailable(status)))
     }
 }
 

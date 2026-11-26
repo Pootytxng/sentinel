@@ -2605,8 +2605,8 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
     if !staged.is_empty() {
         // Result files older versions left in the data folder are not read any more: clear them.
         clear_leftover_result_files(root.path());
-        let nonce = crate::fps_pipe::random_hex()
-            .map_err(|e| format!("The admin step was not started: Compy could not make its results key ({e}). Nothing else was changed."))?;
+        // a12: the random source failing refuses the admin step with the one fixed sentence (no fallback value).
+        let nonce = crate::fps_pipe::random_hex().map_err(|_| crate::actions::RANDOM_KEY_UNAVAILABLE.to_string())?;
         // Checked (never indexed) command attribution: by construction every staged range lies
         // inside all_cmds, but a panic HERE would poison HISTORY_LOCK for the whole session — so
         // an impossible mismatch aborts the batch BEFORE elevation instead.

@@ -1186,6 +1186,13 @@ pub(crate) const HELPER_SAVED_VALUE_NO_MATCH_MSG: &str =
 /// A5 Part A: the pre-launch refusal when the app cannot create the results pipe (nothing was launched).
 const RESULTS_CHANNEL_NOT_CREATED: &str = "elevated results channel could not be created";
 
+/// a12: the ONE pre-launch refusal when Windows' random number generator fails while Compy makes an administrator
+/// step's results key (nonce) or its results pipe's name (`fps_pipe::is_random_unavailable`). Fails closed: there is no
+/// fallback value, and nothing is launched. It says nothing about other changes (a Fix batch's no-admin items may
+/// already be made). Mirrored in `src/data/backend-error.ts`; `elevation_error_nothing_ran` matches it.
+pub(crate) const RANDOM_KEY_UNAVAILABLE: &str =
+    "Windows couldn't give Compy the random number this administrator step needs, so Compy didn't start that step.";
+
 /// One elevated dispatch whose output Compy reads (A5 Part A): how the elevation ended, and every line the
 /// helper relayed over the dispatch's pipe (joined by newlines).
 pub(crate) struct ElevatedCapture {
@@ -1255,6 +1262,7 @@ pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCap
     };
     let pipe = match crate::fps_pipe::ServerPipe::create() {
         Ok(p) => p,
+        Err(e) if crate::fps_pipe::is_random_unavailable(&e) => return none(Err(RANDOM_KEY_UNAVAILABLE.to_string())),
         Err(e) => return none(Err(format!("{RESULTS_CHANNEL_NOT_CREATED}: {e}"))),
     };
     let name = pipe.name.clone();
@@ -1631,6 +1639,7 @@ pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
         || err == STORED_RECORD_REFUSED_UNDO
         || err.starts_with(TYPED_REQUEST_NOT_PREPARED)
         || err == EXE_REPLACED_REFUSED
+        || err == RANDOM_KEY_UNAVAILABLE
         || err.starts_with(RESULTS_CHANNEL_NOT_CREATED)
         || err.starts_with("could not launch elevated process")
         || err.starts_with("cannot find own exe")
@@ -1686,7 +1695,7 @@ pub(crate) fn run_elevated_op(op: ElevatedOp) -> Result<(), String> {
     if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
         return Err(ELEVATION_DECLINED_MSG.to_string());
     }
-    let nonce = crate::fps_pipe::random_hex().map_err(|e| format!("{TYPED_REQUEST_NOT_PREPARED}: {e}"))?;
+    let nonce = crate::fps_pipe::random_hex().map_err(|_| RANDOM_KEY_UNAVAILABLE.to_string())?;
     let req = ElevatedRequest::single(op, &nonce)
         .map_err(|_| TYPED_REQUEST_NOT_PREPARED.to_string())?;
     // Test-only: elevate powershell DIRECTLY with the script the helper would compose, so live-QA elevated
@@ -6478,7 +6487,7 @@ pub(crate) fn memcompress_outcome(
 /// builder above). Recorded on a received prior; the mutation's confirmation decides [`ResultReceived`].
 fn restore_memory_compression_elevated_read() -> Result<(ApplyResult, ResultReceived), String> {
     // A5 Part A: the prior and the confirmation come back over the dispatch's pipe with its nonce.
-    let nonce = crate::fps_pipe::random_hex().map_err(|e| format!("{RESULTS_CHANNEL_NOT_CREATED}: {e}"))?;
+    let nonce = crate::fps_pipe::random_hex().map_err(|_| RANDOM_KEY_UNAVAILABLE.to_string())?;
     // A9: the combined op, run alone over the pipe; the helper composes `memcompress_combined_restore_script`
     // with this request's nonce, so the lines read below carry it.
     let request = ElevatedRequest::single(ElevatedOp::MemoryCompressionCombined {}, &nonce)
@@ -10480,6 +10489,69 @@ mod a9_exe_identity_tests {
         assert!(launch_was_attempted(&Ok(std::process::ExitStatus::from_raw(0))));
         assert!(launch_was_attempted(&Ok(std::process::ExitStatus::from_raw(1))));
         assert!(launch_was_attempted(&Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "another error"))));
+    }
+}
+
+#[cfg(test)]
+mod a12_random_tests {
+    //! a12 item 3: when Windows' random number generator fails, every administrator step refuses with the ONE fixed
+    //! sentence before anything is launched; no caller falls back to a predictable value.
+    use super::*;
+    use crate::fps_pipe as pipe;
+
+    /// Break: make `fps_pipe::random_16` return `Ok(b)` (the zeroed buffer) when BCryptGenRandom fails, and this fails.
+    /// (The exe identity check is forced to refuse too, so even a broken fallback launches nothing.)
+    #[test]
+    fn a_failed_random_source_refuses_the_elevation_with_the_one_sentence() {
+        let _exe = ForceExeReplaced::begin();
+        let _rng = pipe::ForceRandomFailure::begin();
+        let e = pipe::random_hex().expect_err("no value when the random source fails");
+        assert!(pipe::is_random_unavailable(&e), "{e}");
+        let e = match pipe::ServerPipe::create() {
+            Ok(_) => panic!("a pipe was created with no random name"),
+            Err(e) => e,
+        };
+        assert!(pipe::is_random_unavailable(&e), "{e}");
+        assert_eq!(run_elevated_op(ElevatedOp::HagsEnable {}), Err(RANDOM_KEY_UNAVAILABLE.to_string()), "a single op");
+        let req = ElevatedRequest::batch(
+            vec![("fast-startup-off".to_string(), vec![ElevatedOp::FastStartupOff {}])],
+            "0123456789abcdef0123456789abcdef",
+        )
+        .expect("a valid request");
+        let cap = run_elevated_request_capture(&req);
+        assert_eq!(cap.run, Err(RANDOM_KEY_UNAVAILABLE.to_string()), "the capture's pipe name");
+        assert!(!cap.launch_attempted, "nothing was launched");
+        assert!(elevation_error_nothing_ran(RANDOM_KEY_UNAVAILABLE));
+        assert!(!pipe::is_random_unavailable(&std::io::Error::other("another error")));
+    }
+
+    /// Every production caller of the nonce maps a random-source failure to the one sentence (the Gaming restore takes
+    /// its per-item path instead, where each item is a single op refused the same way). A new caller must join this list.
+    /// Break: change history.rs's batch nonce error back to a `format!` with the OS error, and this fails.
+    #[test]
+    fn every_nonce_caller_refuses_with_the_one_sentence() {
+        let needle = concat!("fps_pipe::", "random_hex()");
+        let mut seen = 0;
+        for (file, src) in [
+            ("actions.rs", include_str!("actions.rs")),
+            ("history.rs", include_str!("history.rs")),
+            ("gaming_orchestrator.rs", include_str!("gaming_orchestrator.rs")),
+        ] {
+            let src = src.replace("\r\n", "\n");
+            for (at, _) in src.match_indices(needle) {
+                let after = &src[at + needle.len()..];
+                if after.starts_with('"') {
+                    continue; // a test's source pin quoting the call
+                }
+                let mapped = after.starts_with(".map_err(|_| ")
+                    && after.lines().next().is_some_and(|l| l.contains("RANDOM_KEY_UNAVAILABLE.to_string())?;"));
+                let per_item = src[..at].ends_with("let Ok(nonce) = crate::")
+                    && after.starts_with(" else {\n        return staged_fallback(&staged, errs);");
+                assert!(mapped || per_item, "{file}: {}", after.lines().next().unwrap_or_default());
+                seen += 1;
+            }
+        }
+        assert_eq!(seen, 5, "actions.rs 2, history.rs 1, gaming_orchestrator.rs 2");
     }
 }
 
