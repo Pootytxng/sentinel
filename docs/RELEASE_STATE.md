@@ -110,10 +110,10 @@ fleet path has since carried real traffic — the owner reports at least two tes
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
 | **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:1233` | Flipped 2026-06-18 w/ owner sign-off. §7 QA harness passed; **GAMING_MODE_QA.md 10/10 PASSED 2026-07-14**; **owner SIGNED OFF 2026-07-14** — field-proven for 1.0. |
-| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2911` | Armed 2026-06-25. Live exact-restore + UAC-cancel=no-partial + critical-service block proven. Session start/restore ride the ONE batched elevation (T6/T6b). |
-| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2981` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. |
+| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2976` | Armed 2026-06-25. Live exact-restore + UAC-cancel=no-partial + critical-service block proven. Session start/restore ride the ONE batched elevation (T6/T6b). |
+| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:3046` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. |
 | **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:335` | REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
-| **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:3337` | Built dark 2026-07-06. Command refuses while dark; FE renders nothing. Arming needs live remove→reinstall QA + owner sign-off. |
+| **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:3402` | Built dark 2026-07-06. Command refuses while dark; FE renders nothing. Arming needs live remove→reinstall QA + owner sign-off. |
 | **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs:442` | Built dark 2026-07-09 (reuses audited batch path; multi-change Drop-guard rollback; corrupt-ledger read ABORTS pre-mutation). No FE surface. |
 | **Experiment engine + simulator (Intelligence P3)** | **ARMED** (`true`, 2026-07-17) | `experiment_gate()` — `experiment.rs:60` | Armed after owner sign-off + live apply→rollback round-trip. No new mutation primitive; resolve stays history-only; simulator reads catalog READ-ONLY. |
 | **Leftovers restore** | **ARMED** (`true`, 2026-07-16) | `restore_gate()` — `leftovers.rs:898` | Armed after owner-present live-UAC QA (3 loops PASS); receipts ride the Trust Ledger (`leftover_adopted`). |
@@ -154,16 +154,16 @@ fleet path has since carried real traffic — the owner reports at least two tes
   registration, the declaration, the grants and the overlay's real `invoke()` sites in agreement.
   Owner GO given 2026-08-03. **Open sub-item:** the spec's per-command main-window caller check
   (defense in depth behind the ACL) is deliberately deferred — see the PR for the reasoning.
-- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:7689`).
+- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:7776`).
 - Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:1680`).
 - Elevation (in source since A9; the installed build is per the rows above): every admin step relaunches
   `compy.exe --run-elevated-op <hex JSON>` (windowless) with one request of the closed typed set
-  (`run_elevated_op` — `actions.rs:1613`; helper `run_request` — `elevated_ops.rs:926`); the generic
+  (`run_elevated_op` — `actions.rs:1678`; helper `run_request` — `elevated_ops.rs:926`); the generic
   `--run-elevated` entry and its ticket are deleted (refused, nothing run:
-  `refused_generic_elevated_entry` — `lib.rs:112`). 4-way honest UAC attribution (`elevation_outcome` — `actions.rs:1547`).
+  `refused_generic_elevated_entry` — `lib.rs:112`). 4-way honest UAC attribution (`elevation_outcome` — `actions.rs:1611`).
 - Gaming-session advanced tier batches to ONE elevation per session start and per restore
   (`apply_elevated_tier` — `gaming_orchestrator.rs:659`); no-partial abort+restore contract;
-  UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1575`).
+  UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1639`).
 
 ## Release blockers
 
