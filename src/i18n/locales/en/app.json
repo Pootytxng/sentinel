@@ -143,7 +143,7 @@
     "benchStackNothingApplied": "The stack didn't apply — nothing was changed, so there's nothing to measure.",
     "benchRunCancelled": "Run cancelled.",
     "coreParkingDefaultUnread": "Compy couldn't read this power plan's own default for core parking from Windows, so it won't guess a value to put back. Nothing was changed.",
-    "coreParkingNotForced": "Compy checked again and this power plan's core parking no longer looks changed from its own default, so it didn't put anything back. Nothing was changed.",
+    "coreParkingNotForced": "Compy checked again and this isn't a case it puts back: it only resets core parking on Windows' Balanced plan when it's set to 100% and that plan's own default is lower. Nothing was changed.",
     "unmapped": "Compy couldn't finish this. Details: {{detail}}",
     "unmappedNoDetail": "Compy couldn't finish this."
   },

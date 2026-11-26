@@ -6678,7 +6678,7 @@ pub(crate) const CORE_PARKING_DEFAULT_UNREAD: &str = "Compy couldn't read this p
 
 /// a10 r2 F2: the restore re-checked the detector's rule (stock Balanced, forced to 100 or more, plan default
 /// lower) and it no longer holds. Mirrored in `src/data/backend-error.ts` (pinned by `backend-error.test.ts`).
-pub(crate) const CORE_PARKING_NOT_FORCED: &str = "Compy checked again and this power plan's core parking no longer looks changed from its own default, so it didn't put anything back. Nothing was changed.";
+pub(crate) const CORE_PARKING_NOT_FORCED: &str = "Compy checked again and this isn't a case it puts back: it only resets core parking on Windows' Balanced plan when it's set to 100% and that plan's own default is lower. Nothing was changed.";
 
 // ── Core parking: put the plan's own provisioned default back (AC + DC) so the override is lifted ──
 // a10 r1 (F2): it used to write a fixed 0/0 ("re-allow parking"), which is neither the recorded prior

@@ -444,7 +444,7 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
   // a10 r2 F2: the restore re-checked the detector's rule and it no longer holds (actions.rs CORE_PARKING_NOT_FORCED).
   {
     rust: "CORE_PARKING_NOT_FORCED",
-    text: "Compy checked again and this power plan's core parking no longer looks changed from its own default, so it didn't put anything back. Nothing was changed.",
+    text: "Compy checked again and this isn't a case it puts back: it only resets core parking on Windows' Balanced plan when it's set to 100% and that plan's own default is lower. Nothing was changed.",
     key: "app.backendErrors.coreParkingNotForced",
   },
 ];
