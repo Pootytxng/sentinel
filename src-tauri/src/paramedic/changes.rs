@@ -11,6 +11,7 @@
 
 use std::time::Duration;
 
+use super::hardware_records::HwRead;
 use super::*;
 use crate::change_sources::{
     self, ChangeError, ChangeEvent, ChangeKind, ChangeReport, Gap, KindStatus, Note, Precision, SteamLookup, UnreadableReason,
@@ -751,6 +752,8 @@ pub(crate) struct Slots {
     /// The first look's hardware-facts read and its read of Compy's own change history.
     pub facts: std::sync::atomic::AtomicBool,
     pub history: std::sync::atomic::AtomicBool,
+    /// F7: the read of Windows' hardware error records.
+    pub hardware: std::sync::atomic::AtomicBool,
 }
 
 impl Slots {
@@ -760,6 +763,7 @@ impl Slots {
             crashes: std::sync::atomic::AtomicBool::new(false),
             facts: std::sync::atomic::AtomicBool::new(false),
             history: std::sync::atomic::AtomicBool::new(false),
+            hardware: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -820,6 +824,30 @@ where
     G: FnOnce(String, Vec<String>, Duration) -> ModInput + Send + 'static,
     H: FnOnce(String) -> CrashRead + Send + 'static,
 {
+    diagnose_with_hardware(inp, complaint, game, budget, fetch, fetch_mods, fetch_crashes, None::<fn(DateTime<Utc>) -> HwRead>, slots)
+}
+
+/// `diagnose_with_all` plus the read of Windows' hardware error records (`fetch_hardware`, F7), through the
+/// same `spawn_reader` on its own named thread inside the same budget. It is given the start of the oldest
+/// normal session the rough one was judged against. A read that is late or dies is unavailable, never "none".
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn diagnose_with_hardware<F, G, H, J>(
+    mut inp: DiagnoseInputs,
+    complaint: Complaint,
+    game: Option<&str>,
+    budget: Duration,
+    fetch: F,
+    fetch_mods: Option<G>,
+    fetch_crashes: Option<H>,
+    fetch_hardware: Option<J>,
+    slots: Option<&'static Slots>,
+) -> Diagnosis
+where
+    F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
+    G: FnOnce(String, Vec<String>, Duration) -> ModInput + Send + 'static,
+    H: FnOnce(String) -> CrashRead + Send + 'static,
+    J: FnOnce(DateTime<Utc>) -> HwRead + Send + 'static,
+{
     let probe = diagnose(&inp, complaint, game);
     let (Some((t0, t1)), Some(g)) = (change_window(&probe), probe.game.clone()) else { return probe };
     let started = std::time::Instant::now();
@@ -832,6 +860,10 @@ where
         let game = g.clone();
         spawn_reader("paramedic-crashes", slots.map(|s| &s.crashes), move || f(game))
     });
+    // `None` inside: the answer has no normal sessions to give the read a start, so it is not started.
+    let hardware_rx = fetch_hardware.map(|f| {
+        hardware_records::read_since(&inp, &probe).map(|since| spawn_reader("paramedic-hardware", slots.map(|s| &s.hardware), move || f(since)))
+    });
     inp.changes = run_within(budget, move || fetch(t0, t1, g));
     if let Some(rx) = mods_rx {
         inp.mods = collect_reader(rx, budget, started)
@@ -839,6 +871,12 @@ where
     }
     if let Some(rx) = crashes_rx {
         inp.crashes = collect_reader(rx, budget, started).unwrap_or_else(extras::CrashRead::Unavailable);
+    }
+    if let Some(rx) = hardware_rx {
+        inp.hardware = match rx {
+            Some(rx) => collect_reader(rx, budget, started).unwrap_or_else(HwRead::Unavailable),
+            None => HwRead::Unavailable("no-window"),
+        };
     }
     diagnose(&inp, complaint, probe.game.as_deref())
 }

@@ -32,6 +32,7 @@ mod changes;
 mod extras;
 mod facts;
 pub(crate) mod first_look;
+mod hardware_records;
 pub(crate) mod home_status;
 mod mods;
 mod recovery;
@@ -307,6 +308,11 @@ pub(crate) struct DiagnoseInputs {
     /// "not undone").
     #[serde(skip)]
     compy_records: Vec<extras::CompyRecord>,
+    /// F7: when Windows wrote its hardware error records (WHEA-Logger), as the command read them. Wire-only:
+    /// never part of a recorded fixture, never stored or exported. Not read says nothing; a failed read is a
+    /// "couldn't see" line, never "none".
+    #[serde(skip)]
+    hardware: hardware_records::HwRead,
 }
 
 // ---- Outputs: codes, ids and numbers. The UI owns every sentence. ----------------------------
@@ -462,7 +468,7 @@ pub(crate) enum OneClickAction {
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-#[allow(dead_code)] // OneClick and Hardware arrive in F6 and F7
+#[allow(dead_code)] // OneClick arrives in F6. Hardware (F7): `hardware_records::detect` builds it; it carries no action.
 pub(crate) enum Fix {
     OneClick { action: OneClickAction, reversible: bool, needs_admin: bool },
     Steps { code: &'static str, args: BTreeMap<&'static str, String> },
@@ -1158,7 +1164,19 @@ pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String
         let fetch_crashes = |exe: String| extras::read_real_crashes(&exe);
         // A reader still running from an earlier press is not started again (that kind reads "took too long").
         static SLOTS: changes::Slots = changes::Slots::new();
-        Ok(changes::diagnose_with_all(inp, complaint, game.as_deref(), changes::CHANGES_BUDGET, fetch, Some(fetch_mods), Some(fetch_crashes), Some(&SLOTS)))
+        // F7: Windows' hardware error records, from the oldest normal session compared with up to now.
+        let fetch_hardware = |since: DateTime<Utc>| hardware_records::read_real_hardware_records(since, Utc::now());
+        Ok(changes::diagnose_with_hardware(
+            inp,
+            complaint,
+            game.as_deref(),
+            changes::CHANGES_BUDGET,
+            fetch,
+            Some(fetch_mods),
+            Some(fetch_crashes),
+            Some(fetch_hardware),
+            Some(&SLOTS),
+        ))
     })
     .await
     .map_err(|_| "the diagnosis stopped unexpectedly".to_string())?
@@ -1318,6 +1336,7 @@ fn inputs_from_parts(
         changes: ChangeRead::NotRead,
         mods: ModInput::default(),
         crashes: CrashRead::NotRead,
+        hardware: hardware_records::HwRead::NotRead,
     }
 }
 
@@ -1494,6 +1513,7 @@ impl Out {
 fn category(id: &str) -> usize {
     const ORDER: &[&str] = &[
         "hardware-change",
+        "hardware-errors",
         "background-load",
         "gpu-driver-change",
         "memory-pressure",
@@ -1629,8 +1649,15 @@ fn explain<'a>(
     // Files in the game's own folder: a candidate only for a mod's own loader, never an all-clear when unread.
     mods::detect(&ctx, &mut out);
     extras::detect_temperature(&ctx, &mut out);
-    // After every candidate: the crash line compares the crashes' dates with the earliest dated one.
+    // After every candidate that is a dated CHANGE: the crash line compares the crashes' dates with the earliest one.
     extras::detect_crashes(&ctx, &mut out);
+    // F7: Windows' hardware error records, for an episode still going on. After the crash line on purpose: a
+    // hardware error record is dated but is not a change, so the crash line must never count it as "the earliest
+    // change". A recovered episode, or one with a single session back in range, is told by its own block and gets
+    // no hardware lead in this slice.
+    if recovered.is_none() && once.is_none() {
+        hardware_records::detect(&ctx, &mut out);
+    }
     start_unknowns(&ctx, &mut out);
     d.start_record = start_record(&ctx);
     start_listing_note(&ctx, &mut out);
@@ -1691,7 +1718,7 @@ fn explain<'a>(
 
 /// Likely first (fixed category order breaks ties), then the changes in play (Possible, with timing,
 /// nothing against), then the rest. Within the last two, more supports first, then the category order.
-const TIMING_ONLY_SOURCES: &[&str] = &["windows-update", "game-files-change", "program-installed", "other-driver-change", "graphics-mod"];
+const TIMING_ONLY_SOURCES: &[&str] = &["windows-update", "game-files-change", "program-installed", "other-driver-change", "graphics-mod", "hardware-errors"];
 
 fn rank(c: &mut Vec<Cand>) {
     c.retain(|x| x.certainty().is_some());

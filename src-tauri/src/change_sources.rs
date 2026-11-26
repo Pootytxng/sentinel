@@ -1102,6 +1102,64 @@ pub(crate) fn read_windows_updates(since: DateTime<Utc>, until: DateTime<Utc>, b
 }
 
 // ---------------------------------------------------------------------------------------------
+// Hardware error records: WHEA-Logger events 17, 18, 19 (System log)
+// ---------------------------------------------------------------------------------------------
+
+/// The provider and event ids Windows uses for the hardware error records it keeps in the System log.
+/// The same family as the Black Box's own table (`blackbox::classify_incident`); a test holds the two together.
+pub(crate) const WHEA_PROVIDER: &str = "Microsoft-Windows-WHEA-Logger";
+pub(crate) const WHEA_IDS: [u32; 3] = [17, 18, 19];
+
+/// When Windows wrote each hardware error record in the span asked (oldest first), and how far back the
+/// read reached. Only the time is read: which part a record names is NOT parsed, here or anywhere else.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HardwareErrorLog {
+    pub records: Vec<DateTime<Utc>>,
+    /// Records older than this may be missing: the log's own oldest record, or, after a timeout, the row
+    /// cap or the output cap, the oldest row this read reached.
+    pub covered_from: Option<DateTime<Utc>>,
+}
+
+/// Pure: the event query for the hardware error records over `[since, until]`.
+fn whea_query(since: DateTime<Utc>, until: DateTime<Utc>) -> String {
+    let ids = WHEA_IDS.iter().map(|i| format!("EventID={i}")).collect::<Vec<_>>().join(" or ");
+    format!("*[System[Provider[@Name='{WHEA_PROVIDER}']and({ids})and{}]]", xpath_bounds(since, until))
+}
+
+/// A block from any other provider, or with any other id, is not one of these records.
+fn parse_whea_block(b: &str) -> Option<DateTime<Utc>> {
+    if xml_attr(b, "Provider", "Name")? != WHEA_PROVIDER {
+        return None;
+    }
+    if !WHEA_IDS.contains(&xml_event_id(b)?) {
+        return None;
+    }
+    xml_event_time(b)
+}
+
+fn parse_whea(xml: &str) -> Parsed<DateTime<Utc>> {
+    parse_blocks(xml, parse_whea_block)
+}
+
+/// Pure: an assessed read as a hardware error log. A read in which Windows returned a block Compy could not
+/// take as one of these records is `Unreadable`, never a shorter list: a count with a hole in it is not a count.
+fn whea_log(a: Assessed<DateTime<Utc>>, since: DateTime<Utc>, until: DateTime<Utc>) -> Result<HardwareErrorLog, UnreadableReason> {
+    if let Some(n) = a.gaps.iter().find_map(|g| if let Gap::MalformedRecords(n) = g { Some(*n) } else { None }) {
+        return Err(UnreadableReason::RecordsUnreadable(n));
+    }
+    let mut records: Vec<DateTime<Utc>> = a.items.into_iter().filter(|t| *t >= since && *t <= until).collect();
+    records.sort();
+    Ok(HardwareErrorLog { records, covered_from: a.covered_from })
+}
+
+/// Hardware error records over `[since, until]`, through the same budgeted, unelevated System-log read as
+/// the update reader (`read_channel`): no process kind and no start of its own.
+pub(crate) fn read_hardware_errors(since: DateTime<Utc>, until: DateTime<Utc>, budget: Duration) -> Result<HardwareErrorLog, UnreadableReason> {
+    let a = read_channel("System", &whea_query(since, until), budget, parse_whea)?;
+    whea_log(a, since, until)
+}
+
+// ---------------------------------------------------------------------------------------------
 // Game update: Steam appmanifest_<id>.acf
 // ---------------------------------------------------------------------------------------------
 
@@ -2090,6 +2148,80 @@ mod tests {
 <Data Name='updateTitle'>{title}</Data><Data Name='updateGuid'>{{c809da48-75dc-470e-b669-9ba3cc9fcb07}}</Data>\
 <Data Name='updateRevisionNumber'>200</Data></EventData></Event>\n"
         )
+    }
+
+    /// A hardware error record as `wevtutil /f:xml` prints one. The event data names a part; nothing reads it.
+    fn whea(time: &str, id: u32) -> String {
+        format!(
+            "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>\
+<Provider Name='Microsoft-Windows-WHEA-Logger' Guid='{{c26c4f3c-3f66-4e99-8f8a-39405cfed220}}'/>\
+<EventID>{id}</EventID><Version>0</Version><Level>3</Level><TimeCreated SystemTime='{time}'/>\
+<EventRecordID>1</EventRecordID><Channel>System</Channel></System><EventData>\
+<Data Name='ErrorSource'>4</Data><Data Name='FRUText'>a part name nothing reads</Data></EventData></Event>\n"
+        )
+    }
+
+    // ---- hardware error records (F7) -------------------------------------------------------
+
+    #[test]
+    fn the_hardware_query_asks_for_the_black_box_tables_provider_and_ids() {
+        // The Black Box's own classifier takes every id asked for, under this provider, as a hardware error record,
+        // and takes neither neighbour: the two readers ask Windows for the same family.
+        for id in WHEA_IDS {
+            assert_eq!(crate::blackbox::classify_incident(WHEA_PROVIDER, id), Some(crate::blackbox::IncidentKind::HardwareError), "id {id}");
+        }
+        assert_eq!(WHEA_IDS.len(), 3);
+        assert_eq!(crate::blackbox::classify_incident(WHEA_PROVIDER, 16), None);
+        assert_eq!(crate::blackbox::classify_incident(WHEA_PROVIDER, 20), None);
+        let q = whea_query(utc("2026-10-01T10:00:00Z"), utc("2026-10-08T09:00:00Z"));
+        assert_eq!(
+            q,
+            "*[System[Provider[@Name='Microsoft-Windows-WHEA-Logger']and(EventID=17 or EventID=18 or EventID=19)and\
+(TimeCreated[@SystemTime>='2026-10-01T10:00:00.000Z'])and(TimeCreated[@SystemTime<='2026-10-08T09:00:00.001Z'])]]"
+        );
+    }
+
+    #[test]
+    fn hardware_error_records_parse_to_their_times_oldest_first_inside_the_span_asked() {
+        // Newest first, as the query returns them, with one row outside the span asked.
+        let raw = [whea("2026-10-07T10:05:00.1234567Z", 19), whea("2026-10-06T12:00:00Z", 18), whea("2026-10-05T12:00:00Z", 17), whea("2026-09-20T12:00:00Z", 17)].concat();
+        let log_start = utc("2026-09-01T00:00:00Z");
+        let a = assess(&raw, false, Some(log_start), parse_whea(&raw)).expect("readable");
+        let log = whea_log(a, utc("2026-10-01T10:00:00Z"), utc("2026-10-08T09:00:00Z")).expect("a log");
+        assert_eq!(log.records, vec![utc("2026-10-05T12:00:00Z"), utc("2026-10-06T12:00:00Z"), utc("2026-10-07T10:05:00.1234567Z")]);
+        assert_eq!(log.covered_from, Some(log_start), "a whole read reaches back to the log's own oldest record");
+    }
+
+    #[test]
+    fn a_row_from_another_provider_or_id_is_dropped_by_the_parser() {
+        // Same id (19) from the update provider, and the right provider with an id one past the family.
+        let raw = [whea("2026-10-07T10:05:00Z", 17), wu("2026-10-07T09:00:00Z", "an update"), whea("2026-10-06T10:00:00Z", 20), whea("2026-10-05T10:00:00Z", 18)].concat();
+        let parsed = parse_whea(&raw);
+        assert_eq!(parsed.items, vec![utc("2026-10-07T10:05:00Z"), utc("2026-10-05T10:00:00Z")]);
+        assert_eq!((parsed.blocks, parsed.malformed()), (4, 2));
+        // And a read holding such rows is not a shorter list: it is unreadable.
+        let a = assess(&raw, false, Some(utc("2026-09-01T00:00:00Z")), parse_whea(&raw)).expect("some rows parse");
+        assert_eq!(whea_log(a, utc("2026-10-01T00:00:00Z"), utc("2026-10-08T00:00:00Z")), Err(UnreadableReason::RecordsUnreadable(2)));
+    }
+
+    #[test]
+    fn an_empty_hardware_answer_is_a_read_with_no_records_and_a_timeout_with_no_rows_is_unreadable() {
+        let log_start = utc("2026-09-01T00:00:00Z");
+        let (since, until) = (utc("2026-10-01T00:00:00Z"), utc("2026-10-08T00:00:00Z"));
+        let a = assess("", false, Some(log_start), parse_whea("")).expect("an empty answer is a read");
+        assert_eq!(whea_log(a, since, until), Ok(HardwareErrorLog { records: Vec::new(), covered_from: Some(log_start) }));
+        assert_eq!(assess("", true, Some(log_start), parse_whea("")).err(), Some(UnreadableReason::TimedOutBeforeAnyRecord));
+        // Text that holds no event at all is not "no records".
+        assert_eq!(assess("Access is denied.", false, Some(log_start), parse_whea("Access is denied.")).err(), Some(UnreadableReason::RecordsUnreadable(0)));
+    }
+
+    #[test]
+    fn a_hardware_read_cut_short_reaches_back_only_to_its_oldest_row() {
+        let raw = [whea("2026-10-07T10:05:00Z", 19), whea("2026-10-06T12:00:00Z", 19)].concat();
+        let a = assess(&raw, true, Some(utc("2026-09-01T00:00:00Z")), parse_whea(&raw)).expect("rows arrived before the budget ended");
+        let log = whea_log(a, utc("2026-10-01T00:00:00Z"), utc("2026-10-08T00:00:00Z")).expect("a log");
+        assert_eq!(log.records.len(), 2);
+        assert_eq!(log.covered_from, Some(utc("2026-10-06T12:00:00Z")), "older rows were not read, so the read does not speak for them");
     }
 
     // ---- drivers --------------------------------------------------------------------------

@@ -1476,6 +1476,7 @@ export type ParamedicWhen =
 export type ParamedicFix =
   | { kind: "steps"; code: string; args: Record<string, string> }
   | { kind: "none"; code: string }
+  /** F7: no action and no steps to "fix" it; the card shows what the owner can check. `code`: "hardware-errors". */
   | { kind: "hardware"; code: string }
   | { kind: "one-click"; action: { kind: string; change_id: string }; reversible: boolean; needs_admin: boolean };
 

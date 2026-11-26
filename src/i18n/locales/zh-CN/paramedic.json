@@ -332,6 +332,10 @@
     },
     "gpuHotter": {
       "what": "显卡温度比平时更高"
+    },
+    "hardwareErrors": {
+      "what": "Windows 记录了硬件错误",
+      "one": "Windows 记录了一次硬件错误"
     }
   },
   "since": {
@@ -706,7 +710,10 @@
     "crashesUnavailable": "{{game}} 以前是否意外关闭过（查看用时过长）",
     "crashesUnreadable": "{{game}} 以前是否意外关闭过（Windows 的崩溃记录读不了）",
     "crashesPartial": "Compy 只读到了 Windows 崩溃记录的一部分，其中没有找到 {{game}} 的崩溃。",
-    "compyLedger": "Compy 刚才无法读取它自己的更改记录，所以无法说出哪一项变化最早。"
+    "compyLedger": "Compy 刚才无法读取它自己的更改记录，所以无法说出哪一项变化最早。",
+    "hardwareErrorsSlow": "Windows 是否记录了硬件错误（查看用时过长）",
+    "hardwareErrorsUnread": "Windows 是否记录了硬件错误（Compy 没能读取 Windows 的日志）",
+    "hardwareErrorsBefore": "这段时间较早的部分里 Windows 是否记录了硬件错误（Compy 这次读取 Windows 日志没有追溯到那么早）"
   },
   "nothingWrong": {
     "title": "看起来一切正常",
@@ -836,6 +843,29 @@
   "numbers": {
     "show": "查看数据",
     "hide": "收起数据"
+  },
+  "hardware": {
+    "titleLikely": "这看起来是硬件问题",
+    "titlePossible": "这有可能是硬件问题",
+    "verdictLikely": "Windows 的硬件错误记录与发生的情况最吻合，已排在最前面。",
+    "verdictPossible": "Windows 在同一时期记录了至少一次硬件错误，但 Compy 无法证明问题出在这里。",
+    "next": "点开第一项，看看你可以检查什么。如果你改了什么，再玩一次 {{game}}，然后再点“出问题了”。",
+    "notProven": "仅凭这些记录，Compy 无法证明这一点。",
+    "whyTie": "Windows 的硬件错误记录和另一项变化同样吻合，Compy 分不出哪一项在前。",
+    "countOne": "Windows 在 {{at}} 记录了一次硬件错误（来源：WHEA-Logger）。",
+    "countMany": "在 {{from}} 到 {{to}} 之间，Windows 在 {{n}} 个不同的时间记录了硬件错误（来源：WHEA-Logger；相隔不到一分钟的记录算作一次）。",
+    "inRough": "其中 {{n}} 次落在 Compy 测为不顺的 {{game}} 运行期间或刚结束之后。",
+    "inRoughOnly": "它落在 Compy 测为不顺的 {{game}} 运行期间或刚结束之后。",
+    "inNormalOne": "在 {{game}} 正常运行期间或刚结束之后，Windows 也记录了一次。",
+    "inNormalMany": "在 {{game}} 正常运行期间或刚结束之后，Windows 也记录了 {{n}} 次。",
+    "normalClean": "在 Compy 查看的 {{base}} 次 {{game}} 正常运行期间及刚结束之后，没有找到这类记录；Compy 这次读取 Windows 日志追溯到了其中最早一次之前。",
+    "normalUnread": "Compy 这次读取 Windows 日志只追溯到 {{from}}，所以说不准在那之前的正常运行期间是否也记录了这类错误。",
+    "checkedNone": "硬件错误记录（来源：WHEA-Logger）：Compy 向 Windows 系统日志查询了 {{from}} 到 {{to}} 的这类记录，结果一条也没有返回。",
+    "intro": "当电脑的某个部件报告自身出错时，Windows 会留下一条记录。对此 Compy 没有可以更改的设置。你可以这样做：",
+    "step1": "如果你在 BIOS 里改过超频、降压或内存配置文件（XMP 或 EXPO），先把它改回默认值，再玩一次 {{game}}，然后再点“出问题了”。",
+    "step2": "按 Windows + X，打开“事件查看器”。在“Windows 日志”下打开“系统”，按来源 WHEA-Logger 筛选。逐条打开，看 Windows 对它的描述。",
+    "step3": "如果 BIOS 设置全部恢复默认后 Windows 仍在记录这类错误，把下面这几行告诉电脑厂商或维修店：",
+    "tellPart": "Compy 没有读取是电脑的哪个部件报告的。"
   },
   "verdict": {
     "likely": "有一项变化与问题出现的时间最吻合，已排在最前面。",

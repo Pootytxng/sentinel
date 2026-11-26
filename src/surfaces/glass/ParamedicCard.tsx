@@ -181,6 +181,8 @@ function whatText(id: string, t: T): string | null {
       return t("paramedic.finding.otherDriver.what");
     case "gpu-hotter":
       return t("paramedic.finding.gpuHotter.what");
+    case "hardware-errors":
+      return t("paramedic.finding.hardwareErrors.what");
     default:
       return null;
   }
@@ -240,6 +242,10 @@ function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | nu
   if (f.id === "program-installed") {
     const day = f.evidence.find((e) => e.code === "installed-and-started")?.args.day;
     if (day) return t("paramedic.finding.programInstalled.what", { day: dates.day(day) });
+  }
+  // F7: one record is "a hardware error"; the plural heading is only for two or more separate times.
+  if (f.id === "hardware-errors" && f.evidence.find((e) => e.code === "whea-count")?.args.count === "1") {
+    return t("paramedic.finding.hardwareErrors.one");
   }
   return whatText(f.id, t);
 }
@@ -643,6 +649,20 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.recoveryDriverUnread");
     case "compy-changes-differ":
       return t("paramedic.evidence.compyChangesDiffer", { from: a.from, to: a.to });
+    // F7: Windows' hardware error records. Counts and dates only: what a record did to the game, and which part it
+    // names, are never said (neither is read). One record has its own sentence in both languages (zh has one plural form).
+    case "whea-count":
+      return a.count === "1"
+        ? t("paramedic.hardware.countOne", { at: dates.dayTime(a.from) })
+        : t("paramedic.hardware.countMany", { n: Number(a.count), from: dates.dayTime(a.from), to: dates.dayTime(a.to) });
+    case "whea-in-rough":
+      return a.of === "1" ? t("paramedic.hardware.inRoughOnly", { game }) : t("paramedic.hardware.inRough", { n: Number(a.count), game });
+    case "whea-in-normal":
+      return a.count === "1" ? t("paramedic.hardware.inNormalOne", { game }) : t("paramedic.hardware.inNormalMany", { n: Number(a.count), game });
+    case "whea-normal-clean":
+      return t("paramedic.hardware.normalClean", { base: a.base, game });
+    case "whea-normal-unread":
+      return t("paramedic.hardware.normalUnread", { from: dates.dayTime(a.from) });
     default:
       return null;
   }
@@ -874,6 +894,13 @@ function unknownLine(code: string, { t, game, startRecord }: Ctx): string | null
       return t("paramedic.unknown.identityUnreadable");
     case "windows-build":
       return t("paramedic.unknown.windowsBuild");
+    // F7: a hardware error log that was not read, or not far enough back, is never "none".
+    case "hardware-errors-slow":
+      return t("paramedic.unknown.hardwareErrorsSlow");
+    case "hardware-errors-unread":
+      return t("paramedic.unknown.hardwareErrorsUnread");
+    case "hardware-errors-before":
+      return t("paramedic.unknown.hardwareErrorsBefore");
     default:
       return null;
   }
@@ -912,6 +939,9 @@ function seenLine(s: ParamedicRuledOut, ctx: Ctx): string | null {
   const program = programLine(s.id, a, ctx);
   if (program) return program;
   switch (s.id) {
+    // F7: only for a span the read reached the start of (the engine sends it for no other case).
+    case "hardware-errors-none":
+      return t("paramedic.hardware.checkedNone", { from: dates.dayTime(a.from), to: dates.dayTime(a.to) });
     case "gpu-temp":
       return t("paramedic.seen.gpuTemp", { count: Number(a.count), rough: a.rough, base: a.base });
     case "setting-drift-moved":
@@ -1124,6 +1154,35 @@ function restoredAt(f: ParamedicFinding): string | undefined {
   return all[all.length - 1];
 }
 
+/** F7: what a hardware lead shows where other rows show steps. Compy has no change to make here, so there is no
+ *  button, no "How to fix it" and no "try the fix": the heading (which says "looks like" only at Most likely), what
+ *  the record is, three things the owner can do, and the lines to pass on (the same count and rough-session sentences
+ *  as the evidence above, the second only when a record sat in a rough session). Nothing here changes the PC. */
+function HardwareBlock({ finding, ctx }: { finding: ParamedicFinding; ctx: Ctx }) {
+  const { t, game } = ctx;
+  const count = finding.evidence.find((e) => e.code === "whea-count");
+  const rough = finding.evidence.find((e) => e.code === "whea-in-rough");
+  const tell = present([count ? evidenceLine(count, ctx) : null, rough ? evidenceLine(rough, ctx) : null, t("paramedic.hardware.tellPart")]);
+  return (
+    <div data-testid="paramedic-hardware">
+      <p className="gl-row-title" data-testid="paramedic-hardware-title">
+        {finding.confidence === "likely" ? t("paramedic.hardware.titleLikely") : t("paramedic.hardware.titlePossible")}
+      </p>
+      <p className="gl-para-note">{t("paramedic.hardware.intro")}</p>
+      <ol className="gl-para-lines gl-para-steps">
+        <li>{t("paramedic.hardware.step1", { game })}</li>
+        <li>{t("paramedic.hardware.step2")}</li>
+        <li>{t("paramedic.hardware.step3")}</li>
+      </ol>
+      <ul className="gl-para-lines" data-testid="paramedic-hardware-tell">
+        {tell.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** The steps for one candidate; they sit inside its row, which opens on a tap. */
 function FixBlock({
   fix,
@@ -1140,6 +1199,8 @@ function FixBlock({
   appliedOnly?: boolean;
   finding?: ParamedicFinding;
 }) {
+  // F7: a hardware lead shows its own block and nothing else (no steps title, no button).
+  if (fix.kind === "hardware") return finding ? <HardwareBlock finding={finding} ctx={ctx} /> : null;
   const offer = fix.kind === "steps" && fix.code === "compy-change" && finding ? compyOfferFor(finding, ctx) : null;
   // B10 review r1 F3: once the row's change is undone, its "undo the newest one" and "play once" steps go: the undone
   // line carries the one next step, and step 1 would point at a different, unnamed change.
@@ -1284,7 +1345,10 @@ function CompyUndoRow({ offer, ctx }: { offer: CompyUndoOffer; ctx: Ctx }) {
 }
 
 function whyFirst(d: ParamedicDiagnosis, ctx: Ctx): string | null {
-  if (d.why_first === "tie") return ctx.t("paramedic.why.tie");
+  // F7: "two changes ... the one that's easier to undo" is untrue when one of the two is Windows' hardware error records.
+  if (d.why_first === "tie") {
+    return d.findings.slice(0, 2).some((f) => f.fix.kind === "hardware") ? ctx.t("paramedic.hardware.whyTie") : ctx.t("paramedic.why.tie");
+  }
   if (d.why_first !== "cross-game" && d.why_first !== "cross-game-lead") return null;
   const games = d.findings[0]?.evidence.find((e) => e.code === "cross-game")?.args.games;
   if (!games) return null;
@@ -1464,7 +1528,10 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
           )}
           {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
           {!recovered && <FixBlock fix={f.fix} ctx={ctx} possible={f.confidence === "possible"} restored={restoredAt(f)} appliedOnly={appliedOnly(f)} finding={f} />}
-          {!recovered && f === d.findings[0] && f.confidence !== "possible" && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
+          {/* F7: a hardware lead has no fix to try, so it never says "until you try the fix". */}
+          {!recovered && f === d.findings[0] && f.confidence !== "possible" && (
+            <span className="gl-row-sub">{f.fix.kind === "hardware" ? t("paramedic.hardware.notProven") : t("paramedic.card.notProven")}</span>
+          )}
         </div>
       )}
     </div>
@@ -1723,7 +1790,11 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     const rest = d.findings.filter((f) => !rows.includes(f));
     const lead = d.findings[0];
     let verdict: string;
+    // F7: Windows' hardware error records are not "one change" and have no fix to try, so a hardware lead has its
+    // own verdict and next-step sentences. "Looks like" is never said here: only the block's heading says it, at Most likely.
+    const hardwareLead = lead.fix.kind === "hardware";
     if (!separable) verdict = t("paramedic.notSeparable.title");
+    else if (hardwareLead) verdict = lead.confidence === "likely" ? t("paramedic.hardware.verdictLikely") : t("paramedic.hardware.verdictPossible");
     else if (lead.confidence === "likely") verdict = t("paramedic.verdict.likely");
     // "Lines up with when it started" is said only when something in play has timing. A finding that rests on
     // a measured figure alone (no start, no dated change) says what was measured and that it is not tied to a time.
@@ -1734,6 +1805,8 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
       next = inPlay.some((f) => f.id === "background-load")
         ? t("paramedic.notSeparable.next", { game })
         : t("paramedic.notSeparable.nextOther", { game });
+    } else if (hardwareLead) {
+      next = t("paramedic.hardware.next", { game });
     } else if (lead.confidence === "likely") {
       next = t("paramedic.next.likely", { game });
     } else {
