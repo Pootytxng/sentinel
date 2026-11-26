@@ -63,7 +63,7 @@ describe("shared confidence words never say a retired strength word", () => {
         }
       // A finding the interview reached by an answer alone is level "likely" internally, and is worded Possible.
       expect([...chips].some((c) => c.startsWith("likely=")), [...chips].join(" | ")).toBe(true);
-      for (const c of chips) if (c.startsWith("likely=")) expect(c).toBe(`likely=${i18n.t("common.confidenceWord.possible")}`);
+      for (const c of chips) if (c.startsWith("likely=")) expect(c).toBe(`likely=${i18n.t("common.strength.possible")}`);
     });
 
     it(`${loc}: the Black Box strength labels and the new group lines carry no retired word`, () => {

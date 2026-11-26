@@ -93,7 +93,8 @@ describe("the shared how-sure words (common.source / common.strength)", () => {
   it("zh-CN has one word for Measured: the tag and the older shared word are both 已实测", () => {
     const zh = locale("zh-CN", "common.json");
     expect((zh.source as Tree).measured).toBe("已实测");
-    expect((zh.confidenceWord as Tree).measured).toBe("已实测");
+    // D3 slice 3: the older list's "measured" moved to this key, so there is one key as well as one word.
+    expect((zh.confidenceWord as Tree).measured).toBeUndefined();
     // Same for "Measured once": one zh wording in the app, not two.
     expect((zh.source as Tree).measuredOnce).toBe((zh.confidenceWord as Tree).measuredOnce);
   });

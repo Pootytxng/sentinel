@@ -43,10 +43,16 @@ describe("confidence vocabulary", () => {
     const locales = join("src", "i18n", "locales");
     for (const loc of ["en", "zh-CN"]) {
       const common = JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as { confidenceWord: Record<string, string> };
-      for (const w of ["known", "measured", "measuredOnce", "possible", "likely", "expected", "unknown"] as const) {
+      // D3 slice 3: "possible" and "measured" are spelled by the shared vocabulary (common.strength.possible,
+      // common.source.measured) through confidenceWordText; the older list no longer carries them.
+      for (const w of ["known", "measuredOnce", "likely", "expected", "unknown"] as const) {
         expect(confidenceWordKey(w)).toBe(`common.confidenceWord.${w}`);
         expect(common.confidenceWord[w]).toBeTruthy();
       }
+      for (const w of ["possible", "measured"] as const) expect(common.confidenceWord[w], `${loc}: confidenceWord.${w} was moved`).toBeUndefined();
+      const shared = JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as { source: Record<string, string>; strength: Record<string, string> };
+      expect(shared.strength.possible).toBeTruthy();
+      expect(shared.source.measured).toBeTruthy();
       for (const file of ["home.json", "optimize.json", "gaming.json", "blackbook.json"]) {
         const text = readFileSync(join(locales, loc, file), "utf8");
         expect(text, `${loc}/${file}`).not.toMatch(/\{\{level\}\}\s*confidence|confidence\s*[:：]?\s*\{\{level\}\}|"confidenceTag"|"confidenceSuffix"|"confidenceLabel"/);
