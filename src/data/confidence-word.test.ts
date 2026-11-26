@@ -50,6 +50,9 @@ describe("confidence vocabulary", () => {
         expect(common.confidenceWord[w]).toBeTruthy();
       }
       for (const w of ["possible", "measured"] as const) expect(common.confidenceWord[w], `${loc}: confidenceWord.${w} was moved`).toBeUndefined();
+      // Review r1, F1: the key builder is total. The two moved words get the shared keys, never a key that does not exist.
+      expect(confidenceWordKey("possible")).toBe("common.strength.possible");
+      expect(confidenceWordKey("measured")).toBe("common.source.measured");
       const shared = JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as { source: Record<string, string>; strength: Record<string, string> };
       expect(shared.strength.possible).toBeTruthy();
       expect(shared.source.measured).toBeTruthy();

@@ -13,7 +13,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import i18n from "../i18n";
 import { ConfidenceWord, PatternConfidence, RowConfidence } from "../design/ConfidenceWord";
-import { confidenceWordText, wordFromBand, wordFromBench, wordFromFinding, wordFromPattern, wordFromRow, type ConfidenceWord as Word } from "./confidence-word";
+import { confidenceWordKey, confidenceWordText, wordFromBand, wordFromBench, wordFromFinding, wordFromPattern, wordFromRow, type ConfidenceWord as Word } from "./confidence-word";
 import { INTERVIEW_FINDINGS, interviewFinding, type InterviewFacts } from "../surfaces/home-interview-data";
 
 afterEach(async () => {
@@ -57,6 +57,23 @@ describe("confidenceWordText: one helper spells every shown word", () => {
     for (const loc of LANGS) {
       const c = common(loc);
       expect([c.confidenceWord.known, c.confidenceWord.expected, c.confidenceWord.unknown], loc).toEqual([TEXT[loc].known, TEXT[loc].expected, TEXT[loc].unknown]);
+    }
+  });
+
+  // Review r1, F1: BenchWord still calls t(confidenceWordKey(word)); the builder must never hand it a missing key.
+  it("the key builder is total: every word's key resolves to a real string, in both languages", async () => {
+    const words: Word[] = ["known", "measured", "measuredOnce", "possible", "likely", "expected", "unknown"];
+    expect(confidenceWordKey("possible")).toBe("common.strength.possible");
+    expect(confidenceWordKey("measured")).toBe("common.source.measured");
+    for (const loc of LANGS) {
+      await i18n.changeLanguage(loc);
+      for (const w of words) {
+        const key = confidenceWordKey(w);
+        const shown = i18n.t(key);
+        expect(shown, `${loc}/${w}`).not.toBe(key);
+        expect(shown.trim().length, `${loc}/${w}`).toBeGreaterThan(0);
+        if (w !== "likely") expect(shown, `${loc}/${w}`).toBe(TEXT[loc][w]);
+      }
     }
   });
 

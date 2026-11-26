@@ -56,6 +56,7 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - Decide: the tier name "starter" (the app now says "N starter tweaks ready", "Starter stack", "Apply all starter fixes").
 - Decide: the Test bench rule for "Likely better" (two agreeing comparisons).
 - Decide: should Home count an unapplied optional tweak as "worth a look"?
+- Decide: what the Home interview chip says for three findings (the health check, "I want more FPS", "always slow") whose chip reads "Measured" but rests on a setting check or a loaded list, not on play Compy measured: "Read from your PC", or no chip (`_train\d12-review-r1-unrun.md` F3).
 - Privacy questions and the lawyer list (`_train\t2-privacy-for-owner-and-lawyer.md`).
 - Site copy differences (`_train\t2-site-privacy-diff.md`, `_train\c3-site-claims.md`).
 - Website lines that make the same game and anti-cheat claims, with suggested wording in `_train\c3-site-claims.md` (the EULA line needs a lawyer).

@@ -172,7 +172,13 @@ describe("confidence-word.ts through the mappers is byte-identical to the frozen
   ] as const;
   const bases = [undefined, ...rustVariants("priorities.rs", "Basis", "kebab-case")] as ("fact" | "measured" | undefined)[];
   const locales = join("src", "i18n", "locales");
-  const text = (loc: string, w: string) => (JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as { confidenceWord: Record<string, string> }).confidenceWord[w];
+  // D3 slice 3: Possible and Measured are kept under the shared keys; every word must resolve to a real string.
+  const text = (loc: string, w: string): string => {
+    const c = JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as { confidenceWord: Record<string, string>; source: Record<string, string>; strength: Record<string, string> };
+    const s = w === "possible" ? c.strength.possible : w === "measured" ? c.source.measured : c.confidenceWord[w];
+    if (typeof s !== "string" || s === "") throw new Error(`${loc}: no string for the word "${w}"`);
+    return s;
+  };
 
   // u3-focus 2026-11-21 (deliberate change, not a loosening): the OLD word for a supported band was
   // "likely", which is a strength above "Possible" shown with no two independent supports. The band
