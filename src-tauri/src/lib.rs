@@ -1306,35 +1306,56 @@ pub(crate) fn eee_disabled_from(res: &crate::actions::EeeResolution) -> Option<b
     }
 }
 
-/// PURE (a11): whether ONE applied EEE record's own change is still in place, read from the pass's one
-/// adapter listing (`listing`, `None` = the listing did not finish). Only the (adapter, property) pairs
-/// in the record's saved snapshot are consulted, so another adapter's EEE state never changes this
-/// record's answer. `Some(true)` = every saved pair is listed exactly once and reads disabled;
-/// `Some(false)` = every saved pair is listed exactly once and at least one reads not disabled (the
-/// "turned off outside Compy" evidence, about the record's own adapter only). Anything else is `None`
-/// ("couldn't read"), never on or off: a failed listing, a record with no saved pairs, or a saved pair
-/// whose adapter or property is not in the listing (unplugged, disabled, renamed, removed, or listed
-/// twice). The listing names only Up, wired adapters, so an unplugged adapter is "not listed".
-/// Names compare byte-equal: the snapshot was written from the same enumeration's trimmed fields.
+/// a11: what the live listing says about ONE applied EEE record's own saved (adapter, property) pairs.
+/// a11 r1 F2: four states, so a record that is only partly as Compy set it is never read as "all undone".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum EeeRecordRead {
+    /// Every saved pair is listed exactly once and reads disabled (Compy's change in place).
+    AllDisabled,
+    /// Every saved pair is listed exactly once and none reads disabled.
+    NoneDisabled,
+    /// Every saved pair is listed exactly once; some read disabled and some do not.
+    Mixed,
+    /// The listing did not finish, the record saved no pairs, or a saved pair is not listed exactly once.
+    Unread,
+}
+
+/// PURE (a11): one applied EEE record read from the pass's one adapter listing (`listing`, `None` = the
+/// listing did not finish). Only the (adapter, property) pairs in the record's saved snapshot are
+/// consulted, so another adapter's EEE state never changes this record's answer. A failed listing, a
+/// record with no saved pairs, or a saved pair whose adapter or property is not in the listing
+/// (unplugged, disabled, renamed, removed) or is listed twice is `Unread` ("couldn't read"), never on or
+/// off. The listing names only Up, wired adapters, so an unplugged adapter is "not listed". Names compare
+/// byte-equal: the snapshot was written from the same enumeration's trimmed fields.
 pub(crate) fn eee_record_disabled_in(
     listing: Option<&[crate::actions::EeeProperty]>,
     saved: &[crate::actions::EeeNicSnapshot],
-) -> Option<bool> {
-    let props = listing?;
+) -> EeeRecordRead {
+    let Some(props) = listing else {
+        return EeeRecordRead::Unread;
+    };
     if saved.is_empty() {
-        return None;
+        return EeeRecordRead::Unread;
     }
-    let mut all_disabled = true;
+    let (mut off, mut on) = (0usize, 0usize);
     for s in saved {
         let mut hits = props
             .iter()
             .filter(|p| p.adapter_name == s.adapter_name && p.display_name == s.property_display_name);
         let (Some(p), None) = (hits.next(), hits.next()) else {
-            return None;
+            return EeeRecordRead::Unread;
         };
-        all_disabled &= crate::actions::eee_value_is_disabled(p);
+        if crate::actions::eee_value_is_disabled(p) {
+            off += 1;
+        } else {
+            on += 1;
+        }
     }
-    Some(all_disabled)
+    match (off, on) {
+        (_, 0) => EeeRecordRead::AllDisabled,
+        (0, _) => EeeRecordRead::NoneDisabled,
+        _ => EeeRecordRead::Mixed,
+    }
 }
 
 

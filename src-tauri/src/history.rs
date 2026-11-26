@@ -608,8 +608,8 @@ impl LiveReads {
     }
 
     /// a11: one applied EEE record's own change, from the pass's one listing and only the adapters
-    /// and properties `saved` names. An adapter or property that is not listed is `None`.
-    fn eee_record_disabled(&self, saved: &[EeeNicSnapshot]) -> Option<bool> {
+    /// and properties `saved` names. An adapter or property that is not listed is `Unread`.
+    fn eee_record_read(&self, saved: &[EeeNicSnapshot]) -> crate::EeeRecordRead {
         crate::eee_record_disabled_in(self.eee_listing(), saved)
     }
 
@@ -757,11 +757,44 @@ fn service_row_check(
 /// adapter's EEE state never decides it. A failed listing, a saved adapter or property that is not
 /// listed (unplugged, disabled, renamed, removed), or a change with no EEE snapshot is `Unreadable`
 /// ("couldn't read"), never `Off` ("turned off outside Compy") and never `On`.
+/// The ledger's answer: `Mixed` is Off, because at least one pair is not as Compy set it.
 fn eee_row_check(snapshot: Option<&Snapshot>, reads: &LiveReads) -> ActiveCheck {
-    match snapshot {
-        Some(Snapshot::EeeNicProperty { adapters }) => ActiveCheck::from_read(reads.eee_record_disabled(adapters)),
-        _ => ActiveCheck::Unreadable,
+    match eee_row_read(snapshot, reads) {
+        crate::EeeRecordRead::AllDisabled => ActiveCheck::On,
+        crate::EeeRecordRead::NoneDisabled | crate::EeeRecordRead::Mixed => ActiveCheck::Off,
+        crate::EeeRecordRead::Unread => ActiveCheck::Unreadable,
     }
+}
+
+/// a11 r1 F2: the same read after an undo, for the undo read-backs' wording only. `Mixed` (one pair back,
+/// one still as Compy set it) is On, whose sentence says the setting still reads as changed and to check
+/// it in Windows; Off ("a live read confirms the change is no longer in effect") only when NO saved pair
+/// still reads disabled.
+fn eee_undo_read_back(snapshot: &Snapshot, reads: &LiveReads) -> ActiveCheck {
+    match eee_row_read(Some(snapshot), reads) {
+        crate::EeeRecordRead::AllDisabled | crate::EeeRecordRead::Mixed => ActiveCheck::On,
+        crate::EeeRecordRead::NoneDisabled => ActiveCheck::Off,
+        crate::EeeRecordRead::Unread => ActiveCheck::Unreadable,
+    }
+}
+
+/// One EEE change's four-state read from its own snapshot; a non-EEE or missing snapshot is `Unread`.
+fn eee_row_read(snapshot: Option<&Snapshot>, reads: &LiveReads) -> crate::EeeRecordRead {
+    match snapshot {
+        Some(Snapshot::EeeNicProperty { adapters }) => reads.eee_record_read(adapters),
+        _ => crate::EeeRecordRead::Unread,
+    }
+}
+
+/// a11 r1 F2: the live read-back after an undo (`record_receipts`, `rollback_change_inner`), which only
+/// chooses the wording of a message after the ledger save failed. An EEE change reads its own snapshot
+/// with the after-undo mapping ([`eee_undo_read_back`]); every other change reads as
+/// [`check_change_state`] does.
+fn check_change_state_after_undo(rec_id: &str, action: Option<&AppliedAction>, snapshot: &Snapshot, reads: &LiveReads) -> ActiveCheck {
+    if rec_id == "eee-disable" {
+        return eee_undo_read_back(snapshot, reads);
+    }
+    check_change_state(rec_id, action, Some(snapshot), reads)
 }
 
 /// Pure: a startup-app row's live re-check. The rec id `startup-entry:<name>` doesn't say which way
@@ -2028,7 +2061,7 @@ fn record_receipts(
         dispatch_rollback(root, a, s).inspect_err(|_| undo_failed.set(true))
     };
     let probe = |rec_id: &str, applied: Option<&AppliedAction>, snapshot: &Snapshot| {
-        check_change_state(rec_id, applied, Some(snapshot), &LiveReads::default())
+        check_change_state_after_undo(rec_id, applied, snapshot, &LiveReads::default())
     };
     let effects = UndoEffects { rollback: &rollback, probe: &probe };
     commit_receipts(history, made, &save, &effects).inspect_err(|e| {
@@ -2822,7 +2855,7 @@ fn rollback_change_inner(change_id: &str, cite: Option<CiteTrial>) -> Result<(),
     let save = |h: &[AppliedChange]| save_history(&root, h);
     let rollback = |a: &RollbackAction, s: &Snapshot| dispatch_rollback_outcome(&root, a, s);
     let probe = |rec_id: &str, applied: Option<&AppliedAction>, snapshot: &Snapshot| {
-        check_change_state(rec_id, applied, Some(snapshot), &LiveReads::default())
+        check_change_state_after_undo(rec_id, applied, snapshot, &LiveReads::default())
     };
     commit_rollback(&mut history, idx, justified_by, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
 }
@@ -4522,8 +4555,8 @@ mod receipt_commit_tests {
         assert!(body.contains("let reads = LiveReads::default();") && body.contains("into_view_with(c, &reads)"));
     }
 
-    // Break check (a11): in `crate::eee_record_disabled_in`, answer a failed listing (`None`) with
-    // `Some(false)` instead of `listing?` -> the rows read Off ("turned off outside Compy") and this fails.
+    // Break check (a11-3): in `crate::eee_record_disabled_in`, answer a failed listing (`None`) with
+    // `NoneDisabled` instead of `Unread` -> the rows read Off ("turned off outside Compy") and this fails.
     #[test]
     fn a_failed_eee_listing_gives_every_row_the_unread_state() {
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -4564,8 +4597,8 @@ mod receipt_commit_tests {
         c
     }
 
-    // Break check (a11-1): make `eee_row_check` ignore the snapshot and answer
-    // `ActiveCheck::from_read(reads.eee_disabled())` (every eligible adapter, as before a11) -> the record
+    // Break check (a11-1): make `eee_row_read` ignore the snapshot and answer from `reads.eee_disabled()`
+    // (every eligible adapter, as before a11) -> the record
     // for "Ethernet" reads Off while "Ethernet 2" has EEE on, and this fails.
     #[test]
     fn a_record_for_one_adapter_is_unaffected_by_another_adapters_eee() {
@@ -4595,7 +4628,7 @@ mod receipt_commit_tests {
     }
 
     // Break check (a11-2): in `crate::eee_record_disabled_in`, answer a saved pair that is not listed
-    // exactly once with `Some(false)` instead of `None` -> the unplugged adapter reads Off ("turned off
+    // exactly once with `NoneDisabled` instead of `Unread` -> the unplugged adapter reads Off ("turned off
     // outside Compy") and this fails.
     #[test]
     fn a_record_whose_adapter_is_not_listed_reads_unreadable_never_off_or_on() {
@@ -4639,9 +4672,10 @@ mod receipt_commit_tests {
         assert_eq!(check_row_state(&a, &LiveReads::default()), ActiveCheck::Unreadable);
     }
 
-    // Break checks: (a11-4) make `LiveReads::eee_record_disabled` give every record the pass's one
+    // Break checks: (a11-4) make `LiveReads::eee_record_read` give every record the pass's one
     // all-adapter answer (`self.eee_disabled()`) -> "Ethernet" no longer reads its own On and this fails;
-    // (a11-7) make `record_receipts`' read-back pass `None` for the snapshot -> the source pin fails;
+    // (a11-7) make `record_receipts`' read-back go through `check_change_state` without the snapshot ->
+    // the source pin fails;
     // (a11-8, r1 F1) give the production pass `read_eee: || None` in `with_listings` -> the real-pass
     // asserts at the end read Unreadable and this fails.
     #[test]
@@ -4664,6 +4698,8 @@ mod receipt_commit_tests {
         assert_eq!(check_change_state("eee-disable", action, Some(&typed(&a)), &reads), ActiveCheck::On);
         assert_eq!(check_change_state("eee-disable", action, Some(&typed(&b)), &reads), ActiveCheck::Off);
         assert_eq!(check_change_state("eee-disable", action, None, &reads), ActiveCheck::Unreadable);
+        assert_eq!(check_change_state_after_undo("eee-disable", action, &typed(&a), &reads), ActiveCheck::On);
+        assert_eq!(check_change_state_after_undo("eee-disable", action, &typed(&b), &reads), ActiveCheck::Off);
         // A view pass over both rows too.
         let views: Vec<AppliedChangeView> = [a, b].into_iter().map(|c| into_view_with(c, &reads)).collect();
         assert_eq!(views[0].active_check, Some(ActiveCheck::On));
@@ -4676,7 +4712,7 @@ mod receipt_commit_tests {
         // Both production undo read-backs (`record_receipts`, `rollback_change_inner`) hand the check the
         // undo's own snapshot. Split so this test's own text never matches.
         let src = include_str!("history.rs").replace("\r\n", "\n");
-        let wired = concat!("check_change_state(rec_id, applied, ", "Some(snapshot), &LiveReads::default())");
+        let wired = concat!("check_change_state_after_undo(rec_id, applied, ", "snapshot, &LiveReads::default())");
         assert_eq!(src.matches(wired).count(), 2, "both undo read-backs pass the snapshot");
         // a11 r1 F1: the PRODUCTION pass (`LiveReads::default()`) reads the real enumeration: a finished
         // two-adapter listing through the enumeration seam gives each record its own answer.
@@ -4690,6 +4726,61 @@ mod receipt_commit_tests {
         assert_eq!(check_row_state(&applied_eee("Ethernet"), &live), ActiveCheck::On, "the real pass: A reads its own off");
         assert_eq!(check_row_state(&applied_eee("Ethernet 2"), &live), ActiveCheck::Off, "the real pass: B reads its own on");
         assert_eq!(probe_rec_target_with("eee-disable", &live), ActiveCheck::Off, "the real pass, no record: not off everywhere");
+    }
+
+    // a11 r1 F2: a record with two saved pairs, only one put back. The ledger reads it Off (at least one
+    // pair is not as Compy set it); the undo read-backs read it On, so their message says the setting
+    // still reads as changed and to check it in Windows, never "a live read confirms the change is no
+    // longer in effect". Break check (a11-9): map `Mixed` to Off in `eee_undo_read_back` -> the undo
+    // read-back of the partly undone record reads Off and this fails.
+    #[test]
+    fn a_partly_undone_record_is_never_read_back_as_no_longer_in_effect() {
+        let two = applied_eee_pairs(&[("Ethernet", "Energy-Efficient Ethernet"), ("Ethernet 2", "Energy-Efficient Ethernet")]);
+        let typed = serde_json::from_value::<Snapshot>(two.snapshot.clone()).expect("typed");
+        let applied = AppliedAction::DisableEnergyEfficientEthernet;
+        let pass = |text: &str| {
+            let reads = LiveReads::default().with_eee_read(|| None);
+            let _ = reads.eee.set(eee_listing(text));
+            reads
+        };
+        // One pair put back (Enabled), the other still as Compy set it (Disabled): Mixed.
+        let mixed = pass("Ethernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\n");
+        assert_eq!(check_row_state(&two, &mixed), ActiveCheck::Off, "ledger: not as Compy set it");
+        assert_eq!(check_change_state_after_undo("eee-disable", Some(&applied), &typed, &mixed), ActiveCheck::On, "undo: still partly changed");
+        // Both put back: the undo read-back may say it is no longer in effect.
+        let back = pass("Ethernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n");
+        assert_eq!(check_row_state(&two, &back), ActiveCheck::Off);
+        assert_eq!(check_change_state_after_undo("eee-disable", Some(&applied), &typed, &back), ActiveCheck::Off);
+        // Neither put back: On on both paths.
+        let none_back = pass("Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\n");
+        assert_eq!(check_row_state(&two, &none_back), ActiveCheck::On);
+        assert_eq!(check_change_state_after_undo("eee-disable", Some(&applied), &typed, &none_back), ActiveCheck::On);
+        // A pair not listed: Unreadable on both paths.
+        let gone = pass("Ethernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n");
+        assert_eq!(check_row_state(&two, &gone), ActiveCheck::Unreadable);
+        assert_eq!(check_change_state_after_undo("eee-disable", Some(&applied), &typed, &gone), ActiveCheck::Unreadable);
+        // The four states themselves.
+        let listing = crate::actions::parse_eee_property_lines(
+            "Ethernet|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\n",
+        );
+        let saved = |names: &[&str]| -> Vec<crate::actions::EeeNicSnapshot> {
+            names
+                .iter()
+                .map(|n| crate::actions::EeeNicSnapshot {
+                    adapter_name: (*n).into(),
+                    property_display_name: "Energy-Efficient Ethernet".into(),
+                    prior_value: "Enabled".into(),
+                })
+                .collect()
+        };
+        use crate::EeeRecordRead as R;
+        let l = Some(listing.as_slice());
+        assert_eq!(crate::eee_record_disabled_in(l, &saved(&["Ethernet 2"])), R::AllDisabled);
+        assert_eq!(crate::eee_record_disabled_in(l, &saved(&["Ethernet"])), R::NoneDisabled);
+        assert_eq!(crate::eee_record_disabled_in(l, &saved(&["Ethernet", "Ethernet 2"])), R::Mixed);
+        assert_eq!(crate::eee_record_disabled_in(l, &saved(&["Ethernet 3"])), R::Unread);
+        assert_eq!(crate::eee_record_disabled_in(None, &saved(&["Ethernet"])), R::Unread);
+        assert_eq!(crate::eee_record_disabled_in(l, &[]), R::Unread);
     }
 
     // ── CR-core-parking-plan-gone: an undo whose power plan no longer exists ──
