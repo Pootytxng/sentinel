@@ -1117,6 +1117,11 @@ mod tests {
         Incident {
             incident_id: "test-incident".into(),
             headline: "A game closed on its own".into(),
+            headline_parts: crate::blackbox::HeadlineParts {
+                code: crate::blackbox::HeadlineCode::AppCrashNoApp,
+                app: None,
+                while_game: None,
+            },
             tag: kind.tag().into(),
             when: when.into(),
             when_display: "Jun 12, 9:42 PM".into(),

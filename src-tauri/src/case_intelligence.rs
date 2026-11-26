@@ -4108,6 +4108,11 @@ mod tests {
             crate::blackbox::Incident {
                 incident_id: "test-incident".into(),
                 headline: "Your display driver stopped responding".into(),
+                headline_parts: crate::blackbox::HeadlineParts {
+                    code: crate::blackbox::HeadlineCode::GpuTimeout,
+                    app: None,
+                    while_game: None,
+                },
                 tag: "Display 4101".into(),
                 when: "2026-08-20T21:42:00-05:00".into(),
                 when_display: "Aug 20, 9:42 PM".into(),

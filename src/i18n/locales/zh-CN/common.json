@@ -443,7 +443,19 @@
       "unexpectedShutdown": "你的电脑意外关机或卡死 — {{when}}",
       "blueScreen": "你的电脑蓝屏并已重启 — {{when}}",
       "hardwareError": "Windows 记录了一个硬件级错误 — {{when}}",
+      "unknown": "Windows 记录了此版本 Compy 没有对应说明的内容 — {{when}}",
       "whileGame": "，当时 {{game}} 正在运行"
+    },
+    "headlineWhat": {
+      "appCrash": "{{app}} 已停止工作并关闭",
+      "appCrashNoApp": "一个应用程序崩溃了",
+      "appHang": "{{app}} 停止响应（卡死）",
+      "appHangNoApp": "一个应用程序停止响应",
+      "gpuTimeout": "你的显卡驱动停止响应后已恢复",
+      "unexpectedShutdown": "你的电脑意外关机或卡死",
+      "blueScreen": "你的电脑蓝屏并已重启",
+      "hardwareError": "Windows 记录了一个硬件级错误",
+      "unknown": "Windows 记录了此版本 Compy 没有对应说明的内容"
     },
     "applied": {
       "on": "开启",

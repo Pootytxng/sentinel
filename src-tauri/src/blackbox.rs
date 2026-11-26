@@ -140,6 +140,10 @@ pub(crate) struct Incident {
     /// never announced twice; the frontend also carries it as a one-shot deep-link selector.
     pub(crate) incident_id: String,
     pub(crate) headline: String,     // plain-English (Sarah & Caleb bar)
+    /// d10: the same headline as a closed code plus its values, so the webview words it in the
+    /// user's language (`src/data/incident-headline.ts`). `headline` stays the English sentence for
+    /// the Care card's stored summary, the OS toast and the Rust tests.
+    pub(crate) headline_parts: HeadlineParts,
     pub(crate) tag: String,          // neutral evidence tag
     pub(crate) when: String,         // RFC3339
     pub(crate) when_display: String, // "Jun 12, 9:42 PM" (local offset preserved)
@@ -243,6 +247,7 @@ fn assemble_incidents(
             Incident {
                 incident_id: incident_id_for(p.kind, when_utc, &p.fields),
                 headline: build_headline(p.kind, &p.fields, &when_display, game.as_deref()),
+                headline_parts: headline_parts(p.kind, &p.fields, game.as_deref()),
                 tag: p.kind.tag().to_string(),
                 when: p.when.to_rfc3339(),
                 when_display,
@@ -1117,6 +1122,92 @@ fn vitals_summary(s: &SessionSummary) -> String {
     }
 }
 
+/// d10: the closed set of headline sentences. One code per sentence `build_headline` can say; the
+/// webview words each one with a literal i18n key (`src/data/incident-headline.ts`, whose
+/// `HEADLINE_CODES` a test pins to the test-only `HEADLINE_CODES` here). Adding a variant means adding its en and
+/// zh-CN keys; the tests below fail until the en key says exactly what [`render_headline_en`] says.
+#[derive(Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum HeadlineCode {
+    GpuTimeout,
+    AppCrash,
+    AppCrashNoApp,
+    AppHang,
+    AppHangNoApp,
+    UnexpectedShutdown,
+    BlueScreen,
+    HardwareError,
+}
+
+/// The wire names of every [`HeadlineCode`], in declaration order. The TS list is pinned to this
+/// (src/data/incident-headline.test.ts reads it from this file); Rust pins it to the serde names.
+#[cfg(test)]
+pub(crate) const HEADLINE_CODES: [&str; 8] = [
+    "gpu_timeout",
+    "app_crash",
+    "app_crash_no_app",
+    "app_hang",
+    "app_hang_no_app",
+    "unexpected_shutdown",
+    "blue_screen",
+    "hardware_error",
+];
+
+/// d10: a headline as data. `when` is not here: the incident carries it (`when`, `when_display`).
+#[derive(Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct HeadlineParts {
+    pub(crate) code: HeadlineCode,
+    /// The app's display name; `Some` exactly for `app_crash` and `app_hang`.
+    pub(crate) app: Option<String>,
+    /// The game the ", while … was running" tail names; `None` when there is no tail.
+    pub(crate) while_game: Option<String>,
+}
+
+/// Pure: which sentence this incident gets, with its values. The one decision `build_headline` makes.
+fn headline_parts(kind: IncidentKind, fields: &IncidentFields, game: Option<&str>) -> HeadlineParts {
+    let app = fields.faulting_app.as_deref().map(pretty_proc);
+    let code = match (kind, app.is_some()) {
+        (IncidentKind::GpuTimeout, _) => HeadlineCode::GpuTimeout,
+        (IncidentKind::AppCrash, true) => HeadlineCode::AppCrash,
+        (IncidentKind::AppCrash, false) => HeadlineCode::AppCrashNoApp,
+        (IncidentKind::AppHang, true) => HeadlineCode::AppHang,
+        (IncidentKind::AppHang, false) => HeadlineCode::AppHangNoApp,
+        (IncidentKind::UnexpectedShutdown, _) => HeadlineCode::UnexpectedShutdown,
+        (IncidentKind::BlueScreen, _) => HeadlineCode::BlueScreen,
+        (IncidentKind::HardwareError, _) => HeadlineCode::HardwareError,
+    };
+    let names_app = matches!(code, HeadlineCode::AppCrash | HeadlineCode::AppHang);
+    // For an app crash/hang the app is already the subject; only add the "while X" clause when
+    // the correlated game is something different (avoids "game.exe crashed, while game running").
+    let already_named = matches!(kind, IncidentKind::AppCrash | IncidentKind::AppHang) && app.as_deref() == game;
+    HeadlineParts {
+        code,
+        app: if names_app { app } else { None },
+        while_game: game.filter(|_| !already_named).map(str::to_string),
+    }
+}
+
+/// The English sentence for `parts`. Every en key under `common.backendWords.headline` must say
+/// exactly this (pinned by `every_headline_code_has_an_en_key_that_says_what_rust_says`).
+fn render_headline_en(parts: &HeadlineParts, when_display: &str) -> String {
+    let app = parts.app.as_deref().unwrap_or_default();
+    let base = match parts.code {
+        HeadlineCode::GpuTimeout => "Your graphics driver stopped responding and recovered".to_string(),
+        HeadlineCode::AppCrash => format!("{app} stopped working and closed"),
+        HeadlineCode::AppCrashNoApp => "An application crashed".to_string(),
+        HeadlineCode::AppHang => format!("{app} stopped responding (froze)"),
+        HeadlineCode::AppHangNoApp => "An application stopped responding".to_string(),
+        HeadlineCode::UnexpectedShutdown => "Your PC shut down unexpectedly or hard-froze".to_string(),
+        HeadlineCode::BlueScreen => "Your PC blue-screened and restarted".to_string(),
+        HeadlineCode::HardwareError => "Windows logged a hardware-level error".to_string(),
+    };
+    let mut h = format!("{base} — {when_display}");
+    if let Some(g) = &parts.while_game {
+        h = format!("{h}, while {g} was running");
+    }
+    h
+}
+
 /// Plain-English headline. The neutral tag carries the category; this translates the event for a
 /// non-technical reader and — when a session correlated — names what was running.
 fn build_headline(
@@ -1125,32 +1216,7 @@ fn build_headline(
     when_display: &str,
     game: Option<&str>,
 ) -> String {
-    let base = match kind {
-        IncidentKind::GpuTimeout => "Your graphics driver stopped responding and recovered".to_string(),
-        IncidentKind::AppCrash => match &fields.faulting_app {
-            Some(app) => format!("{} stopped working and closed", pretty_proc(app)),
-            None => "An application crashed".to_string(),
-        },
-        IncidentKind::AppHang => match &fields.faulting_app {
-            Some(app) => format!("{} stopped responding (froze)", pretty_proc(app)),
-            None => "An application stopped responding".to_string(),
-        },
-        IncidentKind::UnexpectedShutdown => "Your PC shut down unexpectedly or hard-froze".to_string(),
-        IncidentKind::BlueScreen => "Your PC blue-screened and restarted".to_string(),
-        IncidentKind::HardwareError => "Windows logged a hardware-level error".to_string(),
-    };
-    let mut h = format!("{base} — {when_display}");
-    if let Some(g) = game {
-        // For an app crash/hang the app is already the subject; only add the "while X" clause when
-        // the correlated game is something different (avoids "game.exe crashed, while game running").
-        let app = fields.faulting_app.as_deref().map(pretty_proc);
-        let already_named = matches!(kind, IncidentKind::AppCrash | IncidentKind::AppHang)
-            && app.as_deref() == Some(g);
-        if !already_named {
-            h = format!("{h}, while {g} was running");
-        }
-    }
-    h
+    render_headline_en(&headline_parts(kind, fields, game), when_display)
 }
 
 fn extract_fields(kind: IncidentKind, ev: &RawEvent) -> IncidentFields {
@@ -2549,6 +2615,112 @@ mod blackbox_tests {
         assert_eq!(pretty_proc("Palworld-Win64-Shipping.exe"), "Palworld");
     }
 
+    // ── d10: the headline as a closed code plus values ──
+
+    /// Every variant. A new one fails to compile in the match until it is listed.
+    fn every_headline_code() -> Vec<HeadlineCode> {
+        use HeadlineCode::*;
+        let all = vec![GpuTimeout, AppCrash, AppCrashNoApp, AppHang, AppHangNoApp, UnexpectedShutdown, BlueScreen, HardwareError];
+        for c in &all {
+            match c {
+                GpuTimeout | AppCrash | AppCrashNoApp | AppHang | AppHangNoApp | UnexpectedShutdown | BlueScreen
+                | HardwareError => {}
+            }
+        }
+        all
+    }
+
+    /// The i18n key under `common.backendWords.headline` (and `headlineWhat`) for each code — the same
+    /// pairing `src/data/incident-headline.ts` writes as one literal t() per code.
+    fn en_key(c: HeadlineCode) -> &'static str {
+        match c {
+            HeadlineCode::GpuTimeout => "gpuTimeout",
+            HeadlineCode::AppCrash => "appCrash",
+            HeadlineCode::AppCrashNoApp => "appCrashNoApp",
+            HeadlineCode::AppHang => "appHang",
+            HeadlineCode::AppHangNoApp => "appHangNoApp",
+            HeadlineCode::UnexpectedShutdown => "unexpectedShutdown",
+            HeadlineCode::BlueScreen => "blueScreen",
+            HeadlineCode::HardwareError => "hardwareError",
+        }
+    }
+
+    fn parts(code: HeadlineCode, while_game: Option<&str>) -> HeadlineParts {
+        let app = matches!(code, HeadlineCode::AppCrash | HeadlineCode::AppHang).then(|| "ROB RUN".to_string());
+        HeadlineParts { code, app, while_game: while_game.map(str::to_string) }
+    }
+
+    #[test]
+    fn the_headline_code_list_is_every_variant_by_its_wire_name() {
+        let wire: Vec<String> = every_headline_code()
+            .into_iter()
+            .map(|c| serde_json::to_value(c).unwrap().as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(wire, HEADLINE_CODES.to_vec(), "HEADLINE_CODES (and the TS list pinned to it) must name every variant in order");
+    }
+
+    #[test]
+    fn build_headline_says_exactly_what_it_said_before_the_codes() {
+        // d10 rule: the English is unchanged byte for byte. These are the sentences main produced.
+        let f = |app: Option<&str>| IncidentFields { faulting_app: app.map(Into::into), ..Default::default() };
+        let w = "Jun 12, 9:42 PM";
+        let cases: [(IncidentKind, Option<&str>, Option<&str>, &str); 10] = [
+            (IncidentKind::GpuTimeout, None, None, "Your graphics driver stopped responding and recovered — Jun 12, 9:42 PM"),
+            (IncidentKind::AppCrash, Some("Palworld-Win64-Shipping.exe"), None, "Palworld stopped working and closed — Jun 12, 9:42 PM"),
+            (IncidentKind::AppCrash, None, None, "An application crashed — Jun 12, 9:42 PM"),
+            (IncidentKind::AppHang, Some("dllhost.exe"), None, "dllhost stopped responding (froze) — Jun 12, 9:42 PM"),
+            (IncidentKind::AppHang, None, None, "An application stopped responding — Jun 12, 9:42 PM"),
+            (IncidentKind::UnexpectedShutdown, None, None, "Your PC shut down unexpectedly or hard-froze — Jun 12, 9:42 PM"),
+            (IncidentKind::BlueScreen, None, None, "Your PC blue-screened and restarted — Jun 12, 9:42 PM"),
+            (IncidentKind::HardwareError, None, Some("Helldivers2"), "Windows logged a hardware-level error — Jun 12, 9:42 PM, while Helldivers2 was running"),
+            (IncidentKind::AppCrash, Some("dllhost.exe"), Some("ROB RUN"), "dllhost stopped working and closed — Jun 12, 9:42 PM, while ROB RUN was running"),
+            (IncidentKind::AppHang, Some("ROB RUN.exe"), Some("ROB RUN"), "ROB RUN stopped responding (froze) — Jun 12, 9:42 PM"),
+        ];
+        for (kind, app, game, want) in cases {
+            assert_eq!(build_headline(kind, &f(app), w, game), want);
+        }
+    }
+
+    #[test]
+    fn headline_parts_carry_the_app_only_for_app_codes_and_the_tail_only_when_it_is_said() {
+        let f = |app: Option<&str>| IncidentFields { faulting_app: app.map(Into::into), ..Default::default() };
+        let p = headline_parts(IncidentKind::AppCrash, &f(Some("Palworld-Win64-Shipping.exe")), Some("Palworld"));
+        assert_eq!(p, HeadlineParts { code: HeadlineCode::AppCrash, app: Some("Palworld".into()), while_game: None });
+        let p = headline_parts(IncidentKind::AppHang, &f(Some("dllhost.exe")), Some("ROB RUN"));
+        assert_eq!(p, HeadlineParts { code: HeadlineCode::AppHang, app: Some("dllhost".into()), while_game: Some("ROB RUN".into()) });
+        let p = headline_parts(IncidentKind::AppCrash, &f(None), Some("ROB RUN"));
+        assert_eq!(p, HeadlineParts { code: HeadlineCode::AppCrashNoApp, app: None, while_game: Some("ROB RUN".into()) });
+        // A system family never names an app, even when a source filled one in.
+        let p = headline_parts(IncidentKind::BlueScreen, &f(Some("game.exe")), Some("game"));
+        assert_eq!(p, HeadlineParts { code: HeadlineCode::BlueScreen, app: None, while_game: Some("game".into()) });
+    }
+
+    #[test]
+    fn every_headline_code_has_an_en_key_that_says_what_rust_says() {
+        // The webview renders every code through its en key; this pins that key to the Rust sentence,
+        // with and without the tail, and the when-less "what" key to the sentence minus its time.
+        let en: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/i18n/locales/en/common.json")).expect("en common.json parses");
+        let words = &en["backendWords"];
+        let tail = words["headline"]["whileGame"].as_str().expect("whileGame key");
+        let when = "Jun 12, 9:42 PM";
+        for code in every_headline_code() {
+            let key = en_key(code);
+            let full = words["headline"][key].as_str().unwrap_or_else(|| panic!("no en headline key {key}"));
+            let what = words["headlineWhat"][key].as_str().unwrap_or_else(|| panic!("no en headlineWhat key {key}"));
+            for game in [None, Some("Helldivers2")] {
+                let p = parts(code, game);
+                let app = p.app.clone().unwrap_or_default();
+                let tail_en = game.map(|g| tail.replace("{{game}}", g)).unwrap_or_default();
+                let rendered = format!("{}{tail_en}", full.replace("{{app}}", &app).replace("{{when}}", when));
+                assert_eq!(rendered, render_headline_en(&p, when), "en key {key} drifted from Rust");
+                let rendered_what = format!("{}{tail_en}", what.replace("{{app}}", &app));
+                let rust_what = render_headline_en(&p, when).replacen(&format!(" — {when}"), "", 1);
+                assert_eq!(rendered_what, rust_what, "en headlineWhat key {key} drifted from Rust");
+            }
+        }
+    }
+
     #[test]
     fn fmt_hex_code_normalizes_only_bare_hex() {
         assert_eq!(fmt_hex_code("c0000005"), "0xc0000005");
@@ -2653,9 +2825,11 @@ mod blackbox_tests {
         assert!(v.get("skipped_sources").and_then(|s| s.as_array()).is_some());
         assert!(v.get("skipped_needs_admin").and_then(|s| s.as_array()).is_some());
         let inc = &v["incidents"][0];
-        for key in ["headline", "tag", "when", "when_display", "vitals", "receipt"] {
+        for key in ["headline", "headline_parts", "tag", "when", "when_display", "vitals", "receipt"] {
             assert!(inc.get(key).is_some(), "missing key {key}");
         }
+        // d10: the TS side reads these three names (src/data/incident-headline.ts HeadlineParts).
+        assert_eq!(inc["headline_parts"], serde_json::json!({ "code": "unexpected_shutdown", "app": null, "while_game": null }));
         assert!(inc["vitals"].is_null(), "no session → vitals serializes as null (honest absence)");
     }
 
@@ -3035,6 +3209,7 @@ mod blackbox_tests {
         Incident {
             incident_id: "test-incident".into(),
             headline: "h".into(),
+            headline_parts: HeadlineParts { code: HeadlineCode::BlueScreen, app: None, while_game: None },
             tag: kind.tag().to_string(),
             when: when.into(),
             when_display: "d".into(),

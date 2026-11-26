@@ -167,8 +167,24 @@ pub(crate) struct PendingCareIncident {
     pub(crate) kind: String,
     /// The pretty process name when Windows named one, else absent. Never a path.
     pub(crate) app_label: Option<String>,
-    /// Black Box's own plain-English headline for this incident.
+    /// Black Box's own plain-English headline for this incident. Kept as written: the OS toast reads
+    /// it, and a card stored before d10 has nothing else to show.
     pub(crate) summary: String,
+    /// d10: the same headline as a code plus values (`blackbox::HeadlineParts`), so Home words it in
+    /// the user's language. `None` on a card stored before this field existed (serde default), and
+    /// on one whose stored parts this build can't read (a newer code): such a card shows `summary`.
+    /// Read leniently so an unknown code never makes the whole incident file unreadable.
+    #[serde(default, deserialize_with = "lenient_headline_parts")]
+    pub(crate) headline_parts: Option<crate::blackbox::HeadlineParts>,
+}
+
+/// `headline_parts` as stored, or `None` when it is absent, null or not a shape this build knows.
+fn lenient_headline_parts<'de, D>(d: D) -> Result<Option<crate::blackbox::HeadlineParts>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let v = serde_json::Value::deserialize(d)?;
+    Ok(serde_json::from_value(v).ok())
 }
 
 impl IncidentObserverState {
@@ -311,6 +327,7 @@ fn card_for(inc: &Incident) -> PendingCareIncident {
         kind: inc.tag.clone(),
         app_label: inc.receipt.faulting_app.as_deref().and_then(crate::blackbox::pretty_proc_opt),
         summary: inc.headline.clone(),
+        headline_parts: Some(inc.headline_parts.clone()),
     }
 }
 
@@ -974,6 +991,11 @@ mod tests {
         Incident {
             incident_id: id.into(),
             headline: format!("headline for {id}"),
+            headline_parts: crate::blackbox::HeadlineParts {
+                code: crate::blackbox::HeadlineCode::AppCrash,
+                app: app.map(Into::into),
+                while_game: None,
+            },
             tag: kind.tag().into(),
             when: when.into(),
             when_display: "Aug 20, 9:42 PM".into(),
@@ -1461,6 +1483,7 @@ mod tests {
             kind: "App hang".into(),
             app_label: Some(blob.into()),
             summary: format!("{blob} stopped responding (froze) — Sep 23, 10:15 AM"),
+            headline_parts: None,
         });
         let dir = tmpdir("ps-blob");
         let p = dir.join("incident-observer.json");
@@ -1492,6 +1515,7 @@ mod tests {
             kind: "App crash".into(),
             app_label: Some(r#"{"Count":0,"value":[]}"#.into()),
             summary: r#"{"Count":0,"value":[]} stopped working and closed — Sep 1, 9:00 PM"#.into(),
+            headline_parts: None,
         });
         repair_powershell_blobs(&mut s);
         let card = s.pending_card.unwrap();
@@ -1520,6 +1544,7 @@ mod tests {
                 kind: "App crash".into(),
                 app_label: Some(text.into()),
                 summary: text.into(),
+                headline_parts: None,
             });
             repair_powershell_blobs(&mut s);
             let card = s.pending_card.unwrap();
@@ -1527,6 +1552,44 @@ mod tests {
             assert_eq!(card.app_label.as_deref(), Some(text));
             assert_eq!(s.seen[0].app.as_deref(), Some(text));
         }
+    }
+
+    // d10: the card carries the headline as a code plus values; a card stored before that has none.
+    const D10_OLD_CARD: &str = r#"{"schema_version":1,"last_scan_at":null,"seen":[],"pending_home_incident_id":"p","pending_card":{"incident_id":"p","occurred_at":"2026-09-01T21:00:00-07:00","occurred_display":"Sep 1, 9:00 PM","kind":"Blue screen","app_label":null,"summary":"Your PC blue-screened and restarted — Sep 1, 9:00 PM"}}"#;
+
+    #[test]
+    fn a_card_stored_before_headline_parts_loads_with_none_and_keeps_its_summary() {
+        let s: IncidentObserverState = serde_json::from_str(D10_OLD_CARD).expect("an old file still loads");
+        let card = s.pending_card.expect("the old card survives");
+        assert_eq!(card.headline_parts, None);
+        assert_eq!(card.summary, "Your PC blue-screened and restarted — Sep 1, 9:00 PM", "stored text is not rewritten");
+    }
+
+    #[test]
+    fn a_stored_headline_code_this_build_does_not_know_reads_as_none_not_a_corrupt_file() {
+        let newer = D10_OLD_CARD.replace(
+            r#""summary":"#,
+            r#""headline_parts":{"code":"a_code_from_a_newer_build","app":null,"while_game":null},"summary":"#,
+        );
+        let dir = tmpdir("d10-unknown-code");
+        let p = dir.join("incident-observer.json");
+        std::fs::write(&p, newer).unwrap();
+        let s = load_or_quarantine(&p);
+        let set_aside = p.with_extension("corrupt.json").exists();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(!set_aside, "an unknown headline code must not set the incident file aside");
+        let card = s.pending_card.expect("the card survives an unknown code");
+        assert_eq!(card.headline_parts, None);
+        assert_eq!(card.summary, "Your PC blue-screened and restarted — Sep 1, 9:00 PM");
+    }
+
+    #[test]
+    fn a_new_card_carries_the_incidents_headline_parts() {
+        let i = inc("n", IncidentKind::AppCrash, "2026-09-01T21:00:00Z", Some("Game"));
+        let card = card_for(&i);
+        assert_eq!(card.headline_parts.as_ref(), Some(&i.headline_parts));
+        let back: PendingCareIncident = serde_json::from_value(serde_json::to_value(&card).unwrap()).unwrap();
+        assert_eq!(back.headline_parts, card.headline_parts, "the parts survive a save and a load");
     }
 
     #[test]

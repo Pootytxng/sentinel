@@ -455,7 +455,19 @@
       "unexpectedShutdown": "Your PC shut down unexpectedly or hard-froze — {{when}}",
       "blueScreen": "Your PC blue-screened and restarted — {{when}}",
       "hardwareError": "Windows logged a hardware-level error — {{when}}",
+      "unknown": "Windows recorded something this version of Compy has no sentence for — {{when}}",
       "whileGame": ", while {{game}} was running"
+    },
+    "headlineWhat": {
+      "appCrash": "{{app}} stopped working and closed",
+      "appCrashNoApp": "An application crashed",
+      "appHang": "{{app}} stopped responding (froze)",
+      "appHangNoApp": "An application stopped responding",
+      "gpuTimeout": "Your graphics driver stopped responding and recovered",
+      "unexpectedShutdown": "Your PC shut down unexpectedly or hard-froze",
+      "blueScreen": "Your PC blue-screened and restarted",
+      "hardwareError": "Windows logged a hardware-level error",
+      "unknown": "Windows recorded something this version of Compy has no sentence for"
     },
     "applied": {
       "on": "On",
