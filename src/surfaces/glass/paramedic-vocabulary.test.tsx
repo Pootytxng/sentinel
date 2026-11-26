@@ -23,7 +23,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import i18n from "../../i18n";
 import type { ParamedicCertainty, ParamedicDiagnosis, ParamedicEvidence, ParamedicSessionRef } from "../../types";
 import { CERTAINTY_VALUES, EVIDENCE_KIND_VALUES, SOURCES, STRENGTHS, fromCertainty, strengthFor, type Strength } from "../../data/certainty";
-import { sourceWord, strengthWord } from "../../data/certainty-words";
+import { isShownSource, sourceWord, strengthWord, type ShownSource } from "../../data/certainty-words";
 import { candidateTag, evidenceTag } from "./paramedic-tags";
 import { ParamedicCard } from "./ParamedicCard";
 
@@ -40,8 +40,8 @@ const locale = (loc: Lang, file: string) => JSON.parse(readFileSync(join("src", 
 
 /** The shared words, written out. A change to either locale file must be a change here too. */
 const SOURCE_WORDS: Record<Lang, Record<string, string>> = {
-  en: { read: "Read from your PC", measured: "Measured", measuredOnce: "Measured once", user: "You told Compy", general: "Not measured on your PC", unread: "Couldn't read" },
-  "zh-CN": { read: "从你的电脑读取", measured: "已实测", measuredOnce: "仅测得一次", user: "你告诉 Compy 的", general: "未在你的电脑上实测", unread: "未能读取" },
+  en: { read: "Read from your PC", measured: "Measured", measuredOnce: "Measured once", general: "Not measured on your PC", unread: "Couldn't read" },
+  "zh-CN": { read: "从你的电脑读取", measured: "已实测", measuredOnce: "仅测得一次", general: "未在你的电脑上实测", unread: "未能读取" },
 };
 const STRENGTH_WORDS: Record<Lang, Record<string, string>> = {
   en: { possible: "Possible", mostLikely: "Most likely" },
@@ -57,7 +57,7 @@ const OLD_EN = /\bKnown\b|Often causes this/;
 const OLD_ZH = /已知|已测得|常会导致/;
 
 describe("the shared how-sure words (common.source / common.strength)", () => {
-  it("en and zh-CN carry the same eight keys with exactly these words", () => {
+  it("en and zh-CN carry the same seven keys with exactly these words", () => {
     for (const loc of LANGS) {
       const common = locale(loc, "common.json");
       expect(common.source, loc).toEqual(SOURCE_WORDS[loc]);
@@ -65,11 +65,18 @@ describe("the shared how-sure words (common.source / common.strength)", () => {
     }
   });
 
+  it("a source no screen shows yet has no word: `user` has no key in either language and is not a shown source", () => {
+    expect(SOURCES.filter((s) => !isShownSource(s))).toEqual(["user"]);
+    for (const loc of LANGS) expect((locale(loc, "common.json").source as Tree).user, loc).toBeUndefined();
+  });
+
   it("sourceWord returns the locale's word for every source, in both languages", async () => {
-    const key: Record<(typeof SOURCES)[number], string> = { read: "read", measured: "measured", "measured-once": "measuredOnce", user: "user", general: "general", unread: "unread" };
+    const key: Record<ShownSource, string> = { read: "read", measured: "measured", "measured-once": "measuredOnce", general: "general", unread: "unread" };
     for (const loc of LANGS) {
       await i18n.changeLanguage(loc);
-      for (const s of SOURCES) expect(sourceWord(s, i18n.t), `${loc}/${s}`).toBe(SOURCE_WORDS[loc][key[s]]);
+      const shown = SOURCES.filter(isShownSource);
+      expect(shown.length).toBe(5);
+      for (const s of shown) expect(sourceWord(s, i18n.t), `${loc}/${s}`).toBe(SOURCE_WORDS[loc][key[s]]);
     }
   });
 
@@ -121,7 +128,7 @@ describe("evidence-line tags: each old word maps to its shared word", () => {
   it("the words the card keeps are unchanged in both languages: Not recorded, Not read, Supports this, Weakens this", async () => {
     for (const loc of LANGS) {
       await i18n.changeLanguage(loc);
-      expect(evidenceTag(line("unknown"), i18n.t), loc).toEqual({ axis: "source", text: KEPT[loc].unknown });
+      expect(evidenceTag(line("unknown", { code: "load-not-recorded" }), i18n.t), loc).toEqual({ axis: "source", text: KEPT[loc].unknown });
       expect(evidenceTag(line("unknown", { code: "whea-normal-unread" }), i18n.t), loc).toEqual({ axis: "source", text: KEPT[loc].notRead });
       expect(evidenceTag(line("supported-inference"), i18n.t), loc).toEqual({ axis: "relation", text: KEPT[loc].supports });
     }
@@ -130,8 +137,65 @@ describe("evidence-line tags: each old word maps to its shared word", () => {
   it("a line with no record is never tagged Couldn't read, and an unread hardware log is never tagged Not recorded", async () => {
     for (const loc of LANGS) {
       await i18n.changeLanguage(loc);
-      expect(evidenceTag(line("unknown"), i18n.t).text, loc).not.toBe(SOURCE_WORDS[loc].unread);
-      expect(evidenceTag(line("unknown", { code: "whea-normal-unread" }), i18n.t).text, loc).not.toBe(KEPT[loc].unknown);
+      const noRecord = evidenceTag(line("unknown", { code: "load-not-recorded" }), i18n.t);
+      const logUnread = evidenceTag(line("unknown", { code: "whea-normal-unread" }), i18n.t);
+      expect(noRecord?.text, loc).toBe(KEPT[loc].unknown);
+      expect(noRecord?.text, loc).not.toBe(SOURCE_WORDS[loc].unread);
+      expect(logUnread?.text, loc).toBe(KEPT[loc].notRead);
+      expect(logUnread?.text, loc).not.toBe(KEPT[loc].unknown);
+    }
+  });
+
+  // Review r1, F4: EvidenceKind `unknown` is three different things; the card tells them apart by code.
+  const NO_RECORD = ["load-not-recorded", "rough-load-not-recorded", "recovery-load-not-recorded", "ram-unrecorded", "ram-since-unread", "recovery-ram-not-read", "recovery-ram-rough-unread", "program-start-unread", "install-not-recorded", "recovery-compy-unread", "recovery-build-unread", "recovery-driver-unread", "driver-back-none", "drift-restored-none", "recovered-steam-latest-only"];
+  const READ_FAILED = ["gap-unread", "recovery-records-unread", "cross-game-mod-unchecked"];
+  const NOT_READ = ["whea-normal-unread", "install-time-not-read"];
+  const NOT_JUDGED = ["driver-back-unjudged", "driver-back-between", "drift-restored-unjudged", "drift-restored-between", "compy-undone-unread", "compy-undone-between", "cross-game-confounded", "recovered-driver-record-differs", "recovery-day-unplaced", "recovery-drift-unknown", "which-not-recorded"];
+
+  it("an `unknown` line where Compy kept no record says Not recorded / 未记录 (15 codes)", async () => {
+    expect(NO_RECORD.length).toBe(15);
+    for (const loc of LANGS) {
+      await i18n.changeLanguage(loc);
+      for (const code of NO_RECORD) expect(evidenceTag(line("unknown", { code }), i18n.t), `${loc}/${code}`).toEqual({ axis: "source", text: KEPT[loc].unknown });
+    }
+  });
+
+  it("an `unknown` line where the read did not come back says Couldn't read / 未能读取, never Not recorded", async () => {
+    for (const loc of LANGS) {
+      await i18n.changeLanguage(loc);
+      for (const code of READ_FAILED) {
+        const tag = evidenceTag(line("unknown", { code }), i18n.t);
+        expect(tag, `${loc}/${code}`).toEqual({ axis: "source", text: loc === "en" ? "Couldn't read" : "未能读取" });
+        expect(tag?.text, `${loc}/${code}`).not.toBe(KEPT[loc].unknown);
+      }
+    }
+  });
+
+  it("a read that did not reach that far says Not read / 未读取: the hardware log and the install time", async () => {
+    for (const loc of LANGS) {
+      await i18n.changeLanguage(loc);
+      for (const code of NOT_READ) expect(evidenceTag(line("unknown", { code }), i18n.t), `${loc}/${code}`).toEqual({ axis: "source", text: loc === "en" ? "Not read" : "未读取" });
+    }
+  });
+
+  it("an `unknown` line that was recorded but not judged, or whose code the card does not know, gets no tag", async () => {
+    for (const loc of LANGS) {
+      await i18n.changeLanguage(loc);
+      for (const code of [...NOT_JUDGED, "a-code-this-build-does-not-know", "driver-changed"]) expect(evidenceTag(line("unknown", { code }), i18n.t), `${loc}/${code}`).toBeNull();
+    }
+  });
+
+  it("the note on how a figure is built (figure-scope) gets no tag: it is not a fact Compy read", async () => {
+    for (const loc of LANGS) {
+      await i18n.changeLanguage(loc);
+      expect(evidenceTag(line("known", { code: "figure-scope" }), i18n.t), loc).toBeNull();
+    }
+  });
+
+  it("an evidence kind the card does not know gets no tag, never Measured", async () => {
+    for (const loc of LANGS) {
+      await i18n.changeLanguage(loc);
+      expect(evidenceTag({ kind: "a-kind-this-build-does-not-know" as ParamedicEvidence["kind"], code: "driver-changed", against: false }, i18n.t), loc).toBeNull();
     }
   });
 
@@ -144,18 +208,24 @@ describe("evidence-line tags: each old word maps to its shared word", () => {
   });
 
   it("an evidence line never carries a strength: every kind, with and without `against`, in both languages", async () => {
+    let seen = 0;
     for (const loc of LANGS) {
       await i18n.changeLanguage(loc);
       const strengthWords = Object.values(STRENGTH_WORDS[loc]);
       for (const kind of [...EVIDENCE_KIND_VALUES, "a-kind-this-build-does-not-know" as ParamedicEvidence["kind"]])
         for (const against of [false, true])
-          for (const code of ["driver-changed", "whea-normal-unread"]) {
+          for (const code of ["driver-changed", "whea-normal-unread", "load-not-recorded", "gap-unread", "driver-back-unjudged", "figure-scope"]) {
             const tag = evidenceTag({ kind, code, against }, i18n.t);
+            // No tag is allowed (a line no word is true of); a strength is not.
+            if (!tag) continue;
+            seen++;
             expect(tag.axis, `${loc}/${kind}/${against}/${code}`).not.toBe("strength");
             expect(strengthWords, `${loc}/${kind}/${against}/${code}`).not.toContain(tag.text);
             expect(tag.text.trim().length, `${loc}/${kind}: empty tag`).toBeGreaterThan(0);
           }
     }
+    // Not vacuous: most combinations do carry a tag.
+    expect(seen).toBeGreaterThan(80);
   });
 });
 
@@ -245,7 +315,8 @@ const base: ParamedicDiagnosis = {
   method: "paramedic-rules-v1",
 };
 const ev = (kind: ParamedicEvidence["kind"], code: string, args: Record<string, string> = {}, against = false): ParamedicEvidence => ({ kind, code, args, against, source: "sessions" });
-/** One line of each kind the engine sends on a row today, plus one that weakens it. */
+/** Four lines that exercise the four tag paths: read, measured, no record, weakens. The kinds are set for the test
+ *  (the engine sends `value-changed` and `hardware-changed` as `known`, and never `hardware-changed` with `against`). */
 const LINES: ParamedicEvidence[] = [
   ev("known", "driver-changed", { from: "1.0", to: "2.0" }),
   ev("measured", "value-changed", { from: "40", to: "70" }),
@@ -275,9 +346,9 @@ const hardware: F = {
 };
 
 const DOOR = { en: "Something's wrong", "zh-CN": "出问题了" } as const;
-const ask = async (findings: F[], lang: Lang = "en") => {
+const ask = async (findings: F[], lang: Lang = "en", over: Partial<ParamedicDiagnosis> = {}) => {
   await i18n.changeLanguage(lang);
-  answer.value = { ...base, findings };
+  answer.value = { ...base, findings, ...over };
   render(<ParamedicCard />);
   fireEvent.click(screen.getByRole("button", { name: DOOR[lang] }));
   await waitFor(() => expect(screen.queryByTestId("paramedic-verdict")).toBeTruthy());
@@ -364,6 +435,55 @@ describe("the Something's-wrong card renders the shared words", () => {
     expect(rowChips(0)).toEqual([["strength", "最有可能"]]);
     expect(rowChips(1)).toEqual([["strength", "有可能"]]);
     expect(screen.getAllByText("最有可能").length).toBe(1);
+  });
+
+  // Review r1: the engine sends two Likely rows on purpose (paramedic.rs why_first "tie"). The card shows both as
+  // sent; lowering the second one in the UI would change an engine level, so this pins that it does not.
+  it("a tie: two rows the engine sent as likely both read Most likely (the card lowers neither)", async () => {
+    const openEverything = () => {
+      for (let i = 0; i < 6; i++) {
+        const closed = screen.queryAllByRole("button").filter((b) => b.getAttribute("aria-expanded") === "false");
+        if (closed.length === 0) return;
+        closed.forEach((b) => fireEvent.click(b));
+      }
+    };
+    const topChips = () => rows().flatMap((_, i) => rowChips(i));
+    for (const lang of LANGS) {
+      await ask([driver("likely"), driver("likely")], lang, { why_first: "tie" });
+      openEverything();
+      expect(rows().length, lang).toBe(2);
+      expect(topChips(), lang).toEqual([
+        ["strength", STRENGTH_WORDS[lang].mostLikely],
+        ["strength", STRENGTH_WORDS[lang].mostLikely],
+      ]);
+      cleanup();
+    }
+  });
+
+  // Review r1, F1 / F2 / F4, on the card itself: a line no word is true of renders its sentence with no chip.
+  it("on the card: Couldn't read on a failed read, Not read on an install time, and no chip on a figure note or an unjudged line", async () => {
+    const lines: ParamedicEvidence[] = [
+      ev("unknown", "cross-game-mod-unchecked", { otherGame: "Game B" }),
+      ev("unknown", "install-time-not-read", { seenAt: "2026-10-06T12:00:00Z" }),
+      ev("known", "figure-scope"),
+      ev("unknown", "driver-back-unjudged", { back: "2026-10-06T12:00:00Z", count: "2" }),
+      ev("unknown", "load-not-recorded"),
+    ];
+    const expected: Record<Lang, (string | null)[][]> = {
+      en: [["source", "Couldn't read"], ["source", "Not read"], ["source", "Not recorded"]],
+      "zh-CN": [["source", "未能读取"], ["source", "未读取"], ["source", "未记录"]],
+    };
+    for (const lang of LANGS) {
+      await ask([driver("possible", lines)], lang);
+      openRow();
+      const items = [...rows()[0].querySelectorAll("ul.gl-para-lines > li")];
+      // All five sentences are on the screen; only three carry a chip.
+      expect(items.length, lang).toBe(5);
+      expect(items.map((li) => li.querySelector(".gl-chip") !== null), lang).toEqual([true, true, false, false, true]);
+      expect(items.every((li) => (li.textContent ?? "").trim().length > 6), lang).toBe(true);
+      expect(lineTags(), lang).toEqual(expected[lang]);
+      cleanup();
+    }
   });
 
   it("an answer whose rows are all Possible never shows Most likely, in either language", async () => {
