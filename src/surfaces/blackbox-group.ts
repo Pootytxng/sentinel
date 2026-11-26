@@ -28,7 +28,8 @@ export type IncidentGroup = {
 };
 
 /** The headline minus its trailing date: "ROB RUN stopped working and closed — Nov 20, 12:17 AM" is
- *  split into the shared wording and the optional ", while X was running" tail. */
+ *  split into the shared wording and the optional session-game tail (", during or just after a X
+ *  session Compy recorded"). */
 export function headlineWording(inc: CrashIncident): string {
   const cut = inc.headline.indexOf(` — ${inc.when_display}`);
   if (cut < 0) return inc.headline;

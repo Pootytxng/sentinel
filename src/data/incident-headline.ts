@@ -107,7 +107,7 @@ function wording(p: HeadlineParts, t: TFunction): string | null {
   }
 }
 
-/** The ", while <game> was running" tail, or "" when there is none. */
+/** The ", during or just after a <game> session Compy recorded" tail, or "" when there is none. */
 function tail(p: HeadlineParts, t: TFunction): string {
   const game = p.while_game;
   return game != null ? t("common.backendWords.headline.whileGame", { game }) : "";
@@ -122,7 +122,8 @@ export function incidentHeadline(src: HeadlineSource, t: TFunction, lang: string
   return base + tail(p, t);
 }
 
-/** The headline without its time ("ROB RUN stopped working and closed, while X was running"). A record
+/** The headline without its time ("ROB RUN stopped working and closed, during or just after a X
+ *  session Compy recorded"). A record
  *  without parts gets its stored sentence minus the " — <time>" Rust put in it. */
 export function incidentWording(src: HeadlineSource, t: TFunction): string {
   const p = src.headline_parts;

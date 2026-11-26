@@ -33,7 +33,7 @@ describe("careHeadline", () => {
     expect(careHeadline(crash, en, "en")).toBe(crash.summary);
     const withGame = {
       ...crash,
-      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, while ROB RUN was running",
+      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, during or just after a ROB RUN session Compy recorded",
       headline_parts: { code: "app_crash", app: "dllhost", while_game: "ROB RUN" },
     };
     expect(careHeadline(withGame, en, "en-US")).toBe(withGame.summary);
@@ -50,16 +50,16 @@ describe("careHeadline", () => {
     expect(careHeadline({ ...crash, headline_parts: bsod }, zh, "zh-CN")).toContain("蓝屏");
   });
 
-  it("keeps the 'while <game> was running' clause from its value, the game's name untranslated", () => {
+  it("keeps the session-game clause from its value, the game's name untranslated", () => {
     const s = {
       ...crash,
-      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, while ROB RUN was running",
+      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, during or just after a ROB RUN session Compy recorded",
       headline_parts: { code: "app_crash", app: "dllhost", while_game: "ROB RUN" },
     };
     const h = careHeadline(s, zh, "zh-CN");
     expect(h).toContain("dllhost 已停止工作并关闭");
-    expect(h).toContain("当时 ROB RUN 正在运行");
-    expect(h).not.toMatch(/while|was running/);
+    expect(h).toContain("发生在 Compy 记录的一次 ROB RUN 会话期间或刚结束后");
+    expect(h).not.toMatch(/during|session|recorded/);
   });
 
   it("a card stored before the code existed shows its stored sentence as it is, in every language", () => {

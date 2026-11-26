@@ -444,7 +444,7 @@
       "blueScreen": "你的电脑蓝屏并已重启 — {{when}}",
       "hardwareError": "Windows 记录了一个硬件级错误 — {{when}}",
       "unknown": "Windows 记录了此版本 Compy 没有对应说明的内容 — {{when}}",
-      "whileGame": "，当时 {{game}} 正在运行"
+      "whileGame": "，发生在 Compy 记录的一次 {{game}} 会话期间或刚结束后"
     },
     "headlineWhat": {
       "appCrash": "{{app}} 已停止工作并关闭",

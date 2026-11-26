@@ -56,8 +56,12 @@ describe("each code renders its en and zh-CN literal", () => {
     expect(incidentHeadline(rec(code, app), en, "en")).toBe(enText);
     expect(incidentHeadline(rec(code, app), zh, "zh-CN")).toBe(zhText);
     // The tail is a value of every code, the game's name untranslated.
-    expect(incidentHeadline(rec(code, app, "Helldivers2"), en, "en")).toBe(`${enText}, while Helldivers2 was running`);
-    expect(incidentHeadline(rec(code, app, "Helldivers2"), zh, "zh-CN")).toBe(`${zhText}，当时 Helldivers2 正在运行`);
+    expect(incidentHeadline(rec(code, app, "Helldivers2"), en, "en")).toBe(
+      `${enText}, during or just after a Helldivers2 session Compy recorded`,
+    );
+    expect(incidentHeadline(rec(code, app, "Helldivers2"), zh, "zh-CN")).toBe(
+      `${zhText}，发生在 Compy 记录的一次 Helldivers2 会话期间或刚结束后`,
+    );
     // The group line's wording is the same sentence without its time.
     expect(incidentWording(rec(code, app), en)).toBe(enText.replace(" — Jun 12, 9:42 PM", ""));
     expect(incidentWording(rec(code, app), zh)).toBe(zhText.replace(/\s?— .*$/, ""));

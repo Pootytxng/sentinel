@@ -363,7 +363,7 @@ function IncidentRow({
    *  are said once by the group, so the row keeps what is its own (time, vitals, changed-before,
    *  known issue, the answer to "Did this point you the right way?", the receipt). */
   compact?: boolean;
-  /** P2-group: in a compact row, show the record's whole headline (with its ", while X was running"
+  /** P2-group: in a compact row, show the record's whole headline (with its session-game
    *  tail) rather than only its time. */
   fullHeadline?: boolean;
   /** P2-group: "Unknown" rows the group already says once for every record; left out here. */
@@ -741,7 +741,7 @@ function IncidentGroupBlock({
               lifted={isLiftedInc(inc)}
               compact
               // A crash/hang group headline names the program only; each record's own headline (which
-              // can carry ", while X was running") stays in full, worded from its code (d10).
+              // can carry the session-game tail) stays in full, worded from its code (d10).
               fullHeadline={!!lineKey}
               hideCategories={hide}
             />

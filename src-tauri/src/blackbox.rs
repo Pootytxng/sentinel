@@ -1159,7 +1159,8 @@ pub(crate) struct HeadlineParts {
     pub(crate) code: HeadlineCode,
     /// The app's display name; `Some` exactly for `app_crash` and `app_hang`.
     pub(crate) app: Option<String>,
-    /// The game the ", while … was running" tail names; `None` when there is no tail.
+    /// The game the ", during or just after a … session Compy recorded" tail names; `None` when there
+    /// is no tail.
     pub(crate) while_game: Option<String>,
 }
 
@@ -1203,13 +1204,15 @@ fn render_headline_en(parts: &HeadlineParts, when_display: &str) -> String {
     };
     let mut h = format!("{base} — {when_display}");
     if let Some(g) = &parts.while_game {
-        h = format!("{h}, while {g} was running");
+        // d10 r1: a session matches a crash up to VITALS_GRACE_SECS after its recorded end, so the
+        // game may already have closed; the tail says only what Compy recorded.
+        h = format!("{h}, during or just after a {g} session Compy recorded");
     }
     h
 }
 
 /// Plain-English headline. The neutral tag carries the category; this translates the event for a
-/// non-technical reader and — when a session correlated — names what was running.
+/// non-technical reader and — when a session correlated — names the game of that recorded session.
 fn build_headline(
     kind: IncidentKind,
     fields: &IncidentFields,
@@ -2335,7 +2338,11 @@ mod blackbox_tests {
             "Display driver amdkmdag stopped responding and has successfully recovered.", serde_json::Value::Null)];
         let out = from_events(events, &sessions);
         assert_eq!(out.len(), 1);
-        assert!(out[0].headline.contains("while Helldivers2 was running"), "got: {}", out[0].headline);
+        assert!(
+            out[0].headline.ends_with(", during or just after a Helldivers2 session Compy recorded"),
+            "got: {}",
+            out[0].headline
+        );
         assert!(out[0].vitals.is_some());
         assert_eq!(out[0].receipt.faulting_module.as_deref(), Some("amdkmdag"), "driver shows in the receipt");
     }
@@ -2346,7 +2353,9 @@ mod blackbox_tests {
         let events = vec![ev("Application Error", 1000, "2026-06-12T21:42:00-07:00", "crash",
             serde_json::json!(["game.exe", "1.0", "ts", "unity.dll", "1.0", "ts", "c0000005"]))];
         let out = from_events(events, &sessions);
-        assert!(!out[0].headline.contains("while game was running"), "no redundant clause: {}", out[0].headline);
+        // d10 r1: retargeted at the tail as it is worded now (any wording of it: "session Compy recorded").
+        assert_eq!(out[0].headline, format!("game stopped working and closed — {}", out[0].when_display), "no redundant clause");
+        assert!(!out[0].headline.contains("session Compy recorded"), "no redundant clause: {}", out[0].headline);
         assert!(out[0].vitals.is_some(), "vitals still attached even though the clause is suppressed");
     }
 
@@ -2608,10 +2617,10 @@ mod blackbox_tests {
         let h = build_headline(IncidentKind::AppCrash, &fields, "yesterday evening", None);
         assert!(h.starts_with("Palworld stopped working and closed"), "headline: {h}");
         assert!(!h.contains("Win64"), "shipping suffix leaked into the headline: {h}");
-        // The correlated game flows through pretty_proc_opt too, so the "while X" clause stays
+        // The correlated game flows through pretty_proc_opt too, so the session-game clause stays
         // suppressed when the crashing app IS the game (both sides prettified consistently).
         let h2 = build_headline(IncidentKind::AppCrash, &fields, "yesterday evening", Some("Palworld"));
-        assert!(!h2.contains("while"), "already-named suppression broke: {h2}");
+        assert!(!h2.contains("session Compy recorded"), "already-named suppression broke: {h2}");
         assert_eq!(pretty_proc("Palworld-Win64-Shipping.exe"), "Palworld");
     }
 
@@ -2660,8 +2669,9 @@ mod blackbox_tests {
     }
 
     #[test]
-    fn build_headline_says_exactly_what_it_said_before_the_codes() {
-        // d10 rule: the English is unchanged byte for byte. These are the sentences main produced.
+    fn build_headline_says_exactly_these_sentences() {
+        // d10: the bases are unchanged byte for byte from main. The tail was CHANGED on purpose in
+        // review r1: ", while X was running" was false for a crash in the 90 s grace after a session.
         let f = |app: Option<&str>| IncidentFields { faulting_app: app.map(Into::into), ..Default::default() };
         let w = "Jun 12, 9:42 PM";
         let cases: [(IncidentKind, Option<&str>, Option<&str>, &str); 10] = [
@@ -2672,8 +2682,8 @@ mod blackbox_tests {
             (IncidentKind::AppHang, None, None, "An application stopped responding — Jun 12, 9:42 PM"),
             (IncidentKind::UnexpectedShutdown, None, None, "Your PC shut down unexpectedly or hard-froze — Jun 12, 9:42 PM"),
             (IncidentKind::BlueScreen, None, None, "Your PC blue-screened and restarted — Jun 12, 9:42 PM"),
-            (IncidentKind::HardwareError, None, Some("Helldivers2"), "Windows logged a hardware-level error — Jun 12, 9:42 PM, while Helldivers2 was running"),
-            (IncidentKind::AppCrash, Some("dllhost.exe"), Some("ROB RUN"), "dllhost stopped working and closed — Jun 12, 9:42 PM, while ROB RUN was running"),
+            (IncidentKind::HardwareError, None, Some("Helldivers2"), "Windows logged a hardware-level error — Jun 12, 9:42 PM, during or just after a Helldivers2 session Compy recorded"),
+            (IncidentKind::AppCrash, Some("dllhost.exe"), Some("ROB RUN"), "dllhost stopped working and closed — Jun 12, 9:42 PM, during or just after a ROB RUN session Compy recorded"),
             (IncidentKind::AppHang, Some("ROB RUN.exe"), Some("ROB RUN"), "ROB RUN stopped responding (froze) — Jun 12, 9:42 PM"),
         ];
         for (kind, app, game, want) in cases {

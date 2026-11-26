@@ -167,7 +167,7 @@ describe("BlackBox surface (v2 triage UI)", () => {
     await i18n.changeLanguage("zh-CN");
     try {
       const inc = appCrashIncident();
-      inc.headline = "ROB RUN stopped working and closed — Nov 19, 9:42 PM, while Helldivers2 was running";
+      inc.headline = "ROB RUN stopped working and closed — Nov 19, 9:42 PM, during or just after a Helldivers2 session Compy recorded";
       inc.headline_parts = { code: "app_crash", app: "ROB RUN", while_game: "Helldivers2" };
       inc.when = "2026-11-19T21:42:00-08:00";
       inc.when_display = "Nov 19, 9:42 PM";
@@ -176,9 +176,9 @@ describe("BlackBox surface (v2 triage UI)", () => {
       fireEvent.click(screen.getByRole("button", { name: i18n.t("gaming.blackBox.scanButton") }));
       await waitFor(() => expect(document.body.textContent).toContain("ROB RUN 已停止工作并关闭"));
       const row = document.querySelector(".bb-item")!;
-      expect(row.querySelector(".bb-headline")!.textContent).toMatch(/^ROB RUN 已停止工作并关闭 — 11月19日.*，当时 Helldivers2 正在运行$/);
+      expect(row.querySelector(".bb-headline")!.textContent).toMatch(/^ROB RUN 已停止工作并关闭 — 11月19日.*，发生在 Compy 记录的一次 Helldivers2 会话期间或刚结束后$/);
       expect(row.getAttribute("aria-label")).toContain("ROB RUN 已停止工作并关闭");
-      expect(row.getAttribute("aria-label")).not.toMatch(/stopped working|was running|Nov 19/);
+      expect(row.getAttribute("aria-label")).not.toMatch(/stopped working|session Compy recorded|Nov 19/);
     } finally {
       await i18n.changeLanguage("en");
     }
