@@ -6220,7 +6220,9 @@ mod leftover_restore_tests {
             } else {
                 // a10 r1 (F2): core parking also refuses before elevation when this PC's plan default
                 // can't be read (it never writes a guessed value). Only that id, only that sentence.
-                let default_unread = id == "core-parking-forced" && err == crate::actions::CORE_PARKING_DEFAULT_UNREAD;
+                // a10 r2 F2: or when its re-check of the detector's rule doesn't hold on this PC.
+                let default_unread = id == "core-parking-forced"
+                    && (err == crate::actions::CORE_PARKING_DEFAULT_UNREAD || err == crate::actions::CORE_PARKING_NOT_FORCED);
                 assert!(
                     err.contains("refusing to restore blind") || default_unread,
                     "{id}: the decline or an honest pre-elevation refusal, nothing else: {err}"

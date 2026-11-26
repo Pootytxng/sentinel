@@ -441,6 +441,12 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "Compy couldn't read this power plan's own default for core parking from Windows, so it won't guess a value to put back. Nothing was changed.",
     key: "app.backendErrors.coreParkingDefaultUnread",
   },
+  // a10 r2 F2: the restore re-checked the detector's rule and it no longer holds (actions.rs CORE_PARKING_NOT_FORCED).
+  {
+    rust: "CORE_PARKING_NOT_FORCED",
+    text: "Compy checked again and this power plan's core parking no longer looks changed from its own default, so it didn't put anything back. Nothing was changed.",
+    key: "app.backendErrors.coreParkingNotForced",
+  },
 ];
 
 /** The i18n key for a backend error/reason that carries one of the sentences above, else null. */

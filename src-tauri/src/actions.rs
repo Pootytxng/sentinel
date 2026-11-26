@@ -6676,6 +6676,10 @@ pub(crate) fn core_parking_default_script(
 /// Mirrored in `src/data/backend-error.ts` (pinned by `backend-error.test.ts`).
 pub(crate) const CORE_PARKING_DEFAULT_UNREAD: &str = "Compy couldn't read this power plan's own default for core parking from Windows, so it won't guess a value to put back. Nothing was changed.";
 
+/// a10 r2 F2: the restore re-checked the detector's rule (stock Balanced, forced to 100 or more, plan default
+/// lower) and it no longer holds. Mirrored in `src/data/backend-error.ts` (pinned by `backend-error.test.ts`).
+pub(crate) const CORE_PARKING_NOT_FORCED: &str = "Compy checked again and this power plan's core parking no longer looks changed from its own default, so it didn't put anything back. Nothing was changed.";
+
 // ── Core parking: put the plan's own provisioned default back (AC + DC) so the override is lifted ──
 // a10 r1 (F2): it used to write a fixed 0/0 ("re-allow parking"), which is neither the recorded prior
 // nor Windows' default (the VM's stock was AC 100 / DC 10). It now writes the default it just read
@@ -6735,6 +6739,12 @@ pub(crate) fn restore_core_parking_default_with(
     };
     let target_ac = crate::elevated_ops::Percent::parse(default_ac).map_err(|_| CORE_PARKING_DEFAULT_UNREAD.to_string())?;
     let target_dc = crate::elevated_ops::Percent::parse(default_dc).map_err(|_| CORE_PARKING_DEFAULT_UNREAD.to_string())?;
+    // a10 r2 F2: the restore is picked by id alone (history::restore_leftover), so it re-checks the
+    // detector's own rule on what it just read: the stock Balanced plan, forced to 100 or more, while the
+    // plan's own default is lower. Anything else changes nothing, before any prompt.
+    if !(plan.eq_ignore_ascii_case(crate::BALANCED_PLAN_GUID) && prior_ac >= 100 && default_ac < 100) {
+        return Err(CORE_PARKING_NOT_FORCED.to_string());
+    }
     run_elevated(ElevatedOp::CoreParkingDefault {
         plan: typed_plan,
         prior_ac: typed_ac,
@@ -6773,7 +6783,8 @@ mod core_parking_restore_tests {
         }
         assert_eq!(ran.get(), 0, "nothing runs elevated on an unread plan");
 
-        let plan = "11111111-2222-3333-4444-555555555555";
+        // a10 r2 F2: the restore only runs on the stock Balanced plan (it re-checks the detector's rule).
+        let plan = crate::BALANCED_PLAN_GUID;
         let done = restore_core_parking_default_with(&|| Some(plan.to_string()), &priors, &defaults, &run);
         assert_eq!(ran.get(), 1);
         match done {
@@ -6795,7 +6806,8 @@ mod core_parking_restore_tests {
     #[test]
     fn the_core_parking_apply_writes_the_recorded_plan_and_refuses_an_alias() {
         use std::cell::RefCell;
-        let plan = "11111111-2222-3333-4444-555555555555";
+        // a10 r2 F2: the restore only runs on the stock Balanced plan (it re-checks the detector's rule).
+        let plan = crate::BALANCED_PLAN_GUID;
         let seen = RefCell::new(Vec::<String>::new());
         // A9: the op as the script the helper composes from it (same builders, pinned by the goldens).
         let run = |op: ElevatedOp| -> Result<(), String> {
@@ -6876,6 +6888,37 @@ mod core_parking_restore_tests {
             }
         }
         assert_eq!(ran.get(), 0, "nothing runs elevated without a read default");
+    }
+
+    /// a10 r2 F2: the restore is reachable by id alone, so it re-checks the detector's rule on what it just
+    /// read. Another plan, a live value under 100, or a plan default of 100 or more: the fixed sentence, nothing
+    /// run elevated, no ApplyResult. Break: drop the check before `run_elevated` -> all three apply and this fails.
+    #[test]
+    fn the_core_parking_restore_rechecks_the_detectors_rule_before_any_prompt() {
+        let ran = Cell::new(0);
+        let run = |_: ElevatedOp| -> Result<(), String> {
+            ran.set(ran.get() + 1);
+            Ok(())
+        };
+        let other_plan = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+        let cases: [(&str, &str, CoreParkingDefaults, CoreParkingDefaults); 3] = [
+            ("another plan (High performance)", other_plan, (Some(100), Some(100)), (Some(10), Some(5))),
+            ("live 40 on Balanced", crate::BALANCED_PLAN_GUID, (Some(40), Some(10)), (Some(10), Some(5))),
+            ("plan default 100 on Balanced", crate::BALANCED_PLAN_GUID, (Some(100), Some(10)), (Some(100), Some(10))),
+        ];
+        for (why, plan, live, default) in cases {
+            let priors = move || -> Result<(Option<u32>, Option<u32>), String> { Ok(live) };
+            let defaults = move |_: &str| default;
+            match restore_core_parking_default_with(&|| Some(plan.to_string()), &priors, &defaults, &run) {
+                Err(e) => assert_eq!(e, CORE_PARKING_NOT_FORCED, "{why}"),
+                Ok(_) => panic!("{why}: must not restore"),
+            }
+        }
+        assert_eq!(ran.get(), 0, "nothing runs elevated when the rule doesn't hold");
+        // The case the detector flags still runs: Balanced, live 100, default 10.
+        restore_core_parking_default_with(&|| Some(crate::BALANCED_PLAN_GUID.to_string()), &|| Ok((Some(100), Some(100))), &|_| (Some(10), Some(5)), &run)
+            .expect("the flagged case restores");
+        assert_eq!(ran.get(), 1);
     }
 }
 pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan_guid: Option<&str>) -> Result<UndoDone, String> {
@@ -10483,7 +10526,8 @@ mod a9_caller_tests {
     /// `restore_core_parking_default_with`, or `reactivate: true` for a plan that is not active.
     #[test]
     fn core_parking_apply_and_undo_hand_over_the_rows_values() {
-        let plan = "11111111-2222-3333-4444-555555555555";
+        // a10 r2 F2: the apply only runs on the stock Balanced plan (it re-checks the detector's rule).
+        let plan = crate::BALANCED_PLAN_GUID;
         let seen = std::cell::RefCell::new(Vec::new());
         let run = |op: ElevatedOp| -> Result<(), String> {
             seen.borrow_mut().push(op);
