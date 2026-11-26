@@ -5205,7 +5205,7 @@ pub(crate) fn resolve_eee_from_read(read: Option<&std::process::Output>) -> EeeR
 
 /// PURE (a11): a finished enumeration → every EEE-shaped property it listed, unfiltered (the per-record
 /// Trust Ledger check needs the properties that have no recognized "off" value too). `None` exactly where
-/// [`resolve_eee_from_read`] says `Unreadable`: no output, a non-zero exit, or the unread marker.
+/// `resolve_eee_from_read` (test-only) says `Unreadable`: no output, a non-zero exit, or the unread marker.
 pub(crate) fn eee_properties_from_read(read: Option<&std::process::Output>) -> Option<Vec<EeeProperty>> {
     let out = read?;
     if !out.status.success() {
