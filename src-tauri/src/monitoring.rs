@@ -2162,7 +2162,7 @@ fn start_plain_or_elevated(exe: std::path::PathBuf, generation: u64) {
         support_record(
             SupportOutcome::Failed,
             "nonelevated_start_failed",
-            &format!("{why}; asking for administrator permission instead"),
+            &format!("{why}; trying the administrator start instead"),
         );
     };
     let e2 = exe.clone();
