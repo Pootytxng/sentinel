@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Term } from "./Term";
-import { confidenceHintKey, confidenceWordKey, isMeasuredRow, wordFromBand, wordFromPattern, wordFromRow } from "../data/confidence-word";
+import { confidenceHintKey, confidenceWordText, isMeasuredRow, wordFromBand, wordFromPattern, wordFromRow } from "../data/confidence-word";
 import type { ConfidenceBand, PriorityBasis } from "../types";
 
 /** P7-confidence, review 2026-10-28: a band's word ("Likely", "Unknown") with its one-line hint in the
@@ -11,7 +11,7 @@ export function ConfidenceWord({ band }: { band: ConfidenceBand | "high" | "medi
   const word = wordFromBand(band);
   return (
     <span data-confidence={band ?? undefined}>
-      <Term tip={t(confidenceHintKey(word))}>{t(confidenceWordKey(word))}</Term>
+      <Term tip={t(confidenceHintKey(word))}>{confidenceWordText(word, t)}</Term>
     </span>
   );
 }
@@ -23,7 +23,7 @@ export function PatternConfidence({ band }: { band: ConfidenceBand | "high" | "m
   const word = wordFromPattern(band);
   return (
     <span data-confidence={band ?? undefined}>
-      <Term tip={t(word === "measured" ? "common.confidenceHint.pattern" : confidenceHintKey(word))}>{t(confidenceWordKey(word))}</Term>
+      <Term tip={t(word === "measured" ? "common.confidenceHint.pattern" : confidenceHintKey(word))}>{confidenceWordText(word, t)}</Term>
     </span>
   );
 }
@@ -37,7 +37,7 @@ export function RowConfidence({ basis, band }: { basis: PriorityBasis | undefine
   const measured = isMeasuredRow(basis);
   return (
     <span data-confidence={band ?? undefined} data-basis={measured ? "measured" : "fact"}>
-      <Term tip={t(confidenceHintKey(word))}>{t(confidenceWordKey(word))}</Term>
+      <Term tip={t(confidenceHintKey(word))}>{confidenceWordText(word, t)}</Term>
       {measured ? null : (
         <>
           {" "}

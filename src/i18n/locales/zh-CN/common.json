@@ -174,9 +174,7 @@
   "confidenceWord": {
     "measuredOnce": "仅测得一次",
     "measuredTimes_other": "已测 {{count}} 次",
-    "possible": "有可能",
     "known": "已知",
-    "measured": "已实测",
     "likely": "较可能",
     "expected": "预期",
     "unknown": "未知"

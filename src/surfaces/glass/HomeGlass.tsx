@@ -19,7 +19,7 @@ import { deriveReverted } from "../use-scan";
 import type { CardUndoResult } from "../../data/compy-undo";
 import { gameLibrary } from "../../data/game-library";
 import { knownFps } from "../../lib/session-metrics";
-import { wordFromRow, isMeasuredRow, confidenceWordKey } from "../../data/confidence-word";
+import { wordFromRow, isMeasuredRow, confidenceWordText } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
 import { ParamedicCard } from "./ParamedicCard";
 import { useDates } from "./GamesRoom";
@@ -421,7 +421,7 @@ export function HomeGlass({
                     )}
                   </span>
                   <span className="gl-chip" data-tone="accent">
-                    {t(confidenceWordKey(wordFromRow(topLimiter.basis, topLimiter.confidence)))}
+                    {confidenceWordText(wordFromRow(topLimiter.basis, topLimiter.confidence), t)}
                   </span>
                 </div>
               </div>

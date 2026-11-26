@@ -8,8 +8,10 @@
 //   Unknown   — Compy lacks sufficient evidence (§26: a valid answer).
 // The raw band stays available to the technical layer (`data-confidence` on the chip); only the
 // default face is translated.
+import type { TFunction } from "i18next";
 import type { ConfidenceBand, Provenance } from "../types";
 import type { FindingLevel } from "../surfaces/home-interview-data";
+import { sourceWord, strengthWord } from "./certainty-words";
 import { fromBench, fromFindingLevel, fromHypothesisBand, fromPatternBand, fromPriorityRow, fromProvenance, PROVENANCE_VALUES, type BenchKind, type Mapped } from "./certainty";
 
 export type ConfidenceWord = "known" | "measured" | "measuredOnce" | "possible" | "likely" | "expected" | "unknown";
@@ -92,8 +94,30 @@ export function wordFromFinding(level: FindingLevel): ConfidenceWord {
   return shownWord(fromFindingLevel(level));
 }
 
-/** The i18n key of a word (common.confidenceWord.*). */
+/** The i18n key of a word that is still spelled by the older list (common.confidenceWord.*): Known,
+ *  Measured once (the Test bench), Expected, Unknown. "possible" and "measured" have NO key there since
+ *  D3 slice 3: a screen that can show either goes through confidenceWordText below. */
 export const confidenceWordKey = (w: ConfidenceWord): string => `common.confidenceWord.${w}`;
+
+/** D3 slice 3: the text a word is SHOWN as, for every screen that tags a conclusion with one of these
+ *  words (What changed, Hardware, History's patterns, the Home interview, a measured priority row).
+ *  A word the shared vocabulary has is spelled by certainty-words.ts, so it reads the same here as on
+ *  the Something's-wrong card: "possible" is the strength Possible, "measured" and "measuredOnce" are
+ *  the sources Measured and Measured once. The other words (Known, Expected, Unknown) are not in the
+ *  shared vocabulary as tags and keep their older keys until their own slice.
+ *  This spells a word; it decides none. Which word a band, row or level gets is the functions above. */
+export function confidenceWordText(w: ConfidenceWord, t: TFunction): string {
+  switch (w) {
+    case "possible":
+      return strengthWord("possible", t);
+    case "measured":
+      return sourceWord("measured", t);
+    case "measuredOnce":
+      return sourceWord("measured-once", t);
+    default:
+      return t(confidenceWordKey(w));
+  }
+}
 
 /** The i18n key of a word's one-line hint (common.confidenceHint.*), shown as the chip's title: it
  *  says what the word qualifies — for "Likely", that the reading itself is measured and only its

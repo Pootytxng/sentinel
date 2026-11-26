@@ -179,10 +179,8 @@
   },
   "confidenceWord": {
     "known": "Known",
-    "measured": "Measured",
     "measuredOnce": "Measured once",
     "measuredTimes_other": "Measured {{count}} times",
-    "possible": "Possible",
     "likely": "Likely",
     "expected": "Expected",
     "unknown": "Unknown"
