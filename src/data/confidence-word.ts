@@ -94,10 +94,11 @@ export function wordFromFinding(level: FindingLevel): ConfidenceWord {
   return shownWord(fromFindingLevel(level));
 }
 
-/** The i18n key of a word that is still spelled by the older list (common.confidenceWord.*): Known,
- *  Measured once (the Test bench), Expected, Unknown. "possible" and "measured" have NO key there since
- *  D3 slice 3: a screen that can show either goes through confidenceWordText below. */
-export const confidenceWordKey = (w: ConfidenceWord): string => `common.confidenceWord.${w}`;
+/** The i18n key of a word, for every word: Possible and Measured are kept under the shared keys since D3
+ *  slice 3 (the same keys certainty-words.ts spells), the rest under the older list. No input builds a key
+ *  that does not exist. */
+export const confidenceWordKey = (w: ConfidenceWord): string =>
+  w === "possible" ? "common.strength.possible" : w === "measured" ? "common.source.measured" : `common.confidenceWord.${w}`;
 
 /** D3 slice 3: the text a word is SHOWN as, for every screen that tags a conclusion with one of these
  *  words (What changed, Hardware, History's patterns, the Home interview, a measured priority row).
