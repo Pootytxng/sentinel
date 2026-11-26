@@ -33,7 +33,7 @@ describe("careHeadline", () => {
     expect(careHeadline(crash, en, "en")).toBe(crash.summary);
     const withGame = {
       ...crash,
-      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, during or just after a ROB RUN session Compy recorded",
+      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, during or just after a session of ROB RUN that Compy recorded",
       headline_parts: { code: "app_crash", app: "dllhost", while_game: "ROB RUN" },
     };
     expect(careHeadline(withGame, en, "en-US")).toBe(withGame.summary);
@@ -53,7 +53,7 @@ describe("careHeadline", () => {
   it("keeps the session-game clause from its value, the game's name untranslated", () => {
     const s = {
       ...crash,
-      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, during or just after a ROB RUN session Compy recorded",
+      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, during or just after a session of ROB RUN that Compy recorded",
       headline_parts: { code: "app_crash", app: "dllhost", while_game: "ROB RUN" },
     };
     const h = careHeadline(s, zh, "zh-CN");

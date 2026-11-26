@@ -57,7 +57,7 @@ describe("each code renders its en and zh-CN literal", () => {
     expect(incidentHeadline(rec(code, app), zh, "zh-CN")).toBe(zhText);
     // The tail is a value of every code, the game's name untranslated.
     expect(incidentHeadline(rec(code, app, "Helldivers2"), en, "en")).toBe(
-      `${enText}, during or just after a Helldivers2 session Compy recorded`,
+      `${enText}, during or just after a session of Helldivers2 that Compy recorded`,
     );
     expect(incidentHeadline(rec(code, app, "Helldivers2"), zh, "zh-CN")).toBe(
       `${zhText}，发生在 Compy 记录的一次 Helldivers2 会话期间或刚结束后`,

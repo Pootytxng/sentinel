@@ -457,7 +457,7 @@
       "blueScreen": "Your PC blue-screened and restarted — {{when}}",
       "hardwareError": "Windows logged a hardware-level error — {{when}}",
       "unknown": "A record this version of Compy can't describe — {{when}}",
-      "whileGame": ", during or just after a {{game}} session Compy recorded"
+      "whileGame": ", during or just after a session of {{game}} that Compy recorded"
     },
     "headlineWhat": {
       "appCrash": "{{app}} stopped working and closed",

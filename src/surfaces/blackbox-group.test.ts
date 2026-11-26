@@ -59,7 +59,7 @@ describe("groupIncidents", () => {
     ["evidence", (c: CrashIncident) => withAssess(c, { evidence: ["Windows recorded ROB RUN crashing", "another line"] })],
     ["next step", (c: CrashIncident) => withAssess(c, { next_step: { headline: "x", detail: "y", reversible: true, research_only: true } })],
     ["having an assessment", (c: CrashIncident) => ({ ...c, assessment: null })],
-    ["headline wording", (c: CrashIncident) => ({ ...c, headline: `${c.headline}, during or just after a Other session Compy recorded` })],
+    ["headline wording", (c: CrashIncident) => ({ ...c, headline: `${c.headline}, during or just after a session of Other that Compy recorded` })],
   ])("a differing %s splits the group", (_name, change) => {
     const g = groupIncidents([inc(0), change(inc(1)), inc(2)]);
     expect(g).toHaveLength(2);
@@ -101,9 +101,9 @@ describe("the cap", () => {
   });
 
   it("a record that differs only in its session-game tail is a different group", () => {
-    const tail = inc(1, { headline: `${inc(1).headline}, during or just after a ROB RUN session Compy recorded` });
+    const tail = inc(1, { headline: `${inc(1).headline}, during or just after a session of ROB RUN that Compy recorded` });
     expect(groupIncidents([inc(0), tail])).toHaveLength(2);
-    expect(headlineWording(tail)).toBe("ROB RUN stopped working and closed, during or just after a ROB RUN session Compy recorded");
+    expect(headlineWording(tail)).toBe("ROB RUN stopped working and closed, during or just after a session of ROB RUN that Compy recorded");
   });
 });
 

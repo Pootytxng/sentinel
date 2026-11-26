@@ -167,7 +167,7 @@ describe("BlackBox surface (v2 triage UI)", () => {
     await i18n.changeLanguage("zh-CN");
     try {
       const inc = appCrashIncident();
-      inc.headline = "ROB RUN stopped working and closed — Nov 19, 9:42 PM, during or just after a Helldivers2 session Compy recorded";
+      inc.headline = "ROB RUN stopped working and closed — Nov 19, 9:42 PM, during or just after a session of Helldivers2 that Compy recorded";
       inc.headline_parts = { code: "app_crash", app: "ROB RUN", while_game: "Helldivers2" };
       inc.when = "2026-11-19T21:42:00-08:00";
       inc.when_display = "Nov 19, 9:42 PM";
@@ -178,7 +178,7 @@ describe("BlackBox surface (v2 triage UI)", () => {
       const row = document.querySelector(".bb-item")!;
       expect(row.querySelector(".bb-headline")!.textContent).toMatch(/^ROB RUN 已停止工作并关闭 — 11月19日.*，发生在 Compy 记录的一次 Helldivers2 会话期间或刚结束后$/);
       expect(row.getAttribute("aria-label")).toContain("ROB RUN 已停止工作并关闭");
-      expect(row.getAttribute("aria-label")).not.toMatch(/stopped working|session Compy recorded|Nov 19/);
+      expect(row.getAttribute("aria-label")).not.toMatch(/stopped working|that Compy recorded|Nov 19/);
       // r1 break check: render `{inc.tag}` in the chip again -> "App crash" shows here.
       expect(row.querySelector(".bb-tag")!.textContent).toBe("应用崩溃");
     } finally {

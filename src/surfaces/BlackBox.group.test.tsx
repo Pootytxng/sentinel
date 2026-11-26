@@ -108,15 +108,15 @@ describe("Problems room - identical incidents grouped", () => {
   it("a session-game tail is not lost: each record keeps its full headline behind the button", async () => {
     const tailed = (i: number) =>
       rob(i, {
-        headline: `Launcher stopped working and closed — Nov 10, 12:0${i} PM, during or just after a ROB RUN session Compy recorded`,
+        headline: `Launcher stopped working and closed — Nov 10, 12:0${i} PM, during or just after a session of ROB RUN that Compy recorded`,
         receipt: { ...rob(i).receipt, faulting_app: "Launcher.exe" },
       });
     const { container } = await open([tailed(0), tailed(1), tailed(2)]);
     expect(container.querySelector(".bb-group .bb-headline")!.textContent).toMatch(/^Launcher stopped working and closed 3 times in the Windows records Compy read/);
-    expect(container.textContent).not.toMatch(/a ROB RUN session Compy recorded/);
+    expect(container.textContent).not.toMatch(/a session of ROB RUN that Compy recorded/);
     fireEvent.click(screen.getByRole("button", { name: "Show each one (3)" }));
     expect(
-      screen.getAllByText(/Launcher stopped working and closed — Nov 10, 12:0\d PM, during or just after a ROB RUN session Compy recorded/),
+      screen.getAllByText(/Launcher stopped working and closed — Nov 10, 12:0\d PM, during or just after a session of ROB RUN that Compy recorded/),
     ).toHaveLength(3);
     // A record without the tail is a different group.
     const plain = rob(3, { receipt: { ...rob(3).receipt, faulting_app: "Launcher.exe" }, headline: "Launcher stopped working and closed — Nov 10, 12:03 PM" });
