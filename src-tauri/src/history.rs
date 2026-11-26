@@ -4641,7 +4641,9 @@ mod receipt_commit_tests {
 
     // Break checks: (a11-4) make `LiveReads::eee_record_disabled` give every record the pass's one
     // all-adapter answer (`self.eee_disabled()`) -> "Ethernet" no longer reads its own On and this fails;
-    // (a11-7) make `record_receipts`' read-back pass `None` for the snapshot -> the source pin fails.
+    // (a11-7) make `record_receipts`' read-back pass `None` for the snapshot -> the source pin fails;
+    // (a11-8, r1 F1) give the production pass `read_eee: || None` in `with_listings` -> the real-pass
+    // asserts at the end read Unreadable and this fails.
     #[test]
     fn two_records_for_different_adapters_get_their_own_answers_from_one_listing() {
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -4676,6 +4678,18 @@ mod receipt_commit_tests {
         let src = include_str!("history.rs").replace("\r\n", "\n");
         let wired = concat!("check_change_state(rec_id, applied, ", "Some(snapshot), &LiveReads::default())");
         assert_eq!(src.matches(wired).count(), 2, "both undo read-backs pass the snapshot");
+        // a11 r1 F1: the PRODUCTION pass (`LiveReads::default()`) reads the real enumeration: a finished
+        // two-adapter listing through the enumeration seam gives each record its own answer.
+        use std::os::windows::process::ExitStatusExt;
+        let _read = crate::actions::ForceEeeRead::begin(Some(std::process::Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: b"Ethernet|Energy-Efficient Ethernet|Disabled|Enabled~Disabled\r\nEthernet 2|Energy-Efficient Ethernet|Enabled|Enabled~Disabled\r\n".to_vec(),
+            stderr: Vec::new(),
+        }));
+        let live = LiveReads::default();
+        assert_eq!(check_row_state(&applied_eee("Ethernet"), &live), ActiveCheck::On, "the real pass: A reads its own off");
+        assert_eq!(check_row_state(&applied_eee("Ethernet 2"), &live), ActiveCheck::Off, "the real pass: B reads its own on");
+        assert_eq!(probe_rec_target_with("eee-disable", &live), ActiveCheck::Off, "the real pass, no record: not off everywhere");
     }
 
     // ── CR-core-parking-plan-gone: an undo whose power plan no longer exists ──
