@@ -1059,7 +1059,10 @@ describe("paramedic words", () => {
     expect(en).not.toMatch(/were busy|got rougher|usual speed|outside Compy|nearly full in these/i);
     expect(en).not.toMatch(/was patched|were patched|got patched/i);
     expect(JSON.parse(en).evidence.crossGameConfounded).not.toMatch(/busy/i);
-    expect(JSON.parse(zh).answer.likely).not.toMatch(/原因/);
+    // D3 slice 2: the row's top word moved to the shared vocabulary (common.strength.mostLikely).
+    const zhCommon = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "common.json"), "utf8"));
+    expect(zhCommon.strength.mostLikely).toBe("最有可能");
+    expect(zhCommon.strength.mostLikely).not.toMatch(/原因/);
   });
 
   it("the recovery strings say supports and weakens, never caused, fixed or a verdict word, in both languages", () => {
