@@ -2718,6 +2718,56 @@ mod safety_tests {
         assert_eq!(lines, ["n0nce:a:ok", "n0nce:end"]);
     }
 
+    /// a12 item 2: a batch item's own output never changes any item's reported result. The batch script
+    /// (`actions::compose_batch_script`) writes each item's receipt as its own `Write-Output '<nonce>:<id>:ok|fail'`
+    /// line, and the app reads a receipt only from a line that STARTS with this dispatch's random nonce
+    /// (`actions::parse_batch_receipts`); no op that can ride a batch is ever given the nonce (only the combined
+    /// memory-compression op is, and it cannot ride one). End to end, unelevated, through the helper's own runner and a
+    /// real pipe: items that print text, an object, a receipt with another nonce, and this nonce's receipt text in the
+    /// middle of a line report exactly what the same items report silently.
+    /// Break: in `parse_batch_receipts` take a receipt from anywhere in a line
+    /// (`line.split_once(prefix.as_str()).map(|(_, r)| r)` instead of `line.trim().strip_prefix(prefix.as_str())`)
+    /// and this fails.
+    #[test]
+    fn a_batch_items_stray_output_never_changes_any_items_result() {
+        const N: &str = "0123456789abcdef0123456789abcdef";
+        let run = |items: &[(&str, &str)]| -> std::collections::HashMap<String, bool> {
+            let items: Vec<(String, Vec<String>)> = items.iter().map(|(id, c)| (id.to_string(), vec![c.to_string()])).collect();
+            let script = actions::compose_batch_script(&items, N).expect("composes");
+            let pipe = fps_pipe::ServerPipe::create().expect("pipe");
+            let name = pipe.name.clone();
+            let me = std::process::id();
+            let reader = std::thread::spawn(move || pipe.collect_lines(&|| false, &|pid| pid == me, 64 * 1024));
+            let out = fps_pipe::connect_to_parent(&name, me).expect("connect");
+            assert_eq!(run_helper_script(&script, Some(out)), 0);
+            let (lines, _) = reader.join().unwrap();
+            // PowerShell's formatter may add blank lines after the last statement's output (an object's table).
+            let last = lines.iter().rev().find(|l| !l.trim().is_empty()).map(String::as_str);
+            assert_eq!(last, Some(format!("{N}:end").as_str()), "the end marker is the last line: {lines:?}");
+            actions::parse_batch_receipts(&lines.join("\n"), N)
+        };
+        let expected: std::collections::HashMap<String, bool> =
+            [("a".to_string(), true), ("b".to_string(), false), ("c".to_string(), true)].into_iter().collect();
+        let silent = run(&[("a", "$null = 1"), ("b", "throw 'x'"), ("c", "$null = 2")]);
+        assert_eq!(silent, expected, "the silent batch");
+        let c_noisy = format!("Write-Output 'note {N}:b:ok'; Write-Output '{N}'; Write-Output ' :a:fail'");
+        let noisy = run(&[
+            ("a", "Write-Output 'stray text'; Write-Output 'ffffffffffffffffffffffffffffffff:b:ok'; [pscustomobject]@{ b = 'ok' }"),
+            ("b", "Write-Output 'b:ok'; throw 'x'"),
+            ("c", &c_noisy),
+        ]);
+        assert_eq!(noisy, expected, "stray output changed a reported result");
+        // No op that can ride a batch composes with the nonce: in `ElevatedOp::script` the nonce is read in one arm
+        // only, the combined memory-compression op's, and that op is refused from a batch.
+        let ops = include_str!("elevated_ops.rs").replace("\r\n", "\n");
+        let at = ops.find(concat!("pub(crate) fn ", "script<R")).expect("script");
+        let body = &ops[at..at + ops[at..].find(concat!("// ── Helper-side ", "reads")).expect("end of script")];
+        let uses: Vec<&str> = body.lines().skip(1).filter(|l| l.contains("nonce")).collect();
+        assert_eq!(uses.len(), 1, "{uses:?}");
+        assert!(uses[0].trim_start().starts_with("Op::MemoryCompressionCombined {} =>"), "{uses:?}");
+        assert!(!elevated_ops::ElevatedOp::MemoryCompressionCombined {}.is_batchable());
+    }
+
     #[test]
     fn the_relay_drains_powershell_output_after_the_pipe_breaks() {
         struct Broken;
