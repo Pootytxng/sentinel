@@ -2762,6 +2762,11 @@ mod safety_tests {
         let ops = include_str!("elevated_ops.rs").replace("\r\n", "\n");
         let at = ops.find(concat!("pub(crate) fn ", "script<R")).expect("script");
         let body = &ops[at..at + ops[at..].find(concat!("// ── Helper-side ", "reads")).expect("end of script")];
+        // Review r1: the scan keys on the parameter's name, so a rename must fail here first.
+        assert!(
+            body.lines().next().is_some_and(|l| l.contains("(&self, nonce: &Nonce, ")),
+            "the script's nonce parameter was renamed: update this pin to the new name"
+        );
         let uses: Vec<&str> = body.lines().skip(1).filter(|l| l.contains("nonce")).collect();
         assert_eq!(uses.len(), 1, "{uses:?}");
         assert!(uses[0].trim_start().starts_with("Op::MemoryCompressionCombined {} =>"), "{uses:?}");

@@ -10527,7 +10527,8 @@ mod a12_random_tests {
 
     /// Every production caller of the nonce maps a random-source failure to the one sentence (the Gaming restore takes
     /// its per-item path instead, where each item is a single op refused the same way). A new caller must join this list.
-    /// Break: change history.rs's batch nonce error back to a `format!` with the OS error, and this fails.
+    /// Break: change history.rs's batch nonce failure to `.map_err(|e| format!(... {e} ...))?` with the OS error, and this
+    /// fails.
     #[test]
     fn every_nonce_caller_refuses_with_the_one_sentence() {
         let needle = concat!("fps_pipe::", "random_hex()");
@@ -10547,7 +10548,15 @@ mod a12_random_tests {
                     && after.lines().next().is_some_and(|l| l.contains("RANDOM_KEY_UNAVAILABLE.to_string())?;"));
                 let per_item = src[..at].ends_with("let Ok(nonce) = crate::")
                     && after.starts_with(" else {\n        return staged_fallback(&staged, errs);");
-                assert!(mapped || per_item, "{file}: {}", after.lines().next().unwrap_or_default());
+                // Review r1 F2: the Fix batch skips each admin item with the sentence and returns its report.
+                let skips = src[..at].ends_with("let Ok(nonce) = crate::")
+                    && after.starts_with(" else {\n")
+                    && after.find("\n        };\n").is_some_and(|end| {
+                        let block = &after[..end];
+                        block.contains("Err(crate::actions::RANDOM_KEY_UNAVAILABLE.to_string())")
+                            && block.contains("return Ok(BatchApplyReport")
+                    });
+                assert!(mapped || per_item || skips, "{file}: {}", after.lines().next().unwrap_or_default());
                 seen += 1;
             }
         }

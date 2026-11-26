@@ -1773,9 +1773,22 @@ fn apply_fn_for(rec_id: &str) -> Option<fn() -> Result<ApplyResult, String>> {
     Some(f)
 }
 
+/// Test-only (a12 review r1 F2): answers `dispatch_apply` for the rec ids it returns `Some` for. Never shipped.
+#[cfg(test)]
+type FakeApply = fn(&str) -> Option<Result<ApplyResult, String>>;
+#[cfg(test)]
+thread_local! {
+    static FAKE_APPLY: std::cell::Cell<Option<FakeApply>> = const { std::cell::Cell::new(None) };
+}
+
 /// The ONE dispatch from rec id to its audited apply_* — `apply_recommendation` and the §4 batch
 /// orchestrator both go through here, so there is no second copy of the match to drift.
 fn dispatch_apply(_root: &MutationRoot, rec_id: &str) -> Result<ApplyResult, String> {
+    // Test-only (a12 review r1 F2): a batch test answers chosen rec ids itself, so it touches no setting.
+    #[cfg(test)]
+    if let Some(answer) = FAKE_APPLY.with(|f| f.get()).and_then(|f| f(rec_id)) {
+        return answer;
+    }
     match apply_fn_for(rec_id) {
         Some(f) => f(),
         None => Err(format!("'{}' is not yet supported for one-click apply", rec_id)),
@@ -2606,7 +2619,21 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         // Result files older versions left in the data folder are not read any more: clear them.
         clear_leftover_result_files(root.path());
         // a12: the random source failing refuses the admin step with the one fixed sentence (no fallback value).
-        let nonce = crate::fps_pipe::random_hex().map_err(|_| crate::actions::RANDOM_KEY_UNAVAILABLE.to_string())?;
+        // Review r1 F2: like a refusal before launch (elevated_item_outcome), each admin item is skipped with it and
+        // the report is returned, so the no-admin items made above keep their place in it.
+        let Ok(nonce) = crate::fps_pipe::random_hex() else {
+            let refused: Result<(), String> = Err(crate::actions::RANDOM_KEY_UNAVAILABLE.to_string());
+            let no_receipts = std::collections::HashMap::new();
+            for d in &staged {
+                let reason = match elevated_item_outcome(&refused, &no_receipts, &d.rec_id) {
+                    AdminItem::Skipped(reason) => reason,
+                    _ => crate::actions::RANDOM_KEY_UNAVAILABLE.to_string(),
+                };
+                outcomes.push(outcome_skipped(&d.rec_id, &d.rec_title, reason));
+            }
+            let skipped = outcomes.iter().filter(|o| o.status == "skipped").count();
+            return Ok(BatchApplyReport { items: outcomes, applied, skipped, elevation_prompts });
+        };
         // Checked (never indexed) command attribution: by construction every staged range lies
         // inside all_cmds, but a panic HERE would poison HISTORY_LOCK for the whole session — so
         // an impossible mismatch aborts the batch BEFORE elevation instead.
@@ -4041,6 +4068,61 @@ mod batch_apply_tests {
         let after = load_history().expect("test ledger readable");
         let kept: Vec<AppliedChange> = after.iter().filter(|c| before.contains(&c.id)).cloned().collect();
         save_history(&crate::data_root::mutation_root().expect("test root"), &kept).expect("ledger put back");
+    }
+
+    /// a12 review r1 F2: the test's applies (no setting is touched): `game-mode` made at once with no admin step,
+    /// `fast-startup-off` parking its one admin op in the batch's sink.
+    fn fake_apply(rec_id: &str) -> Option<Result<ApplyResult, String>> {
+        match rec_id {
+            "game-mode" => Some(Ok(ApplyResult {
+                applied_action: AppliedAction::EnableGameMode,
+                rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
+                snapshot: Snapshot::GameMode { prior_enabled: Some(0), prior_allow: Some(1) },
+                elevation_used: false,
+            })),
+            "fast-startup-off" => Some(
+                crate::actions::run_elevated_op(crate::elevated_ops::ElevatedOp::FastStartupOff {}).map(|()| ApplyResult {
+                    applied_action: AppliedAction::DisableFastStartup,
+                    rollback_action: RollbackAction::RestoreFastStartupFromSnapshot,
+                    snapshot: Snapshot::FastStartup { prior_hiberboot: Some(1) },
+                    elevation_used: true,
+                }),
+            ),
+            _ => None,
+        }
+    }
+
+    /// a12 review r1 F2: when the random source fails for the admin step's results key, the batch returns its normal
+    /// report: the no-admin item made in phase 1 is applied (and recorded), each admin item is skipped with the one
+    /// sentence, and no prompt is counted. The exe identity check is forced to refuse too, so nothing can launch.
+    /// Break: return `Err(RANDOM_KEY_UNAVAILABLE)` from the nonce failure again (a batch-level error) and this fails.
+    #[test]
+    fn a_failed_random_source_skips_the_admin_items_and_keeps_the_report() {
+        let _files = crate::data_root::shared_root_files();
+        let _exe = crate::actions::ForceExeReplaced::begin();
+        let before: std::collections::HashSet<String> =
+            load_history().expect("test ledger readable").iter().map(|c| c.id.clone()).collect();
+        FAKE_APPLY.with(|f| f.set(Some(fake_apply)));
+        let report = {
+            let _rng = crate::fps_pipe::ForceRandomFailure::begin();
+            apply_recommendations_batch(vec![item("game-mode"), item("fast-startup-off")])
+        };
+        FAKE_APPLY.with(|f| f.set(None));
+        let after = load_history().expect("test ledger readable");
+        let new: Vec<&AppliedChange> = after.iter().filter(|c| !before.contains(&c.id)).collect();
+        let new_ids: Vec<&str> = new.iter().map(|c| c.rec_id.as_str()).collect();
+        // Put the shared test ledger back as it was before asserting (these rows describe nothing that happened).
+        let kept: Vec<AppliedChange> = after.iter().filter(|c| before.contains(&c.id)).cloned().collect();
+        save_history(&crate::data_root::mutation_root().expect("test root"), &kept).expect("ledger put back");
+        let report = report.expect("the report is returned, not a batch-level error");
+        assert_eq!(report.elevation_prompts, 0, "nothing was launched");
+        assert_eq!((report.applied, report.skipped), (1, 1), "{report:?}");
+        let by = |id: &str| report.items.iter().find(|o| o.rec_id == id).unwrap_or_else(|| panic!("{id}: {report:?}"));
+        assert_eq!(by("game-mode").status, "applied");
+        assert_eq!(by("fast-startup-off").status, "skipped");
+        let reason = by("fast-startup-off").reason.as_deref().unwrap_or_default();
+        assert!(reason.contains(crate::actions::RANDOM_KEY_UNAVAILABLE), "{reason}");
+        assert_eq!(new_ids, ["game-mode"], "only the no-admin item is recorded");
     }
 
     // The UAC-cancel / elevation-failure arm, proven deterministically (no real prompt): with
