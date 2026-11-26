@@ -5,8 +5,11 @@
 //
 // A screen that shows a tag gets its text from here, so the same tag reads the same on every screen.
 // The Something's-wrong card is the first screen on these words (surfaces/glass/paramedic-tags.ts);
-// the Problems room and Home follow in slice 3. Until then "You told Compy" and "Couldn't read" have
-// no screen: nothing renders them yet.
+// the Problems room and Home follow in slice 3.
+//
+// Only a word some screen shows today has a key (review r1, F3): the source `user` ("You told Compy")
+// gets its word in the slice that first shows it. ShownSource is the type that keeps a caller from
+// asking for a word that does not exist.
 //
 // Every key is written out as a literal inside t(), so the orphan-key guard and the affordance census
 // see it. No function here decides WHEN a word is earned: that is certainty.ts (and the Rust rules
@@ -14,8 +17,12 @@
 import type { TFunction } from "i18next";
 import { strengthWire, type Source, type Strength } from "./certainty";
 
+/** Sources that have a word on a screen today. The others get theirs in the slice that first shows them. */
+export type ShownSource = Exclude<Source, "user">;
+export const isShownSource = (s: Source): s is ShownSource => s !== "user";
+
 /** The tag for a source. */
-export function sourceWord(source: Source, t: TFunction): string {
+export function sourceWord(source: ShownSource, t: TFunction): string {
   switch (source) {
     case "read":
       return t("common.source.read");
@@ -23,8 +30,6 @@ export function sourceWord(source: Source, t: TFunction): string {
       return t("common.source.measured");
     case "measured-once":
       return t("common.source.measuredOnce");
-    case "user":
-      return t("common.source.user");
     case "general":
       return t("common.source.general");
     case "unread":

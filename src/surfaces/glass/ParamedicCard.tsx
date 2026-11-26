@@ -1123,13 +1123,16 @@ function Evidence({ list, ctx: base, hideInstallAt }: { list: ParamedicEvidence[
   return (
     <ul className="gl-para-lines">
       {rows.map(({ e, text }, i) => {
-        // D3 slice 2: a source or a relation from the shared vocabulary, never a strength (paramedic-tags.ts).
+        // D3 slice 2: a source or a relation from the shared vocabulary, never a strength; no chip when no
+        // word would be true of the line (paramedic-tags.ts).
         const tag = evidenceTag(e, ctx.t);
         return (
           <li key={`${e.code}-${i}`}>
-            <span className="gl-chip" data-tone={tag.tone} data-axis={tag.axis}>
-              {tag.text}
-            </span>
+            {tag && (
+              <span className="gl-chip" data-tone={tag.tone} data-axis={tag.axis}>
+                {tag.text}
+              </span>
+            )}
             {text}
           </li>
         );
