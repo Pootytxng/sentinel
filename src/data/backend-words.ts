@@ -10,7 +10,7 @@
 import type { TFunction } from "i18next";
 import { FRIENDLY_LABELS } from "./friendly-labels";
 import { incidentHeadline, recordWhen } from "./incident-headline";
-import type { PendingCareIncident } from "../types";
+import type { HeadlineParts, PendingCareIncident } from "../types";
 
 /** The incident's kind tag in the app's language; an unknown tag as sent. */
 export function incidentKindLabel(kind: string, t: TFunction): string {
@@ -39,18 +39,49 @@ export function incidentWhen(pc: Pick<PendingCareIncident, "occurred_at" | "occu
   return recordWhen(pc.occurred_at, pc.occurred_display, lang);
 }
 
+/** Parts for a Care card stored before d10 (no `headline_parts`), from its closed kind tag and the app
+ *  name Windows recorded. No game tail: the card holds it only inside its English sentence, and that
+ *  is not parsed. An unknown tag gives null, so the stored sentence is shown. */
+function legacyParts(kind: string, appLabel: string | null): HeadlineParts | null {
+  const app = appLabel?.trim() || null;
+  const parts = (code: string, withApp = false): HeadlineParts => ({ code, app: withApp ? app : null, while_game: null });
+  switch (kind) {
+    case "App crash":
+      return app ? parts("app_crash", true) : parts("app_crash_no_app");
+    case "App hang":
+      return app ? parts("app_hang", true) : parts("app_hang_no_app");
+    case "GPU timeout":
+      return parts("gpu_timeout");
+    case "Unexpected shutdown / hard freeze":
+      return parts("unexpected_shutdown");
+    case "Blue screen":
+      return parts("blue_screen");
+    case "Hardware-logged error":
+      return parts("hardware_error");
+    default:
+      return null;
+  }
+}
+
 /** The Care card's headline (d10): worded from the card's `headline_parts` in the app's language
- *  (incident-headline.ts). A card stored before the parts existed has only its stored English
- *  `summary`, shown as it is; an empty one comes back empty (the caller has its own fallback). */
+ *  (incident-headline.ts). A card stored before the parts existed: English shows its stored
+ *  `summary` as it is; another language words it from the card's kind tag and app name (r1: keeps
+ *  CR-zh-backend-home), and an unknown tag shows the stored summary. An empty summary on such a card
+ *  comes back empty (the caller has its own fallback). */
 export function careHeadline(
-  pc: Pick<PendingCareIncident, "headline_parts" | "occurred_at" | "occurred_display" | "summary">,
+  pc: Pick<PendingCareIncident, "headline_parts" | "kind" | "app_label" | "occurred_at" | "occurred_display" | "summary">,
   t: TFunction,
   lang: string,
 ): string {
   const summary = pc.summary.trim();
-  if (!pc.headline_parts) return summary;
+  let parts = pc.headline_parts ?? null;
+  if (!parts) {
+    if (!summary || lang.toLowerCase().startsWith("en")) return summary;
+    parts = legacyParts(pc.kind, pc.app_label);
+    if (!parts) return summary;
+  }
   return incidentHeadline(
-    { headline_parts: pc.headline_parts, headline: summary, when: pc.occurred_at, when_display: pc.occurred_display },
+    { headline_parts: parts, headline: summary, when: pc.occurred_at, when_display: pc.occurred_display },
     t,
     lang,
   );

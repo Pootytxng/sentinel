@@ -62,11 +62,21 @@ describe("careHeadline", () => {
     expect(h).not.toMatch(/during|session|recorded/);
   });
 
-  it("a card stored before the code existed shows its stored sentence as it is, in every language", () => {
+  // r1 break check: make careHeadline return the summary whenever there are no parts -> the zh rows fail.
+  it("a card stored before the code existed: English as stored, zh-CN worded from its kind tag", () => {
     const old = { ...crash, headline_parts: null };
-    expect(careHeadline(old, zh, "zh-CN")).toBe(crash.summary);
-    expect(careHeadline({ ...old, headline_parts: undefined }, zh, "zh-CN")).toBe(crash.summary);
     expect(careHeadline(old, en, "en")).toBe(crash.summary);
+    const h = careHeadline(old, zh, "zh-CN");
+    expect(h).toContain("ROB RUN 已停止工作并关闭");
+    expect(h).toContain("11月11日");
+    expect(h).not.toMatch(/stopped|Nov/);
+    expect(careHeadline({ ...old, headline_parts: undefined, app_label: null }, zh, "zh-CN")).toContain("一个应用程序崩溃了");
+    expect(careHeadline({ ...old, kind: "Blue screen", app_label: null }, zh, "zh-CN")).toContain("蓝屏");
+    // The old English tail is not parsed: the game is left out rather than lifted from English.
+    const tailed = { ...old, summary: "ROB RUN stopped working and closed — Nov 11, 2:36 PM, while Other was running" };
+    expect(careHeadline(tailed, zh, "zh-CN")).not.toMatch(/Other|while/);
+    // An unknown tag shows the stored sentence.
+    expect(careHeadline({ ...old, kind: "Something new" }, zh, "zh-CN")).toBe(crash.summary);
   });
 
   it("dates at the stamp's own offset, as the backend does, whatever zone this machine is in (review r1)", () => {
