@@ -444,7 +444,8 @@
       "gpuTimeout": "GPU timeout",
       "unexpectedShutdown": "Unexpected shutdown / hard freeze",
       "blueScreen": "Blue screen",
-      "hardwareError": "Hardware-logged error"
+      "hardwareError": "Hardware-logged error",
+      "unknown": "Record"
     },
     "headline": {
       "appCrash": "{{app}} stopped working and closed — {{when}}",

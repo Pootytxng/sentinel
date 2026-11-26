@@ -124,6 +124,11 @@ describe("incidentKindLabel and appliedValueLabel", () => {
     expect(appliedValueLabel("On", zh)).toBe("开启");
     expect(appliedValueLabel("Something new", zh)).toBe("Something new");
     expect(incidentKindLabel("Something new", zh)).toBe("Something new");
+    // d10 r1: Black Box's chip passes a fixed plain word for an unknown tag, never the backend's.
+    // Break check: make the default branch return `kind` again -> fails.
+    expect(incidentKindLabel("Something new", zh, zh("common.backendWords.kind.unknown"))).toBe("记录");
+    expect(incidentKindLabel("Something new", en, en("common.backendWords.kind.unknown"))).toBe("Record");
+    expect(incidentKindLabel("Blue screen", zh, "unused")).toBe("蓝屏");
   });
 });
 

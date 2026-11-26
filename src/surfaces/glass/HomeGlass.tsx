@@ -147,8 +147,10 @@ export function HomeGlass({
   const newestLow = newest ? knownFps(newest.low1_fps_est) : null;
   // The headline is Black Box's own sentence for the record, the one the full check prints, so a
   // freeze reads "stopped responding" and a crash "closed unexpectedly". The fallback names no kind.
-  // CR-zh-backend-home: in another language the sentence is composed from the stable kind tag
-  // (backend-words.ts); English keeps Black Box's own.
+  // d10: careHeadline (backend-words.ts) words it from the card's headline code in the app's
+  // language, English included (the en keys say exactly Black Box's sentence). A card stored before
+  // the code existed shows its stored English in English and, in another language, is worded from
+  // its kind tag (CR-zh-backend-home).
   const careSummary = pendingCare ? careHeadline(pendingCare, t, i18n.language) : "";
   const careHead = pendingCare
     ? careSummary ||

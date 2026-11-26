@@ -12,8 +12,9 @@ import { FRIENDLY_LABELS } from "./friendly-labels";
 import { incidentHeadline, recordWhen } from "./incident-headline";
 import type { HeadlineParts, PendingCareIncident } from "../types";
 
-/** The incident's kind tag in the app's language; an unknown tag as sent. */
-export function incidentKindLabel(kind: string, t: TFunction): string {
+/** The incident's kind tag in the app's language; an unknown tag as sent, or as `unknown` when the
+ *  caller gives one (d10 r1: Black Box's chip passes its fixed plain word, never the backend's). */
+export function incidentKindLabel(kind: string, t: TFunction, unknown: string = kind): string {
   switch (kind) {
     case "App crash":
       return t("common.backendWords.kind.appCrash");
@@ -28,7 +29,7 @@ export function incidentKindLabel(kind: string, t: TFunction): string {
     case "Hardware-logged error":
       return t("common.backendWords.kind.hardwareError");
     default:
-      return kind;
+      return unknown;
   }
 }
 

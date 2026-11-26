@@ -179,6 +179,8 @@ describe("BlackBox surface (v2 triage UI)", () => {
       expect(row.querySelector(".bb-headline")!.textContent).toMatch(/^ROB RUN 已停止工作并关闭 — 11月19日.*，发生在 Compy 记录的一次 Helldivers2 会话期间或刚结束后$/);
       expect(row.getAttribute("aria-label")).toContain("ROB RUN 已停止工作并关闭");
       expect(row.getAttribute("aria-label")).not.toMatch(/stopped working|session Compy recorded|Nov 19/);
+      // r1 break check: render `{inc.tag}` in the chip again -> "App crash" shows here.
+      expect(row.querySelector(".bb-tag")!.textContent).toBe("应用崩溃");
     } finally {
       await i18n.changeLanguage("en");
     }

@@ -432,7 +432,8 @@
       "gpuTimeout": "显卡超时",
       "unexpectedShutdown": "意外关机或死机",
       "blueScreen": "蓝屏",
-      "hardwareError": "硬件记录的错误"
+      "hardwareError": "硬件记录的错误",
+      "unknown": "记录"
     },
     "headline": {
       "appCrash": "{{app}} 已停止工作并关闭 — {{when}}",

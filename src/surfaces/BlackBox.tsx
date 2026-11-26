@@ -37,6 +37,7 @@ import { pickCareStep, isLifted, storedStutterStep, dismissStoredStep, markFinal
 import { CareHonestEnd } from "./CareHonestEnd";
 import { prettyGameName } from "./game-name";
 import { incidentHeadline, incidentWording, recordWhen } from "../data/incident-headline";
+import { incidentKindLabel } from "../data/backend-words";
 import {
   groupIncidents,
   sharedUnknownItems,
@@ -425,7 +426,7 @@ function IncidentRow({
           </span>
         ) : (
           <>
-            <span className="bb-tag">{inc.tag}</span>
+            <span className="bb-tag">{incidentKindLabel(inc.tag, t, t("common.backendWords.kind.unknown"))}</span>
             <span className="bb-headline">{headline}</span>
           </>
         )}
@@ -665,7 +666,7 @@ function IncidentGroupBlock({
       data-selected={markedHidden ? "true" : undefined}
     >
       <div className="bb-item-head">
-        <span className="bb-tag">{newest.tag}</span>
+        <span className="bb-tag">{incidentKindLabel(newest.tag, t, t("common.backendWords.kind.unknown"))}</span>
         <span className="bb-headline">{headline}</span>
       </div>
       {markedHidden && (
