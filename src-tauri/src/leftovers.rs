@@ -432,7 +432,23 @@ fn detect_mmcss(probes: &Value) -> Outcome {
 // Balanced plan, the one plan known to park by default (CR-1102-left). Every other plan (High
 // performance, Ultimate, vendor or custom plans, an unread plan) is left unflagged: it may ship
 // unparked as its own default (charter rule #5: honest uncertainty beats a guess).
+//
+// a10 r2: THE CORE-PARKING FINDING SWITCH. OFF (false) in every build until real-machine captures show
+// that the registry default this detector compares against (DefaultPowerSchemeValues, read by
+// `crate::cpmincores_plan_defaults`) EQUALS the live value on untouched PCs (the pass condition in
+// _train/a10-review-r2.md section 6: stock Balanced, several CPUs, `powercfg /qh` live AC/DC == the key's
+// AC/DC). While it is false, `detect_core_parking` never returns a Finding: every case that would have been
+// one returns the "can't tell" reason instead, so the leftover restore (`core-parking-forced`) is never
+// offered by the UI. It gates ONLY that branch; the read, the Unavailable/Clean branches and the restore's
+// own refusals are the same either way. Turn it on with the owner's sign-off on those captures.
+pub(crate) const CORE_PARKING_FINDING_ARMED: bool = false;
+
 fn detect_core_parking(probes: &Value) -> Outcome {
+    detect_core_parking_with(probes, CORE_PARKING_FINDING_ARMED)
+}
+
+/// [`detect_core_parking`] with the finding switch passed in (`armed`); tests run both positions.
+fn detect_core_parking_with(probes: &Value, armed: bool) -> Outcome {
     let p = match probe_obj(probes, "core_parking") {
         Some(p) => p,
         None => return Outcome::Unavailable(REASON_UNREADABLE),
@@ -470,6 +486,11 @@ fn detect_core_parking(probes: &Value) -> Outcome {
         Some(d) if d < 100 => d,
         _ => return Outcome::Undecidable(per_cpu_default_reason(min_pct)),
     };
+    // a10 r2: until the switch is on, the comparison above is not trusted enough to flag (see
+    // CORE_PARKING_FINDING_ARMED): Compy says it can't tell, which is true either way.
+    if !armed {
+        return Outcome::Undecidable(per_cpu_default_reason(min_pct));
+    }
     Outcome::Finding(Leftover {
         id: "core-parking-forced".into(),
         title: "Core parking forced off".into(),
@@ -994,6 +1015,27 @@ mod leftovers_tests {
         HashSet::new()
     }
 
+    /// a10 r2: the catalog with the core-parking finding switch ON, for the tests of the finding branch
+    /// itself (its rule, its receipt, the charter laws over every detector). Production runs it OFF.
+    fn armed_detectors() -> Vec<Detector> {
+        fn armed_core_parking(p: &Value) -> Outcome {
+            detect_core_parking_with(p, true)
+        }
+        DETECTORS
+            .iter()
+            .map(|d| Detector {
+                id: d.id,
+                title: d.title,
+                endorsed_by: d.endorsed_by,
+                run: if d.id == "core-parking-forced" { armed_core_parking } else { d.run },
+            })
+            .collect()
+    }
+
+    fn evaluate_armed(probes: &Value) -> LeftoversReport {
+        evaluate_with(&armed_detectors(), probes, &no_endorsements())
+    }
+
     #[test]
     fn rotted_fixture_produces_findings_with_full_receipts() {
         // The owner's real rig, 2026-06-06/08: fixed 30000 MB pagefile + memory compression off.
@@ -1302,14 +1344,14 @@ mod leftovers_tests {
         // a10 r1 (F1): forced = 100 while the plan's own default parks (the second support).
         let forced = with(base(), "core_parking",
             json!({ "readable": true, "min_cores_ac_pct": 100, "default_ac_pct": 10, "plan_name": "Balanced" }));
-        assert!(find(&evaluate_leftovers(&forced, &no_endorsements()), "core-parking-forced").is_some());
+        assert!(find(&evaluate_armed(&forced), "core-parking-forced").is_some());
         // Vendor/high-perf plans ship unparked — flagging them would be a false positive
         // (the dev rig's own AMD Ryzen plan is the precedent).
         for plan in ["High performance", "Ultimate Performance", "AMD Ryzen Balanced", "Synez Power Plan"] {
             let stock = with(base(), "core_parking",
                 json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": plan }));
             assert!(
-                find(&evaluate_leftovers(&stock, &no_endorsements()), "core-parking-forced").is_none(),
+                find(&evaluate_armed(&stock), "core-parking-forced").is_none(),
                 "{plan} ships unparked — not rot"
             );
         }
@@ -1318,17 +1360,17 @@ mod leftovers_tests {
         // whatever it is called; a probe from an older build without `plan_class` reads as before.
         let zh_high = with(base(), "core_parking",
             json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "高性能", "plan_class": "high-performance" }));
-        assert!(find(&evaluate_leftovers(&zh_high, &no_endorsements()), "core-parking-forced").is_none(), "高性能 ships unparked");
+        assert!(find(&evaluate_armed(&zh_high), "core-parking-forced").is_none(), "高性能 ships unparked");
         let zh_balanced = with(base(), "core_parking",
             json!({ "readable": true, "min_cores_ac_pct": 100, "default_ac_pct": 10, "plan_name": "平衡", "plan_class": "balanced" }));
-        assert!(find(&evaluate_leftovers(&zh_balanced, &no_endorsements()), "core-parking-forced").is_some(), "平衡 at 100 is forced");
+        assert!(find(&evaluate_armed(&zh_balanced), "core-parking-forced").is_some(), "平衡 at 100 is forced");
         // CR-1102-left: a custom plan (the owner's "Synez Power Plan", class other) may ship unparked
         // as its own default, and an unread plan is unknown: neither is called a leftover.
         for (name, class) in [(json!("Synez Power Plan"), json!("other")), (json!(null), json!(null))] {
             let custom = with(base(), "core_parking",
                 json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": name, "plan_class": class }));
             assert!(
-                find(&evaluate_leftovers(&custom, &no_endorsements()), "core-parking-forced").is_none(),
+                find(&evaluate_armed(&custom), "core-parking-forced").is_none(),
                 "{name} ({class}) is not known to park by default"
             );
         }
@@ -1361,7 +1403,7 @@ mod leftovers_tests {
     }
 
     fn core_parking_report(probe: Value) -> LeftoversReport {
-        evaluate_leftovers(&with(probes(Some(true), json!([]), Some(true), Some(31)), "core_parking", probe), &no_endorsements())
+        evaluate_armed(&with(probes(Some(true), json!([]), Some(true), Some(31)), "core_parking", probe))
     }
 
     // a10 r1 (F1): the plan's own default reading below 100 is the second support. Break check: in
@@ -1403,6 +1445,33 @@ mod leftovers_tests {
         // Below 100 stays Clean, as before (nothing to judge).
         let r = core_parking_report(json!({ "readable": true, "min_cores_ac_pct": 40, "plan_name": "Balanced", "plan_class": "balanced" }));
         assert!(find(&r, "core-parking-forced").is_none() && r.unavailable.iter().all(|u| u.id != "core-parking-forced"));
+    }
+
+    // a10 r2: the finding switch, both positions, on the one probe that is a finding when armed (stock
+    // Balanced, live 100, the plan's own default 10). OFF (the shipped value): no finding, the "can't tell"
+    // sentence, never Clean. ON: the finding. Break checks: set CORE_PARKING_FINDING_ARMED to true -> the pin
+    // and the OFF asserts fail; drop the `if !armed` early return -> the OFF asserts fail.
+    #[test]
+    fn the_core_parking_finding_switch_ships_off_and_only_gates_the_finding() {
+        // black_box: a plain assert on a const trips clippy's assertions_on_constants.
+        assert!(!std::hint::black_box(CORE_PARKING_FINDING_ARMED), "OFF until real-machine captures pass (a10-review-r2.md section 6)");
+        let probe = json!({
+            "readable": true, "min_cores_ac_pct": 100, "default_ac_pct": 10, "default_dc_pct": 5,
+            "plan_name": "Balanced", "plan_class": "balanced",
+        });
+        let shipped = evaluate_leftovers(&with(probes(Some(true), json!([]), Some(true), Some(31)), "core_parking", probe.clone()), &no_endorsements());
+        assert!(find(&shipped, "core-parking-forced").is_none(), "OFF: never a finding, so the restore is never offered");
+        let u = shipped.unavailable.iter().find(|u| u.id == "core-parking-forced").expect("OFF: named as undecided, not Clean");
+        assert_eq!(u.reason, per_cpu_default_reason(100));
+        assert!(matches!(detect_core_parking_with(&json!({ "core_parking": probe.clone() }), false), Outcome::Undecidable(_)));
+        assert!(matches!(detect_core_parking_with(&json!({ "core_parking": probe }), true), Outcome::Finding(_)), "ON: the finding");
+        // The other branches are the same in both positions.
+        for armed in [false, true] {
+            let unread = json!({ "core_parking": { "readable": false } });
+            assert!(matches!(detect_core_parking_with(&unread, armed), Outcome::Unavailable(REASON_UNREADABLE)));
+            let low = json!({ "core_parking": { "readable": true, "min_cores_ac_pct": 40, "plan_name": "Balanced", "plan_class": "balanced" } });
+            assert!(matches!(detect_core_parking_with(&low, armed), Outcome::Clean));
+        }
     }
 
     #[test]
@@ -1491,7 +1560,7 @@ mod leftovers_tests {
 
     #[test]
     fn law_every_detector_can_fire_and_every_finding_carries_a_full_receipt() {
-        let r = evaluate_leftovers(&fully_rotted(), &no_endorsements());
+        let r = evaluate_armed(&fully_rotted());
         assert_eq!(
             r.findings.len(),
             DETECTORS.len(),
@@ -1518,7 +1587,7 @@ mod leftovers_tests {
         // (Honest NEGATIONS like "no measured FPS win" are fine; these tokens never are.)
         let banned = ["boost", "speed up", "speeds up", "guaranteed", "instantly faster", "unlock fps"];
         let alarm = ["danger", "warning!", "critical!", "fix now", "issues found"];
-        let r = evaluate_leftovers(&fully_rotted(), &no_endorsements());
+        let r = evaluate_armed(&fully_rotted());
         for f in &r.findings {
             let copy = format!(
                 "{} {} {} {} {} {}",
@@ -1538,7 +1607,7 @@ mod leftovers_tests {
     #[test]
     fn law_report_shape_has_no_score_no_gauge_fields() {
         // Charter rule #4 structurally: the serialized report is findings + counting ONLY.
-        let r = evaluate_leftovers(&fully_rotted(), &no_endorsements());
+        let r = evaluate_armed(&fully_rotted());
         let v = serde_json::to_value(&r).expect("serializes");
         let keys: Vec<&str> = v.as_object().expect("object").keys().map(|s| s.as_str()).collect();
         assert_eq!(keys.len(), 3, "exactly findings/checked/unavailable — no scores, no grades: {keys:?}");
@@ -1550,7 +1619,7 @@ mod leftovers_tests {
     #[test]
     fn law_every_finding_admits_origin_uncertainty() {
         // Charter rule #5: we can never prove who set a value — no finding pretends otherwise.
-        let r = evaluate_leftovers(&fully_rotted(), &no_endorsements());
+        let r = evaluate_armed(&fully_rotted());
         for f in &r.findings {
             assert!(f.uncertain_source, "{}: must carry the origin-uncertainty flag", f.id);
         }
