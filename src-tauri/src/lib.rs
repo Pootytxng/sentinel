@@ -740,7 +740,8 @@ pub(crate) const CPMINCORES_QUERY_ARGS: [&str; 4] =
     ["/qh", "SCHEME_CURRENT", "SUB_PROCESSOR", "0cc5b647-c1df-4637-891a-dec35c318583"];
 
 /// Windows' stock Balanced plan (the only plan the core-parking detector judges).
-pub(crate) const BALANCED_PLAN_GUID: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+/// a10 r2 F3: the same constant as the plan-class table's `SCHEME_BALANCED` (one definition, not two).
+pub(crate) const BALANCED_PLAN_GUID: &str = SCHEME_BALANCED;
 
 /// a10 r1 (F1/F2): the HKLM key holding a plan's provisioned CPMINCORES defaults
 /// (`ACSettingIndex` / `DCSettingIndex`), under the processor subgroup and the CPMINCORES setting.
@@ -2692,7 +2693,7 @@ mod safety_tests {
     /// Break: connect the pipe after `run_request` and this fails.
     #[test]
     fn a_refused_channel_runs_nothing() {
-        let req = r#"{"v":1,"nonce":"0123456789abcdef0123456789abcdef","wrapper":"batch","items":[{"id":"adv-usb","ops":[{"op":"tcp-autotuning","disabled":false}]}]}"#;
+        let req = r#"{"v":2,"nonce":"0123456789abcdef0123456789abcdef","wrapper":"batch","items":[{"id":"adv-usb","ops":[{"op":"tcp-autotuning","disabled":false}]}]}"#;
         let hex = actions::to_hex(req.as_bytes());
         let name = fps_pipe::pipe_name_from([7u8; 16]);
         let args = [hex, "--pipe".to_string(), name, "--parent-pid".to_string(), std::process::id().to_string()];

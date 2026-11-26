@@ -10166,13 +10166,13 @@ mod elevated_goldens {
             r
         };
         let single = request(concat!(
-            r#"{"v":1,"nonce":""#, nonce!(), r#"","wrapper":"single","items":[{"ops":[{"op":"service-disable","service":"SysMain"}]}]}"#
+            r#"{"v":2,"nonce":""#, nonce!(), r#"","wrapper":"single","items":[{"ops":[{"op":"service-disable","service":"SysMain"}]}]}"#
         ));
         let mut cap = CaptureRun(Vec::new());
         assert_eq!(run_request(&single, None, &mut cap), 0);
         assert_eq!(cap.0, vec![G_SINGLE_SERVICE_DISABLE.to_string()]);
         let batch = request(concat!(
-            r#"{"v":1,"nonce":""#, nonce!(), r#"","wrapper":"batch","items":["#,
+            r#"{"v":2,"nonce":""#, nonce!(), r#"","wrapper":"batch","items":["#,
             r#"{"id":"sysmain-disable","ops":[{"op":"service-disable","service":"SysMain"}]},"#,
             r#"{"id":"nagle-disable","ops":[{"op":"nagle-disable","interfaces":[""#, nic!(), r#""]}]}]}"#
         ));

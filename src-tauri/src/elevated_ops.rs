@@ -28,8 +28,10 @@ pub(crate) enum Refused {
     NoMatch,
 }
 
-/// The request format version this helper reads.
-pub(crate) const REQUEST_VERSION: u32 = 1;
+/// The request format version this helper reads. a10 r2 F3: 2 since `CoreParkingDefault` carries
+/// `target_ac` / `target_dc`. A v1 request (an older app) is refused whole here, and a v2 request is refused
+/// whole by a v1 helper (its own `v == REQUEST_VERSION` check), so a mixed pair never writes.
+pub(crate) const REQUEST_VERSION: u32 = 2;
 /// The most items one request may carry (a Fix batch is at most the appliable catalog; Gaming Mode fewer).
 pub(crate) const MAX_ITEMS: usize = 32;
 /// The most ops one item may carry.
@@ -1109,7 +1111,7 @@ mod tests {
     }
 
     fn request_json(wrapper: &str, items: &str) -> String {
-        format!(r#"{{"v":1,"nonce":"{N}","wrapper":"{wrapper}","items":[{items}]}}"#)
+        format!(r#"{{"v":2,"nonce":"{N}","wrapper":"{wrapper}","items":[{items}]}}"#)
     }
 
     fn hex(s: &str) -> String {
@@ -1313,7 +1315,7 @@ mod tests {
         }
         let item_extra = request_json("single", r#"{"ops":[{"op":"hags-enable"}],"cmd":"calc"}"#);
         assert!(serde_json::from_str::<ElevatedRequest>(&item_extra).is_err());
-        let req_extra = format!(r#"{{"v":1,"nonce":"{N}","wrapper":"single","items":[{{"ops":[{{"op":"hags-enable"}}]}}],"x":1}}"#);
+        let req_extra = format!(r#"{{"v":2,"nonce":"{N}","wrapper":"single","items":[{{"ops":[{{"op":"hags-enable"}}]}}],"x":1}}"#);
         assert!(serde_json::from_str::<ElevatedRequest>(&req_extra).is_err());
     }
 
@@ -1360,7 +1362,20 @@ mod tests {
             ("not UTF-8", vec![actions::to_hex(&[0xff, 0xfe, 0xfd])]),
             ("unknown op", vec![hex(&request_json("single", r#"{"ops":[{"op":"raw","script":"calc"}]}"#))]),
             ("extra field on an op", vec![hex(&request_json("single", r#"{"ops":[{"op":"hags-enable","x":1}]}"#))]),
-            ("version 2", vec![hex(&request_json("single", one).replace(r#""v":1"#, r#""v":2"#))]),
+            // a10 r2 F3: v2 (CoreParkingDefault carries its targets). A v1 request from an older app is refused
+            // whole, never run; a v2 request to an older (v1) helper is refused by that helper's own version check.
+            ("version 1 (an older app)", vec![hex(&request_json("single", one).replace(r#""v":2"#, r#""v":1"#))]),
+            (
+                "version 1 old-shape core parking",
+                vec![hex(
+                    &request_json(
+                        "single",
+                        r#"{"ops":[{"op":"core-parking-default","plan":"381b4222-f694-41f0-9685-ff5bb260df2e","prior_ac":100,"prior_dc":100}]}"#,
+                    )
+                    .replace(r#""v":2"#, r#""v":1"#),
+                )],
+            ),
+            ("version 3", vec![hex(&request_json("single", one).replace(r#""v":2"#, r#""v":3"#))]),
             ("no items", vec![hex(&request_json("single", ""))]),
             ("33 items", with_pipe(hex(&request_json("batch", &many.join(","))))),
             ("9 ops", vec![hex(&request_json("single", &nine_ops))]),
@@ -1821,7 +1836,7 @@ mod tests {
 
     // ── fuzz [v3r fuzz] ──
 
-    const VALID_BATCH: &str = r#"{"v":1,"nonce":"0123456789abcdef0123456789abcdef","wrapper":"batch","items":[{"id":"sysmain-disable","ops":[{"op":"service-disable","service":"SysMain"}]},{"id":"r3","ops":[{"op":"core-parking-restore","ac":100,"dc":90,"target":{"kind":"plan","plan":"381b4222-f694-41f0-9685-ff5bb260df2e","reactivate":true}}]}]}"#;
+    const VALID_BATCH: &str = r#"{"v":2,"nonce":"0123456789abcdef0123456789abcdef","wrapper":"batch","items":[{"id":"sysmain-disable","ops":[{"op":"service-disable","service":"SysMain"}]},{"id":"r3","ops":[{"op":"core-parking-restore","ac":100,"dc":90,"target":{"kind":"plan","plan":"381b4222-f694-41f0-9685-ff5bb260df2e","reactivate":true}}]}]}"#;
 
     /// Arbitrary bytes, mutated valid requests and hostile strings never panic the request parser, and whatever
     /// it accepts re-validates and round-trips. Break: replace `.ok_or(Refused::Request)?` after `from_hex` in
