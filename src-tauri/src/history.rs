@@ -2347,7 +2347,9 @@ pub(crate) struct BatchApplyReport {
     items: Vec<BatchItemOutcome>,
     applied: usize,
     skipped: usize,
-    /// 0 or 1 — the whole point of the batch. Surfaced so the UI/QA can assert it honestly.
+    /// 0 or 1 — the whole point of the batch. Surfaced so the UI/QA can assert it honestly. a12: 1 only when the
+    /// batch's one elevated launch was actually attempted (`ElevatedCapture::launch_attempted`); a request refused
+    /// before launch (the exe identity check, the results pipe, the request's size) reports 0.
     elevation_prompts: usize,
 }
 
@@ -2620,11 +2622,16 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         let request = crate::elevated_ops::ElevatedRequest::batch(request_items, &nonce).map_err(|_| {
             crate::actions::BATCH_REQUEST_NOT_PREPARED.to_string()
         })?;
-        elevation_prompts = 1;
         // A declined UAC ran nothing, so every item is skipped and the phase-1 items stand on their
         // own receipts. Any other error means the script may have run and stopped part-way: the relayed
         // lines are the only evidence of which items finished, so they are read either way (#616).
-        let crate::actions::ElevatedCapture { run, text } = crate::actions::run_elevated_request_capture(&request);
+        let crate::actions::ElevatedCapture { run, text, launch_attempted } =
+            crate::actions::run_elevated_request_capture(&request);
+        // a12: a prompt is counted only when the elevated launch was actually attempted (every pre-launch
+        // refusal, the exe identity check included, passed), not when the request was merely built.
+        if launch_attempted {
+            elevation_prompts = 1;
+        }
         let receipts = parse_batch_receipts(&text, &nonce);
         let mut made_elevated: Vec<Made> = Vec::new();
         let first_admin_outcome = outcomes.len();
@@ -3997,6 +4004,45 @@ mod batch_apply_tests {
         assert!(dir.join("gaming-restore-d.receipts").is_dir(), "a folder is never deleted");
     }
 
+    /// a12: `elevation_prompts` counts a prompt only when the batch's elevated launch was actually attempted. A batch
+    /// whose admin step the exe identity check refuses (the real pre-launch refusal; nothing is launched) reports 0;
+    /// a batch whose launch was attempted reports 1. Same two elevated recs as below, so phase 1 only reads.
+    /// Break: put `elevation_prompts = 1;` back right after the request is built (before the capture) and this fails.
+    #[test]
+    fn elevation_prompts_counts_only_a_launch_that_was_attempted() {
+        let _files = crate::data_root::shared_root_files();
+        let before: std::collections::HashSet<String> =
+            load_history().expect("test ledger readable").iter().map(|c| c.id.clone()).collect();
+        {
+            let _replaced = crate::actions::ForceExeReplaced::begin();
+            let dispatched = crate::actions::elevation_dispatch_count();
+            let report = apply_recommendations_batch(vec![item("fast-startup-off"), item("hags-enable")])
+                .expect("a refused admin step is per-item skips, never a batch-level error");
+            assert_eq!(crate::actions::elevation_dispatch_count(), dispatched + 1, "the admin step reached the capture");
+            assert_eq!(report.elevation_prompts, 0, "refused by the identity check before launch: no prompt");
+            assert_eq!(report.applied, 0, "{report:?}");
+            assert!(report.items.iter().all(|o| o.status == "skipped"), "{report:?}");
+            let now = load_history().expect("test ledger readable");
+            assert!(now.iter().all(|c| before.contains(&c.id)), "a refused admin step records nothing");
+        }
+        crate::actions::fake_next_capture(|req| {
+            let n = req.nonce.as_str();
+            crate::actions::ElevatedCapture {
+                run: Ok(()),
+                text: format!("{n}:fast-startup-off:ok\n{n}:hags-enable:ok\n{n}:end\n"),
+                launch_attempted: true,
+            }
+        });
+        let report = apply_recommendations_batch(vec![item("fast-startup-off"), item("hags-enable")]);
+        assert!(!crate::actions::unused_fake_capture(), "the batch's admin step reached the capture");
+        let report = report.expect("batch ran");
+        assert_eq!(report.elevation_prompts, 1, "the launch was attempted: one prompt");
+        // Put the shared test ledger back as it was (these rows describe nothing that happened).
+        let after = load_history().expect("test ledger readable");
+        let kept: Vec<AppliedChange> = after.iter().filter(|c| before.contains(&c.id)).cloned().collect();
+        save_history(&crate::data_root::mutation_root().expect("test root"), &kept).expect("ledger put back");
+    }
+
     // The UAC-cancel / elevation-failure arm, proven deterministically (no real prompt): with
     // elevation forced to fail, EVERY deferred (elevated) item is skipped with the honest "did not
     // complete" reason and NOTHING is ledgered for them. Uses two elevated recs so phase 1 mutates
@@ -4049,7 +4095,11 @@ mod batch_apply_tests {
             assert_eq!(req.items[0].ops, [ElevatedOp::FastStartupOff {}]);
             assert_eq!(req.items[1].ops, [ElevatedOp::HagsEnable {}]);
             let nonce = req.nonce.as_str();
-            crate::actions::ElevatedCapture { run: Ok(()), text: format!("{nonce}:fast-startup-off:ok\n{nonce}:end\n") }
+            crate::actions::ElevatedCapture {
+                run: Ok(()),
+                text: format!("{nonce}:fast-startup-off:ok\n{nonce}:end\n"),
+                launch_attempted: true,
+            }
         });
         let report = apply_recommendations_batch(vec![item("fast-startup-off"), item("hags-enable")]);
         assert!(!crate::actions::unused_fake_capture(), "the batch's admin step reached the capture");
@@ -6063,7 +6113,7 @@ mod leftover_restore_tests {
             // A9: the combined op, alone; its nonce is the request's.
             assert_eq!(req.items[0].ops, [crate::elevated_ops::ElevatedOp::MemoryCompressionCombined {}]);
             let nonce = req.nonce.as_str();
-            crate::actions::ElevatedCapture { run: Ok(()), text: format!("{nonce}:prior:False\n") }
+            crate::actions::ElevatedCapture { run: Ok(()), text: format!("{nonce}:prior:False\n"), launch_attempted: true }
         });
         let outcome = restore_leftover("memory-compression-off", "QA seam test");
         let unused = crate::actions::unused_fake_capture();

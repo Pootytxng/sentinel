@@ -754,7 +754,7 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
     // Read on every outcome (A2b): a receipt carrying this run's nonce was written by THIS run, and an
     // `ok` one must keep its change in the contract even when the elevation reported "nothing ran"
     // (resolve_tier_elevation).
-    let actions::ElevatedCapture { run: elevation, text: receipts_text } = actions::run_elevated_request_capture(&request);
+    let actions::ElevatedCapture { run: elevation, text: receipts_text, .. } = actions::run_elevated_request_capture(&request);
     match resolve_tier_elevation(elevation, &receipts_text, &nonce, &id_labels) {
         TierDecision::Confirmed => Ok(()),
         TierDecision::DropStaged(msg) => {
@@ -1206,7 +1206,7 @@ fn restore_elevated_run<'a>(
 
     // Phase 2 — the ONE elevation. Its outcome is final for this attempt: no per-item
     // fallback past this point (a decline must never be followed by more prompts).
-    let actions::ElevatedCapture { run: elevation, text: receipts_text } = actions::run_elevated_request_capture(&request);
+    let actions::ElevatedCapture { run: elevation, text: receipts_text, .. } = actions::run_elevated_request_capture(&request);
     // resolve_restore_batch answers one outcome per item, in `id_labels` order, which is `staged`
     // order: zip so each outcome lands on its own change (CR-gm-restore-partial), never by label.
     let outcomes = resolve_restore_batch(elevation, &receipts_text, &nonce, &id_labels);
@@ -2012,7 +2012,7 @@ mod elevation_batch_tests {
                 req.items.iter().map(|i| (i.id.as_ref().map(|id| id.as_str()).unwrap_or_default(), &i.ops)).collect();
             assert_eq!(items, vec![("adv-usb", &vec![usb2]), ("SysMain", &vec![svc2])], "ids, order and ops");
             let n = req.nonce.as_str();
-            actions::ElevatedCapture { run: Ok(()), text: format!("{n}:adv-usb:ok\n{n}:SysMain:ok\n{n}:end\n") }
+            actions::ElevatedCapture { run: Ok(()), text: format!("{n}:adv-usb:ok\n{n}:SysMain:ok\n{n}:end\n"), launch_attempted: true }
         });
         let res = apply_elevated_tier(&mut file, vec![parking("adv-usb", usb), parking("SysMain", svc)]);
         assert!(!actions::unused_fake_capture(), "the tier's one elevation reached the capture");
@@ -2058,7 +2058,7 @@ mod elevation_batch_tests {
                 );
                 let n = req.nonce.as_str();
                 let text = if partial { format!("{n}:r0:ok\n{n}:end\n") } else { format!("{n}:r0:ok\n{n}:r1:ok\n{n}:end\n") };
-                actions::ElevatedCapture { run: Ok(()), text }
+                actions::ElevatedCapture { run: Ok(()), text, launch_attempted: true }
             });
             let mut errs = RestoreErrs::default();
             restore_elevated_run(&run, "gm-1700000000000", &mut errs);

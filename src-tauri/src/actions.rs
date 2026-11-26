@@ -911,6 +911,32 @@ thread_local! {
     static FAKE_CAPTURE: std::cell::RefCell<Option<FakeCapture>> = const { std::cell::RefCell::new(None) };
 }
 
+// Test-only (a12): while set, this thread's typed launches fail the exe identity check (`refuse_if_exe_replaced`),
+// so a test reaches the real pre-launch refusal with nothing launched. Never shipped.
+#[cfg(test)]
+thread_local! {
+    static FORCE_EXE_REPLACED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Test-only (a12): set [`FORCE_EXE_REPLACED`] on this thread until the guard drops.
+#[cfg(test)]
+pub(crate) struct ForceExeReplaced(());
+
+#[cfg(test)]
+impl ForceExeReplaced {
+    pub(crate) fn begin() -> Self {
+        FORCE_EXE_REPLACED.with(|f| f.set(true));
+        ForceExeReplaced(())
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForceExeReplaced {
+    fn drop(&mut self) {
+        FORCE_EXE_REPLACED.with(|f| f.set(false));
+    }
+}
+
 /// Answer the next capture on this thread with `f` (test-only; see `FAKE_CAPTURE`).
 #[cfg(test)]
 pub(crate) fn fake_next_capture(f: impl FnOnce(&ElevatedRequest) -> ElevatedCapture + 'static) {
@@ -1165,6 +1191,11 @@ const RESULTS_CHANNEL_NOT_CREATED: &str = "elevated results channel could not be
 pub(crate) struct ElevatedCapture {
     pub(crate) run: Result<(), String>,
     pub(crate) text: String,
+    /// a12: whether the elevated launch itself was attempted (the UAC "runas" call was made), i.e. every
+    /// pre-launch refusal passed: the request fit, the results pipe was created, the exe identity check and the
+    /// launch-target check passed. False for every refusal before that call, so a batch counts only a prompt
+    /// Windows was really asked to raise (a decline still counts: the prompt was shown).
+    pub(crate) launch_attempted: bool,
 }
 
 /// The most output one elevated dispatch may relay (a 32-item batch writes about 2 KiB).
@@ -1181,7 +1212,7 @@ const CAPTURE_MAX_BYTES: usize = 1024 * 1024;
 /// `elevated_item_outcome`, gaming `resolve_tier_elevation` / `resolve_restore_batch`, [`memcompress_outcome`]);
 /// a broken channel after launch is never one of the "nothing ran" errors.
 pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCapture {
-    let none = |run: Result<(), String>| ElevatedCapture { run, text: String::new() };
+    let none = |run: Result<(), String>| ElevatedCapture { run, text: String::new(), launch_attempted: false };
     // Test-only (owner-present QA harnesses): the direct-elevation seam elevates powershell.exe through
     // ShellExecute, which cannot hand back output, so the output goes to a temp file the test reads back.
     // `qa_elevate_direct` counts the dispatch itself, so this comes before the count.
@@ -1201,7 +1232,7 @@ pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCap
         let run = qa_elevate_direct(&format!("& {{ {command} }} | Out-File -LiteralPath '{lit}' -Encoding ascii"));
         let text = std::fs::read_to_string(&out).unwrap_or_default();
         let _ = std::fs::remove_file(&out);
-        return ElevatedCapture { run, text };
+        return ElevatedCapture { run, text, launch_attempted: true };
     }
     #[cfg(test)]
     ELEVATION_DISPATCH_COUNT.with(|c| c.set(c.get() + 1));
@@ -1211,7 +1242,8 @@ pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCap
     }
     #[cfg(test)]
     if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
-        return none(Err(ELEVATION_DECLINED_MSG.to_string()));
+        // The simulated decline stands in for a prompt that was raised and declined.
+        return ElevatedCapture { run: Err(ELEVATION_DECLINED_MSG.to_string()), text: String::new(), launch_attempted: true };
     }
     let exe = match std::env::current_exe() {
         Ok(e) => e,
@@ -1263,11 +1295,20 @@ pub(crate) fn run_elevated_request_capture(req: &ElevatedRequest) -> ElevatedCap
         |pid| launched.store(pid, std::sync::atomic::Ordering::Release),
         finish,
     );
+    // a12: the launch-target check inside `elevate_and_wait_with` is the last pre-launch refusal; any other
+    // result means the UAC "runas" call was made.
+    let launch_attempted = launch_was_attempted(&res);
     // A launch that never started a process (declined, failed) did not run `finish`: stop the wait now.
     finish();
     // The helper's exit closed its end of the pipe, so the reader is at end of file (or never accepted).
     let lines = reader.join().map(|(lines, _end)| lines).unwrap_or_default();
-    ElevatedCapture { run: elevation_outcome(res), text: lines.join("\n") }
+    ElevatedCapture { run: elevation_outcome(res), text: lines.join("\n"), launch_attempted }
+}
+
+/// a12 PURE: whether an `elevate_and_wait*` result came from the UAC "runas" call, i.e. it is not the launch-target
+/// refusal (`elevation_target_refused`, the one refusal inside the launcher, made before that call).
+fn launch_was_attempted(res: &std::io::Result<std::process::ExitStatus>) -> bool {
+    !matches!(res, Err(e) if e.kind() == std::io::ErrorKind::InvalidInput && e.to_string() == ELEVATION_TARGET_REFUSED)
 }
 
 /// A9: the start of the pre-launch refusal when the app cannot put a typed request into the form the helper
@@ -1326,6 +1367,14 @@ pub(crate) fn exe_identity_unchanged(at_start: Option<(u32, u64)>, now: Option<(
 
 /// The check every typed launch makes right before `elevate_and_wait*` (nothing has run yet).
 fn refuse_if_exe_replaced(exe: &std::path::Path) -> Result<(), String> {
+    // Test-only (a12): this thread's launches see an exe identity that differs from the one recorded at startup.
+    #[cfg(test)]
+    let at_start = if FORCE_EXE_REPLACED.with(|f| f.get()) {
+        Some((u32::MAX, u64::MAX))
+    } else {
+        RUNNING_EXE_IDENTITY.get().copied().flatten()
+    };
+    #[cfg(not(test))]
     let at_start = RUNNING_EXE_IDENTITY.get().copied().flatten();
     if exe_identity_unchanged(at_start, crate::data_root::file_identity(exe)) {
         Ok(())
@@ -1404,12 +1453,13 @@ fn elevation_target_refused_among(
     if p.is_absolute() && plain_drive && no_steps && listed {
         None
     } else {
-        Some(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "refused: Compy elevates only its own program or the system PowerShell, by its plain full path",
-        ))
+        Some(std::io::Error::new(std::io::ErrorKind::InvalidInput, ELEVATION_TARGET_REFUSED))
     }
 }
+
+/// The launch-target refusal's text (`elevation_target_refused_among`); `launch_was_attempted` keys on it.
+const ELEVATION_TARGET_REFUSED: &str =
+    "refused: Compy elevates only its own program or the system PowerShell, by its plain full path";
 
 /// Launch `file` elevated (ShellExecuteExW, verb "runas", hidden) with `args`, wait for it to
 /// exit, and return its REAL exit status — with launch-layer failures surfaced as `io::Error`s
@@ -10406,6 +10456,30 @@ mod a9_exe_identity_tests {
         let id = crate::data_root::file_identity(&me);
         assert!(id.is_some(), "the running exe's identity is readable");
         assert_eq!(id, crate::data_root::file_identity(&me));
+    }
+
+    /// a12: a capture refused before its launch (here the real exe identity check, with nothing launched) reports
+    /// that no launch was attempted; of the launcher's own results, only the launch-target refusal is "not attempted".
+    /// Break: make the `none` closure in `run_elevated_request_capture` set `launch_attempted: true` and this fails.
+    #[test]
+    fn a_capture_refused_before_its_launch_reports_no_launch_attempted() {
+        use std::os::windows::process::ExitStatusExt;
+        let _replaced = ForceExeReplaced::begin();
+        let req = ElevatedRequest::batch(
+            vec![("fast-startup-off".to_string(), vec![ElevatedOp::FastStartupOff {}])],
+            "0123456789abcdef0123456789abcdef",
+        )
+        .expect("a valid request");
+        let cap = run_elevated_request_capture(&req);
+        assert_eq!(cap.run, Err(EXE_REPLACED_REFUSED.to_string()), "refused by the identity check");
+        assert!(!cap.launch_attempted, "nothing was launched");
+        assert!(cap.text.is_empty());
+        let refused = elevation_target_refused_among(std::ffi::OsStr::new("relative\\x.exe"), &[]).expect("a relative path is refused");
+        assert!(!launch_was_attempted(&Err(refused)), "the launch-target refusal comes before the runas call");
+        assert!(launch_was_attempted(&Err(std::io::Error::from_raw_os_error(1223))), "a decline: the prompt was raised");
+        assert!(launch_was_attempted(&Ok(std::process::ExitStatus::from_raw(0))));
+        assert!(launch_was_attempted(&Ok(std::process::ExitStatus::from_raw(1))));
+        assert!(launch_was_attempted(&Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "another error"))));
     }
 }
 
