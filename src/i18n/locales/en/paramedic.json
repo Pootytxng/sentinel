@@ -251,7 +251,6 @@
     "stillChecking": "Compy is still checking. Try again in a moment."
   },
   "problem": {
-    "badge": "Measured",
     "body_one": "In a normal session, {{game}}'s dips stay at about {{beforePct}}% of its average frame rate. In your last session they fell to about {{nowPct}}%.",
     "body_other": "In a normal session, {{game}}'s dips stay at about {{beforePct}}% of its average frame rate. In your last {{count}} sessions they fell to about {{nowPct}}%.",
     "spikes": "The slowest 1 in 100 frames took about {{nowMs}} ms, against about {{beforeMs}} ms in your normal sessions.",
@@ -269,12 +268,6 @@
     "oneSession": "One session isn't much to go on. If the next one is normal, this may have been a one-off.",
     "mixed_one": "1 session ({{dates}}) may contain two games, so Compy didn't judge it.",
     "mixed_other": "{{count}} sessions ({{dates}}) may contain two games, so Compy didn't judge them."
-  },
-  "answer": {
-    "likely": "Most likely",
-    "possible": "Possible",
-    "mechanism": "Often causes this (not measured on your PC)",
-    "measured": "Measured"
   },
   "finding": {
     "gpuDriver": {
@@ -344,8 +337,6 @@
     "seen": "Compy noticed it on {{when}}"
   },
   "badge": {
-    "known": "Known",
-    "measured": "Measured",
     "unknown": "Not recorded",
     "notRead": "Not read",
     "against": "Weakens this",

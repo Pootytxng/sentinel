@@ -32,6 +32,7 @@ import type {
 } from "../../types";
 import { useDates } from "./GamesRoom";
 import { ParamedicFirstLook, firstLookApplies, firstLookMeasured, type RecordedGame } from "./ParamedicFirstLook";
+import { candidateTag, evidenceTag, type ParamedicTagAxis } from "./paramedic-tags";
 
 type T = ReturnType<typeof useTranslation>["t"];
 type Dates = ReturnType<typeof useDates>;
@@ -672,16 +673,6 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
   }
 }
 
-function badge(e: ParamedicEvidence, t: T): string {
-  if (e.against) return t("paramedic.badge.against");
-  // F7: a log Compy did not read back far enough is "Not read"; "Not recorded" beside it would read as "no errors recorded".
-  if (e.code === "whea-normal-unread") return t("paramedic.badge.notRead");
-  if (e.kind === "supported-inference") return t("paramedic.badge.supports");
-  if (e.kind === "known") return t("paramedic.badge.known");
-  if (e.kind === "unknown") return t("paramedic.badge.unknown");
-  return t("paramedic.badge.measured");
-}
-
 function stepLines(fix: ParamedicFix, ctx: Ctx, restored?: string, appliedOnly?: boolean): string[] {
   const { t, game, dates } = ctx;
   if (fix.kind !== "steps") return [];
@@ -1131,14 +1122,18 @@ function Evidence({ list, ctx: base, hideInstallAt }: { list: ParamedicEvidence[
   if (rows.length === 0) return null;
   return (
     <ul className="gl-para-lines">
-      {rows.map(({ e, text }, i) => (
-        <li key={`${e.code}-${i}`}>
-          <span className="gl-chip" data-tone={e.against ? "warn" : undefined}>
-            {badge(e, ctx.t)}
-          </span>
-          {text}
-        </li>
-      ))}
+      {rows.map(({ e, text }, i) => {
+        // D3 slice 2: a source or a relation from the shared vocabulary, never a strength (paramedic-tags.ts).
+        const tag = evidenceTag(e, ctx.t);
+        return (
+          <li key={`${e.code}-${i}`}>
+            <span className="gl-chip" data-tone={tag.tone} data-axis={tag.axis}>
+              {tag.text}
+            </span>
+            {text}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -1433,8 +1428,8 @@ function Problem({ d, ctx, skipLater }: { d: ParamedicDiagnosis; ctx: Ctx; skipL
     <>
       <div className="gl-card-top">
         <h2 className="gl-card-title">{t("paramedic.problem.title", { game, count })}</h2>
-        <span className="gl-chip" data-tone="accent">
-          {t("paramedic.problem.badge")}
+        <span className="gl-chip" data-tone="accent" data-axis="source" data-testid="paramedic-problem-source">
+          {t("common.source.measured")}
         </span>
       </div>
       <p>{t("paramedic.problem.body", { game, count, beforePct: pct(p.before.ratio), nowPct: pct(p.now.ratio) })}</p>
@@ -1472,16 +1467,16 @@ function Problem({ d, ctx, skipLater }: { d: ParamedicDiagnosis; ctx: Ctx; skipL
   );
 }
 
-function certaintyChip(f: ParamedicFinding, t: T): { text: string; tone?: string } {
-  if (f.confidence === "likely") return { text: t("paramedic.answer.likely"), tone: "accent" };
-  if (f.confidence === "measured") return { text: t("paramedic.answer.measured"), tone: "accent" };
-  if (f.confidence === "mechanism") return { text: t("paramedic.answer.mechanism") };
-  return { text: t("paramedic.answer.possible") };
+/** D3 slice 2: the row's word comes from the shared vocabulary (paramedic-tags.ts). The level is the engine's. */
+function certaintyChip(f: ParamedicFinding, t: T): Chip {
+  return candidateTag(f.confidence, t);
 }
+
+type Chip = { text: string; tone?: string; axis?: ParamedicTagAxis };
 
 /** B3b: "Matches the timing" is one recovery observation, never a strength of its own, so the row's certainty word
  *  (Possible) stays beside it and the chip carries no accent tone. */
-function chipFor(f: ParamedicFinding, recovered: boolean, t: T): { text: string; tone?: string; certainty?: { text: string; tone?: string } } {
+function chipFor(f: ParamedicFinding, recovered: boolean, t: T): Chip & { certainty?: Chip } {
   if (recovered && f.now) {
     if (f.now === "points-to") return { text: nowText(f.now, t), certainty: certaintyChip(f, t) };
     // Neutral, like the timing chip: one recovery observation weakens a row, it never marks it cleared (no green).
@@ -1512,11 +1507,11 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
           </span>
         )}
         {chip.certainty && (
-          <span className="gl-chip" data-tone={chip.certainty.tone} data-testid="paramedic-row-certainty">
+          <span className="gl-chip" data-tone={chip.certainty.tone} data-axis={chip.certainty.axis} data-testid="paramedic-row-certainty">
             {chip.certainty.text}
           </span>
         )}
-        <span className="gl-chip" data-tone={chip.tone}>
+        <span className="gl-chip" data-tone={chip.tone} data-axis={chip.axis}>
           {chip.text}
         </span>
       </button>
@@ -1698,8 +1693,8 @@ function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     <>
       <div className="gl-card-top">
         <h2 className="gl-card-title">{t("paramedic.recovered.title", { game })}</h2>
-        <span className="gl-chip" data-tone="ok">
-          {t("paramedic.problem.badge")}
+        <span className="gl-chip" data-tone="ok" data-axis="source" data-testid="paramedic-recovered-source">
+          {t("common.source.measured")}
         </span>
       </div>
       <p>{t("paramedic.recovered.numbers", { beforePct: pct(r.before.ratio), roughPct: pct(r.rough.ratio), nowPct: pct(r.now.ratio) })}</p>
@@ -1742,8 +1737,8 @@ function MeasuredOnceAnswer({ d, m, ctx }: { d: ParamedicDiagnosis; m: NonNullab
       <Problem d={d} ctx={ctx} skipLater />
       <div className="gl-card-top">
         <h2 className="gl-card-title">{t("paramedic.measuredOnce.title", { game })}</h2>
-        <span className="gl-chip" data-testid="paramedic-measured-once-chip">
-          {t("common.confidenceWord.measuredOnce")}
+        <span className="gl-chip" data-axis="source" data-testid="paramedic-measured-once-chip">
+          {t("common.source.measuredOnce")}
         </span>
       </div>
       <p>

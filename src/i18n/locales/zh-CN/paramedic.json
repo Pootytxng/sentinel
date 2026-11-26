@@ -251,7 +251,6 @@
     "stillChecking": "Compy 仍在检查，请稍后再试。"
   },
   "problem": {
-    "badge": "已测得",
     "body_one": "正常情况下，{{game}} 掉帧时仍能保持约 {{beforePct}}% 的平均帧率。在你最近一次游戏中，掉帧时降到了约 {{nowPct}}%。",
     "body_other": "正常情况下，{{game}} 掉帧时仍能保持约 {{beforePct}}% 的平均帧率。在你最近 {{count}} 次游戏中，掉帧时降到了约 {{nowPct}}%。",
     "spikes": "最慢的百分之一的帧耗时约 {{nowMs}} 毫秒，你正常游戏时约为 {{beforeMs}} 毫秒。",
@@ -269,12 +268,6 @@
     "oneSession": "只有一次运行的数据，参考价值有限。如果下一次运行正常，这次可能只是偶然。",
     "mixed_one": "有 1 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对它做判断。",
     "mixed_other": "有 {{count}} 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对它们做判断。"
-  },
-  "answer": {
-    "likely": "最有可能",
-    "possible": "有可能",
-    "mechanism": "常会导致这种情况（尚未在你的电脑上测得）",
-    "measured": "已测得"
   },
   "finding": {
     "gpuDriver": {
@@ -344,8 +337,6 @@
     "seen": "Compy 在 {{when}} 注意到"
   },
   "badge": {
-    "known": "已知",
-    "measured": "已测得",
     "unknown": "未记录",
     "notRead": "未读取",
     "against": "削弱这一判断",

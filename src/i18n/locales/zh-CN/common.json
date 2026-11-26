@@ -181,6 +181,18 @@
     "expected": "预期",
     "unknown": "未知"
   },
+  "source": {
+    "read": "从你的电脑读取",
+    "measured": "已实测",
+    "measuredOnce": "仅测得一次",
+    "user": "你告诉 Compy 的",
+    "general": "未在你的电脑上实测",
+    "unread": "未能读取"
+  },
+  "strength": {
+    "possible": "有可能",
+    "mostLikely": "最有可能"
+  },
   "ram": {
     "usable": "可用总量 {{amount}} GB",
     "usedOfUsable": "已用 {{used}} GB / 可用总量 {{total}} GB"

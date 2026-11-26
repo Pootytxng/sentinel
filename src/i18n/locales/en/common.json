@@ -187,6 +187,18 @@
     "expected": "Expected",
     "unknown": "Unknown"
   },
+  "source": {
+    "read": "Read from your PC",
+    "measured": "Measured",
+    "measuredOnce": "Measured once",
+    "user": "You told Compy",
+    "general": "Not measured on your PC",
+    "unread": "Couldn't read"
+  },
+  "strength": {
+    "possible": "Possible",
+    "mostLikely": "Most likely"
+  },
   "ram": {
     "usable": "{{amount}} GB usable",
     "usedOfUsable": "{{used}} / {{total}} GB usable"

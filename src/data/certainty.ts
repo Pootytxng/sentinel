@@ -8,8 +8,9 @@
 //
 // Nothing here changes a stored or wire value. The mappers accept every value the Rust side and the
 // existing screens already use, so old data keeps reading. confidence-word.ts is the first caller
-// (its words are produced through these mappers, unchanged). Words for the new tags, and their
-// zh-CN twins, arrive in slice 2.
+// (its words are produced through these mappers, unchanged). The words for the tags, and their
+// zh-CN twins, are in certainty-words.ts (slice 2); the Something's-wrong card is the first screen on
+// them (surfaces/glass/paramedic-tags.ts).
 //
 // WHAT TYPESCRIPT PREVENTS HERE (checked by `tsc`, which runs in `npm run build`; vitest does not
 // type-check, and the @ts-expect-error lines in certainty.test.ts only prove anything under tsc):
