@@ -1193,6 +1193,12 @@ const RESULTS_CHANNEL_NOT_CREATED: &str = "elevated results channel could not be
 pub(crate) const RANDOM_KEY_UNAVAILABLE: &str =
     "Windows couldn't give Compy the random number this administrator step needs, so Compy didn't start that step.";
 
+/// a12 review r1 F1: the same refusal for the FPS capture helper, whose pipe name also comes from the random source
+/// (`monitoring::start_capture_pipe`). Nothing is launched: not the plain start, not the elevated one. It replaces the
+/// raw OS text in the capture status and the Support record for this cause. Mirrored in `src/data/backend-error.ts`.
+pub(crate) const CAPTURE_RANDOM_UNAVAILABLE: &str =
+    "Windows couldn't give Compy the random number frame capture needs, so Compy didn't start capture.";
+
 /// One elevated dispatch whose output Compy reads (A5 Part A): how the elevation ended, and every line the
 /// helper relayed over the dispatch's pipe (joined by newlines).
 pub(crate) struct ElevatedCapture {
@@ -10561,6 +10567,29 @@ mod a12_random_tests {
             }
         }
         assert_eq!(seen, 5, "actions.rs 2, history.rs 1, gaming_orchestrator.rs 2");
+        // Review r1 F1: the results pipe's NAME is random too. Every production caller of `ServerPipe::create` (the typed
+        // capture here, the FPS capture helper in monitoring.rs) maps a random-source failure to its fixed sentence.
+        // Break: drop the `is_random_unavailable` arm in monitoring.rs `start_capture_pipe` and this fails.
+        let needle = concat!("fps_pipe::", "ServerPipe::create()");
+        let mut pipes = 0;
+        for (file, src) in [("actions.rs", include_str!("actions.rs")), ("monitoring.rs", include_str!("monitoring.rs"))] {
+            let src = src.replace("\r\n", "\n");
+            for (at, _) in src.match_indices(needle) {
+                let after = &src[at + needle.len()..];
+                if after.starts_with(".expect(") {
+                    continue; // a test making its own pipe
+                }
+                let near: String = after.chars().take(300).collect();
+                assert!(
+                    near.contains("is_random_unavailable(&e)")
+                        && (near.contains("RANDOM_KEY_UNAVAILABLE") || near.contains("CAPTURE_RANDOM_UNAVAILABLE")),
+                    "{file}: {}",
+                    after.lines().next().unwrap_or_default()
+                );
+                pipes += 1;
+            }
+        }
+        assert_eq!(pipes, 2, "actions.rs 1 (the typed capture), monitoring.rs 1 (start_capture_pipe)");
     }
 }
 

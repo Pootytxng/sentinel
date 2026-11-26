@@ -125,6 +125,7 @@
     "batchRequestNotPrepared": "Compy couldn't put this batch's administrator step into the form its helper accepts, so it didn't start that step.",
     "exeReplacedRestart": "The Compy program file changed, or couldn't be checked, since Compy started, so it didn't start this administrator step. Restart Compy, then try again.",
     "randomKeyUnavailable": "Windows couldn't give Compy the random number this administrator step needs, so Compy didn't start that step.",
+    "captureRandomUnavailable": "Windows couldn't give Compy the random number frame capture needs, so Compy didn't start capture.",
     "settingUnread": "Compy couldn't read this setting right now, so it can't say whether it is on or off.",
     "couldntCheckHeading": "Couldn't check right now",
     "gmBusy": "Compy is still finishing another change or a Gaming Mode start (if a Windows permission prompt is open, answer or cancel it) — give it a second and try again",

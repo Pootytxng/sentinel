@@ -125,6 +125,7 @@
     "batchRequestNotPrepared": "Compy 无法把这批更改的管理员步骤整理成其助手接受的格式，所以没有启动该步骤。",
     "exeReplacedRestart": "自 Compy 启动以来，它的程序文件已被更改或无法检查，所以没有启动这个管理员步骤。请重新启动 Compy，然后再试。",
     "randomKeyUnavailable": "Windows 无法向 Compy 提供这个管理员步骤所需的随机数，所以 Compy 没有启动该步骤。",
+    "captureRandomUnavailable": "Windows 无法向 Compy 提供帧捕获所需的随机数，所以 Compy 没有启动捕获。",
     "settingUnread": "Compy 现在无法读取这项设置，因此无法判断它是开启还是关闭。",
     "couldntCheckHeading": "现在无法检查",
     "gmBusy": "Compy 仍在完成另一项更改或游戏模式的启动（如果 Windows 权限提示已打开，请回应或取消它）——请稍等片刻再试",

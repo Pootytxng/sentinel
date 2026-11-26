@@ -918,7 +918,14 @@ impl CapturePipe {
 /// over-long line, or at the first line after the capture stops; dropping the pipe then is what ends the
 /// helper.
 fn start_capture_pipe(generation: u64) -> Result<CapturePipe, String> {
-    let pipe = crate::fps_pipe::ServerPipe::create().map_err(|e| format!("could not create the capture pipe: {e}"))?;
+    // a12 review r1 F1: a failed random source (the pipe's name) is the one fixed sentence, never the OS text.
+    let pipe = crate::fps_pipe::ServerPipe::create().map_err(|e| {
+        if crate::fps_pipe::is_random_unavailable(&e) {
+            crate::actions::CAPTURE_RANDOM_UNAVAILABLE.to_string()
+        } else {
+            format!("could not create the capture pipe: {e}")
+        }
+    })?;
     let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let launched = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     let handle = CapturePipe { name: pipe.name.clone(), launched: launched.clone(), done: done.clone() };
@@ -3115,6 +3122,25 @@ mod unreadable_tests {
         again.observe_unreadable_counter(24); // 24 ticks = 12 s
         let summary = serde_json::to_value(again.finalize(100)).unwrap();
         assert_eq!(summary["unreadable_seconds"], fixture["session_unreadable_seconds"]);
+    }
+}
+
+#[cfg(test)]
+mod a12_capture_random_tests {
+    /// a12 review r1 F1: when Windows' random source fails, the capture pipe (whose name it gives) is refused with the
+    /// one fixed sentence, never the OS status text. Every capture start reads this error: the elevated launch and the
+    /// UAC-off spawn put it in the capture status ("failed to launch helper: <it>") and the Support record, and the
+    /// plain start puts it in the Support record before it tries the elevated launch, which meets the same refusal.
+    /// Break: drop the `is_random_unavailable` arm in `start_capture_pipe` (back to the OS text) and this fails.
+    #[test]
+    fn a_failed_random_source_refuses_the_capture_pipe_with_the_one_sentence() {
+        let _rng = crate::fps_pipe::ForceRandomFailure::begin();
+        let e = match super::start_capture_pipe(u64::MAX) {
+            Ok(_) => panic!("a capture pipe was created with no random name"),
+            Err(e) => e,
+        };
+        assert_eq!(e, crate::actions::CAPTURE_RANDOM_UNAVAILABLE);
+        assert!(!e.contains("status"), "no OS status text: {e}");
     }
 }
 

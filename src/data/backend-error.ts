@@ -351,6 +351,13 @@ export const BACKEND_SENTENCES: ReadonlyArray<{ rust: string; text: string; key:
     text: "Windows couldn't give Compy the random number this administrator step needs, so Compy didn't start that step.",
     key: "app.backendErrors.randomKeyUnavailable",
   },
+  // a12 review r1 F1: the same failure for the FPS capture helper's pipe name (actions.rs CAPTURE_RANDOM_UNAVAILABLE,
+  // made in monitoring.rs start_capture_pipe). Nothing is launched.
+  {
+    rust: "CAPTURE_RANDOM_UNAVAILABLE",
+    text: "Windows couldn't give Compy the random number frame capture needs, so Compy didn't start capture.",
+    key: "app.backendErrors.captureRandomUnavailable",
+  },
   // C6: the fixed refusals an undo meets in front of the audited one (experiment::rollback_change →
   // gaming_orchestrator::plain_change_gate), so a stopped undo walk can say why in the user's language.
   // Consts in gaming_orchestrator.rs. C8: the Trial/benchmark plan-class refusal is now three fixed sentences
