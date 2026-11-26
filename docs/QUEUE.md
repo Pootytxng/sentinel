@@ -19,7 +19,8 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - [ ] Capture slice 2 (design `_train\d1-capture-design.md`): ask "Measure this session?" when a game starts. The one-time group grant itself waits for the owner (it changes a security group on the account)
 - [ ] PRIVACY.md additions (`_train\d4i-privacy-additions.md`, `_train\d1s1-privacy-line.txt`)
 - [ ] tauri.conf.json description drops "safe"
-- [ ] Backend incident headline tail and values reach the screen as raw English (zh-CN users see English): move to i18n
+- [x] Crash-record headlines in the user's language (d10, `claude/d10-incident-headlines`): Rust sends a closed code plus values beside the English; Black Box rows, group lines, kind chips, "Since it last worked" and the Home Care card word it through i18n. A Care card stored before d10 shows its stored English in English and is worded from its kind tag in zh-CN (no game tail)
+- [ ] The OS notification popup for a crash record is still English (incident_observer.rs `notify` → lib.rs `notify_care_incident`: English title, the card's English summary, English tail); Rust has no UI language today
 - [ ] Self-delimiting stamp marker for verify-release-state
 - [ ] Problems room follow-ups: the heading "What this points to" sits above a "can't tell" sentence; "Did this help?" answers match by rule only; a time limit on the Event Log reader; the fixed 85°C line is never compared with this card's sessions that did not crash; thermal-trend patterns reach Medium on an unmeasured "well past normal variation"
 - [ ] Card: opening it pushes the lower half of Home below the fold; the questions view has no "More below" cue; Escape from a disclosure
