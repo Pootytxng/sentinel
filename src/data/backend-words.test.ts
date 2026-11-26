@@ -17,36 +17,56 @@ import { FRIENDLY_LABELS } from "./friendly-labels";
 const en = i18n.getFixedT("en");
 const zh = i18n.getFixedT("zh-CN");
 
+// d10: a card written by this build carries `headline_parts`; the English `summary` beside it is what
+// Rust wrote for the same parts.
 const crash = {
   kind: "App crash",
   app_label: "ROB RUN",
   occurred_at: "2026-11-11T14:36:00-08:00",
   occurred_display: "Nov 11, 2:36 PM",
   summary: "ROB RUN stopped working and closed — Nov 11, 2:36 PM",
+  headline_parts: { code: "app_crash", app: "ROB RUN", while_game: null } as { code: string; app: string | null; while_game: string | null } | null,
 };
 
 describe("careHeadline", () => {
-  it("English keeps the backend's own sentence byte for byte", () => {
+  it("English, worded from the code, says exactly the backend's own sentence", () => {
     expect(careHeadline(crash, en, "en")).toBe(crash.summary);
-    const withGame = { ...crash, summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, while ROB RUN was running" };
+    const withGame = {
+      ...crash,
+      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, while ROB RUN was running",
+      headline_parts: { code: "app_crash", app: "dllhost", while_game: "ROB RUN" },
+    };
     expect(careHeadline(withGame, en, "en-US")).toBe(withGame.summary);
   });
 
-  it("zh-CN composes it from the kind tag, keeps the app's own name, dates it in Chinese", () => {
+  it("zh-CN words it from the code, keeps the app's own name, dates it in Chinese", () => {
     const h = careHeadline(crash, zh, "zh-CN");
     expect(h).toContain("ROB RUN 已停止工作并关闭");
     expect(h).toContain("11月11日");
     expect(h).not.toMatch(/stopped|Nov/);
-    expect(careHeadline({ ...crash, app_label: null }, zh, "zh-CN")).toContain("一个应用程序崩溃了");
-    expect(careHeadline({ ...crash, kind: "Blue screen", app_label: null }, zh, "zh-CN")).toContain("蓝屏");
+    const noApp = { code: "app_crash_no_app", app: null, while_game: null };
+    expect(careHeadline({ ...crash, headline_parts: noApp }, zh, "zh-CN")).toContain("一个应用程序崩溃了");
+    const bsod = { code: "blue_screen", app: null, while_game: null };
+    expect(careHeadline({ ...crash, headline_parts: bsod }, zh, "zh-CN")).toContain("蓝屏");
   });
 
-  it("keeps Black Box's 'while <game> was running' clause, the game's name untranslated (review r1)", () => {
-    const s = { ...crash, app_label: "dllhost", summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, while ROB RUN was running" };
+  it("keeps the 'while <game> was running' clause from its value, the game's name untranslated", () => {
+    const s = {
+      ...crash,
+      summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, while ROB RUN was running",
+      headline_parts: { code: "app_crash", app: "dllhost", while_game: "ROB RUN" },
+    };
     const h = careHeadline(s, zh, "zh-CN");
     expect(h).toContain("dllhost 已停止工作并关闭");
     expect(h).toContain("当时 ROB RUN 正在运行");
     expect(h).not.toMatch(/while|was running/);
+  });
+
+  it("a card stored before the code existed shows its stored sentence as it is, in every language", () => {
+    const old = { ...crash, headline_parts: null };
+    expect(careHeadline(old, zh, "zh-CN")).toBe(crash.summary);
+    expect(careHeadline({ ...old, headline_parts: undefined }, zh, "zh-CN")).toBe(crash.summary);
+    expect(careHeadline(old, en, "en")).toBe(crash.summary);
   });
 
   it("dates at the stamp's own offset, as the backend does, whatever zone this machine is in (review r1)", () => {
@@ -60,10 +80,14 @@ describe("careHeadline", () => {
     expect(incidentWhen({ ...late, occurred_at: "2026-11-12T00:30:00" }, "zh-CN")).toBe("Nov 12, 12:30 AM");
   });
 
-  it("an unknown kind, an unreadable stamp or an empty sentence fall back honestly", () => {
-    expect(careHeadline({ ...crash, kind: "Something new" }, zh, "zh-CN")).toBe(crash.summary);
+  it("an unknown code, an unreadable stamp or an empty old sentence fall back honestly", () => {
+    // An unknown code gets the fixed plain sentence, never the backend's English.
+    const newer = { ...crash, headline_parts: { code: "a_newer_code", app: null, while_game: null } };
+    expect(careHeadline(newer, zh, "zh-CN")).toMatch(/^Windows 记录了此版本 Compy 没有对应说明的内容 — 11月11日/);
+    expect(careHeadline(newer, zh, "zh-CN")).not.toContain("stopped working");
+    expect(careHeadline(newer, en, "en")).toBe("Windows recorded something this version of Compy has no sentence for — Nov 11, 2:36 PM");
     expect(careHeadline({ ...crash, occurred_at: "garbage" }, zh, "zh-CN")).toContain("Nov 11, 2:36 PM");
-    expect(careHeadline({ ...crash, summary: "  " }, zh, "zh-CN")).toBe("");
+    expect(careHeadline({ ...crash, headline_parts: null, summary: "  " }, zh, "zh-CN")).toBe("");
   });
 });
 

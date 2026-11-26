@@ -148,6 +148,8 @@ describe("Health summary (glass redesign)", () => {
           occurred_at: "2026-11-11T14:36:00-08:00",
           occurred_display: "Nov 11, 2:36 PM",
           summary: "ROB RUN stopped working and closed — Nov 11, 2:36 PM",
+          // d10: the card carries the headline as a code; that is what the band words in Chinese.
+          headline_parts: { code: "app_crash", app: "ROB RUN", while_game: null },
         },
       });
       const band = document.querySelector(".gl-banner")!;

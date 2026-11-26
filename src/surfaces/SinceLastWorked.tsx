@@ -7,6 +7,7 @@ import "../i18n";
 import type { TFunction } from "i18next";
 import type { BlackBoxReport, CrashIncident, IntelEvent } from "../types";
 import { eventText } from "./event-text";
+import { incidentHeadline } from "../data/incident-headline";
 import "./SinceLastWorked.css";
 
 // P6-timeline (ROADMAP Phase 6 bullet 2, Constitution §16, §17, §27): ONE "Since it last worked"
@@ -43,8 +44,9 @@ function kindOf(e: IntelEvent): SinceRowKind {
 }
 
 /** Pure: the list's rows, newest first. Incidents count only after the anchor session started.
- *  With `t`, event rows are worded in the viewer's language (event-text.ts); without, `summary`. */
-export function sinceRows(report: BlackBoxReport, t?: TFunction): SinceRow[] | null {
+ *  With `t`, event rows are worded in the viewer's language (event-text.ts) and incident rows from
+ *  their headline code (incident-headline.ts, d10); without, `summary` and `headline`. */
+export function sinceRows(report: BlackBoxReport, t?: TFunction, lang = "en"): SinceRow[] | null {
   const slw = report.since_last_worked;
   if (!slw?.anchor) return null;
   const from = ms(slw.anchor.started_at);
@@ -62,7 +64,7 @@ export function sinceRows(report: BlackBoxReport, t?: TFunction): SinceRow[] | n
       key: `incident:${i.incident_id || `${i.when}-${n}`}`,
       kind: "incident",
       at: i.when,
-      text: i.headline,
+      text: t ? incidentHeadline(i, t, lang) : i.headline,
       observedBetween: null,
       rolledBack: false,
     }));
@@ -93,7 +95,7 @@ export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
   });
   if (!report || !slw) return null;
   const when = (iso: string) => fmtWhen(iso, i18n.language);
-  const rows = sinceRows(report, t);
+  const rows = sinceRows(report, t, i18n.language);
   const shown = rows?.slice(0, MAX_SINCE_ROWS) ?? [];
   const hidden = (rows?.length ?? 0) - shown.length;
   const openDrift = slw.open_drift ?? [];

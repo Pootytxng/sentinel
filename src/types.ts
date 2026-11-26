@@ -824,7 +824,11 @@ export type CrashIncident = {
   // announced once; the UI also uses it as the one-shot deep-link selector into Crash & Freeze
   // Rescue. Sixteen lowercase hex characters — opaque by construction, never a path or a filename.
   incident_id: string;
+  /** The English sentence (blackbox.rs build_headline). Shown only when `headline_parts` is absent. */
   headline: string;
+  /** d10 (mirrors `HeadlineParts` in blackbox.rs): the same headline as a code plus values, worded in
+   *  the app's language by src/data/incident-headline.ts. Optional for fixtures and older backends. */
+  headline_parts?: HeadlineParts | null;
   tag: string;
   when: string;
   when_display: string;
@@ -908,6 +912,17 @@ export type PendingCareIncident = {
   kind: string; // the neutral evidence tag ("App crash", "Blue screen")
   app_label: string | null; // pretty process name when Windows named one; never a path
   summary: string;
+  /** d10: absent or null on a card stored before the code existed; such a card shows `summary`. */
+  headline_parts?: HeadlineParts | null;
+};
+
+// d10 (mirrors `HeadlineParts` in src-tauri/src/blackbox.rs). `code` is one of HEADLINE_CODES
+// (src/data/incident-headline.ts); typed as string so a code this build doesn't know is handled, not
+// assumed away.
+export type HeadlineParts = {
+  code: string;
+  app: string | null;
+  while_game: string | null;
 };
 
 // Compy Pro — offline license status (mirrors src-tauri/src/license.rs LicenseStatus). DARK: while

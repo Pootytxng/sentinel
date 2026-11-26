@@ -36,9 +36,9 @@ import { CareNextStep } from "./CareNextStep";
 import { pickCareStep, isLifted, storedStutterStep, dismissStoredStep, markFinalShown, type StutterResult } from "./care-next-step";
 import { CareHonestEnd } from "./CareHonestEnd";
 import { prettyGameName } from "./game-name";
+import { incidentHeadline, incidentWording, recordWhen } from "../data/incident-headline";
 import {
   groupIncidents,
-  headlineWording,
   sharedUnknownItems,
   recordsApart,
   INCIDENT_CAP,
@@ -380,7 +380,9 @@ function IncidentRow({
    *  button that was pressed goes away. A plain deep-link arrival never sets it. */
   focusNonce?: number;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // d10: worded from the record's headline code in the app's language (incident-headline.ts).
+  const headline = incidentHeadline(inc, t, i18n.language);
   const [showReceipt, setShowReceipt] = useState(false);
   const headId = useId();
   const noteId = useId();
@@ -405,7 +407,7 @@ function IncidentRow({
       className="bb-item"
       ref={ref}
       tabIndex={-1}
-      aria-label={t("gaming.blackBox.recordLabel", { headline: inc.headline })}
+      aria-label={t("gaming.blackBox.recordLabel", { headline })}
       // aria-label names the record; the "this is the one you came here to see" note is read as its
       // description, so a screen reader hears both when focus lands here.
       aria-describedby={selected ? noteId : undefined}
@@ -419,12 +421,12 @@ function IncidentRow({
       <div className="bb-item-head">
         {compact ? (
           <span className="bb-headline" id={headId}>
-            {fullHeadline ? inc.headline : inc.when_display}
+            {fullHeadline ? headline : recordWhen(inc.when, inc.when_display, i18n.language)}
           </span>
         ) : (
           <>
             <span className="bb-tag">{inc.tag}</span>
-            <span className="bb-headline">{inc.headline}</span>
+            <span className="bb-headline">{headline}</span>
           </>
         )}
       </div>
@@ -640,9 +642,14 @@ function IncidentGroupBlock({
       : app && newest.tag === "App hang"
       ? "gaming.blackBox.group.hang"
       : null;
-  const headline = lineKey
-    ? t(lineKey, { count, app, range })
-    : t("gaming.blackBox.group.other", { count, what: headlineWording(newest), range });
+  // d10: one literal key per line (no computed key); the "other" line's `what` is the record's
+  // headline without its time, in the app's language.
+  const headline =
+    lineKey === "gaming.blackBox.group.crash"
+      ? t("gaming.blackBox.group.crash", { count, app, range })
+      : lineKey === "gaming.blackBox.group.hang"
+      ? t("gaming.blackBox.group.hang", { count, app, range })
+      : t("gaming.blackBox.group.other", { count, what: incidentWording(newest, t), range });
   const apart = useMemo(() => recordsApart(group, allIncidents), [group, allIncidents]);
   // Members share one next step (it is part of the key): if it is the step shown above, say so once.
   const lifted = items.some(isLiftedInc);
@@ -734,7 +741,7 @@ function IncidentGroupBlock({
               lifted={isLiftedInc(inc)}
               compact
               // A crash/hang group headline names the program only; each record's own headline (which
-              // can carry ", while X was running") stays in full, in the backend's words.
+              // can carry ", while X was running") stays in full, worded from its code (d10).
               fullHeadline={!!lineKey}
               hideCategories={hide}
             />
