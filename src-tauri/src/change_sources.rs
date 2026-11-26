@@ -2224,6 +2224,18 @@ mod tests {
         assert_eq!(log.covered_from, Some(utc("2026-10-06T12:00:00Z")), "older rows were not read, so the read does not speak for them");
     }
 
+    #[test]
+    fn a_flood_past_the_row_cap_reaches_back_only_to_the_oldest_row_it_read() {
+        // One row a minute, newest first, one more than the cap: older rows exist and were not read.
+        let newest = utc("2026-10-07T12:00:00Z");
+        let raw: String = (0..=MAX_EVENTS as i64).map(|i| whea(&(newest - ChronoDuration::minutes(i)).to_rfc3339(), 17)).collect();
+        let a = assess(&raw, false, Some(utc("2026-09-01T00:00:00Z")), parse_whea(&raw)).expect("readable");
+        assert!(a.gaps.contains(&Gap::RowCapReached));
+        let log = whea_log(a, utc("2026-10-01T00:00:00Z"), utc("2026-10-08T00:00:00Z")).expect("a log");
+        assert_eq!(log.records.len(), MAX_EVENTS + 1);
+        assert_eq!(log.covered_from, Some(newest - ChronoDuration::minutes(MAX_EVENTS as i64)), "never the log's own start after the cap");
+    }
+
     // ---- drivers --------------------------------------------------------------------------
 
     #[test]

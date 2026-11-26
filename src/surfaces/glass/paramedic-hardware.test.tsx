@@ -1,8 +1,9 @@
 // F7 slice 1: how the Something's-wrong card words a hardware lead (Windows' hardware error records). A feature
 // test, not a guard. The engine's answer is mocked (codes, counts and dates only); every sentence asserted here is the
 // card's own, written out literally in both languages so a wrong meaning fails here and not by copying the JSON.
-// What must hold: a hardware lead never says "one change" or "try the fix"; "This looks like hardware" only at Most
-// likely; no button; an unread or uncovered log is under "Compy couldn't see" and never a "none" line.
+// What must hold: a hardware lead never says "one change" or "try the fix"; it is "may be hardware" and never "looks
+// like" (the lead is Possible at most, review r1); no button; an unread or uncovered log is under "Compy couldn't
+// see", carries "Not read" and never "Not recorded", and is never a "none" line.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "fs";
@@ -71,20 +72,25 @@ const count = (n: number) => ev("whea-count", { count: String(n), from: "2026-10
 const inRough = (n: number, of: number) => ev("whea-in-rough", { count: String(n), of: String(of) }, { kind: "measured", source: "sessions" });
 const clean = ev("whea-normal-clean", { base: "4" }, { source: "sessions" });
 const inNormal = (n: number) => ev("whea-in-normal", { count: String(n) }, { against: true, source: "sessions" });
+const earlier = (n: number) => ev("whea-earlier", { count: String(n), from: "2026-10-01T20:00:00Z", to: "2026-10-03T15:00:00Z" }, { against: true });
 const unread = ev("whea-normal-unread", { from: "2026-10-03T00:00:00Z" }, { kind: "unknown" });
 
-const hardware = (confidence: F["confidence"], evidence: ParamedicEvidence[], over: Partial<F> = {}): F => ({
+/** A hardware finding as the engine sends it: Possible, with no action. Several records carry a first-to-last span. */
+const hardware = (evidence: ParamedicEvidence[], over: Partial<F> = {}): F => ({
   id: "hardware-errors",
-  confidence,
-  in_play: confidence === "possible",
+  confidence: "possible",
+  in_play: true,
   evidence,
-  since_when: { kind: "exact", at: "2026-10-06T12:00:00Z" },
+  since_when:
+    evidence[0]?.args.count === "1"
+      ? { kind: "exact", at: "2026-10-06T12:00:00Z" }
+      : { kind: "observed-between", from: "2026-10-06T12:00:00Z", to: "2026-10-07T10:05:00Z" },
   fix: { kind: "hardware", code: "hardware-errors" },
   now: null,
   now_evidence: [],
   ...over,
 });
-const likely = () => hardware("likely", [count(2), inRough(1, 2), clean]);
+const usual = () => hardware([count(2), inRough(1, 2), clean]);
 const driver = (confidence: F["confidence"]): F => ({
   id: "gpu-driver-change",
   confidence,
@@ -124,100 +130,87 @@ const rows = () => screen.queryAllByTestId("paramedic-candidate");
 const card = () => screen.getByTestId("paramedic").textContent ?? "";
 const block = () => screen.getByTestId("paramedic-hardware");
 const tell = () => within(screen.getByTestId("paramedic-hardware-tell")).getAllByRole("listitem").map((li) => li.textContent ?? "");
+const openRow = (i = 0) => fireEvent.click(within(rows()[i]).getAllByRole("button")[0]);
 
 const EN = {
-  step1: "If you changed an overclock, an undervolt or a memory profile (XMP or EXPO) in your BIOS, set it back to its default, play Game A once, then press Something's wrong again.",
+  verdict: "Windows recorded at least one hardware error in the same period, but Compy can't prove it is behind this.",
+  next: "Open the first one to see what you can check. If you change anything, play Game A once, then press Something's wrong again.",
+  step1: "If you changed an overclock or an undervolt in your BIOS, set it back to its default, play Game A once, then press Something's wrong again.",
   step2: "Press Windows + X and open Event Viewer. Under Windows Logs, open System and filter by the source WHEA-Logger. Open each record to read what Windows wrote about it.",
-  step3: "If Windows keeps recording these with every BIOS setting at its default, give these lines to the PC's maker or a repair shop:",
+  step3: "If Windows keeps recording these after that, give these lines to the PC's maker or a repair shop:",
   intro: "Windows keeps a record when a part of the PC reports an error about itself. Compy has no setting to change for that. What you can do:",
   tellPart: "Compy has not read which part of the PC reported this.",
 };
 
 describe("a hardware lead on the Something's-wrong card (en)", () => {
-  it('a most-likely hardware lead says "This looks like hardware" and shows no "How to fix it"', async () => {
-    await ask(found([likely()]));
-    expect(verdict()).toBe("Windows' hardware error records line up best with what happened. They're listed first.");
+  it('a hardware lead says "This may be hardware" and shows no "How to fix it"', async () => {
+    await ask(found([usual()]));
+    expect(verdict()).toBe(EN.verdict);
     expect(rows().length).toBe(1);
     expect(rows()[0].textContent).toMatch(/Windows recorded hardware errors/);
-    expect(within(rows()[0]).getByText("Most likely")).toBeTruthy();
+    // Several records: the row is dated from the first to the last, never "On <the first one>".
+    expect(rows()[0].textContent).toMatch(/Between .+ and .+/);
+    expect(within(rows()[0]).getByText("Possible")).toBeTruthy();
     // Nothing of the block shows until the row is opened.
     expect(screen.queryByTestId("paramedic-hardware")).toBeNull();
-    fireEvent.click(within(rows()[0]).getByRole("button"));
-    expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("This looks like hardware");
+    openRow();
+    expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("This may be hardware");
     expect(within(block()).getByText(EN.intro)).toBeTruthy();
     const steps = within(block()).getAllByRole("listitem").map((li) => li.textContent);
     expect(steps.slice(0, 3)).toEqual([EN.step1, EN.step2, EN.step3]);
     expect(card()).not.toMatch(/How to fix it|How to test this/);
-    expect(card()).not.toMatch(/One change lines up|A change lines up|Try the steps under the first one/);
-    expect(screen.getByText("Open the first one to see what you can check. If you change anything, play Game A once, then press Something's wrong again.")).toBeTruthy();
+    expect(card()).not.toMatch(/One change lines up|A change lines up|Try the steps under the first one|Check it, play/);
+    expect(screen.getByText(EN.next)).toBeTruthy();
   });
 
   it("a hardware lead offers no button: nothing in its block can change the PC", async () => {
-    await ask(found([likely()]));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
+    await ask(found([usual()]));
+    openRow();
     expect(within(block()).queryAllByRole("button")).toEqual([]);
     expect(within(block()).queryAllByRole("link")).toEqual([]);
   });
 
-  it('a possible hardware finding says "This may be hardware" and never "looks like"', async () => {
-    await ask(found([hardware("possible", [count(1), clean])]));
-    expect(verdict()).toBe("Windows recorded at least one hardware error in the same period, but Compy can't prove it is behind this.");
-    expect(rows()[0].textContent).toMatch(/Windows recorded a hardware error/);
-    expect(rows()[0].textContent).not.toMatch(/hardware errors/);
-    expect(within(rows()[0]).getByText("Possible")).toBeTruthy();
-    fireEvent.click(within(rows()[0]).getByRole("button"));
-    expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("This may be hardware");
-    // The whole opened row and the verdict above it.
+  it('"looks like" and "Most likely" are never said about a hardware lead', async () => {
+    await ask(found([usual()]));
+    openRow();
     const said = `${verdict()} ${rows()[0].textContent}`;
     expect(said).not.toMatch(/looks like/i);
     expect(said).not.toMatch(/Most likely/);
-    expect(card()).not.toMatch(/How to fix it|How to test this/);
-  });
-
-  it("the steps are the same at Possible and at Most likely; only the heading differs", async () => {
-    const stepsOf = async (f: F) => {
-      await ask(found([f]));
-      fireEvent.click(within(rows()[0]).getByRole("button"));
-      const lines = within(block()).getAllByRole("listitem").map((li) => li.textContent).slice(0, 3);
-      const title = screen.getByTestId("paramedic-hardware-title").textContent;
-      cleanup();
-      return { lines, title };
-    };
-    const a = await stepsOf(likely());
-    const b = await stepsOf(hardware("possible", [count(2), clean]));
-    expect(a.lines).toEqual(b.lines);
-    expect(a.lines).toEqual([EN.step1, EN.step2, EN.step3]);
-    expect([a.title, b.title]).toEqual(["This looks like hardware", "This may be hardware"]);
+    cleanup();
+    // Even if a later engine sent a higher level, the card's own hardware sentences claim no more than "may be".
+    await ask(found([hardware([count(2), inRough(1, 2), clean], { confidence: "likely", in_play: false })]));
+    openRow();
+    expect(verdict()).toBe(EN.verdict);
+    expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("This may be hardware");
+    expect(card()).not.toMatch(/looks like/i);
   });
 
   it('the hardware lead never shows "until you try the fix"', async () => {
-    await ask(found([likely()]));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
-    expect(screen.getByText("Compy can't prove this from the records alone.")).toBeTruthy();
+    await ask(found([hardware([count(2), inRough(1, 2), clean], { confidence: "likely", in_play: false })]));
+    openRow();
     expect(card()).not.toMatch(/until you try the fix/);
     cleanup();
     // The other leads keep their own line.
     await ask(found([driver("likely")]));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
+    openRow();
     expect(screen.getByText("Compy can't prove this until you try the fix and play again.")).toBeTruthy();
-    expect(card()).not.toMatch(/from the records alone/);
   });
 
   it("the evidence lines give counts and dates, and the lines to pass on repeat them", async () => {
-    await ask(found([likely()]));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
+    await ask(found([usual()]));
+    openRow();
     const many = /^Windows recorded hardware errors at 2 separate times between .+ and .+ \(source: WHEA-Logger; records under a minute apart count once\)\.$/;
     const lines = tell();
     expect(lines.length).toBe(3);
     expect(lines[0]).toMatch(many);
-    expect(lines[1]).toBe("1 of these fell during or just after a Game A session Compy measured as rough.");
+    expect(lines[1]).toBe("1 of these fell while a Game A session Compy measured as rough was running, or just after it ended.");
     expect(lines[2]).toBe(EN.tellPart);
     expect(screen.getByText("Compy found none during or just after the 4 normal Game A sessions it checked, and its read of Windows' log goes back past the oldest of them.")).toBeTruthy();
   });
 
   it("the rough-session line is absent when no record sat in a rough session", async () => {
-    await ask(found([hardware("possible", [count(2), clean])]));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
+    await ask(found([hardware([count(2), clean])]));
+    openRow();
     const lines = tell();
     expect(lines.length).toBe(2);
     expect(lines[1]).toBe(EN.tellPart);
@@ -225,50 +218,76 @@ describe("a hardware lead on the Something's-wrong card (en)", () => {
   });
 
   it('a lone record in a rough session says "It fell", never "1 of these"', async () => {
-    await ask(found([hardware("possible", [count(1), inRough(1, 1), clean])]));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
+    await ask(found([hardware([count(1), inRough(1, 1), clean])]));
+    expect(rows()[0].textContent).toMatch(/Windows recorded a hardware error/);
+    expect(rows()[0].textContent).not.toMatch(/hardware errors/);
+    expect(rows()[0].textContent).toMatch(/On .+/);
+    openRow();
     const lines = tell();
     expect(lines[0]).toMatch(/^Windows recorded a hardware error on .+ \(source: WHEA-Logger\)\.$/);
     expect(lines[1]).toBe("It fell during or just after a Game A session Compy measured as rough.");
     expect(card()).not.toMatch(/of these/);
   });
 
-  it("a record in a normal session is shown as weakening the lead", async () => {
-    await ask(found([hardware("possible", [count(2), inRough(1, 2), inNormal(1)], { in_play: false })]));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
-    const li = screen.getByText("Windows also recorded one while Game A was running in its usual range, or just after.").closest("li")!;
+  it('a record in a normal session is shown as weakening the lead, and never with "also"', async () => {
+    await ask(found([hardware([count(1), inNormal(1)], { in_play: false })]));
+    openRow();
+    const li = screen.getByText("Windows recorded a hardware error while Game A was running in its usual range, or just after.").closest("li")!;
     expect(within(li).getByText("Weakens this")).toBeTruthy();
     expect(card()).not.toMatch(/Compy found none during/);
+    expect(rows()[0].textContent).not.toMatch(/\balso\b/);
     cleanup();
-    await ask(found([hardware("possible", [count(2), inNormal(3)], { in_play: false })]));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
-    expect(screen.getByText("Windows also recorded 3 of them while Game A was running in its usual range, or just after.")).toBeTruthy();
+    await ask(found([hardware([count(2), inNormal(3)], { in_play: false })]));
+    openRow();
+    expect(screen.getByText("At 3 separate times, Windows recorded a hardware error while Game A was running in its usual range, or just after.")).toBeTruthy();
   });
 
-  it("normal sessions the read did not reach are said as not read, never as clean", async () => {
-    await ask(found([hardware("possible", [count(2), inRough(1, 2), unread])]));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
+  it("records from before the game got rough are shown, and weaken the lead", async () => {
+    await ask(found([hardware([count(2), inRough(1, 2), clean, earlier(3)], { in_play: false })]));
+    openRow();
+    const line = screen.getByText(/^Windows also recorded hardware errors at 3 separate times before Game A got rough, between .+ and .+\.$/);
+    expect(within(line.closest("li")!).getByText("Weakens this")).toBeTruthy();
+    cleanup();
+    await ask(found([hardware([count(2), clean, earlier(1)], { in_play: false })]));
+    openRow();
+    expect(screen.getByText(/^Windows also recorded a hardware error on .+, before Game A got rough\.$/)).toBeTruthy();
+  });
+
+  it('normal sessions the read did not reach carry "Not read", never "Not recorded" and never "found none"', async () => {
+    await ask(found([hardware([count(2), inRough(1, 2), unread])]));
+    openRow();
     const line = screen.getByText(/^Compy's read of Windows' log only reaches back to .+, so it can't tell whether such errors were also recorded during the normal sessions before that\.$/);
-    expect(within(line.closest("li")!).getByText("Not recorded")).toBeTruthy();
+    const li = line.closest("li")!;
+    expect(within(li).getByText("Not read")).toBeTruthy();
+    expect(li.textContent).not.toMatch(/Not recorded/);
+    expect(rows()[0].textContent).not.toMatch(/Not recorded/);
     expect(card()).not.toMatch(/Compy found none during/);
   });
 
-  it('a tie with a hardware lead never says "two changes" or "easier to undo"', async () => {
-    await ask(found([likely(), driver("likely")], { why_first: "tie" }));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
-    expect(card()).toMatch(/Why this one first: Windows' hardware error records and another change line up equally\. Compy can't rank one above the other\./);
-    expect(card()).not.toMatch(/easier to undo|Two changes line up/);
+  it("in play beside another change, the card says it can't tell them apart and keeps the hardware row's own words", async () => {
+    await ask(found([driver("possible"), usual()], { why_first: "not-separable" }));
+    expect(verdict()).toBe("Compy can't tell which of these it is yet");
+    expect(rows().length).toBe(2);
+    expect(screen.getByText("Play Game A once more. Compy may still not be able to tell these apart.")).toBeTruthy();
+    openRow(1);
+    expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("This may be hardware");
+    expect(rows()[1].textContent).not.toMatch(/How to fix it|How to test this/);
   });
 
   it("a hardware finding behind another lead leaves that lead's sentences as they were", async () => {
-    await ask(found([driver("likely"), hardware("possible", [count(1), clean])]));
+    await ask(found([driver("likely"), usual()]));
     expect(verdict()).toBe("One change lines up best with what happened. It's listed first.");
     expect(screen.getByText(/Try the steps under the first one, play Game A once/)).toBeTruthy();
     expect(rows().length).toBe(2);
-    fireEvent.click(within(rows()[1]).getByRole("button"));
+    openRow(1);
     expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("This may be hardware");
-    // "Can't prove" belongs to the lead only; the second row gets neither sentence.
-    expect(card()).not.toMatch(/from the records alone/);
+  });
+
+  it("under a tie between two changes, the hardware row is listed without a tie sentence of its own", async () => {
+    await ask(found([driver("likely"), { ...driver("likely"), id: "windows-build-change" }, usual()], { why_first: "tie" }));
+    expect(verdict()).toBe("One change lines up best with what happened. It's listed first.");
+    openRow(0);
+    expect(card()).toMatch(/Why this one first: Two changes line up equally\. Start with the one that's easier to undo\./);
   });
 
   it('an unread hardware log renders under "Compy couldn\'t see" and no checked line', async () => {
@@ -294,30 +313,32 @@ describe("a hardware lead on the Something's-wrong card (en)", () => {
 });
 
 const ZH = {
-  step1: "如果你在 BIOS 里改过超频、降压或内存配置文件（XMP 或 EXPO），先把它改回默认值，再玩一次 Game A，然后再点“出问题了”。",
+  verdict: "Windows 在同一时期记录了至少一次硬件错误，但 Compy 无法证明问题出在这里。",
+  step1: "如果你在 BIOS 里改过超频或降压，先把它改回默认值，再玩一次 Game A，然后再点“出问题了”。",
   step2: "按 Windows + X，打开“事件查看器”。在“Windows 日志”下打开“系统”，按来源 WHEA-Logger 筛选。逐条打开，看 Windows 对它的描述。",
-  step3: "如果 BIOS 设置全部恢复默认后 Windows 仍在记录这类错误，把下面这几行告诉电脑厂商或维修店：",
+  step3: "如果这样之后 Windows 仍在记录这类错误，把下面这几行告诉电脑厂商或维修店：",
   intro: "当电脑的某个部件报告自身出错时，Windows 会留下一条记录。对此 Compy 没有可以更改的设置。你可以这样做：",
   tellPart: "Compy 没有读取是电脑的哪个部件报告的。",
 };
 
 describe("a hardware lead on the Something's-wrong card (zh-CN)", () => {
-  it("最有可能的硬件线索：说“这看起来是硬件问题”，不出现“如何解决”", async () => {
-    await ask(found([likely()]), "zh-CN");
-    expect(verdict()).toBe("Windows 的硬件错误记录与发生的情况最吻合，已排在最前面。");
+  it("硬件线索：说“这有可能是硬件问题”，不出现“如何解决”", async () => {
+    await ask(found([usual()]), "zh-CN");
+    expect(verdict()).toBe(ZH.verdict);
     expect(rows()[0].textContent).toMatch(/Windows 记录了硬件错误/);
-    expect(within(rows()[0]).getByText("最有可能")).toBeTruthy();
-    fireEvent.click(within(rows()[0]).getByRole("button"));
-    expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("这看起来是硬件问题");
+    expect(within(rows()[0]).getByText("有可能")).toBeTruthy();
+    openRow();
+    expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("这有可能是硬件问题");
     expect(within(block()).getByText(ZH.intro)).toBeTruthy();
     const steps = within(block()).getAllByRole("listitem").map((li) => li.textContent);
     expect(steps.slice(0, 3)).toEqual([ZH.step1, ZH.step2, ZH.step3]);
     expect(card()).not.toMatch(/如何解决|如何验证这一点/);
-    expect(card()).not.toMatch(/有一项变化|先试试第一项里的步骤/);
+    expect(card()).not.toMatch(/有一项变化|先试试第一项里的步骤|先检查一下/);
     expect(screen.getByText("点开第一项，看看你可以检查什么。如果你改了什么，再玩一次 Game A，然后再点“出问题了”。")).toBeTruthy();
-    // "Can't prove", without "until you try the fix".
-    expect(screen.getByText("仅凭这些记录，Compy 无法证明这一点。")).toBeTruthy();
     expect(card()).not.toMatch(/在你试过解决办法/);
+    const said = `${verdict()} ${rows()[0].textContent}`;
+    expect(said).not.toMatch(/看起来/);
+    expect(said).not.toMatch(/最有可能/);
     const lines = tell();
     expect(lines.length).toBe(3);
     expect(lines[0]).toMatch(/^在 .+ 到 .+ 之间，Windows 在 2 个不同的时间记录了硬件错误（来源：WHEA-Logger；相隔不到一分钟的记录算作一次）。$/);
@@ -327,21 +348,25 @@ describe("a hardware lead on the Something's-wrong card (zh-CN)", () => {
     expect(within(block()).queryAllByRole("button")).toEqual([]);
   });
 
-  it("有可能的硬件线索：说“这有可能是硬件问题”，不说“看起来”", async () => {
-    await ask(found([hardware("possible", [count(1), inRough(1, 1), inNormal(1), unread], { in_play: false })]), "zh-CN");
-    expect(verdict()).toBe("Windows 在同一时期记录了至少一次硬件错误，但 Compy 无法证明问题出在这里。");
+  it("一条记录、落在正常运行里、更早也有、日志没读到：各说各的，不说“看起来”", async () => {
+    await ask(found([hardware([count(1), inRough(1, 1), inNormal(1), earlier(1), unread], { in_play: false })]), "zh-CN");
+    expect(verdict()).toBe(ZH.verdict);
     expect(rows()[0].textContent).toMatch(/Windows 记录了一次硬件错误/);
-    expect(within(rows()[0]).getByText("有可能")).toBeTruthy();
-    fireEvent.click(within(rows()[0]).getByRole("button"));
+    openRow();
     expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("这有可能是硬件问题");
-    const said = `${verdict()} ${rows()[0].textContent}`;
-    expect(said).not.toMatch(/看起来/);
-    expect(said).not.toMatch(/最有可能/);
     const lines = tell();
     expect(lines[0]).toMatch(/^Windows 在 .+ 记录了一次硬件错误（来源：WHEA-Logger）。$/);
     expect(lines[1]).toBe("它落在 Compy 测为不顺的 Game A 运行期间或刚结束之后。");
-    expect(screen.getByText("在 Game A 正常运行期间或刚结束之后，Windows 也记录了一次。")).toBeTruthy();
-    expect(screen.getByText(/^Compy 这次读取 Windows 日志只追溯到 .+，所以说不准在那之前的正常运行期间是否也记录了这类错误。$/)).toBeTruthy();
+    expect(screen.getByText("在 Game A 正常运行期间或刚结束之后，Windows 记录过一次硬件错误。")).toBeTruthy();
+    expect(screen.getByText(/^在 Game A 变得不顺之前，Windows 也在 .+ 记录了一次硬件错误。$/)).toBeTruthy();
+    const unreadLine = screen.getByText(/^Compy 这次读取 Windows 日志只追溯到 .+，所以说不准在那之前的正常运行期间是否也记录了这类错误。$/);
+    expect(within(unreadLine.closest("li")!).getByText("未读取")).toBeTruthy();
+    expect(rows()[0].textContent).not.toMatch(/未记录/);
+    cleanup();
+    await ask(found([hardware([count(2), inNormal(3), earlier(2)], { in_play: false })]), "zh-CN");
+    openRow();
+    expect(screen.getByText("在 Game A 正常运行期间或刚结束之后，Windows 在 3 个不同的时间记录了硬件错误。")).toBeTruthy();
+    expect(screen.getByText(/^在 Game A 变得不顺之前，Windows 也在 .+ 到 .+ 之间的 2 个不同时间记录了硬件错误。$/)).toBeTruthy();
   });
 
   it("没读到的硬件错误日志列在“Compy 看不到”下面，不出现“没有”一类的检查结果", async () => {
@@ -364,11 +389,13 @@ describe("a hardware lead on the Something's-wrong card (zh-CN)", () => {
     expect(within(checked).getByText(/^硬件错误记录（来源：WHEA-Logger）：Compy 向 Windows 系统日志查询了 .+ 到 .+ 的这类记录，结果一条也没有返回。$/)).toBeTruthy();
   });
 
-  it("并列时不说“两项改动”或“更容易撤销”", async () => {
-    await ask(found([likely(), driver("likely")], { why_first: "tie" }), "zh-CN");
-    fireEvent.click(within(rows()[0]).getByRole("button"));
-    expect(card()).toMatch(/Windows 的硬件错误记录和另一项变化同样吻合，Compy 分不出哪一项在前。/);
-    expect(card()).not.toMatch(/更容易撤销|有两项改动/);
+  it("与另一项变化并列时：说分不清，硬件这一行仍用自己的话", async () => {
+    await ask(found([driver("possible"), usual()], { why_first: "not-separable" }), "zh-CN");
+    expect(verdict()).toBe("Compy 暂时还分不清是下面哪一项");
+    expect(rows().length).toBe(2);
+    openRow(1);
+    expect(screen.getByTestId("paramedic-hardware-title").textContent).toBe("这有可能是硬件问题");
+    expect(rows()[1].textContent).not.toMatch(/如何解决|如何验证这一点/);
   });
 });
 
@@ -383,22 +410,24 @@ describe("the hardware sentences obey the product text rules (en and zh-CN)", ()
     for (const [k, v] of Object.entries(j.hardware as Tree)) out[`hardware.${k}`] = v as string;
     for (const [k, v] of Object.entries((j.finding as Tree).hardwareErrors as Tree)) out[`finding.hardwareErrors.${k}`] = v as string;
     for (const [k, v] of Object.entries(j.unknown as Tree)) if (k.startsWith("hardwareErrors")) out[`unknown.${k}`] = v as string;
+    out["badge.notRead"] = (j.badge as Tree).notRead as string;
     return out;
   };
   const placeholders = (s: string) => [...s.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
 
   it("both languages carry the same keys with the same placeholders", () => {
     const [en, zh] = [added("en"), added("zh-CN")];
-    expect(Object.keys(en).length).toBe(26);
+    expect(Object.keys(en).length).toBe(25);
     expect(Object.keys(zh).sort()).toEqual(Object.keys(en).sort());
     for (const k of Object.keys(en)) expect(placeholders(zh[k]), k).toEqual(placeholders(en[k]));
+    expect([en["badge.notRead"], zh["badge.notRead"]]).toEqual(["Not read", "未读取"]);
   });
 
   it("en and zh hardware sentences hold none of the five barred words and no part name", () => {
     const barredEn = /\b(caused?|causes|causing|fixe[sd]|guarantee\w*|safe\w*|probably)\b/i;
     const barredZh = /导致|造成|引起|修好|修复|保证|安全|大概|多半|很可能/;
-    const partEn = /\b(CPU|GPU|RAM|processor|graphics card|motherboard|power supply|PSU|SSD|hard drive|memory stick)\b/i;
-    const partZh = /处理器|显卡|主板|电源|硬盘|内存条|CPU|GPU/;
+    const partEn = /\b(CPU|GPU|RAM|memory|processor|graphics card|motherboard|power supply|PSU|SSD|hard drive)\b/i;
+    const partZh = /处理器|显卡|主板|电源|硬盘|内存|CPU|GPU/;
     for (const [k, s] of Object.entries(added("en"))) {
       expect(s, k).not.toMatch(barredEn);
       expect(s, k).not.toMatch(partEn);
@@ -411,11 +440,11 @@ describe("the hardware sentences obey the product text rules (en and zh-CN)", ()
     }
   });
 
-  it('"looks like" is only the Most-likely heading, and no sentence says "none" about an unread log', () => {
+  it('no sentence says "looks like" or a level above Possible, and none says "none" about an unread log', () => {
     const en = added("en");
-    for (const [k, s] of Object.entries(en)) if (k !== "hardware.titleLikely") expect(s, k).not.toMatch(/looks like/i);
+    for (const [k, s] of Object.entries(en)) expect(s, k).not.toMatch(/looks like|most likely|likely|line up best/i);
     const zh = added("zh-CN");
-    for (const [k, s] of Object.entries(zh)) if (k !== "hardware.titleLikely") expect(s, k).not.toMatch(/看起来/);
+    for (const [k, s] of Object.entries(zh)) expect(s, k).not.toMatch(/看起来|最有可能|最吻合/);
     for (const k of ["unknown.hardwareErrorsSlow", "unknown.hardwareErrorsUnread", "unknown.hardwareErrorsBefore"]) {
       expect(en[k], k).toMatch(/^Whether Windows recorded hardware errors/);
       expect(en[k], k).not.toMatch(/\b(none|no hardware|zero|off)\b/i);
