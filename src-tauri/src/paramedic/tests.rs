@@ -7448,3 +7448,311 @@ fn home_status_back_in_range_matches_the_cards_recovery_answer() {
     // The owner's games are both still rough: nothing back in range.
     assert!(home_status::home_status(&fixture()).back_in_range.is_empty());
 }
+
+// ---- F7 slice 1: Windows' hardware error records as a lead (hardware_records.rs) ------------------------------
+mod hardware_records_f7 {
+    use super::super::hardware_records::{HwRead, HW_REPEAT_MIN, HW_SAME_EVENT_SECS, HW_SESSION_GRACE_SECS};
+    use super::*;
+
+    // Four normal sessions, 2026-10-01 to 04, each 10:00 to 10:10, then one rough session.
+    const ROUGH: &str = "2026-10-07T10:00:00Z";
+    const LAST_NORMAL_END: &str = "2026-10-04T10:10:00Z";
+    const OLDEST_NORMAL: &str = "2026-10-01T10:00:00Z";
+    /// When the log was read.
+    const NOW: &str = "2026-10-08T09:00:00Z";
+    /// Windows' log starts well before the oldest normal session.
+    const LOG_START: &str = "2026-09-01T00:00:00Z";
+    const IN_ROUGH: &str = "2026-10-07T10:05:00Z";
+    /// After the last normal session, outside every session.
+    const BETWEEN: &str = "2026-10-06T12:00:00Z";
+    const BETWEEN_EARLIER: &str = "2026-10-05T12:00:00Z";
+    const IN_NORMAL: &str = "2026-10-02T10:05:00Z";
+
+    fn utc(s: &str) -> DateTime<Utc> {
+        ts(s).expect("a time")
+    }
+
+    fn scenario() -> Vec<SessionFacts> {
+        let mut s = steady(4);
+        s.push(facts(ROUGH, 600, 600, 100.0, 30.0));
+        s
+    }
+
+    fn read(records: &[&str], covered_from: &str) -> HwRead {
+        HwRead::Read { records: records.iter().map(|r| utc(r)).collect(), covered_from: utc(covered_from), until: utc(NOW) }
+    }
+
+    fn run_on(sessions: Vec<SessionFacts>, hw: HwRead) -> Diagnosis {
+        let mut inp = inputs(sessions);
+        inp.hardware = hw;
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    fn run(hw: HwRead) -> Diagnosis {
+        run_on(scenario(), hw)
+    }
+
+    fn lead(d: &Diagnosis) -> Option<&Finding> {
+        d.findings.iter().find(|f| f.id == "hardware-errors")
+    }
+
+    fn codes(f: &Finding) -> Vec<&'static str> {
+        f.evidence.iter().map(|e| e.code).collect()
+    }
+
+    fn line<'a>(f: &'a Finding, code: &str) -> &'a Evidence {
+        f.evidence.iter().find(|e| e.code == code).unwrap_or_else(|| panic!("no {code} line in {:?}", codes(f)))
+    }
+
+    fn says_none(d: &Diagnosis) -> bool {
+        d.seen.iter().any(|s| s.id == "hardware-errors-none")
+    }
+
+    fn hardware_unknowns(d: &Diagnosis) -> Vec<&'static str> {
+        d.unknowns.iter().copied().filter(|u| u.starts_with("hardware-errors")).collect()
+    }
+
+    #[test]
+    fn the_scenario_is_one_measured_rough_session_after_four_normal_ones() {
+        let d = run(HwRead::NotRead);
+        let p = d.problem.as_ref().expect("a measured problem");
+        assert_eq!(p.sessions_affected.len(), 1);
+        assert_eq!(d.first_bad.as_ref().map(|s| s.started_at.as_str()), Some(ROUGH));
+        assert_eq!((HW_REPEAT_MIN, HW_SAME_EVENT_SECS, HW_SESSION_GRACE_SECS), (2, 60, 90));
+    }
+
+    #[test]
+    fn a_fixture_that_never_read_the_log_says_nothing_about_hardware_errors() {
+        assert!(matches!(HwRead::default(), HwRead::NotRead));
+        let d = run(HwRead::default());
+        assert!(lead(&d).is_none() && !says_none(&d) && hardware_unknowns(&d).is_empty(), "{:?} {:?}", d.seen, d.unknowns);
+    }
+
+    #[test]
+    fn a_covered_empty_read_says_none_found_with_the_span_it_read() {
+        let d = run(read(&[], LOG_START));
+        assert!(lead(&d).is_none());
+        let none = d.seen.iter().find(|s| s.id == "hardware-errors-none").expect("the checked line");
+        assert_eq!((none.args["from"].as_str(), none.args["to"].as_str()), (LAST_NORMAL_END, NOW));
+        assert!(hardware_unknowns(&d).is_empty());
+    }
+
+    #[test]
+    fn one_hardware_error_record_in_the_window_is_possible() {
+        let d = run(read(&[BETWEEN], LOG_START));
+        let f = lead(&d).expect("a lead");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert_eq!(f.since_when, When::Exact { at: BETWEEN.into() });
+        assert_eq!(codes(f), ["whea-count", "whea-normal-clean"]);
+        let count = line(f, "whea-count");
+        assert_eq!((count.args["count"].as_str(), count.args["from"].as_str(), count.args["to"].as_str()), ("1", BETWEEN, BETWEEN));
+        assert!(!says_none(&d) && hardware_unknowns(&d).is_empty());
+        // One record is one record, even inside the rough session: Windows' count is not a second support.
+        let inside = run(read(&[IN_ROUGH], LOG_START));
+        let f = lead(&inside).expect("a lead");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert_eq!(line(f, "whea-in-rough").args["count"], "1");
+    }
+
+    #[test]
+    fn records_under_sixty_seconds_apart_count_once() {
+        let d = run(read(&[IN_ROUGH, "2026-10-07T10:05:59Z", "2026-10-07T10:05:30Z"], LOG_START));
+        let f = lead(&d).expect("a lead");
+        assert_eq!(line(f, "whea-count").args["count"], "1");
+        assert_eq!(line(f, "whea-in-rough").args["count"], "1");
+        assert_eq!(f.confidence, Certainty::Possible, "three rows of one event are not a repeat");
+        // Sixty seconds apart is two.
+        let two = run(read(&[IN_ROUGH, "2026-10-07T10:06:00Z"], LOG_START));
+        let f = lead(&two).expect("a lead");
+        assert_eq!(line(f, "whea-count").args["count"], "2");
+        assert_eq!(f.confidence, Certainty::Likely);
+    }
+
+    #[test]
+    fn two_records_with_one_inside_a_rough_session_and_a_covered_clean_baseline_is_likely() {
+        let d = run(read(&[BETWEEN, IN_ROUGH], LOG_START));
+        let f = lead(&d).expect("a lead");
+        assert_eq!(f.confidence, Certainty::Likely);
+        assert_eq!(ids(&d)[0], "hardware-errors");
+        assert_eq!(codes(f), ["whea-count", "whea-in-rough", "whea-normal-clean"]);
+        assert_eq!(line(f, "whea-count").args["count"], "2");
+        assert_eq!(line(f, "whea-in-rough").args["count"], "1");
+        assert_eq!(line(f, "whea-normal-clean").args["base"], "4");
+        assert!(f.evidence.iter().all(|e| !e.against));
+        // A record up to 90 s after the rough session's recorded end still belongs to it; one later does not.
+        let grace = run(read(&[BETWEEN, "2026-10-07T10:11:30Z"], LOG_START));
+        assert_eq!(lead(&grace).expect("a lead").confidence, Certainty::Likely);
+        let late = run(read(&[BETWEEN, "2026-10-07T10:11:31Z"], LOG_START));
+        assert_eq!(lead(&late).expect("a lead").confidence, Certainty::Possible);
+    }
+
+    #[test]
+    fn two_records_outside_every_session_stay_possible() {
+        let d = run(read(&[BETWEEN_EARLIER, BETWEEN], LOG_START));
+        let f = lead(&d).expect("a lead");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert_eq!(codes(f), ["whea-count", "whea-normal-clean"]);
+        assert_eq!(line(f, "whea-count").args["count"], "2");
+        assert!(f.in_play);
+    }
+
+    #[test]
+    fn a_record_inside_a_normal_session_weakens_it_and_caps_it_at_possible() {
+        let d = run(read(&[IN_NORMAL, BETWEEN, IN_ROUGH], LOG_START));
+        let f = lead(&d).expect("a lead");
+        assert_eq!(f.confidence, Certainty::Possible, "two records and a rough session, but one sat in a normal session");
+        assert_eq!(codes(f), ["whea-count", "whea-in-rough", "whea-in-normal"]);
+        let against = line(f, "whea-in-normal");
+        assert!(against.against);
+        assert_eq!(against.args["count"], "1");
+        assert_eq!(line(f, "whea-count").args["count"], "2", "the count is of the period after the last normal session");
+        assert!(!f.in_play);
+    }
+
+    #[test]
+    fn a_record_only_inside_a_normal_session_is_no_lead() {
+        let d = run(read(&[IN_NORMAL], LOG_START));
+        assert!(lead(&d).is_none());
+        assert!(says_none(&d), "none after the last normal session, and the line says only that span");
+    }
+
+    #[test]
+    fn a_baseline_the_log_does_not_reach_is_unread_not_clean() {
+        // The log starts on the 3rd: after two of the four normal sessions.
+        let d = run(read(&[BETWEEN, IN_ROUGH], "2026-10-03T00:00:00Z"));
+        let f = lead(&d).expect("a lead");
+        assert_eq!(f.confidence, Certainty::Possible, "the second support needs the normal sessions read");
+        assert_eq!(codes(f), ["whea-count", "whea-in-rough", "whea-normal-unread"]);
+        let unread = line(f, "whea-normal-unread");
+        assert_eq!((unread.kind, unread.args["from"].as_str()), (EvidenceKind::Unknown, "2026-10-03T00:00:00Z"));
+        // Reaching exactly the oldest normal session's start is reaching it.
+        let edge = run(read(&[BETWEEN, IN_ROUGH], OLDEST_NORMAL));
+        assert_eq!(lead(&edge).expect("a lead").confidence, Certainty::Likely);
+    }
+
+    #[test]
+    fn an_unavailable_hardware_read_is_an_unknown_and_never_a_none_line() {
+        let slow = run(HwRead::Unavailable("took-too-long"));
+        assert_eq!(hardware_unknowns(&slow), ["hardware-errors-slow"]);
+        assert!(lead(&slow).is_none() && !says_none(&slow));
+        for why in ["read-failed", "reader-failed", "no-window"] {
+            let d = run(HwRead::Unavailable(why));
+            assert_eq!(hardware_unknowns(&d), ["hardware-errors-unread"], "{why}");
+            assert!(lead(&d).is_none() && !says_none(&d), "{why}");
+        }
+    }
+
+    #[test]
+    fn a_window_the_log_does_not_reach_never_says_none_found() {
+        // The log starts two days after the last normal session ended.
+        let d = run(read(&[], "2026-10-06T00:00:00Z"));
+        assert!(lead(&d).is_none() && !says_none(&d));
+        assert_eq!(hardware_unknowns(&d), ["hardware-errors-before"]);
+        // Records in the part that was read are still a lead, without the second support.
+        let some = run(read(&[IN_ROUGH, "2026-10-07T10:08:00Z"], "2026-10-06T00:00:00Z"));
+        let f = lead(&some).expect("a lead");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert!(codes(f).contains(&"whea-normal-unread"));
+    }
+
+    #[test]
+    fn the_hardware_finding_carries_fix_hardware_and_never_steps_or_one_click() {
+        for records in [vec![BETWEEN], vec![BETWEEN, IN_ROUGH], vec![IN_NORMAL, BETWEEN]] {
+            let d = run(read(&records, LOG_START));
+            assert_eq!(lead(&d).expect("a lead").fix, Fix::Hardware { code: "hardware-errors" }, "{records:?}");
+        }
+    }
+
+    #[test]
+    fn a_timing_only_hardware_finding_never_ranks_above_a_change_with_a_support() {
+        let mut sess = steady(4);
+        for s in sess.iter_mut() {
+            s.peak_ram_bytes = Some(50);
+            s.ram_total_bytes = Some(100);
+        }
+        let mut rough = facts(ROUGH, 600, 600, 100.0, 30.0);
+        rough.peak_ram_bytes = Some(95);
+        rough.ram_total_bytes = Some(100);
+        sess.push(rough);
+        let d = run_on(sess, read(&[BETWEEN], LOG_START));
+        let at = |id: &str| ids(&d).iter().position(|x| *x == id).unwrap_or_else(|| panic!("no {id} in {:?}", ids(&d)));
+        assert!(at("memory-pressure") < at("hardware-errors"), "{:?}", ids(&d));
+    }
+
+    #[test]
+    fn a_recovered_episode_gets_no_hardware_lead() {
+        let mut sess = scenario();
+        sess.push(facts("2026-10-08T10:00:00Z", 600, 600, 100.0, 50.0));
+        sess.push(facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 50.0));
+        let mut inp = inputs(sess);
+        inp.hardware = HwRead::Read { records: vec![utc(BETWEEN), utc(IN_ROUGH)], covered_from: utc(LOG_START), until: utc("2026-10-10T09:00:00Z") };
+        let d = diagnose(&inp, Complaint::Slow, Some("g"));
+        assert!(matches!(d.state, DiagnosisState::Recovered), "{:?}", d.state);
+        assert!(lead(&d).is_none() && !says_none(&d) && hardware_unknowns(&d).is_empty());
+    }
+
+    #[test]
+    fn a_late_hardware_reader_reads_took_too_long_and_a_second_press_starts_no_second_reader() {
+        use super::super::changes::{diagnose_with_hardware, ChangeRead, Slots};
+        use super::super::extras::CrashRead;
+        use super::super::mods::ModInput;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::{Arc, Mutex};
+        use std::time::Duration;
+        let slots: &'static Slots = Box::leak(Box::new(Slots::new()));
+        let started = Arc::new(AtomicUsize::new(0));
+        let asked: Arc<Mutex<Vec<DateTime<Utc>>>> = Arc::new(Mutex::new(Vec::new()));
+        let call = |sleep_ms: u64, budget_ms: u64, slot: Option<&'static Slots>| {
+            let (n, asked) = (started.clone(), asked.clone());
+            diagnose_with_hardware(
+                inputs(scenario()),
+                Complaint::Slow,
+                Some("g"),
+                Duration::from_millis(budget_ms),
+                |_, _, _| ChangeRead::NotRead,
+                None::<fn(String, Vec<String>, Duration) -> ModInput>,
+                None::<fn(String) -> CrashRead>,
+                Some(move |since: DateTime<Utc>| {
+                    n.fetch_add(1, Ordering::SeqCst);
+                    asked.lock().expect("the list").push(since);
+                    std::thread::sleep(Duration::from_millis(sleep_ms));
+                    read(&[BETWEEN, IN_ROUGH], LOG_START)
+                }),
+                slot,
+            )
+        };
+        // First press: the reader outlives the budget.
+        let first = call(600, 80, Some(slots));
+        assert_eq!(hardware_unknowns(&first), ["hardware-errors-slow"]);
+        assert!(lead(&first).is_none() && !says_none(&first));
+        assert_eq!(started.load(Ordering::SeqCst), 1);
+        // Second press while it still runs: no second reader, and still "took too long".
+        let second = call(0, 80, Some(slots));
+        assert_eq!(started.load(Ordering::SeqCst), 1, "no second reader of this kind");
+        assert_eq!(hardware_unknowns(&second), ["hardware-errors-slow"]);
+        // After it ends, the next press reads again, and what it returned is used.
+        let end = std::time::Instant::now() + Duration::from_secs(3);
+        while slots.hardware.load(Ordering::Acquire) && std::time::Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let third = call(0, 2000, Some(slots));
+        assert_eq!(started.load(Ordering::SeqCst), 2);
+        assert_eq!(lead(&third).expect("a lead").confidence, Certainty::Likely);
+        // The reader is asked from the oldest normal session the rough one was judged against.
+        assert!(asked.lock().expect("the list").iter().all(|t| *t == utc(OLDEST_NORMAL)));
+        // A reader that dies is unread, never none.
+        let dead = diagnose_with_hardware(
+            inputs(scenario()),
+            Complaint::Slow,
+            Some("g"),
+            Duration::from_millis(500),
+            |_, _, _| ChangeRead::NotRead,
+            None::<fn(String, Vec<String>, Duration) -> ModInput>,
+            None::<fn(String) -> CrashRead>,
+            Some(|_: DateTime<Utc>| -> HwRead { panic!("the read died") }),
+            None,
+        );
+        assert_eq!(hardware_unknowns(&dead), ["hardware-errors-unread"]);
+        assert!(lead(&dead).is_none() && !says_none(&dead));
+    }
+}
