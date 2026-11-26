@@ -10,7 +10,7 @@
 
 /** Byte-equal to leftovers.rs `REASON_PER_CPU_DEFAULT`. */
 export const PER_CPU_DEFAULT_REASON =
-  "Compy can read this setting ({pct}% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.";
+  "Compy can read this setting (at least {pct}% of cores are never parked), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.";
 
 /** The percentage when `reason` is that sentence with a whole number of 1-3 digits in it, else null. */
 export function perCpuDefaultPct(reason: string): string | null {

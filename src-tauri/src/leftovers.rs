@@ -75,7 +75,7 @@ const REASON_NEEDS_ADMIN: &str = "needs admin to check";
 /// reading below 100) Compy can't tell a tweak from Windows' per-processor choice. `{pct}` is the
 /// read value. Mirrored byte-for-byte in `src/data/leftover-reason.ts` (pinned by its test), which
 /// shows it in the user's language (`optimize.check.perCpuDefault`, en + zh-CN).
-pub(crate) const REASON_PER_CPU_DEFAULT: &str = "Compy can read this setting ({pct}% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.";
+pub(crate) const REASON_PER_CPU_DEFAULT: &str = "Compy can read this setting (at least {pct}% of cores are never parked), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.";
 
 fn per_cpu_default_reason(pct: u64) -> String {
     REASON_PER_CPU_DEFAULT.replace("{pct}", &pct.to_string())
@@ -1387,7 +1387,7 @@ mod leftovers_tests {
     // assert fails (and src/data/leftover-reason.test.ts, which pins the TS copy to the Rust const).
     #[test]
     fn core_parking_without_a_parking_default_is_undecided_with_the_one_sentence() {
-        let sentence = "Compy can read this setting (100% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.";
+        let sentence = "Compy can read this setting (at least 100% of cores are never parked), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.";
         for (why, default) in [("default 100", json!(100)), ("default missing or unread", Value::Null), ("default above 100", json!(101))] {
             let r = core_parking_report(json!({
                 "readable": true, "min_cores_ac_pct": 100, "default_ac_pct": default,

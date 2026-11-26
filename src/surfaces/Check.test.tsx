@@ -581,7 +581,7 @@ describe("Check", () => {
           id: "core-parking-forced",
           title: "Core parking override",
           reason:
-            "Compy can read this setting (100% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.",
+            "Compy can read this setting (at least 100% of cores are never parked), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.",
         },
       ],
     };
@@ -594,7 +594,7 @@ describe("Check", () => {
     expect(await screen.findByText(/1 setting couldn't be checked this pass/)).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Core parking override — Compy can read this setting (100% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.",
+        "Core parking override — Compy can read this setting (at least 100% of cores are never parked), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/couldn't be read/)).not.toBeInTheDocument();

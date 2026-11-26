@@ -18,10 +18,10 @@ describe("a10 r1: the per-processor core-parking reason", () => {
   // Break check: change either locale's perCpuDefault -> fails.
   it("says the same thing in en and zh-CN, with the number", () => {
     expect(json("en").perCpuDefault).toBe(
-      "Compy can read this setting ({{pct}}% of cores always kept awake), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.",
+      "Compy can read this setting (at least {{pct}}% of cores are never parked), but Windows chooses this value per processor, so Compy can't tell whether a tweak changed it.",
     );
     expect(json("zh-CN").perCpuDefault).toBe(
-      "Compy 能读取此设置（始终保持唤醒的核心为 {{pct}}%），但 Windows 会按处理器选择此值，因此 Compy 无法判断它是否被优化工具改过。",
+      "Compy 能读取此设置（至少 {{pct}}% 的核心从不停放），但 Windows 会按处理器选择此值，因此 Compy 无法判断它是否被优化工具改过。",
     );
     expect(json("en").perCpuDefault).toBe(PER_CPU_DEFAULT_REASON.replace("{pct}", "{{pct}}"));
   });
