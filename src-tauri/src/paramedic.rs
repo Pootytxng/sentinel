@@ -1081,7 +1081,7 @@ fn diagnose_game(inp: &DiagnoseInputs, complaint: Complaint, game_key: &str) -> 
             }
             d.state = DiagnosisState::NothingWrong { sessions_checked: n.max(1) };
         }
-        Verdict::Fired => explain(inp, &game_key, &sess, &judged, newest, &mut d, None, None),
+        Verdict::Fired => explain(inp, &game_key, &sess, &judged, newest, &mut d, None, None, true),
         Verdict::Unjudged => {}
     }
     d
@@ -1103,7 +1103,7 @@ fn recovery_answer<'a>(
     let Some(outcome) = recovery::outcome(sess, judged, f, sess.len()) else { return false };
     match outcome {
         Outcome::Recovered { idx } => {
-            explain(inp, game_key, sess, judged, f, d, Some(&idx), None);
+            explain(inp, game_key, sess, judged, f, d, Some(&idx), None, false);
             d.state = if d.recovery.is_some() {
                 DiagnosisState::Recovered
             } else {
@@ -1114,7 +1114,7 @@ fn recovery_answer<'a>(
             // B2: exactly one clear session since (it is the newest judged one, nothing newer unjudged): the card
             // says so as "Measured once". It is computed after the findings and changes none of them.
             let once = (one_clear && !partial && !cap_changed).then_some(newest);
-            explain(inp, game_key, sess, judged, f, d, None, once);
+            explain(inp, game_key, sess, judged, f, d, None, once, false);
             d.state = DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial, one_clear, cap_changed } };
         }
     }
@@ -1513,11 +1513,12 @@ impl Out {
 fn category(id: &str) -> usize {
     const ORDER: &[&str] = &[
         "hardware-change",
-        "hardware-errors",
         "background-load",
         "gpu-driver-change",
         "memory-pressure",
         "gpu-hotter",
+        // F7: after the measured sizes. A hardware error record has no known effect on frame pacing.
+        "hardware-errors",
         "display-refresh-lower",
         "power-plan-change",
         "compy-change",
@@ -1546,6 +1547,9 @@ fn explain<'a>(
     // B2: the one clear session since this episode (index). With it `d.measured_once` is set, after the
     // findings: nothing is re-scored.
     once: Option<usize>,
+    // F7: Windows' hardware error records are a lead only for an episode still going on (the newest judged session
+    // is rough). False for a recovered episode and for every "can't tell yet whether it is back to normal" answer.
+    hardware_lead: bool,
 ) {
     let mut run = vec![newest];
     for i in (0..newest).rev() {
@@ -1653,9 +1657,8 @@ fn explain<'a>(
     extras::detect_crashes(&ctx, &mut out);
     // F7: Windows' hardware error records, for an episode still going on. After the crash line on purpose: a
     // hardware error record is dated but is not a change, so the crash line must never count it as "the earliest
-    // change". A recovered episode, or one with a single session back in range, is told by its own block and gets
-    // no hardware lead in this slice.
-    if recovered.is_none() && once.is_none() {
+    // change". A recovered episode, or one Compy can't yet call back to normal, gets no hardware lead in this slice.
+    if hardware_lead {
         hardware_records::detect(&ctx, &mut out);
     }
     start_unknowns(&ctx, &mut out);
@@ -1753,7 +1756,7 @@ fn rank(c: &mut Vec<Cand>) {
     }
     // A hotter reading is one measured size with no date: it ranks with the other sizes (after memory-pressure
     // in the category order) but never above a change that is dated, even one that only has its timing.
-    if let (Some(h), Some(last_dated)) = (c.iter().position(|x| x.id == "gpu-hotter"), c.iter().rposition(|x| x.t)) {
+    if let (Some(h), Some(last_dated)) = (c.iter().position(|x| x.id == "gpu-hotter"), c.iter().rposition(|x| x.t && x.id != "hardware-errors")) {
         if h < last_dated {
             let cand = c.remove(h);
             c.insert(last_dated, cand);

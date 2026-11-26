@@ -810,7 +810,7 @@ pub(super) fn collect_reader<T>(rx: Started<T>, budget: Duration, started: std::
 /// same budget. A crash read that is late or dies reads as unavailable, never as "no crashes".
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn diagnose_with_all<F, G, H>(
-    mut inp: DiagnoseInputs,
+    inp: DiagnoseInputs,
     complaint: Complaint,
     game: Option<&str>,
     budget: Duration,
@@ -860,8 +860,10 @@ where
         let game = g.clone();
         spawn_reader("paramedic-crashes", slots.map(|s| &s.crashes), move || f(game))
     });
-    // `None` inside: the answer has no normal sessions to give the read a start, so it is not started.
-    let hardware_rx = fetch_hardware.map(|f| {
+    // Only for an episode still going on: a recovered answer, or one Compy can't yet call back to normal, gets no
+    // hardware lead, so the log is not asked. `None` inside: no normal sessions to give the read a start.
+    let wants_hardware = matches!(probe.state, DiagnosisState::Found | DiagnosisState::CantTell { why: CantTellWhy::NothingChanged });
+    let hardware_rx = fetch_hardware.filter(|_| wants_hardware).map(|f| {
         hardware_records::read_since(&inp, &probe).map(|since| spawn_reader("paramedic-hardware", slots.map(|s| &s.hardware), move || f(since)))
     });
     inp.changes = run_within(budget, move || fetch(t0, t1, g));
@@ -875,7 +877,8 @@ where
     if let Some(rx) = hardware_rx {
         inp.hardware = match rx {
             Some(rx) => collect_reader(rx, budget, started).unwrap_or_else(HwRead::Unavailable),
-            None => HwRead::Unavailable("no-window"),
+            // Nothing was asked, so nothing is said.
+            None => HwRead::NotRead,
         };
     }
     diagnose(&inp, complaint, probe.game.as_deref())

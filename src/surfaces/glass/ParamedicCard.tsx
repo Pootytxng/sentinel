@@ -659,6 +659,10 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return a.of === "1" ? t("paramedic.hardware.inRoughOnly", { game }) : t("paramedic.hardware.inRough", { n: Number(a.count), game });
     case "whea-in-normal":
       return a.count === "1" ? t("paramedic.hardware.inNormalOne", { game }) : t("paramedic.hardware.inNormalMany", { n: Number(a.count), game });
+    case "whea-earlier":
+      return a.count === "1"
+        ? t("paramedic.hardware.earlierOne", { at: dates.dayTime(a.from), game })
+        : t("paramedic.hardware.earlier", { n: Number(a.count), from: dates.dayTime(a.from), to: dates.dayTime(a.to), game });
     case "whea-normal-clean":
       return t("paramedic.hardware.normalClean", { base: a.base, game });
     case "whea-normal-unread":
@@ -670,6 +674,8 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
 
 function badge(e: ParamedicEvidence, t: T): string {
   if (e.against) return t("paramedic.badge.against");
+  // F7: a log Compy did not read back far enough is "Not read"; "Not recorded" beside it would read as "no errors recorded".
+  if (e.code === "whea-normal-unread") return t("paramedic.badge.notRead");
   if (e.kind === "supported-inference") return t("paramedic.badge.supports");
   if (e.kind === "known") return t("paramedic.badge.known");
   if (e.kind === "unknown") return t("paramedic.badge.unknown");
@@ -1155,7 +1161,7 @@ function restoredAt(f: ParamedicFinding): string | undefined {
 }
 
 /** F7: what a hardware lead shows where other rows show steps. Compy has no change to make here, so there is no
- *  button, no "How to fix it" and no "try the fix": the heading (which says "looks like" only at Most likely), what
+ *  button, no "How to fix it" and no "try the fix": the heading (always "may be": the lead is Possible at most), what
  *  the record is, three things the owner can do, and the lines to pass on (the same count and rough-session sentences
  *  as the evidence above, the second only when a record sat in a rough session). Nothing here changes the PC. */
 function HardwareBlock({ finding, ctx }: { finding: ParamedicFinding; ctx: Ctx }) {
@@ -1166,7 +1172,7 @@ function HardwareBlock({ finding, ctx }: { finding: ParamedicFinding; ctx: Ctx }
   return (
     <div data-testid="paramedic-hardware">
       <p className="gl-row-title" data-testid="paramedic-hardware-title">
-        {finding.confidence === "likely" ? t("paramedic.hardware.titleLikely") : t("paramedic.hardware.titlePossible")}
+        {t("paramedic.hardware.titlePossible")}
       </p>
       <p className="gl-para-note">{t("paramedic.hardware.intro")}</p>
       <ol className="gl-para-lines gl-para-steps">
@@ -1345,10 +1351,7 @@ function CompyUndoRow({ offer, ctx }: { offer: CompyUndoOffer; ctx: Ctx }) {
 }
 
 function whyFirst(d: ParamedicDiagnosis, ctx: Ctx): string | null {
-  // F7: "two changes ... the one that's easier to undo" is untrue when one of the two is Windows' hardware error records.
-  if (d.why_first === "tie") {
-    return d.findings.slice(0, 2).some((f) => f.fix.kind === "hardware") ? ctx.t("paramedic.hardware.whyTie") : ctx.t("paramedic.why.tie");
-  }
+  if (d.why_first === "tie") return ctx.t("paramedic.why.tie");
   if (d.why_first !== "cross-game" && d.why_first !== "cross-game-lead") return null;
   const games = d.findings[0]?.evidence.find((e) => e.code === "cross-game")?.args.games;
   if (!games) return null;
@@ -1528,10 +1531,9 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
           )}
           {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
           {!recovered && <FixBlock fix={f.fix} ctx={ctx} possible={f.confidence === "possible"} restored={restoredAt(f)} appliedOnly={appliedOnly(f)} finding={f} />}
-          {/* F7: a hardware lead has no fix to try, so it never says "until you try the fix". */}
-          {!recovered && f === d.findings[0] && f.confidence !== "possible" && (
-            <span className="gl-row-sub">{f.fix.kind === "hardware" ? t("paramedic.hardware.notProven") : t("paramedic.card.notProven")}</span>
-          )}
+          {/* F7: a hardware lead is Possible at most, so it never reaches this line ("until you try the fix"); the
+              kind is tested anyway so a later slice cannot show it by raising the level alone. */}
+          {!recovered && f === d.findings[0] && f.confidence !== "possible" && f.fix.kind !== "hardware" && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
         </div>
       )}
     </div>
@@ -1791,10 +1793,10 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     const lead = d.findings[0];
     let verdict: string;
     // F7: Windows' hardware error records are not "one change" and have no fix to try, so a hardware lead has its
-    // own verdict and next-step sentences. "Looks like" is never said here: only the block's heading says it, at Most likely.
+    // own verdict and next-step sentences. The engine sends it as Possible at most, and the sentence claims no more.
     const hardwareLead = lead.fix.kind === "hardware";
     if (!separable) verdict = t("paramedic.notSeparable.title");
-    else if (hardwareLead) verdict = lead.confidence === "likely" ? t("paramedic.hardware.verdictLikely") : t("paramedic.hardware.verdictPossible");
+    else if (hardwareLead) verdict = t("paramedic.hardware.verdictPossible");
     else if (lead.confidence === "likely") verdict = t("paramedic.verdict.likely");
     // "Lines up with when it started" is said only when something in play has timing. A finding that rests on
     // a measured figure alone (no start, no dated change) says what was measured and that it is not tied to a time.
