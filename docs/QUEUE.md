@@ -4,29 +4,49 @@ Changes to privilege, rollback or measurement code get an independent review bef
 No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md for the check).
 The push check can fail on a vitest 15 s timeout when several builds share the PC (one retry passed; not a code failure). A push is confirmed only by the "main -> main" line.
 
+## Owner ruling 2026-11-26 (supersedes earlier commercial proposals)
+- Compy must work without the owner's labour. No paid sessions or service.
+- Spending authorized: $0. The $1,000 remains whole.
+- 2026-12-11 is not a v1.0 or paid launch.
+- Next release: a free invite-only tester build, unsigned, through the existing release transaction, on the owner's explicit publish GO. The 2026-12-07 tester-build target is conditional.
+- Steam, pricing, payments and signing are undecided and unscheduled.
+- No new governance or coordination documents.
+- The owner names 5-10 testers by 2026-12-01, including one NVIDIA, one Intel or laptop PC and two non-enthusiasts.
+- Sequence: Phase 1 exit; tester build; watch-only first sessions; a week of ordinary play per ROADMAP Phase 5; review on 2026-12-22.
+- Pass: 6 of 10 independently accepted answers AND Phase 5 on 3 or more outside PCs including a non-AMD GPU. 3-5 of 10: fix the top three points where a human had to step in, and rerun. Under 3 of 10: stop.
+
 ## NOW (in flight, each on its own branch)
 - Desk build on the owner's PC: ec5bae0e (installed and runtime-proved 2026-11-22)
 
 ## NEXT (in order)
+Phase 1 exit first (owner ruling 2026-11-26; `docs/product/ROADMAP.md` Phase 1). Already met and not re-queued: first look S4 and S5 (adfd664c); `home.json` in the wording scan (478f8d42); no "Check again" before an answer and the Re-run band wording (both under Done, 2026-11-20).
+- [ ] First-run and empty states for a new user — a new PC gets a clear first screen, not blank cards
+- [ ] One vocabulary for how sure Compy is (design `_train\d3-vocabulary-design.md`): slices 1-3 are on main (7c446a8f, 68010f6f, 9c450762; tests 3df789e5, 6d172e08), none on an installed build yet. Still open at 833cbe64: the Problems room says Weak/Partial/Strong signal (`src/i18n/locales/en/gaming.json`) and the Monitor insight says "Prime suspect" (`monitor.json`); the tiles (Known/Likely/Unknown) and the lowest-level "Unknown" beside an observation were not re-checked
+- [ ] Paramedic card: drift evidence lines name the setting (driftApplied/driftOther)
+- [ ] first look: drift notices ('turned off outside Compy') and changes undone inside the window
+- [ ] Problems room follow-ups: the heading "What this points to" sits above a "can't tell" sentence; "Did this help?" answers match by rule only; a time limit on the Event Log reader; the fixed 85°C line is never compared with this card's sessions that did not crash; thermal-trend patterns reach Medium on an unmeasured "well past normal variation"
+- [ ] Card: opening it pushes the lower half of Home below the fold; the questions view has no "More below" cue; Escape from a disclosure
+- [ ] The app says three things about what leaves the PC (site: "sends nothing"; site: "checks GitHub"; app footer: "signed update check only"): one true sentence in the app; the site is the owner's
+- [x] tauri.conf.json description drops "safe" (checked 2026-11-27 at 833cbe64: neither description holds the word)
+- [ ] Phase 1 exit check: install current main on the desk (ec5bae0e predates the d10-d12, D6, b13 and a10 landings), then the look-only run as a brand-new user; the Home headline decision is under "Waiting on the owner"
+Then, in this order (owner ruling 2026-11-26):
+- [ ] Tester build: free, invite-only, unsigned, through the existing release transaction (`docs/RELEASE_TRANSACTION.md`), on the owner's explicit publish GO. Target 2026-12-07, conditional on the Phase 1 exit
+- [ ] Watch-only first sessions with the named testers: every point where a human had to step in is written down
+- [ ] A week of ordinary play on each tester PC (ROADMAP Phase 5)
+- [ ] 2026-12-22 review against the pass rule in the owner ruling
+Rest of NEXT (order unchanged):
 - [ ] Per-machine install: the per-user install folder itself is user-writable
 - [ ] Owner capture checks (`_train\g3-owner-capture-checks.md`)
 - [ ] Capture slice 2
 - [ ] Consumer panel follow-up
 - [ ] Handles audit S5: the direct query-only opens of the game (fps.rs ~520/~643, monitoring.rs ~896)
 - [ ] Remove or rewrite the #[ignore] test in running_at_start.rs (~1180) that opens every process
-- [ ] Paramedic card: drift evidence lines name the setting (driftApplied/driftOther)
-- [ ] One vocabulary for how sure Compy is, slice 1 = types only (design `_train\d3-vocabulary-design.md`): Problems room says Weak/Partial/Strong signal, the card Possible/Likely, tiles Known/Likely/Unknown; a lowest-level pattern shows "Unknown" beside an observation; SessionDebrief says "Prime suspect"
 - [ ] Capture slice 2 (design `_train\d1-capture-design.md`): ask "Measure this session?" when a game starts. The one-time group grant itself waits for the owner (it changes a security group on the account)
 - [ ] PRIVACY.md additions (`_train\d4i-privacy-additions.md`, `_train\d1s1-privacy-line.txt`)
-- [ ] tauri.conf.json description drops "safe"
 - [x] Crash-record headlines in the user's language (d10, `claude/d10-incident-headlines`): Rust sends a closed code plus values beside the English; Black Box rows, group lines, kind chips, "Since it last worked" and the Home Care card word it through i18n. A Care card stored before d10 shows its stored English in English and is worded from its kind tag in zh-CN (no game tail)
 - [ ] The OS notification popup for a crash record is still English (incident_observer.rs `notify` → lib.rs `notify_care_incident`: English title, the card's English summary, English tail); Rust has no UI language today
 - [ ] Self-delimiting stamp marker for verify-release-state
-- [ ] Problems room follow-ups: the heading "What this points to" sits above a "can't tell" sentence; "Did this help?" answers match by rule only; a time limit on the Event Log reader; the fixed 85°C line is never compared with this card's sessions that did not crash; thermal-trend patterns reach Medium on an unmeasured "well past normal variation"
-- [ ] Card: opening it pushes the lower half of Home below the fold; the questions view has no "More below" cue; Escape from a disclosure
-- [ ] The app says three things about what leaves the PC (site: "sends nothing"; site: "checks GitHub"; app footer: "signed update check only"): one true sentence in the app; the site is the owner's
 - [ ] Layer 2 design is written and parked (`_train\d2-layer2-design.md`); not before Layer 1 ships
-- [ ] first look: drift notices ('turned off outside Compy') and changes undone inside the window
 - [ ] first look S6-S7 (start measuring + one-session statement; local store for answers)
 - [ ] Group a crash-and-relaunch into one sitting for baselines, noise bands and real-play counts — a crash and relaunch no longer counts as two independent sessions
 - [ ] Paramedic: sessions flagged Suspected (`session_boundary::suspected_splice`) are not judged; a note says why — an old two-game row never poisons a diagnosis
@@ -41,7 +61,6 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - [ ] In-app Clear history (removes the ledger, its backup, marker and set-asides together)
 - [ ] History backup follow-ups: a `backup_current` flag in the health view, age out the restored note, a `.corrupt` left after a full restore still reads as incomplete, render the restored note in the UI (en + zh-CN)
 - [ ] Baseline keyed by frame cap, refresh rate and resolution — a changed cap no longer looks like a slowdown
-- [ ] First-run and empty states for a new user — a new PC gets a clear first screen, not blank cards
 - [ ] Signing, privacy policy and EULA — the installer is signed and the legal text is published
 - [ ] verify the NVIDIA / AMD overlay and Game Bar image names on real installs
 
@@ -61,16 +80,14 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - Site copy differences (`_train\t2-site-privacy-diff.md`, `_train\c3-site-claims.md`).
 - Website lines that make the same game and anti-cheat claims, with suggested wording in `_train\c3-site-claims.md` (the EULA line needs a lawyer).
 - ROB RUN driver-rollback test: four rough sessions in a row since the Nov 19 driver update; cause not settled.
-- Start the code-signing identity check now (memo `_train\r1-signing-memo.md`: lead time up to 30 business days; individuals in the US or Canada).
-- Decide: is 2026-12-11 a free invite-only beta rather than a paid launch (business memo `_train\m2-business-memo.md`; roadmap "Date risk": the date does not fit serially)?
-- Decide: pricing. The memo proposes a free Paramedic with a one-time Pro; the 2026-08-22 ruling was a subscription; the panel accepted only a one-time price (project doc `claude/CONSUMER_PANEL_2026-11-20.md`).
+- Code-signing identity check: not started. Signing is undecided and unscheduled (owner ruling 2026-11-26). Memo `_train\r1-signing-memo.md`: lead time up to 30 business days; individuals in the US or Canada.
 - Decide: may Compy offer a one-time grant that adds the account to "Performance Log Users" so games are measured with no prompt (design `_train\d1-capture-design.md`)? To prove slice 1 he adds his own account by hand and plays one session.
 - The website (his to publish): no download link; Game Mode is "no gain" in one place and "Real" in another; module names the app no longer uses; legal pages marked DRAFT; two different statements of what leaves the PC.
 - Keep or restore the score ring; keep or reword the Home heading "N things are worth a look"; keep or reword "Something's wrong" as the main button (three of five panel personas: "I didn't say anything was wrong").
 - Legal drafts for a lawyer (in progress): `_train\legal-drafts\`.
 - One ordinary ROB RUN session with nothing else running (Compy now records background load).
 - US/Canada eligibility and identity for code signing.
-- 3-5 outside testers.
+- Name 5-10 outside testers by 2026-12-01, including one NVIDIA, one Intel or laptop PC and two non-enthusiasts (owner ruling 2026-11-26).
 - A VM (or 15 minutes) for the deletion tests ("Clear play history", "Clear everything"), the installer tests and a real UAC-prompt test.
 - Yes or no on editing the project's `.claude/settings.json` in the diet.
 - Publish the privacy page wording with the release: site/privacy.html lags docs/PRIVACY.md (the history backup, and now what "Clear play history" and "Clear everything" delete, keep and refuse).
@@ -78,9 +95,10 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - Decide: per-user or per-machine install (brief `_train\a3-owner-brief.md`).
 - Decide: the installer description's word "reversible" (state the mechanism instead).
 - ARCHITECTURE_LOCKS line for the ledger backup (proposed text in _train\b1-review-r1.md).
-- Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee"; a strength above the lowest needs two independent supports and no contradicting evidence (in the Paramedic's code and now the Problems room's; not yet written in the constitution); the full health check shows no score ring (removed 2026-11-20, one revert restores it).
+- Coordinator defaults the owner may overturn: ship date: none set (owner ruling 2026-11-26: 2026-12-11 is not a v1.0 or paid launch; `docs/product/ROADMAP.md` still shows the old target); v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee"; a strength above the lowest needs two independent supports and no contradicting evidence (in the Paramedic's code and now the Problems room's; not yet written in the constitution); the full health check shows no score ring (removed 2026-11-20, one revert restores it).
 
 ## Done (newest first)
+- 2026-11-26 - Owner ruling recorded at the top of this file. Closed two owner questions: "is 2026-12-11 a free invite-only beta rather than a paid launch" (decided: not a v1.0 or paid launch; the next release is the free invite-only tester build) and "pricing" (deferred: undecided and unscheduled; `_train\m2-business-memo.md` and project doc `claude/CONSUMER_PANEL_2026-11-20.md` stay as references)
 - 2026-11-22 - desk build ec5bae0e installed and stamped (installed over fc01eff9)
 - 2026-11-22 - Security slice and follow-ups: system tools run by absolute path from the real system directory with a pinned child environment; logman with a cleared environment; elevation only for absolute, closed targets; the gaming tier refuses elevation when its receipts file cannot be cleared; where Compy runs from is recorded at each start b19b886c, 7ed20677, 4e8fee63, 8b492da8, 184b4fbf, eb1d26cd
 - 2026-11-22 - Capture starts without an administrator prompt when this sign-in is already in Performance Log Users; the no-prompt line states the mechanism fe1102f9, 1fb8e983
@@ -148,6 +166,7 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-27 queue session (docs/QUEUE.md only): recorded the owner ruling of 2026-11-26, moved the Phase 1 exit items to the top of NEXT after checking them against main 833cbe64, closed the 2026-12-11 and pricing questions. No code, no build, no other file.
 - 2026-11-22 desk-install session 8: built and installed main ec5bae0e over fc01eff9, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1122a.
 - 2026-11-21 desk-install session 7: built and installed main fc01eff9 over 0c4057c7, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1121d.
 - 2026-11-21 desk-install session 6: built and installed main 0c4057c7 over a0cfaca3, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1121c.
@@ -157,4 +176,3 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - 2026-11-20 afternoon session: landed 0cc3a30e, fec63809, cb8afffe, abbad9bc, b8f782d7 (each reviewed, each through the push check). Look-only check of 5f4cad34 on the owner's data ran (_train\view-1120d\report-2.md); the brand-new-user half did NOT run (owner came back to the PC). Affordance baseline re-recorded: the score ring's entries and the header button retired by the coordinator, reported to the owner, reversible.
 - 2026-11-20 desk-install session 3: built and installed main 5f4cad34, proved at runtime, stamped in RELEASE_STATE; look-only checks of the Home card (real data and new-user sandbox) in _train\view-1120d.
 - 2026-11-20 desk-install session 2: built and installed main dd799c62, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120c.
-- 2026-11-20 desk-install session: built and installed main 3e69f454, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120b.
