@@ -365,20 +365,14 @@
   font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
+  /* D3 vocabulary (e5a): the shared strength word, in sentence case (no uppercase: capitals made
+     a hedge read louder than its evidence). Possible is the only strength this room shows. */
   border: 1px solid var(--ix-border);
   border-radius: 999px;
   padding: 2px 9px;
   white-space: nowrap;
 }
-.bb-strength-strong {
-  color: var(--ix-accent-text);
-  border-color: var(--ix-accent);
-}
-.bb-strength-partial {
-  color: var(--ix-text-2);
-}
-.bb-strength-weak {
+.bb-strength-possible {
   color: var(--ix-text-3);
   border-style: dashed;
 }

@@ -127,7 +127,8 @@ describe("no t() call with a non-literal key in the touched files", () => {
 
   const BEFORE: Record<string, string[]> = {
     "src/data/backend-words.ts": ["`common.backendW", "v.detailKey, { .", "v.labelKey, { de"],
-    "src/surfaces/BlackBox.tsx": ["`gaming.blackBox", "`gaming.blackBox", "`gaming.blackBox", "`gaming.blackBox", "cb.anchor_kind ="],
+    // e5a: one fewer - t(`gaming.blackBox.strengthLabel.${a.strength}`) became the shared strengthWord().
+    "src/surfaces/BlackBox.tsx": ["`gaming.blackBox", "`gaming.blackBox", "`gaming.blackBox", "cb.anchor_kind ="],
     "src/surfaces/SinceLastWorked.tsx": ["`gaming.blackBox", "`gaming.blackBox", 'slw.anchor ? "ga', "slw.none_reason "],
   };
   for (const [file, before] of Object.entries(BEFORE)) {

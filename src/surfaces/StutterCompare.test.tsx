@@ -150,7 +150,9 @@ describe("the Care view compares on a stutter arrival", () => {
     expect(screen.getByText(/none of it is a proven cause/)).toBeInTheDocument();
     // The cause heading itself carries the tag, not only the section.
     const cause = screen.getByText("Possible reason");
-    expect(cause.parentElement?.textContent).toMatch(/not proven cause/i);
+    // e5a (D3): the tag is "Listed by when it happened". Break check: put "not proven cause" back in
+    // gaming.blackBox.changedBefore.notProven -> this fails.
+    expect(cause.parentElement?.textContent).toMatch(/Listed by when it happened/);
     // One-shot: the flag is spent, and no Monitor/Benchmark command was used.
     expect(localStorage.getItem(CARE_ARRIVAL_KEY)).toBeNull();
     expect(cmds().every((c) => ["get_session_summaries", "what_changed_between"].includes(c))).toBe(true);

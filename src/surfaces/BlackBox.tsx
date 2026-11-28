@@ -38,6 +38,8 @@ import { CareHonestEnd } from "./CareHonestEnd";
 import { prettyGameName } from "./game-name";
 import { incidentHeadline, incidentWording, recordWhen } from "../data/incident-headline";
 import { incidentKindLabel } from "../data/backend-words";
+import { fromBlackboxStrength, strengthWire } from "../data/certainty";
+import { strengthWord } from "../data/certainty-words";
 import {
   groupIncidents,
   sharedUnknownItems,
@@ -543,13 +545,20 @@ function AssessmentBlock({
   const { t } = useTranslation();
   const a = inc.assessment as CrashAssessment; // only rendered when present
   const research = a.next_step.research_only;
+  // D3 vocabulary (e5a): the tag is the shared strength word. blackbox.rs emits only `weak` (one kind
+  // of evidence), and the reserved strong/partial map to Possible too (certainty.ts
+  // fromBlackboxStrength), so this tag never says "Most likely".
+  const mapped = fromBlackboxStrength(a.strength);
+  const strength = mapped.axis === "strength" ? mapped.strength : null;
   return (
     <div className={`bb-assess bb-assess-${a.strength}`}>
       <div className="bb-assess-head">
         <span className="bb-assess-label">{t("gaming.blackBox.whatThisPointsTo")}</span>
-        <span className={`bb-strength bb-strength-${a.strength}`}>
-          {t(`gaming.blackBox.strengthLabel.${a.strength}`)}
-        </span>
+        {strength && (
+          <span className={`bb-strength bb-strength-${strengthWire(strength)}`} data-testid="bb-strength">
+            {strengthWord(strength, t)}
+          </span>
+        )}
       </div>
       {a.statement ? (
         // What Windows recorded and what that record can't tell: one fixed sentence, never a cause.

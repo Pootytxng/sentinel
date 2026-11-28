@@ -66,15 +66,15 @@ describe("shared confidence words never say a retired strength word", () => {
       for (const c of chips) if (c.startsWith("likely=")) expect(c).toBe(`likely=${i18n.t("common.strength.possible")}`);
     });
 
-    it(`${loc}: the Black Box strength labels and the new group lines carry no retired word`, () => {
+    // e5a: the Black Box tag is the shared strength word now (BlackBox.tsx strengthWord; render-checked in
+    // BlackBox.test.tsx), so its own Strong/Partial/Weak signal labels were removed with their last
+    // consumer (orphan-key guard). Break check: re-add gaming.blackBox.strengthLabel -> the first line fails.
+    it(`${loc}: the Black Box has no strength labels of its own and the group lines carry no retired word`, () => {
       const gaming = JSON.parse(readFileSync(join("src", "i18n", "locales", loc, "gaming.json"), "utf8")) as {
-        blackBox: { strengthLabel: Record<string, string>; group: Record<string, string> };
+        blackBox: { strengthLabel?: unknown; group: Record<string, string> };
       };
-      const texts = [
-        ...Object.values(gaming.blackBox.strengthLabel),
-        gaming.blackBox.group.apartCrash_other,
-        gaming.blackBox.group.apartHang_other,
-      ];
+      expect(gaming.blackBox.strengthLabel).toBeUndefined();
+      const texts = [gaming.blackBox.group.apartCrash_other, gaming.blackBox.group.apartHang_other];
       for (const s of texts) expect(s).not.toMatch(RETIRED);
     });
   }

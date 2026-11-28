@@ -201,6 +201,13 @@ describe.each(LOCALES)("Session Debrief states only measured frame rates (%s)", 
     expect(text(container.querySelector(".debrief-insight p"))).toBe(
       t("monitor.sessionDebrief.primeSuspectInsight", { limiter: "power plan", reason: "Windows is on Balanced." }),
     );
+    // e5a (D3 vocabulary): the top limiter is a readiness row Compy read, so it is "worth a look first",
+    // never a "suspect". Break check: put "Prime suspect: {{limiter}}. {{reason}}" (or 头号嫌疑) back in
+    // monitor.json -> the literal below fails in that locale.
+    expect(text(container.querySelector(".debrief-insight p"))).toBe(
+      lang === "en" ? "Worth a look first: power plan. Windows is on Balanced." : "先看这一项：power plan。Windows is on Balanced.",
+    );
+    expect(container.textContent).not.toMatch(/suspect|嫌疑/i);
   });
 
   it("a measured stutter correlation is still shown when a reading is unknown (its own evidence)", async () => {

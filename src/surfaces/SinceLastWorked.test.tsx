@@ -94,7 +94,9 @@ describe("Since it last worked (P6-timeline)", () => {
   it("lists incidents, Compy changes, drift, observed changes and sessions newest first, from the last clean session", async () => {
     const list = await scan(REPORT);
     expect(within(list).getByText(/What Compy recorded since your last session with no crash on record started \(Elden Ring,/)).toBeInTheDocument();
-    expect(within(list).getByText(/not proven cause/)).toBeInTheDocument();
+    // e5a (D3): the tag says the list is ordered by time. Break check: put "listed by time, not proven
+    // cause" back in gaming.blackBox.sinceWorked.notProven -> this fails.
+    expect(within(list).getByText("Listed by when it happened")).toBeInTheDocument();
     const rows = within(list).getAllByRole("listitem");
     expect(rows.map((r) => r.getAttribute("data-kind"))).toEqual(["incident", "observed", "drift", "session", "compy"]);
     expect(rows[0]).toHaveTextContent("Elden Ring stopped working and closed");

@@ -528,7 +528,7 @@
     "compareAnyTwo": "Compare any two of your {{game}} sessions and Compy explains the delta.",
     "gameLabel": "Game",
     "baselineGoodLabel": "Baseline (good)",
-    "compareSuspectLabel": "Compare (suspect)",
+    "compareSuspectLabel": "Compare (rough session)",
     "comparingEllipsis": "Comparing…",
     "compareButton": "Compare",
     "pickTwoDifferentSessions": "Pick two different sessions to compare.",

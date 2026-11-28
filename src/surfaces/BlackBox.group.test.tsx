@@ -85,7 +85,8 @@ describe("Problems room - identical incidents grouped", () => {
     // The limit is said: these are the newest records Compy read, so the count is not a total.
     expect(screen.getByText("Compy reads only the newest records Windows keeps (at most 25 are listed), so this counts only those; older ones may exist that it did not count.")).toBeTruthy();
     // The shared reading, once.
-    expect(screen.getAllByText(/WEAK SIGNAL/i)).toHaveLength(1);
+    // e5a: the reading's strength tag is the shared "Possible" (was "Weak signal"), once for the group.
+    expect(screen.getAllByTestId("bb-strength").map((el) => el.textContent)).toEqual(["Possible"]);
     expect(screen.getAllByText(/That record alone can't tell where the problem is/)).toHaveLength(1);
     expect(screen.queryByText("Did this point you the right way?")).toBeNull();
     expect(screen.queryByRole("button", { name: "Show the receipt" })).toBeNull();

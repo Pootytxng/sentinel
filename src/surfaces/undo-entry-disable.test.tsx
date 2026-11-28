@@ -9,7 +9,8 @@ import { WhatChangedPanel } from "./WhatChangedPanel";
 import { SessionDebrief } from "./SessionDebrief";
 import { ActionDetailsSheet } from "./ActionDetails";
 import { ConfirmProvider } from "../design/ConfirmDialog";
-import type { WhatChangedOutcome, IntelSessionRef, AppliedChange, ComparisonResult, SessionSummary } from "../types";
+import type { WhatChangedOutcome, IntelSessionRef, AppliedChange, ComparisonResult, SessionSummary, Priorities } from "../types";
+import i18n from "../i18n";
 
 const REASON = "Compy has no saved undo for this change.";
 
@@ -218,6 +219,50 @@ describe("debrief's Revert it", () => {
     expect(revert(container)!.disabled).toBe(false);
     expect(container.querySelector(".cmp-noundo")).toBeNull();
   });
+});
+
+// e5a (D3 vocabulary): the same debrief card's words. A no-change result rules ONE thing out, and the
+// next readiness row is "the next one" to check, never a "suspect". Break check: put "Chase suspect #2 —
+// {{suspect}}" or "One suspect cleared: " (or 追查嫌疑 / 已排除一个嫌疑) back in monitor.json -> fails in
+// that locale; pass `{ suspect: ... }` again in SessionDebrief.tsx -> the name is missing and it fails.
+describe("debrief comparison card words (e5a)", () => {
+  const two: Priorities = {
+    limiters: [
+      { id: "power-plan", title: "Power plan", reason: "Windows is on Balanced.", linked: "power-plan", confidence: "medium", status: "attention" },
+      { id: "game-bar", title: "Xbox Game Bar", reason: "It is on.", linked: REC_ID, confidence: "medium", status: "attention" },
+    ],
+    already_fine: [],
+    not_worth_touching: [],
+    session_hint: null,
+    upgrade_path: null,
+  };
+  for (const lang of ["en", "zh-CN"] as const)
+    it(`${lang}: a no-change result says one thing was ruled out and names the next one to check`, async () => {
+      await i18n.changeLanguage(lang);
+      try {
+        harness.comparison = { ...cmp, verdict: "no-change", after_low1_fps: 100.9, delta_low1_pct: -0.5 };
+        const { container } = render(
+          <ConfirmProvider>
+            <SessionDebrief s={debriefSession} priorities={two} recs={[]} apply={vi.fn()} busyId={null} onExport={vi.fn()} changes={[row(true)]} rollback={vi.fn()} />
+          </ConfirmProvider>,
+        );
+        // The ruled-out line sits behind the card's "why" door (SessionDebrief.test.tsx openWhy): re-query the
+        // live card and open a shut door until the line is there.
+        await waitFor(() => {
+          const live = container.querySelector('[data-testid="cmp-card"]');
+          expect(live).not.toBeNull();
+          const door = live!.querySelector<HTMLDetailsElement>('[data-testid="cmp-depth-why"]')!;
+          if (!door.open) fireEvent.click(door.querySelector("summary")!);
+          expect(live!.querySelector(".cmp-means")).not.toBeNull();
+        });
+        const card = container.querySelector('[data-testid="cmp-card"]')?.textContent ?? "";
+        expect(card).toContain(lang === "en" ? "One thing ruled out: " : "已排除一项：");
+        expect(card).toContain(lang === "en" ? "Check the next one: Xbox Game Bar" : "查看下一项：Xbox Game Bar");
+        expect(container.textContent).not.toMatch(/suspect|嫌疑/i);
+      } finally {
+        await i18n.changeLanguage("en");
+      }
+    });
 });
 
 describe("details sheet's Roll back", () => {

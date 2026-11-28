@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { BlackBox } from "./BlackBox";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import i18n from "../i18n";
@@ -92,9 +94,10 @@ describe("BlackBox surface (v2 triage UI)", () => {
     scan();
     expect(await screen.findByText("What this points to")).toBeInTheDocument();
     expect(screen.getByText(/your graphics driver \(amdkmdag\) repeatedly timing out/)).toBeInTheDocument();
-    expect(screen.getByText("Weak signal")).toBeInTheDocument(); // strength is a word, never a %
-    expect(screen.queryByText("Strong signal")).not.toBeInTheDocument();
-    expect(screen.queryByText("Partial signal")).not.toBeInTheDocument();
+    // strength is the shared word, never a % (e5a: "Weak signal" became the shared "Possible")
+    expect(screen.getByTestId("bb-strength").textContent).toBe("Possible");
+    expect(screen.queryByText("Most likely")).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/signal/i);
     expect(screen.getByText(/clean reinstall of your graphics driver/i)).toBeInTheDocument();
   });
 
@@ -126,14 +129,13 @@ describe("BlackBox surface (v2 triage UI)", () => {
     return inc;
   };
 
-  it("an App-crash case renders the Weak label and the replacement sentence with the game's name, never the exclusion", async () => {
+  it("an App-crash case renders the Possible label and the replacement sentence with the game's name, never the exclusion", async () => {
     reportMock.value = { incidents: [appCrashIncident()], skipped_sources: [] };
     render(<BlackBox />);
     scan();
     await screen.findByText("What this points to");
-    expect(screen.getByText("Weak signal")).toBeInTheDocument();
-    expect(screen.queryByText("Strong signal")).not.toBeInTheDocument();
-    expect(screen.queryByText("Partial signal")).not.toBeInTheDocument();
+    expect(screen.getByTestId("bb-strength").textContent).toBe("Possible");
+    expect(screen.queryByText("Most likely")).not.toBeInTheDocument();
     expect(
       screen.getByText(
         "Windows recorded ROB RUN crashing. That record alone can't tell where the problem is: in the program, in something it loads (such as a graphics driver), or in your PC.",
@@ -160,6 +162,38 @@ describe("BlackBox surface (v2 triage UI)", () => {
     } finally {
       await i18n.changeLanguage("en");
     }
+  });
+
+  // e5a (D3 vocabulary): every Black Box band, the reserved strong/partial included, renders the shared
+  // "Possible" in both languages and never "Most likely" or a "signal" word. Break checks: map `strong`
+  // to most-likely in certainty.ts fromBlackboxStrength -> the strong row reads 最有可能 / Most likely
+  // and fails; put the old t(`gaming.blackBox.strengthLabel.${a.strength}`) back -> "Weak signal" fails.
+  for (const loc of ["en", "zh-CN"] as const)
+    for (const strength of ["weak", "partial", "strong"] as const)
+      it(`${loc}: a ${strength} assessment renders Possible, never Most likely`, async () => {
+        await i18n.changeLanguage(loc);
+        try {
+          const inc = assessedIncident();
+          inc.assessment = { ...inc.assessment!, strength };
+          reportMock.value = { incidents: [inc], skipped_sources: [] };
+          render(<BlackBox />);
+          fireEvent.click(screen.getByRole("button", { name: i18n.t("gaming.blackBox.scanButton") }));
+          const tag = await screen.findByTestId("bb-strength");
+          expect(tag.textContent).toBe(loc === "en" ? "Possible" : "有可能");
+          const body = document.body.textContent || "";
+          expect(body).not.toMatch(loc === "en" ? /most likely|signal/i : /最有可能|信号/);
+        } finally {
+          await i18n.changeLanguage("en");
+        }
+      });
+
+  // e5a: the tag is sentence case; capitals made a hedge read louder than its evidence. Break check:
+  // put `text-transform: uppercase` back in the .bb-strength rule -> this fails.
+  it("the strength tag's CSS rule does not uppercase the word", () => {
+    const css = readFileSync(join("src", "surfaces", "BlackBox.css"), "utf8");
+    const rule = css.match(/\.bb-strength\s*\{([^}]*)\}/);
+    expect(rule, ".bb-strength rule not found").not.toBeNull();
+    expect(rule![1]).not.toMatch(/text-transform\s*:\s*uppercase/);
   });
 
   // d10 break check: render `inc.headline` in IncidentRow again -> the English sentence shows in zh-CN.
@@ -605,7 +639,7 @@ const item = (category: string, status: string, extra: Record<string, unknown> =
 }) as unknown as NonNullable<CrashIncident["changed_before"]>["items"][number];
 
 describe("BlackBox — Changed before this (P6-changed)", () => {
-  it("lists every category since the last clean session, each tagged not proven cause", async () => {
+  it("lists every category since the last clean session, each tagged as listed by when it happened", async () => {
     reportMock.value = {
       incidents: [
         sidumpIncident({
@@ -642,7 +676,10 @@ describe("BlackBox — Changed before this (P6-changed)", () => {
     }
     const rows = container.querySelectorAll(".bb-changed-item");
     expect(rows).toHaveLength(6);
-    rows.forEach((row) => expect(row.textContent).toContain("not proven cause"));
+    // e5a (D3): the tag says how the list is ordered, not that an item is an unproven cause. Break
+    // check: put "not proven cause" back in gaming.blackBox.changedBefore.notProven -> both lines fail.
+    rows.forEach((row) => expect(row.textContent).toContain("Listed by when it happened"));
+    rows.forEach((row) => expect(row.textContent).not.toMatch(/proven/i));
     expect(screen.getByText("Trim Windows visual effects rolled back", { exact: false })).toBeInTheDocument();
     // Unread evidence reads as unknown — never as "No change".
     for (const cat of ["windows-build", "power-plan", "drift"]) {

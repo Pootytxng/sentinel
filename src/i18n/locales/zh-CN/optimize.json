@@ -495,7 +495,7 @@
     "compareAnyTwo": "选择任意两局 {{game}} 对局进行比较,Compy 会解释其中的差异。",
     "gameLabel": "游戏",
     "baselineGoodLabel": "基线(表现良好)",
-    "compareSuspectLabel": "对比(疑似异常)",
+    "compareSuspectLabel": "对比(表现差的那局)",
     "comparingEllipsis": "比较中…",
     "compareButton": "比较",
     "pickTwoDifferentSessions": "请选择两局不同的对局进行比较。",

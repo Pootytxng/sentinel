@@ -207,7 +207,7 @@ function ComparisonCard({
       <div className="cmp-actions">
         {nextSuspect && (
           <button className="btn-small" onClick={onDismiss}>
-            {t("monitor.sessionDebrief.chaseSuspect", { suspect: nextSuspect })}
+            {t("monitor.sessionDebrief.chaseSuspect", { name: nextSuspect })}
           </button>
         )}
         {r.verdict === "improved" ? (
@@ -461,7 +461,8 @@ export function SessionDebrief({
     { hour: "numeric", minute: "2-digit" },
   )}`;
 
-  // At most ONE insight: (a) GPU-vs-system hint, (b) prime-suspect open limiter, else none.
+  // At most ONE insight: (a) GPU-vs-system hint, (b) the top open limiter ("Worth a look first": a
+  // fixed-table readiness row Compy read, so no strength word), else none.
   const topLimiter = priorities?.limiters?.[0] ?? null;
   const gpuLoafed =
     s.peak_gpu_usage_pct != null && s.peak_gpu_usage_pct < 70 && ratio != null && ratio < 0.7;
