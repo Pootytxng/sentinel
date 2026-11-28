@@ -3,7 +3,7 @@
 // shown for these records; this is the one place the key becomes words, so the Problems room and the
 // Care receipt say the same thing in the same language.
 import type { TFunction } from "i18next";
-import type { AssessmentStatement, CrashAssessment, PeakVsUsual } from "../types";
+import type { AssessmentStatement, CrashAssessment, PeakUnreadable, PeakVsUsual } from "../types";
 
 const KEY: Record<AssessmentStatement, string> = {
   "app-crash": "appCrash",
@@ -27,11 +27,21 @@ const PEAK_KEY: Record<PeakVsUsual["outcome"] | "not-compared", string> = {
   "not-compared": "gaming.blackBox.assessStatement.peakVsUsual.notCompared",
 };
 
+// e10 r1 (F4): what kept the comparison from being made, in plain words. A `why` this build doesn't know
+// says the general "couldn't read enough" sentence.
+const UNREADABLE_KEY: Record<PeakUnreadable, string> = {
+  "card-unknown": "gaming.blackBox.assessStatement.peakVsUsual.cardUnknown",
+  "short-session": "gaming.blackBox.assessStatement.peakVsUsual.shortSession",
+  "log-unread": "gaming.blackBox.assessStatement.peakVsUsual.logUnread",
+  "reliability-unread": "gaming.blackBox.assessStatement.peakVsUsual.reliabilityUnread",
+  "log-too-short": "gaming.blackBox.assessStatement.peakVsUsual.logTooShort",
+};
+
 /** e10: how the peak sits against this card's usual one. Every variant ends by saying Compy can't tell
  *  whether heat played a part; a record from a build before the comparison says it wasn't compared. */
 export function peakVsUsualText(t: TFunction, temp: number | undefined, cmp: PeakVsUsual | undefined): string {
   if (!cmp) return t(PEAK_KEY["not-compared"]);
-  if (cmp.outcome === "unreadable") return t(PEAK_KEY.unreadable);
+  if (cmp.outcome === "unreadable") return t((cmp.why && UNREADABLE_KEY[cmp.why]) || PEAK_KEY.unreadable);
   if (cmp.outcome === "too-few") return t(PEAK_KEY["too-few"], { have: cmp.sessions });
   return t(PEAK_KEY[cmp.outcome], {
     usual: cmp.usual_c,

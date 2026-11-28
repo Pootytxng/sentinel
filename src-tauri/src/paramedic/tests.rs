@@ -5432,6 +5432,49 @@ mod temperature_and_crashes {
         assert_eq!((TEMP_SAME_C, TEMP_HOTTER_C), (crate::blackbox::TEMP_SAME_C, crate::blackbox::TEMP_HOTTER_C));
         assert_eq!(crate::blackbox::PEAK_BASELINE_MIN, BASELINE_MIN);
         assert_eq!(crate::blackbox::PEAK_BASELINE_MAX, BASELINE_MAX);
+        // e10 r1 F1: which sessions count is the card's own rule, mirrored in blackbox.rs. The numbers...
+        assert_eq!(crate::blackbox::PEAK_MIN_SECS, MIN_JUDGE_SECS);
+        assert_eq!(crate::blackbox::PEAK_MIN_SAMPLES, MIN_JUDGE_SAMPLES);
+        assert_eq!(crate::blackbox::PEAK_MIN_COVERAGE, MIN_JUDGE_COVERAGE);
+        assert_eq!(crate::blackbox::PEAK_BASELINE_COVERAGE, BASELINE_COVERAGE);
+        // ...and the predicate: on each case, the mirror answers what the card's `judgeable` (and its
+        // baseline coverage) answers for the same recorded session.
+        let with = |f: &dyn Fn(&mut crate::sessions::SessionSummary)| {
+            let mut s = summary();
+            f(&mut s);
+            s
+        };
+        let cases = [
+            summary(),
+            with(&|s| s.duration_secs = 299),
+            with(&|s| {
+                s.duration_secs = 300;
+                s.samples = 250;
+                s.background_secs_excluded = Some(0);
+            }),
+            with(&|s| s.samples = 249),
+            with(&|s| s.samples = 360),
+            with(&|s| s.samples = 470),
+            with(&|s| {
+                s.samples = 0;
+                s.background_secs_excluded = Some(600);
+            }),
+            with(&|s| s.unreadable_seconds = 300),
+            with(&|s| s.low1_fps_est = 0.0),
+            with(&|s| s.avg_fps = f64::NAN),
+        ];
+        let mut judged = 0;
+        let mut normal = 0;
+        for (i, s) in cases.iter().enumerate() {
+            let f = facts_from(s);
+            assert_eq!(crate::blackbox::peak_judgeable(s), f.judgeable(), "case {i}");
+            let card_normal = f.judgeable() && f.coverage() >= BASELINE_COVERAGE;
+            assert_eq!(crate::blackbox::peak_reference_eligible(s), card_normal, "case {i}");
+            judged += usize::from(f.judgeable());
+            normal += usize::from(card_normal);
+        }
+        // Not vacuous: some cases pass each rule and some fail it.
+        assert!(judged > normal && normal > 0 && judged < cases.len(), "{judged} judged, {normal} normal");
     }
 
     #[test]

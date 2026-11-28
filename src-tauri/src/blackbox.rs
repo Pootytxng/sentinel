@@ -344,14 +344,26 @@ pub(crate) struct SystemLogCoverage {
     read_ok: bool,
     /// How far back the scan is complete (`BlackBoxReport::clean_judgeable_from`); None = no read was cut.
     judgeable_from: Option<DateTime<Utc>>,
+    /// e10 r1 (F3): the oldest System-log row the read returned. The log is known to hold records back to
+    /// here; before it, rollover may have dropped one. None = no row came back, so no earlier time is known.
+    /// Only the crash-peak comparison reads it.
+    history_from: Option<DateTime<Utc>>,
+    /// e10 r1 (F3): the Reliability history was read (its reader ran). Only the crash-peak comparison reads it.
+    reliability_read: bool,
 }
 
 impl SystemLogCoverage {
     /// Nothing proven: the safe default. No absence line is ever said under this.
-    pub(crate) const UNPROVEN: Self = Self { read_ok: false, judgeable_from: None };
+    pub(crate) const UNPROVEN: Self = Self { read_ok: false, judgeable_from: None, history_from: None, reliability_read: false };
 
     pub(crate) fn new(read_ok: bool, judgeable_from: Option<DateTime<Utc>>) -> Self {
-        Self { read_ok, judgeable_from }
+        Self { read_ok, judgeable_from, history_from: None, reliability_read: false }
+    }
+
+    /// e10 r1 (F3): what the crash-peak comparison needs on top: how far back the System log is known to
+    /// reach, and whether the Reliability history was read.
+    pub(crate) fn with_history(self, history_from: Option<DateTime<Utc>>, reliability_read: bool) -> Self {
+        Self { history_from, reliability_read, ..self }
     }
 
     /// True only when the System log was read and this incident's whole ±10 minute window lies inside
@@ -459,12 +471,48 @@ pub(crate) const TEMP_HOTTER_C: i64 = 10;
 /// the Paramedic card's `BASELINE_MIN` / `BASELINE_MAX` (a paramedic test pins them equal).
 pub(crate) const PEAK_BASELINE_MIN: usize = 3;
 pub(crate) const PEAK_BASELINE_MAX: usize = 10;
+/// e10 r1 (F1): which sessions the card would judge at all, mirrored here because this module may not depend
+/// on `paramedic`: at least `PEAK_MIN_SECS` long, `PEAK_MIN_SAMPLES` measured ticks, `PEAK_MIN_COVERAGE` of its
+/// foreground seconds measured, not mostly unread, and a readable smoothness ratio (the card's
+/// `SessionFacts::judgeable`); a reference session also needs `PEAK_BASELINE_COVERAGE` (the card's
+/// `BASELINE_COVERAGE`). A paramedic test pins the numbers and the predicate against the card's own.
+pub(crate) const PEAK_MIN_SECS: u64 = 300;
+pub(crate) const PEAK_MIN_SAMPLES: u32 = 250;
+pub(crate) const PEAK_MIN_COVERAGE: f64 = 0.50;
+pub(crate) const PEAK_BASELINE_COVERAGE: f64 = 0.80;
 
-/// e10: the crash session's GPU peak against this card's USUAL peak: the median of the peaks of its
-/// earlier sessions of the same game that have no crash record, with the Paramedic card's own lines
-/// (`TEMP_SAME_C` / `TEMP_HOTTER_C`, its "ran hotter than usual" comparison) and its own minimum
-/// (`PEAK_BASELINE_MIN` sessions, the newest `PEAK_BASELINE_MAX`). A measured outcome never says heat
-/// caused anything; too few sessions, or anything Compy couldn't read, is "can't tell".
+/// How much of a session's own (foreground) time Compy measured, as the card counts it.
+fn peak_coverage(s: &SessionSummary) -> f64 {
+    let span = s.duration_secs as f64 - f64::from(s.background_secs_excluded.unwrap_or(0));
+    if span > 0.0 {
+        f64::from(s.samples) / span
+    } else {
+        0.0
+    }
+}
+
+/// e10 r1 (F1/F2): the card's "judgeable" rule for one session (see `PEAK_MIN_SECS`). A background-only
+/// session has no measured ticks, so it never passes.
+pub(crate) fn peak_judgeable(s: &SessionSummary) -> bool {
+    let ratio_ok = s.avg_fps.is_finite() && s.low1_fps_est.is_finite() && s.avg_fps > 0.0 && s.low1_fps_est > 0.0;
+    !s.mostly_unread()
+        && s.duration_secs >= PEAK_MIN_SECS
+        && s.samples >= PEAK_MIN_SAMPLES
+        && peak_coverage(s) >= PEAK_MIN_COVERAGE
+        && ratio_ok
+}
+
+/// e10 r1 (F1): a session the card could use as a normal one (judgeable, and `PEAK_BASELINE_COVERAGE` measured).
+pub(crate) fn peak_reference_eligible(s: &SessionSummary) -> bool {
+    peak_judgeable(s) && peak_coverage(s) >= PEAK_BASELINE_COVERAGE
+}
+
+/// e10: the crash session's GPU peak against this card's USUAL peak: the rounded median of the peaks of its
+/// earlier sessions of the same game that the card would judge, that have no crash record Compy could have
+/// seen, with the Paramedic card's own lines (`TEMP_SAME_C` / `TEMP_HOTTER_C`, its "ran hotter than usual"
+/// comparison) and minimum (`PEAK_BASELINE_MIN` sessions, the newest `PEAK_BASELINE_MAX`). Not applied: the
+/// card's frame-rule flag (a rough session that did not crash still counts). A measured outcome never says
+/// heat caused anything; too few sessions, or anything Compy couldn't read, is "can't tell".
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 pub(crate) enum PeakVsUsual {
@@ -476,60 +524,113 @@ pub(crate) enum PeakVsUsual {
     Same { usual_c: u32, sessions: u32 },
     /// More than `TEMP_SAME_C` below it.
     Lower { usual_c: u32, sessions: u32 },
-    /// Fewer than `BASELINE_MIN` sessions to compare with (`sessions` is how many there are).
+    /// Fewer than `PEAK_BASELINE_MIN` sessions to compare with (`sessions` is how many there are).
     TooFew { sessions: u32 },
-    /// Compy couldn't tell which sessions to compare with: the crash session, its card or its game is
-    /// not on record, or the System log was not read, so a session's "no crash record" means nothing.
-    Unreadable,
+    /// Compy couldn't compare, and `why` says what is missing.
+    Unreadable { why: PeakUnreadable },
+}
+
+/// e10 r1 (F2/F3/F4): what kept the comparison from being made, said in plain words on screen.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum PeakUnreadable {
+    /// The crash session is not on record, or its record names no graphics card or game.
+    CardUnknown,
+    /// The crash session is shorter than the card judges, or too little of it was measured.
+    ShortSession,
+    /// The Windows System log was not read this time.
+    LogUnread,
+    /// Windows' Reliability history was not read this time.
+    ReliabilityUnread,
+    /// There are enough earlier sessions, but the System log Compy read doesn't reach back to them.
+    LogTooShort,
 }
 
 /// e10: the comparison for one record. `None` when the record carries no peak (nothing to compare).
-/// "No crash record" is said of a session only where the scan could have seen one: the System log was
-/// read (`coverage.read_ok`) and the session started inside what the scan kept (`judgeable_from`), and
-/// no record in `ctx` falls inside it (its start up to `VITALS_GRACE_SECS` after its end, the same
-/// window `correlate_vitals` matches a crash to).
+/// "No crash record" is said of a session only where the scan could have seen one (r1 F3): the System log
+/// was read (`coverage.read_ok`) and so was the Reliability history (`coverage.reliability_read`); the
+/// session started at or after the oldest System-log row the read returned (`coverage.history_from`: the
+/// log is known to hold that far back, nothing earlier is) and after any capped read's cut
+/// (`judgeable_from`); no record in `ctx` falls inside it (its start up to `VITALS_GRACE_SECS` after its
+/// end, the window `correlate_vitals` and the card's hardware-record match use); and no unexpected-shutdown
+/// record (written by Windows at the next start, so it can land long after the session's recorded end)
+/// follows it with no other session started in between.
 pub(crate) fn peak_vs_usual(
     inc: &Incident,
     ctx: &[Incident],
     sessions: &[SessionSummary],
     coverage: SystemLogCoverage,
 ) -> Option<PeakVsUsual> {
+    use PeakUnreadable as Why;
     let peak = peak_temp(inc)?;
     let started = inc.vitals.as_ref().map(|v| v.session_started_at.as_str())?;
+    let unreadable = |why| Some(PeakVsUsual::Unreadable { why });
     let blank = |s: &str| s.trim().is_empty();
     let Some(crash_session) = sessions.iter().find(|s| s.started_at == started) else {
-        return Some(PeakVsUsual::Unreadable);
+        return unreadable(Why::CardUnknown);
     };
     let card = crash_session.hw_fingerprint.as_ref().map(|f| f.gpu.as_str()).filter(|g| !blank(g));
     let game = Some(crash_session.process_name.as_str()).filter(|g| !blank(g));
-    let (Some(card), Some(game), Some(crash_start), true) =
-        (card, game, session_window(crash_session).map(|w| w.0), coverage.read_ok)
-    else {
-        return Some(PeakVsUsual::Unreadable);
+    let (Some(card), Some(game), Some(crash_start)) = (card, game, session_window(crash_session).map(|w| w.0)) else {
+        return unreadable(Why::CardUnknown);
     };
-    let crash_times: Vec<DateTime<Utc>> =
-        ctx.iter().filter_map(|i| parse_ts(&i.when)).map(|t| t.with_timezone(&Utc)).collect();
-    let mut earlier: Vec<(DateTime<Utc>, u32)> = sessions
-        .iter()
-        .filter(|s| s.started_at != started)
-        .filter(|s| s.process_name.trim().eq_ignore_ascii_case(game.trim()))
-        .filter(|s| s.hw_fingerprint.as_ref().is_some_and(|f| f.gpu.trim().eq_ignore_ascii_case(card.trim())))
-        .filter_map(|s| {
-            let (start, end) = session_window(s)?;
-            let earlier_and_clear = start < crash_start
-                && coverage.judgeable_from.is_none_or(|from| start >= from)
-                && !crash_times.iter().any(|t| *t >= start && *t <= end);
-            if !earlier_and_clear {
-                return None;
-            }
-            s.peak_gpu_temp_c.map(|p| (start, p))
+    if !peak_judgeable(crash_session) {
+        return unreadable(Why::ShortSession);
+    }
+    if !coverage.read_ok {
+        return unreadable(Why::LogUnread);
+    }
+    if !coverage.reliability_read {
+        return unreadable(Why::ReliabilityUnread);
+    }
+    let record_times: Vec<(DateTime<Utc>, IncidentKind)> =
+        ctx.iter().filter_map(|i| parse_ts(&i.when).map(|t| (t.with_timezone(&Utc), i.kind))).collect();
+    // A shutdown record belongs to the last session started before it, whatever its recorded end.
+    let starts: Vec<DateTime<Utc>> = sessions.iter().filter_map(|s| session_window(s).map(|w| w.0)).collect();
+    let followed_by_shutdown = |start: DateTime<Utc>| {
+        record_times.iter().any(|(t, k)| {
+            *k == IncidentKind::UnexpectedShutdown && *t >= start && !starts.iter().any(|o| *o > start && *o <= *t)
         })
-        .collect();
-    earlier.sort_by_key(|(start, _)| *start);
-    let newest = &earlier[earlier.len().saturating_sub(PEAK_BASELINE_MAX)..];
+    };
+    let checked_from = match (coverage.history_from, coverage.judgeable_from) {
+        (Some(h), Some(j)) => Some(h.max(j)),
+        (Some(h), None) => Some(h),
+        (None, _) => None,
+    };
+    // The card's reference sessions of this game on this card, before the crash session, with a reading.
+    let mut usable: Vec<(DateTime<Utc>, u32)> = Vec::new();
+    let mut unchecked = 0usize;
+    for s in sessions {
+        if s.started_at == started
+            || !s.process_name.trim().eq_ignore_ascii_case(game.trim())
+            || !s.hw_fingerprint.as_ref().is_some_and(|f| f.gpu.trim().eq_ignore_ascii_case(card.trim()))
+            || !peak_reference_eligible(s)
+        {
+            continue;
+        }
+        let (Some((start, end)), Some(p)) = (session_window(s), s.peak_gpu_temp_c) else { continue };
+        if start >= crash_start {
+            continue;
+        }
+        if !checked_from.is_some_and(|from| start >= from) {
+            unchecked += 1;
+            continue;
+        }
+        let clear = !record_times.iter().any(|(t, _)| *t >= start && *t <= end) && !followed_by_shutdown(start);
+        if clear {
+            usable.push((start, p));
+        }
+    }
+    usable.sort_by_key(|(start, _)| *start);
+    let newest = &usable[usable.len().saturating_sub(PEAK_BASELINE_MAX)..];
     let sessions_n = newest.len() as u32;
     if newest.len() < PEAK_BASELINE_MIN {
-        return Some(PeakVsUsual::TooFew { sessions: sessions_n });
+        // Enough sessions exist, but the log doesn't reach back far enough to check them: say that.
+        return if newest.len() + unchecked >= PEAK_BASELINE_MIN {
+            unreadable(Why::LogTooShort)
+        } else {
+            Some(PeakVsUsual::TooFew { sessions: sessions_n })
+        };
     }
     // The usual peak is the median, rounded, as the card takes its normal sessions' typical peak.
     let mut peaks: Vec<f64> = newest.iter().map(|(_, p)| f64::from(*p)).collect();
@@ -562,24 +663,33 @@ fn session_window(s: &SessionSummary) -> Option<(DateTime<Utc>, DateTime<Utc>)> 
 fn usual_evidence(cmp: PeakVsUsual) -> String {
     let of = |u: u32, n: u32| format!("this card's typical peak of {u}°C in {n} earlier sessions of this game with no crash record");
     match cmp {
-        PeakVsUsual::Hotter { usual_c, sessions } => format!("that is more than 10°C above {}", of(usual_c, sessions)),
+        PeakVsUsual::Hotter { usual_c, sessions } => format!("That is more than 10°C above {}", of(usual_c, sessions)),
         PeakVsUsual::Higher { usual_c, sessions } => {
-            format!("that is above {}, but not by the more than 10°C Compy counts as hotter than usual", of(usual_c, sessions))
+            format!("That is above {}, but not by the more than 10°C Compy counts as hotter than usual", of(usual_c, sessions))
         }
-        PeakVsUsual::Same { usual_c, sessions } => format!("that is within 5°C of {}", of(usual_c, sessions)),
-        PeakVsUsual::Lower { usual_c, sessions } => format!("that is below {}", of(usual_c, sessions)),
+        PeakVsUsual::Same { usual_c, sessions } => format!("That is within 5°C of {}", of(usual_c, sessions)),
+        PeakVsUsual::Lower { usual_c, sessions } => format!("That is below {}", of(usual_c, sessions)),
         PeakVsUsual::TooFew { sessions } => format!(
-            "Compy needs at least 3 earlier sessions of this game on this card with a temperature reading and no crash record to compare that peak with, and has {sessions}"
+            "Compy needs at least 3 earlier sessions of this game on this card, each long enough for it to judge, with a temperature reading and no crash record, to compare that peak with, and has {sessions}"
         ),
-        PeakVsUsual::Unreadable => "Compy couldn't read enough to compare that peak with this card's other sessions".into(),
+        PeakVsUsual::Unreadable { why } => match why {
+            PeakUnreadable::CardUnknown => "Compy's record of this session doesn't say which graphics card or game it was, so it can't compare that peak with the card's other sessions".into(),
+            PeakUnreadable::ShortSession => "This session was too short, or too little of it was measured, for Compy to compare its peak with this card's other sessions".into(),
+            PeakUnreadable::LogUnread => "Compy couldn't read the Windows System log this time, so it can't tell which earlier sessions had no crash record".into(),
+            PeakUnreadable::ReliabilityUnread => "Compy couldn't read Windows' Reliability history this time, so it can't tell which earlier sessions had no crash record".into(),
+            PeakUnreadable::LogTooShort => "The Windows System log Compy read doesn't reach back to this card's earlier sessions of this game, so it can't tell whether they had a crash record".into(),
+        },
     }
 }
 
 /// e10: the Overheating rule's next step. Cooling is offered only when the peak was hotter than usual,
-/// and then as a thing to try, not a fix. Otherwise the step says what Compy can and can't tell. The
-/// detail carries no number: the Care step is keyed on its text, and a count that grows each session
+/// and then as a thing to try, not a fix. Otherwise the step says what Compy can and can't tell; where the
+/// comparison couldn't be made, it says what is missing (r1 F4), and only "too few" says playing helps.
+/// The detail carries no count: the Care step is keyed on its text, and a count that grows each session
 /// must not restart it.
 fn peak_next_step(cmp: Option<PeakVsUsual>) -> NextStep {
+    const HEAD: &str = "Keep Compy recording while you play";
+    const LATER: &str = "Look at this record again after a later scan";
     match cmp {
         Some(PeakVsUsual::Hotter { .. }) => NextStep::safe(
             "Check your temperatures under load",
@@ -589,18 +699,46 @@ fn peak_next_step(cmp: Option<PeakVsUsual>) -> NextStep {
              Re-pasting or undervolting are bigger jobs to research first, not do blind.",
         ),
         Some(PeakVsUsual::Higher { .. } | PeakVsUsual::Same { .. } | PeakVsUsual::Lower { .. }) => NextStep::safe(
-            "Keep Compy recording while you play",
+            HEAD,
             "This session's GPU peak was not more than 10°C above this card's typical peak in this game, so this \
              comparison gives no reason to start with cooling. Compy can't tell from this record what was behind it. \
              If it happens again while Compy is recording, that record is compared the same way.",
         ),
-        Some(PeakVsUsual::TooFew { .. } | PeakVsUsual::Unreadable) | None => NextStep::safe(
-            "Keep Compy recording while you play",
+        Some(PeakVsUsual::TooFew { .. }) | None => NextStep::safe(
+            HEAD,
             "Compy can't tell yet whether this peak is usual for this card: it compares a crash session's peak with \
-             at least 3 earlier sessions of the same game on the same card that have a temperature reading and no \
-             crash record. Playing with Compy recording adds them. A temperature overlay during the game shows the \
-             same reading live.",
+             at least 3 earlier sessions of the same game on the same card, each at least 5 minutes long and mostly \
+             measured, with a temperature reading and no crash record. Playing with Compy recording adds them. A \
+             temperature overlay during the game shows the same reading live.",
         ),
+        Some(PeakVsUsual::Unreadable { why }) => match why {
+            PeakUnreadable::CardUnknown => NextStep::safe(
+                "Compy can't compare this peak",
+                "Compy's record of this session doesn't say which graphics card or game it ran on, so it has nothing \
+                 to compare this peak with, and it can't tell whether this peak is usual for the card.",
+            ),
+            PeakUnreadable::ShortSession => NextStep::safe(
+                "Compy can't compare this peak",
+                "This session was shorter than 5 minutes, or too little of it was measured, so its peak can't be \
+                 compared with this card's full sessions. Compy can't tell from this peak whether the card ran hotter \
+                 than usual.",
+            ),
+            PeakUnreadable::LogUnread => NextStep::safe(
+                LATER,
+                "Compy couldn't read the Windows System log this time, so it can't tell which of this card's earlier \
+                 sessions had no crash record, and it can't compare this peak. A later scan may read the log.",
+            ),
+            PeakUnreadable::ReliabilityUnread => NextStep::safe(
+                LATER,
+                "Compy couldn't read Windows' Reliability history this time, so it can't tell which of this card's \
+                 earlier sessions had no crash record, and it can't compare this peak. A later scan may read it.",
+            ),
+            PeakUnreadable::LogTooShort => NextStep::safe(
+                "Compy can't compare this peak",
+                "The Windows System log Compy read doesn't reach back to this card's earlier sessions of this game, so \
+                 it can't tell whether they had a crash record, and it can't compare this peak with them.",
+            ),
+        },
     }
 }
 
@@ -2196,9 +2334,11 @@ pub(crate) fn collect_crash_blackbox() -> BlackBoxReport {
     let (events, ev_skip, event_log_read) = collect_event_log();
     let (wer, wer_skip, wer_cut) = collect_wer();
     let (reliability, rel_skip) = collect_reliability();
+    let reliability_read = rel_skip.is_none();
     let (skipped_sources, skipped_needs_admin) = classify_skips(ev_skip, wer_skip, rel_skip, minidump_skip_note());
     let sessions = crate::sessions::get_session_summaries();
-    let mut report = report_from(events, wer, wer_cut, reliability, &sessions, skipped_sources, event_log_read);
+    let mut report =
+        report_from_reads(events, wer, wer_cut, reliability, &sessions, skipped_sources, event_log_read, reliability_read);
     report.skipped_needs_admin = skipped_needs_admin;
     report
 }
@@ -2217,8 +2357,8 @@ fn classify_skips(
     (all, admin)
 }
 
-/// Pure: the report from already-fetched rows, with the scan's truncation point computed BEFORE the
-/// rows are consumed.
+/// Test seam: `report_from_reads` with the Reliability history read.
+#[cfg(test)]
 fn report_from(
     events: Vec<RawEvent>,
     wer: Vec<WerReport>,
@@ -2228,6 +2368,34 @@ fn report_from(
     skipped_sources: Vec<String>,
     event_log_read: bool,
 ) -> BlackBoxReport {
+    report_from_reads(events, wer, wer_cut, reliability, sessions, skipped_sources, event_log_read, true)
+}
+
+/// e10 r1 (F3): the oldest System-log row among the rows read: the log is known to hold records back to
+/// here. Pure, from the rows already fetched.
+fn system_history_from(events: &[RawEvent]) -> Option<DateTime<Utc>> {
+    events
+        .iter()
+        .filter(|e| EVENT_LOG_SOURCES.iter().any(|(c, p, _)| *c == "System" && p.eq_ignore_ascii_case(e.provider.trim())))
+        .filter_map(|e| parse_ts(&e.time))
+        .map(|t| t.with_timezone(&Utc))
+        .min()
+}
+
+/// Pure: the report from already-fetched rows, with the scan's truncation point computed BEFORE the
+/// rows are consumed. `reliability_read`: the Reliability reader ran (e10 r1 F3).
+#[allow(clippy::too_many_arguments)]
+fn report_from_reads(
+    events: Vec<RawEvent>,
+    wer: Vec<WerReport>,
+    wer_cut: Option<DateTime<Utc>>,
+    reliability: Vec<ReliabilityRecord>,
+    sessions: &[SessionSummary],
+    skipped_sources: Vec<String>,
+    event_log_read: bool,
+    reliability_read: bool,
+) -> BlackBoxReport {
+    let history_from = system_history_from(&events);
     let read_cut = read_truncated_from(&events, &reliability).max(wer_cut);
     let mut incidents = assemble_incidents(events, wer, reliability, sessions);
     let incident_cut = (incidents.len() >= MAX_INCIDENTS)
@@ -2242,7 +2410,8 @@ fn report_from(
     // Now that what was read is known, re-assess with it: an absence line ("found nothing around it")
     // is allowed only for a window the System log was read for and the scan did not cut.
     if blackbox_v2_gate() {
-        apply_assessments(&mut incidents, SystemLogCoverage::new(event_log_read, clean_judgeable_from), sessions);
+        let coverage = SystemLogCoverage::new(event_log_read, clean_judgeable_from).with_history(history_from, reliability_read);
+        apply_assessments(&mut incidents, coverage, sessions);
     }
     BlackBoxReport {
         incidents,
@@ -4030,9 +4199,11 @@ mod blackbox_tests {
     // ── e10: the crash session's GPU peak against this card's usual peak ──────────────────────────
     const E10_CRASH: &str = "2026-06-20T21:00:00Z";
 
-    /// One recorded session of `game.exe` on the test card, an hour long, starting `start`.
+    /// One recorded session of `game.exe` on the test card, an hour long and fully measured (the card
+    /// would judge it), starting `start`.
     fn card_session(start: &str, peak: Option<u32>) -> SessionSummary {
         let mut s = session(start, 3600, "game.exe");
+        s.samples = 3600;
         s.peak_gpu_temp_c = peak;
         s.hw_fingerprint = Some(crate::hardware::HwFingerprint { gpu: "Radeon RX 7800 XT".into(), ..Default::default() });
         s
@@ -4050,11 +4221,18 @@ mod blackbox_tests {
         mk(IncidentKind::GpuTimeout, E10_CRASH, Some("amdkmdag"), None, None, peak)
     }
 
-    const LOG_READ: SystemLogCoverage = SystemLogCoverage { read_ok: true, judgeable_from: None };
+    /// Both logs read, and the System log returned a row from May 1, so it is known to reach back there.
+    fn log_read() -> SystemLogCoverage {
+        SystemLogCoverage::new(true, None).with_history(Some(utc("2026-05-01T00:00:00Z")), true)
+    }
 
     fn e10_cmp(earlier: &[Option<u32>], crash_peak: u32) -> Option<PeakVsUsual> {
         let inc = e10_timeout(Some(crash_peak));
-        peak_vs_usual(&inc, std::slice::from_ref(&inc), &e10_sessions(earlier, crash_peak), LOG_READ)
+        peak_vs_usual(&inc, std::slice::from_ref(&inc), &e10_sessions(earlier, crash_peak), log_read())
+    }
+
+    fn unreadable(why: PeakUnreadable) -> Option<PeakVsUsual> {
+        Some(PeakVsUsual::Unreadable { why })
     }
 
     #[test]
@@ -4062,7 +4240,7 @@ mod blackbox_tests {
         // Usual = median of 70, 72, 74 = 72; 88 is 16 above.
         let inc = e10_timeout(Some(88));
         let sessions = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
-        let a = assess_with(&inc, std::slice::from_ref(&inc), LOG_READ, &sessions).expect("fires");
+        let a = assess_with(&inc, std::slice::from_ref(&inc), log_read(), &sessions).expect("fires");
         assert_eq!(a.temp_vs_usual, Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
         assert_eq!(a.strength, Strength::Weak, "hotter than usual is still one kind of evidence next to the record");
         assert!(a.consistent_with.contains("can't tell whether heat played a part"), "{}", a.consistent_with);
@@ -4075,6 +4253,9 @@ mod blackbox_tests {
         // The lines are the Paramedic card's: 11 above is hotter, 10 is not.
         assert_eq!(e10_cmp(&[Some(80), Some(80), Some(80)], 91), Some(PeakVsUsual::Hotter { usual_c: 80, sessions: 3 }));
         assert_eq!(e10_cmp(&[Some(80), Some(80), Some(80)], 90), Some(PeakVsUsual::Higher { usual_c: 80, sessions: 3 }));
+        // An even count: 70, 71, 72, 73 has median 71.5, rounded to 72 as the card rounds (extras.rs).
+        assert_eq!(e10_cmp(&[Some(70), Some(71), Some(72), Some(73)], 83), Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 4 }));
+        assert_eq!(e10_cmp(&[Some(70), Some(71), Some(72), Some(73)], 82), Some(PeakVsUsual::Higher { usual_c: 72, sessions: 4 }));
     }
 
     #[test]
@@ -4093,7 +4274,7 @@ mod blackbox_tests {
         }
         let inc = e10_timeout(Some(88));
         let sessions = e10_sessions(&[Some(84), Some(86), Some(88)], 88);
-        let a = assess_with(&inc, std::slice::from_ref(&inc), LOG_READ, &sessions).expect("fires");
+        let a = assess_with(&inc, std::slice::from_ref(&inc), log_read(), &sessions).expect("fires");
         assert_eq!(a.temp_vs_usual, Some(PeakVsUsual::Same { usual_c: 86, sessions: 3 }));
         assert!(a.evidence.iter().any(|e| e.contains("within 5°C of this card's typical peak of 86°C")), "{:?}", a.evidence);
         assert!(a.consistent_with.contains("can't tell whether heat played a part"));
@@ -4104,9 +4285,60 @@ mod blackbox_tests {
     }
 
     #[test]
+    fn e10_r1_only_sessions_the_card_would_judge_set_the_usual_peak() {
+        // Three short launches at 55°C and a background-only hour at 50°C: none is a session the card judges,
+        // so a full-length crash session at 86°C is never "hotter than usual" against them.
+        let mut sessions = Vec::new();
+        for day in 1..=3 {
+            let mut s = card_session(&format!("2026-06-{day:02}T18:00:00Z"), Some(55));
+            s.duration_secs = 120;
+            s.samples = 120;
+            sessions.push(s);
+        }
+        let mut background = card_session("2026-06-04T18:00:00Z", Some(50));
+        background.samples = 0;
+        background.background_secs_excluded = Some(3600);
+        sessions.push(background);
+        // An hour with a fifth of it unreadable is not judged either (the card's mostly-unread rule).
+        let mut unread = card_session("2026-06-05T18:00:00Z", Some(50));
+        unread.unreadable_seconds = 1800;
+        sessions.push(unread);
+        sessions.push(card_session(E10_CRASH, Some(86)));
+        let inc = e10_timeout(Some(86));
+        let got = peak_vs_usual(&inc, std::slice::from_ref(&inc), &sessions, log_read());
+        assert_eq!(got, Some(PeakVsUsual::TooFew { sessions: 0 }));
+        let a = assess_with(&inc, std::slice::from_ref(&inc), log_read(), &sessions).expect("fires");
+        assert!(!a.next_step.detail.contains("airflow"), "{}", a.next_step.detail);
+        // A session measured for only 70% of its hour is judged by the card, but is not a normal one (80%).
+        let mut thin = e10_sessions(&[Some(55), Some(80), Some(80)], 80);
+        thin[0].samples = 2520;
+        assert!(peak_judgeable(&thin[0]) && !peak_reference_eligible(&thin[0]));
+        let inc = e10_timeout(Some(80));
+        assert_eq!(peak_vs_usual(&inc, std::slice::from_ref(&inc), &thin, log_read()), Some(PeakVsUsual::TooFew { sessions: 2 }));
+    }
+
+    #[test]
+    fn e10_r1_a_crash_session_too_short_to_judge_is_cant_tell_never_no_reason_to_cool() {
+        let mut sessions = e10_sessions(&[Some(84), Some(86), Some(88)], 86);
+        sessions.last_mut().unwrap().duration_secs = 120;
+        sessions.last_mut().unwrap().samples = 120;
+        let inc = e10_timeout(Some(86));
+        let a = assess_with(&inc, std::slice::from_ref(&inc), log_read(), &sessions).expect("fires");
+        assert_eq!(a.temp_vs_usual, unreadable(PeakUnreadable::ShortSession));
+        assert!(!a.next_step.detail.contains("no reason to start with cooling"), "{}", a.next_step.detail);
+        assert!(!a.next_step.detail.contains("airflow"), "{}", a.next_step.detail);
+        assert!(a.next_step.detail.contains("can't tell"), "{}", a.next_step.detail);
+        assert_eq!(
+            serde_json::to_value(a.temp_vs_usual).unwrap(),
+            serde_json::json!({ "outcome": "unreadable", "why": "short-session" })
+        );
+    }
+
+    #[test]
     fn e10_fewer_than_3_clear_sessions_with_a_reading_is_cant_tell() {
         assert_eq!(PEAK_BASELINE_MIN, 3, "the wording says 3");
         assert_eq!((TEMP_SAME_C, TEMP_HOTTER_C), (5, 10), "the wording says 5 and 10");
+        assert_eq!(PEAK_MIN_SECS, 300, "the wording says 5 minutes");
         // Two clear earlier sessions with a reading; the others do not count: no reading, a crash record
         // inside it, another card, another game, and one AFTER the crash.
         let mut sessions = e10_sessions(&[Some(70), Some(72), None, Some(60)], 88);
@@ -4119,16 +4351,12 @@ mod blackbox_tests {
         // Session 4 (June 4) holds an app crash record: it is not a session that did not crash.
         let crash_in_4 = mk(IncidentKind::AppCrash, "2026-06-04T18:30:00Z", None, None, Some("game.exe"), None);
         let ctx = vec![inc.clone(), crash_in_4];
-        let a = assess_with(&inc, &ctx, LOG_READ, &sessions).expect("fires");
+        let a = assess_with(&inc, &ctx, log_read(), &sessions).expect("fires");
         assert_eq!(a.temp_vs_usual, Some(PeakVsUsual::TooFew { sessions: 2 }));
         assert!(a.evidence.iter().any(|e| e.contains("needs at least 3") && e.ends_with("and has 2")), "{:?}", a.evidence);
         assert!(!a.next_step.detail.contains("airflow"), "{}", a.next_step.detail);
-        assert!(a.next_step.detail.contains("can't tell"), "{}", a.next_step.detail);
+        assert!(a.next_step.detail.contains("can't tell") && a.next_step.detail.contains("Playing with Compy recording"), "{}", a.next_step.detail);
         assert_eq!(serde_json::to_value(a.temp_vs_usual).unwrap(), serde_json::json!({ "outcome": "too-few", "sessions": 2 }));
-        // Sessions before what the scan kept can't be called clear either.
-        let cut = SystemLogCoverage::new(true, parse_ts("2026-06-10T00:00:00Z").map(|t| t.with_timezone(&Utc)));
-        let plenty = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
-        assert_eq!(peak_vs_usual(&inc, std::slice::from_ref(&inc), &plenty, cut), Some(PeakVsUsual::TooFew { sessions: 0 }));
         // Only the newest 10 count (PEAK_BASELINE_MAX, the card's BASELINE_MAX): two old 100°C sessions fall out.
         let mut twelve = vec![Some(100), Some(100)];
         twelve.extend([Some(70); 10]);
@@ -4136,33 +4364,90 @@ mod blackbox_tests {
     }
 
     #[test]
-    fn e10_no_peak_means_no_comparison_and_an_unreadable_side_is_cant_tell() {
+    fn e10_r1_a_session_counts_as_clear_only_where_the_scan_could_have_seen_a_crash() {
+        let inc = e10_timeout(Some(88));
+        let one = std::slice::from_ref(&inc);
+        let sessions = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
+        // The System log's oldest returned row is June 10: it is not known to reach back to June 1-3.
+        let short_log = SystemLogCoverage::new(true, None).with_history(Some(utc("2026-06-10T00:00:00Z")), true);
+        assert_eq!(peak_vs_usual(&inc, one, &sessions, short_log), unreadable(PeakUnreadable::LogTooShort));
+        // No System row came back at all: nothing earlier is known to be held.
+        let no_rows = SystemLogCoverage::new(true, None).with_history(None, true);
+        assert_eq!(peak_vs_usual(&inc, one, &sessions, no_rows), unreadable(PeakUnreadable::LogTooShort));
+        // A capped read's cut after the sessions does the same.
+        let cut = SystemLogCoverage::new(true, Some(utc("2026-06-10T00:00:00Z"))).with_history(Some(utc("2026-05-01T00:00:00Z")), true);
+        assert_eq!(peak_vs_usual(&inc, one, &sessions, cut), unreadable(PeakUnreadable::LogTooShort));
+        // The Reliability history was not read: can't tell.
+        let no_rel = SystemLogCoverage::new(true, None).with_history(Some(utc("2026-05-01T00:00:00Z")), false);
+        assert_eq!(peak_vs_usual(&inc, one, &sessions, no_rel), unreadable(PeakUnreadable::ReliabilityUnread));
+        // An unexpected-shutdown record written at the next start, hours after June 2's session ended, with no
+        // session started in between, belongs to June 2: that session is not clear.
+        let next_boot = mk(IncidentKind::UnexpectedShutdown, "2026-06-02T23:30:00Z", None, None, None, None);
+        let ctx = vec![inc.clone(), next_boot];
+        assert_eq!(peak_vs_usual(&inc, &ctx, &sessions, log_read()), Some(PeakVsUsual::TooFew { sessions: 2 }));
+        // The same record after June 3's session started belongs to June 3, not June 2.
+        let later_boot = mk(IncidentKind::UnexpectedShutdown, "2026-06-03T23:30:00Z", None, None, None, None);
+        let mut four = e10_sessions(&[Some(70), Some(72), Some(74), Some(76)], 88);
+        four.sort_by(|a, b| a.started_at.cmp(&b.started_at));
+        let ctx = vec![inc.clone(), later_boot];
+        assert_eq!(peak_vs_usual(&inc, &ctx, &four, log_read()), Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
+    }
+
+    #[test]
+    fn e10_no_peak_means_no_comparison_and_an_unreadable_side_says_what_is_missing() {
         // In a recorded session, but the session read no GPU temperature.
         let mut cool = e10_timeout(Some(88));
         cool.vitals.as_mut().unwrap().peak_gpu_temp_c = None;
         let sessions = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
-        assert_eq!(peak_vs_usual(&cool, std::slice::from_ref(&cool), &sessions, LOG_READ), None, "no peak, nothing to compare");
-        let a = assess_with(&cool, std::slice::from_ref(&cool), LOG_READ, &sessions);
+        assert_eq!(peak_vs_usual(&cool, std::slice::from_ref(&cool), &sessions, log_read()), None, "no peak, nothing to compare");
+        let a = assess_with(&cool, std::slice::from_ref(&cool), log_read(), &sessions);
         assert!(a.is_none_or(|a| a.temp_vs_usual.is_none()), "no peak: no comparison is shown");
         let one_whea = mk(IncidentKind::HardwareError, E10_CRASH, None, None, None, None);
-        let a = assess_with(&one_whea, std::slice::from_ref(&one_whea), LOG_READ, &sessions).expect("fires");
+        let a = assess_with(&one_whea, std::slice::from_ref(&one_whea), log_read(), &sessions).expect("fires");
         assert_eq!((a.temp_c, a.temp_vs_usual), (None, None));
         assert!(!serde_json::to_string(&a).unwrap().contains("temp_vs_usual"), "absent on the wire");
         // A peak, but the System log was not read: "no crash record" in the other sessions means nothing.
         let hot = e10_timeout(Some(88));
-        assert_eq!(peak_vs_usual(&hot, std::slice::from_ref(&hot), &sessions, SystemLogCoverage::UNPROVEN), Some(PeakVsUsual::Unreadable));
-        // A peak, but the crash session's card is not on record.
+        assert_eq!(peak_vs_usual(&hot, std::slice::from_ref(&hot), &sessions, SystemLogCoverage::UNPROVEN), unreadable(PeakUnreadable::LogUnread));
+        // A peak, but the crash session's card is not on record (or the session isn't).
         let mut no_card = sessions.clone();
         no_card.last_mut().unwrap().hw_fingerprint = None;
-        assert_eq!(peak_vs_usual(&hot, std::slice::from_ref(&hot), &no_card, LOG_READ), Some(PeakVsUsual::Unreadable));
+        assert_eq!(peak_vs_usual(&hot, std::slice::from_ref(&hot), &no_card, log_read()), unreadable(PeakUnreadable::CardUnknown));
         let a = assess(&hot, std::slice::from_ref(&hot)).expect("fires");
-        assert_eq!(a.temp_vs_usual, Some(PeakVsUsual::Unreadable));
+        assert_eq!(a.temp_vs_usual, unreadable(PeakUnreadable::CardUnknown));
         assert!(a.consistent_with.contains("can't tell whether heat played a part"));
-        assert!(!a.next_step.detail.contains("airflow"));
-        assert_eq!(serde_json::to_value(a.temp_vs_usual).unwrap(), serde_json::json!({ "outcome": "unreadable" }));
+        assert_eq!(serde_json::to_value(a.temp_vs_usual).unwrap(), serde_json::json!({ "outcome": "unreadable", "why": "card-unknown" }));
+        // r1 F4: a step for something Compy couldn't read says what is missing, never that playing more helps.
+        let whys = [
+            (PeakUnreadable::CardUnknown, "which graphics card or game"),
+            (PeakUnreadable::ShortSession, "shorter than 5 minutes"),
+            (PeakUnreadable::LogUnread, "couldn't read the Windows System log"),
+            (PeakUnreadable::ReliabilityUnread, "couldn't read Windows' Reliability history"),
+            (PeakUnreadable::LogTooShort, "doesn't reach back"),
+        ];
+        for (why, says) in whys {
+            let step = peak_next_step(unreadable(why));
+            assert!(step.detail.contains(says), "{why:?}: {}", step.detail);
+            assert!(!step.detail.contains("Playing") && !step.detail.contains("airflow"), "{why:?}: {}", step.detail);
+            assert!(step.detail.contains("can't"), "{why:?}: {}", step.detail);
+            assert!(step.reversible && !step.research_only);
+        }
         // A WHEA record with a peak carries the comparison too.
         let whea_hot = mk(IncidentKind::HardwareError, E10_CRASH, None, None, None, Some(88));
-        let w = assess_with(&whea_hot, std::slice::from_ref(&whea_hot), LOG_READ, &sessions).expect("fires");
+        let w = assess_with(&whea_hot, std::slice::from_ref(&whea_hot), log_read(), &sessions).expect("fires");
         assert_eq!(w.temp_vs_usual, Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
+    }
+
+    #[test]
+    fn e10_r1_the_scan_carries_the_system_logs_reach_and_the_reliability_read() {
+        let ev_at = |provider: &str, id: u32, t: &str| ev(provider, id, t, "m", serde_json::json!({}));
+        let rows = vec![
+            ev_at("Display", 4101, "2026-06-20T21:00:00Z"),
+            ev_at("Microsoft-Windows-Kernel-Power", 41, "2026-05-03T08:00:00Z"),
+            ev_at("Application Error", 1000, "2026-04-01T08:00:00Z"),
+        ];
+        // The oldest SYSTEM row, not the older Application one.
+        assert_eq!(system_history_from(&rows), Some(utc("2026-05-03T08:00:00Z")));
+        assert_eq!(system_history_from(&rows[2..]), None);
     }
 }

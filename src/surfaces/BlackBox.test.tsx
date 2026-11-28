@@ -213,11 +213,42 @@ describe("BlackBox surface (v2 triage UI)", () => {
     [
       "too few",
       { outcome: "too-few", sessions: 2 },
-      "To compare it, Compy needs at least 3 earlier sessions of this game on this card with a temperature reading and no crash record, and it has 2. So it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
-      "要做对比，Compy 至少需要这张显卡在该游戏中 3 次有温度读数且没有崩溃记录的较早会话，目前只有 2 次。所以它无法判断这个峰值对这张显卡来说是否正常，也无法判断发热是否起了作用。",
+      "To compare it, Compy needs at least 3 earlier sessions of this game on this card, each at least 5 minutes long and mostly measured, with a temperature reading and no crash record, and it has 2. So it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
+      "要做对比，Compy 至少需要这张显卡在该游戏中 3 次较早的会话，每次至少 5 分钟且大部分被测到，有温度读数且没有崩溃记录，目前只有 2 次。所以它无法判断这个峰值对这张显卡来说是否正常，也无法判断发热是否起了作用。",
+    ],
+    // e10 r1 (F2-F4): each thing that kept the comparison from being made is said in plain words.
+    [
+      "unreadable: card not on record",
+      { outcome: "unreadable", why: "card-unknown" },
+      "Compy's record of this session doesn't say which graphics card or game it was, so it can't compare that peak with the card's other sessions, and it can't tell whether heat played a part.",
+      "Compy 对这次会话的记录里没有写明是哪张显卡或哪个游戏，所以无法把这个峰值与这张显卡的其他会话做对比，也无法判断发热是否起了作用。",
     ],
     [
-      "unreadable",
+      "unreadable: a short crash session",
+      { outcome: "unreadable", why: "short-session" },
+      "That session was shorter than 5 minutes, or too little of it was measured, so Compy can't compare its peak with this card's full sessions, and it can't tell whether heat played a part.",
+      "那次会话不到 5 分钟，或者测到的部分太少，所以 Compy 无法把它的峰值与这张显卡的完整会话做对比，也无法判断发热是否起了作用。",
+    ],
+    [
+      "unreadable: System log not read",
+      { outcome: "unreadable", why: "log-unread" },
+      "Compy couldn't read the Windows System log this time, so it can't tell which of this card's earlier sessions had no crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "Compy 这次没能读取 Windows 系统日志，所以无法判断这张显卡之前的哪些会话没有崩溃记录。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+    ],
+    [
+      "unreadable: Reliability history not read",
+      { outcome: "unreadable", why: "reliability-unread" },
+      "Compy couldn't read Windows' Reliability history this time, so it can't tell which of this card's earlier sessions had no crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "Compy 这次没能读取 Windows 可靠性历史记录，所以无法判断这张显卡之前的哪些会话没有崩溃记录。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+    ],
+    [
+      "unreadable: the log doesn't reach back",
+      { outcome: "unreadable", why: "log-too-short" },
+      "The Windows System log Compy read doesn't reach back to this card's earlier sessions of this game, so it can't tell whether they had a crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "Compy 读取到的 Windows 系统日志没有追溯到这张显卡在该游戏中之前的会话，所以无法判断那些会话是否有崩溃记录。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+    ],
+    [
+      "unreadable with no reason given",
       { outcome: "unreadable" },
       "Compy couldn't read enough to compare that peak with this card's other sessions, so it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
       "Compy 读取到的信息不足以把这个峰值与这张显卡的其他会话做对比，所以无法判断这个峰值对这张显卡来说是否正常，也无法判断发热是否起了作用。",

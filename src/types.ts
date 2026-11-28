@@ -774,11 +774,13 @@ export type AssessmentStatement =
   | "hardware-error"
   | "hardware-error-peak";
 /** e10 (blackbox.rs `PeakVsUsual`): a crash session's GPU peak against this card's usual one, the
- *  Paramedic card's lines (more than 10°C above: hotter; within 5°C: about the same) and minimum (3). */
+ *  Paramedic card's lines (more than 10°C above: hotter; within 5°C: about the same), minimum (3) and
+ *  which sessions count (the card's judgeable ones). `why` (r1) says what kept the comparison from being made. */
+export type PeakUnreadable = "card-unknown" | "short-session" | "log-unread" | "reliability-unread" | "log-too-short";
 export type PeakVsUsual =
   | { outcome: "hotter" | "higher" | "same" | "lower"; usual_c: number; sessions: number }
   | { outcome: "too-few"; sessions: number }
-  | { outcome: "unreadable" };
+  | { outcome: "unreadable"; why?: PeakUnreadable };
 export type CrashAssessment = {
   /** P7-rig-care. Absent on records from a build before the key existed: read as "no rule known". */
   rule?: AssessmentRule;
