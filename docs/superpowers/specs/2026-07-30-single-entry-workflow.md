@@ -4,7 +4,7 @@
 > product authority, priority, approval, or work authorization. Current product direction is
 > [`docs/PRODUCT_CONSTITUTION.md`](../../PRODUCT_CONSTITUTION.md), with sequence derived in
 > [`docs/product/ROADMAP.md`](../../product/ROADMAP.md). Current workflow and claim law is
-> [`docs/WORK_CONTROL.md`](../../WORK_CONTROL.md).
+> `docs/WORK_CONTROL.md` (retired 2026-11-28).
 
 **Issue:** [#18](https://github.com/Pootytxng/sentinel/issues/18) · **Status:** design approved by Kuya
 2026-07-30, implementation not started · **Branch:** `feat/single-entry-workflow` ·

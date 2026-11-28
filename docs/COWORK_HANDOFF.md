@@ -24,7 +24,7 @@
   **Aesthetic taste is NOT his to carry** — agents decide it and show him a before/after to veto
   (CLAUDE.md, "TASTE IS MINE TO EXERCISE, HIS TO OVERRULE").
 
-**Live execution coordination:** read [`WORK_CONTROL.md`](WORK_CONTROL.md) before starting. The
+**Live execution coordination:** read `WORK_CONTROL.md` (retired 2026-11-28) before starting. The
 linked GitHub Project holds the current executor, worktree, claim, status, and next action. Cowork
 may audit in parallel, but it does not write into an overlapping scope. Product status remains in
 BACKLOG and gate/release truth remains in RELEASE_STATE.
@@ -234,5 +234,5 @@ The reverse-chronological board log + resume points were moved to
 [`docs/archive/cowork-handoff-board-2026-06.md`](archive/cowork-handoff-board-2026-06.md) on 2026-06-28,
 to keep this file the durable doctrine it's meant to be. **Product status lives in
 `docs/BACKLOG.md`** (the canonical ledger) and gate/release truth in `docs/RELEASE_STATE.md`.
-Current executor/claim state lives in the Project linked by [`WORK_CONTROL.md`](WORK_CONTROL.md) —
+Current executor/claim state lives in the Project linked by `WORK_CONTROL.md` (retired 2026-11-28) —
 never in another Markdown board.

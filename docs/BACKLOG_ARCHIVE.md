@@ -2895,7 +2895,7 @@ confirmation naming the changes. Cowork adversarial audit WARRANTED (mutation-bo
 > Maintained by the HQ/steering session. Anchored to live `main`, not banners. Lanes: read your row,
 > stay in your file domain, rebase onto `main` before every push.
 >
-> **🚌 Live per-lane QUEUES + the cross-lane MESSAGE BUS now live in [`docs/LANE_BUS.md`](LANE_BUS.md).**
+> **🚌 Live per-lane QUEUES + the cross-lane MESSAGE BUS now live in `docs/LANE_BUS.md` (retired 2026-11-28).**
 > Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
 > direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
 
@@ -3308,7 +3308,7 @@ proof) stayed behind in the live queue rather than travelling here.
    refs re-proven by merge-tree at `f8969e5f`, and the three that proof could retire are deleted from
    `origin` (`claude/foreground-courtesy-handoff-82687b` + `docs/design-foundation` MERGED,
    `claude/checklist-disk-item-c5660e` SUPERSEDED) — 15 refs → 12, evidence in
-   [`BRANCH_DISPOSITIONS.md`](BRANCH_DISPOSITIONS.md). **Left:** nine non-`PRESERVE` refs, and **not
+   `BRANCH_DISPOSITIONS.md` (retired 2026-11-28). **Left:** nine non-`PRESERVE` refs, and **not
    one is retirable by proof** — two are open PRs another lane owns (#160/#163), one is a Codex
    claim, and the rest need an owner product-scope call (bklit design system · user-feedback Lab
    recovery · quiet-pit-wall half B) or a per-file landing (review-consolidation, tool-shed-hygiene,

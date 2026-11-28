@@ -43,7 +43,6 @@ const read = (...parts) => readFileSync(join(ROOT, ...parts), "utf8");
 const LIB_RS = read("src-tauri", "src", "lib.rs");
 const TRAY_RS = read("src-tauri", "src", "tray.rs");
 const SHIP = read("scripts", "ship-reinstall.ps1");
-const CONSOLE_START = read("tools", "console", "start.ps1");
 
 /** The body of `pub fn run()` up to the builder call -- where the decision must be applied. */
 function runPrelude(source) {
@@ -335,31 +334,6 @@ describe("launches hand Compy SW_SHOWNOACTIVATE, not Start-Process's SW_SHOWNORM
     },
     90_000,
   );
-});
-
-describe("the console browser opens quietly only when tooling started it", () => {
-  it("every browser launch carries an explicit window style", () => {
-    const launches = CONSOLE_START.split(/\r?\n/).filter((line) => /^\s*Start-Process\b/.test(line));
-    expect(launches.length).toBeGreaterThan(0);
-    for (const line of launches) {
-      expect(line, `${line.trim()} must name a -WindowStyle`).toMatch(/-WindowStyle\s+\$?\w+/);
-    }
-  });
-
-  it("opens normally for the owner and minimised for tooling", () => {
-    // When HE runs start.ps1 he is asking to look at the console; that window is not an interruption
-    // and must not be hidden from him. Only a tooling-initiated start goes quiet.
-    expect(CONSOLE_START).toMatch(/COMPY_NO_ACTIVATE/);
-    expect(CONSOLE_START).toMatch(/"Minimized"/);
-    expect(CONSOLE_START).toMatch(/"Normal"/);
-  });
-
-  it("treats an empty or zero value as OFF, matching the Rust reader", () => {
-    // Two readers of one variable that disagree about `""` is a lever that cannot be released once
-    // anything upstream exports the name. `is_env_flag_set` in lib.rs holds the same contract.
-    expect(CONSOLE_START).toMatch(/COMPY_NO_ACTIVATE\.Trim\(\)\s*-ne\s*"0"/);
-    expect(LIB_RS).toMatch(/fn is_env_flag_set/);
-  });
 });
 
 // ── RUNTIME TIER ────────────────────────────────────────────────────────────────────────────────

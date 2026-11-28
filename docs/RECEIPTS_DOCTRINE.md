@@ -12,7 +12,7 @@ The current authority stack is:
 - **Product direction:** [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md)
 - **Safety / architecture:** [`ARCHITECTURE_LOCKS.md`](ARCHITECTURE_LOCKS.md)
 - **Current build / release truth:** [`RELEASE_STATE.md`](RELEASE_STATE.md)
-- **Execution ownership:** [`WORK_CONTROL.md`](WORK_CONTROL.md)
+- **Execution ownership:** `WORK_CONTROL.md` (retired 2026-11-28)
 - **Derived roadmap:** [`product/ROADMAP.md`](product/ROADMAP.md)
 - **Derived monetization:** [`product/MONETIZATION.md`](product/MONETIZATION.md)
 

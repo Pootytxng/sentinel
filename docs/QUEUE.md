@@ -40,8 +40,8 @@ Rest of NEXT (order unchanged):
 - [ ] Owner capture checks (`_train\g3-owner-capture-checks.md`)
 - [ ] Capture slice 2
 - [ ] Consumer panel follow-up
-- [ ] Handles audit S5: the direct query-only opens of the game (fps.rs ~520/~643, monitoring.rs ~896)
-- [ ] Remove or rewrite the #[ignore] test in running_at_start.rs (~1180) that opens every process
+- [x] Handles audit S5: the direct query-only opens of the game — already on main: fps.rs and monitoring.rs read the handle-free snapshot, and `open_process_appears_only_at_allowlisted_sites` (other_load.rs) holds an empty allowlist (checked 2026-11-28)
+- [x] Remove or rewrite the #[ignore] test in running_at_start.rs that opens every process — already rewritten in df8d5d7d: it reads `other_load::read_process_rows`, which opens no process (checked 2026-11-28)
 - [ ] Capture slice 2 (design `_train\d1-capture-design.md`): ask "Measure this session?" when a game starts. The one-time group grant itself waits for the owner (it changes a security group on the account)
 - [ ] PRIVACY.md additions (`_train\d4i-privacy-additions.md`, `_train\d1s1-privacy-line.txt`)
 - [x] Crash-record headlines in the user's language (d10, `claude/d10-incident-headlines`): Rust sends a closed code plus values beside the English; Black Box rows, group lines, kind chips, "Since it last worked" and the Home Care card word it through i18n. A Care card stored before d10 shows its stored English in English and is worded from its kind tag in zh-CN (no game tail)

@@ -3,7 +3,7 @@
 > Moved out of `docs/SESSION_HANDOFF.md` on 2026-08-26 under TOKEN LAW §1 (current state only —
 > history moves, never gets deleted). PR #223 has landed; every fix below is on `main` in `97a0e945`
 > and every guard named is in the suite. Back to the live file:
-> [`../SESSION_HANDOFF.md`](../SESSION_HANDOFF.md).
+> `../SESSION_HANDOFF.md` (retired 2026-11-28).
 
 ## What the pre-land review caught, and the guards that now hold it
 
