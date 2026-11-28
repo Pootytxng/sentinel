@@ -2017,6 +2017,20 @@ function isLayer(n: HTMLElement): boolean {
   return !!popup && popup !== "false" && n.getAttribute("aria-expanded") === "true";
 }
 
+/** e8: the toggle of the innermost open disclosure (a row, a fold, "Show more") that holds `from`: `from` itself when
+ *  it is an open toggle, or the open toggle whose `aria-controls` names an element `from` sits in. Null: none. */
+function openDisclosure(from: HTMLElement, root: HTMLElement): HTMLElement | null {
+  const open = Array.from(root.querySelectorAll<HTMLElement>('[aria-expanded="true"]')).filter((b) => !isLayer(b));
+  for (let n: HTMLElement | null = from; n && n !== root; n = n.parentElement) {
+    if (open.includes(n)) return n;
+    const id = n.id;
+    if (!id) continue;
+    const owner = open.find((b) => (b.getAttribute("aria-controls") ?? "").split(/\s+/).includes(id));
+    if (owner) return owner;
+  }
+  return null;
+}
+
 /** The answer region counts as "more below" when more than this many px are still hidden under its bottom edge. */
 const MORE_SLACK_PX = 4;
 
@@ -2234,17 +2248,23 @@ export function ParamedicCard({
   const dim = busy && !showQuestions;
   // Escape closes the open card from anywhere inside it, exactly when "Close" is offered (an answer, the open
   // questions) and also after a failed or slow check; and not while "Check again" is running over an answer.
-  // An open row, fold or "Show more" is an inline section, not a layer on top: Escape still closes the card from
-  // inside it (focus stays on its toggle, so the old rule made Escape dead once anything was opened). Only a
-  // popover-like layer (a dialog, menu, listbox, tooltip or a toggle that opens one) keeps the key for itself, so it
-  // closes first.
+  // A popover-like layer (a dialog, menu, listbox, tooltip or a toggle that opens one) keeps the key for itself, so it
+  // closes first. e8: an open row, fold or "Show more" that holds the focus (its own toggle, or anything inside what it
+  // opened) closes next, innermost first, and focus goes back to its toggle; one more Escape closes the card. Escape
+  // is never dead: each press closes something (the old "an open disclosure keeps Escape" rule closed nothing).
   const onKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     if (!(view.kind === "done" || view.kind === "failed" || view.kind === "still" || showQuestions)) return;
     for (let n = e.target as HTMLElement | null; n && n !== e.currentTarget; n = n.parentElement) {
       if (isLayer(n)) return;
     }
+    const toggle = openDisclosure(e.target as HTMLElement, e.currentTarget);
     e.preventDefault();
+    if (toggle) {
+      toggle.click();
+      toggle.focus();
+      return;
+    }
     close();
   };
 
@@ -2284,6 +2304,7 @@ export function ParamedicCard({
     const heading = scrollRef.current?.querySelector<HTMLElement>("h2");
     (heading ?? scrollRef.current)?.focus();
   }, [dim]);
+  // The questions can open before any answer (the region mounts then): that region is measured and observed too.
   useEffect(() => {
     measure();
     const el = scrollRef.current;
@@ -2292,7 +2313,7 @@ export function ParamedicCard({
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);
     return () => ro.disconnect();
-  }, [answer, measure]);
+  }, [answer, showQuestions, measure]);
 
   return (
     <section ref={sectionRef} tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
@@ -2379,8 +2400,9 @@ export function ParamedicCard({
             </p>
           )}
           {/* The hint is its own strip under the scroll region, never over its last row. At the end of the region it
-              is hidden, not removed: its space stays reserved so nothing moves when the last row is reached. */}
-          {!showQuestions && scrolls && (
+              is hidden, not removed: its space stays reserved so nothing moves when the last row is reached. The
+              questions ("Which game?", "When did it start?") scroll in the same region and get the same hint. */}
+          {scrolls && (
             <div className="gl-para-more" aria-hidden="true" data-testid="paramedic-more" data-shown={more ? "true" : "false"} style={more ? undefined : { visibility: "hidden" }}>
               <ChevronDown />
               <span>{t("paramedic.card.moreBelow")}</span>
