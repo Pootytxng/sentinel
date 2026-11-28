@@ -44,7 +44,30 @@ async function sha256Hex(s: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// LATENCY (dev/ops readout). Every POST is timed end to end and reports it two ways:
+//   - a `Server-Timing: app;dur=<ms>` header, visible in the browser's Network panel;
+//   - one structured log line, {"evt":"api_timing","route":"/api/waitlist","status":..,"ms":..},
+//     readable in Workers Logs or `wrangler pages deployment tail`, where p50/p95 are a query away.
+// The line carries route, status and duration only: never the email, the IP or its hash.
+// Workers clocks advance only across I/O (a Spectre mitigation), so `ms` measures the D1 round trip
+// and body read, not pure CPU; that is the part of the latency worth watching here.
 export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
+  const start = Date.now();
+  const res = await handlePost(ctx);
+  return withTiming(res, "/api/waitlist", Date.now() - start);
+};
+
+function withTiming(res: Response, route: string, ms: number): Response {
+  try {
+    res.headers.set("Server-Timing", `app;dur=${ms}`);
+  } catch {
+    // Immutable headers (a passthrough response): skip the header, keep the log line.
+  }
+  console.log(JSON.stringify({ evt: "api_timing", route, status: res.status, ms }));
+  return res;
+}
+
+const handlePost = async (ctx: PagesContext): Promise<Response> => {
   const { request, env } = ctx;
   const wantsJson = (request.headers.get("accept") ?? "").includes("application/json");
   const redirect = (flag: string) =>

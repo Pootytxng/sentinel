@@ -14,6 +14,10 @@ import { applyRoomAccents, readInstrumentTheme, syncLookAttributes, DEFAULT_THEM
 // below. Default is ALWAYS English; Chinese (Simplified) is reachable only via Settings.
 import "./i18n";
 import { readLanguage } from "./i18n/language";
+// Dev-only per-command IPC latency sampler (never installed in a release build).
+import { maybeInstallCommandTiming } from "./data/command-timing";
+
+maybeInstallCommandTiming();
 
 // The overlay runs in a separate window labeled "overlay". Detect by the
 // window label (robust — avoids URL hash/encoding issues across dev & prod).
