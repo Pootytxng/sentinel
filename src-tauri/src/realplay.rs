@@ -169,6 +169,10 @@ pub(crate) enum NotCountedReason {
     FrameCapChanged,
     /// It began more than [`WINDOW_DAYS`] after the change took effect.
     AfterWindow,
+    /// e12: the game closed and was opened again within `session_boundary::SITTING_GAP_MINUTES`, and this
+    /// launch is not the one its sitting is counted by (`noise_floor::folded_into_sitting`): one sitting
+    /// counts once. Additive: an older Compy reads it as `Other`.
+    SameSitting,
     /// Anything else: a session record Compy can't read in full (a length that can't be added to its
     /// start), or a reason this build doesn't know.
     #[default]
@@ -189,6 +193,7 @@ impl<'de> Deserialize<'de> for NotCountedReason {
             Some("gaming-mode-differs") => Self::GamingModeDiffers,
             Some("frame-cap-changed") => Self::FrameCapChanged,
             Some("after-window") => Self::AfterWindow,
+            Some("same-sitting") => Self::SameSitting,
             _ => Self::Other,
         })
     }
@@ -318,10 +323,15 @@ pub(crate) fn reference_session<'s>(before: &[RealPlaySession], sessions: &'s [S
 }
 
 /// The newest session of the game that can count on either side: the one a real-play start would
-/// pin as its newest as-is session.
+/// pin as its newest as-is session. e12: never a launch folded into another launch of its sitting
+/// (`noise_floor::folded_into_sitting`), which the as-is run leaves out.
 pub(crate) fn newest_countable<'s>(game: &str, sessions: &'s [SessionSummary]) -> Option<&'s SessionSummary> {
+    let folded = crate::noise_floor::folded_into_sitting(sessions);
     sessions
         .iter()
+        .zip(&folded)
+        .filter(|(_, folded)| !**folded)
+        .map(|(s, _)| s)
         .filter(|s| same_game(s, game) && countable(s))
         .filter_map(|s| Some((instant(&s.started_at)?, s)))
         .max_by_key(|(at, _)| *at)
@@ -535,7 +545,8 @@ enum Count {
 
 /// Pure (P5-realplay): which sessions of the game, played while the Trial ran, count right now. A
 /// session counts only when it began after the change took effect and within [`WINDOW_DAYS`], is
-/// long enough, measured and in front, with a length that adds up, ran with no other Compy change
+/// long enough, measured and in front, with a length that adds up, is the launch its sitting is
+/// counted by (e12: `noise_floor::folded_into_sitting`, one sitting counts once), ran with no other Compy change
 /// applied or undone before it ended, with the same Gaming Mode state, under the reference's rig,
 /// driver, Windows and game build and fully comparable conditions, with the reference's Compy changes
 /// plus this one, read as on (never one Compy couldn't confirm), at its start, and is bracketed: the
@@ -563,6 +574,9 @@ pub(crate) fn with_arm<'s>(
     let mut timeline: Vec<(DateTime<Utc>, &SessionSummary)> =
         sessions.iter().filter_map(|s| Some((instant(&s.started_at)?, s))).collect();
     timeline.sort_by_key(|(at, _)| *at);
+    // e12: one sitting counts once; a launch folded into another launch of its sitting is not counted.
+    let folded_rows = crate::noise_floor::folded_into_sitting(sessions);
+    let folded = |s: &SessionSummary| sessions.iter().zip(&folded_rows).any(|(x, f)| *f && std::ptr::eq(x, s));
 
     let mut arm = WithArm { counted: Vec::new(), not_counted: Vec::new(), stop: None, changed: None, reference };
     let mut permanent = false;
@@ -581,8 +595,21 @@ pub(crate) fn with_arm<'s>(
                 }
             }
             let next = timeline.get(i + 1).copied();
-            let count =
-                count_session(s, at, applied, until, other_moved, reference, before_cap, conditions.as_ref(), &pairing, next, live, trial.plan_trial);
+            let count = count_session(
+                s,
+                at,
+                applied,
+                until,
+                other_moved,
+                reference,
+                before_cap,
+                conditions.as_ref(),
+                &pairing,
+                next,
+                live,
+                trial.plan_trial,
+                folded(s),
+            );
             match count {
                 Count::Counted => arm.counted.push(s),
                 Count::Not(reason) => arm.not_counted.push(NotCounted { session_id: s.started_at.clone(), reason }),
@@ -625,6 +652,7 @@ fn count_session(
     next: Option<(DateTime<Utc>, &SessionSummary)>,
     live: Option<bool>,
     plan_trial: bool,
+    folded: bool,
 ) -> Count {
     use NotCountedReason as R;
     if at <= applied {
@@ -645,6 +673,10 @@ fn count_session(
     let Some(end) = ended(s) else {
         return Count::Not(R::Other);
     };
+    // e12: the game closed and was opened again, and its sitting is counted by another launch.
+    if folded {
+        return Count::Not(R::SameSitting);
+    }
     if other_moved.is_some_and(|t| t <= end) {
         return Count::Not(R::OtherCompyChange);
     }
@@ -1400,6 +1432,34 @@ mod tests {
         assert_eq!((a.stop, a.reference.map(|s| s.started_at.as_str())), (None, Some("2026-10-20T19:00:00+00:00")));
         let j = judge(&pinned(), &a.counted_numbers(), TrialOutcome::Recommended, false);
         assert_eq!(decided(j).1.verdict, "no-change");
+    }
+
+    /// e12: the game closed at 19:20 with its process gone and was opened again at 19:25 with the change on:
+    /// one sitting (the card's rule, `session_boundary::group_sittings`), counted once. The relaunch has enough
+    /// readings to count on its own, but they cover under half of its time, so the card would not judge it and
+    /// it is not the launch the sitting is counted by: it is listed as `same-sitting`, never counted.
+    /// Break check: drop the `folded` check in `count_session` and four with-change sessions are counted.
+    #[test]
+    fn a_relaunch_with_the_change_on_is_one_sitting_and_counts_once() {
+        let mut with = with_sessions();
+        with[2].ended = Some(crate::session_boundary::SessionEnd::ProcessExited);
+        let mut relaunch = played("2026-10-21T19:25:00+00:00", 205.0, 238.0, 15);
+        (relaunch.duration_secs, relaunch.samples, relaunch.background_secs_excluded) = (1300, 610, Some(0));
+        relaunch.ended = Some(crate::session_boundary::SessionEnd::ProcessExited);
+        assert!(countable(&relaunch) && !crate::blackbox::peak_judgeable(&relaunch));
+        let sessions: Vec<SessionSummary> = as_is().into_iter().chain(with).chain([relaunch]).collect();
+        let a = arm(&sessions, &ledger(), Some(true), &pinned());
+        assert_eq!(a.counted.iter().map(|s| s.started_at.as_str()).collect::<Vec<_>>(), with_sessions().iter().map(|s| s.started_at.clone()).collect::<Vec<_>>());
+        assert_eq!(reasons(&a), [("2026-10-21T19:25:00+00:00".to_string(), NotCountedReason::SameSitting)]);
+        assert_eq!(serde_json::to_value(NotCountedReason::SameSitting).unwrap(), "same-sitting");
+        assert_eq!(serde_json::from_value::<NotCountedReason>("same-sitting".into()).unwrap(), NotCountedReason::SameSitting);
+        // Opened again more than ten minutes after, the relaunch is a sitting of its own and is read on its own
+        // record, as before: never `same-sitting`.
+        let mut later = sessions.clone();
+        later[6].started_at = "2026-10-21T19:31:00+00:00".into();
+        let l = arm(&later, &ledger(), Some(true), &pinned());
+        assert!(reasons(&l).iter().all(|(_, r)| *r != NotCountedReason::SameSitting), "{:?}", l.not_counted);
+        assert_eq!(l.counted.len() + l.not_counted.len(), 4, "{:?}", l.not_counted);
     }
 
     /// CR-plan-compare-rest: real play pools only sessions shown to run on the as-is sessions' Windows

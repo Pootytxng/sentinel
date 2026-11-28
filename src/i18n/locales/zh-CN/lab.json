@@ -592,6 +592,7 @@
           "gamingModeDiffers": "游戏模式的状态与更改前的对局不同",
           "frameCapChanged": "帧率上限对这局的限制与更改前的对局不同，或 Compy 无法从帧率判断是否有上限",
           "afterWindow": "在测试时间结束后玩的",
+          "sameSitting": "游戏关闭后在 10 分钟内又重新打开，Compy 把这几次启动算作一次游戏",
           "noReading": "没有帧率读数",
           "other": "这个版本的 Compy 无法识别的原因"
         },

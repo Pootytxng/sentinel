@@ -7147,6 +7147,66 @@ fn a_sittings_value_is_its_longest_judgeable_launch_else_its_longest() {
     assert_eq!(pick(&[short.clone(), row("2026-10-03T10:05:00Z", 40, 40)]), 1);
 }
 
+/// e12: the noise bands and real play group a store's recorded rows into sittings with the card's own rule
+/// (`session_boundary::group_sittings`), reading each row as the card reads it (`noise_floor::folded_into_sitting`,
+/// which may not depend on this module). On the same store, a row is folded into another launch there exactly
+/// when the card has it in a sitting it stands for by another launch. Break check: drop the driver comparison
+/// from `RecordedLaunch::same_stamps` in noise_floor.rs and the 11:15 fragment (another driver) is folded there
+/// but not on the card.
+#[test]
+fn the_noise_bands_and_real_play_fold_launches_into_the_cards_own_sittings() {
+    use crate::session_boundary::SessionEnd::{CaptureStopped, ProcessExited};
+    let launch = |at: &str, secs: u64, samples: u32, end: Option<SessionEnd>| {
+        let mut s = summary();
+        s.started_at = at.into();
+        s.duration_secs = secs;
+        s.samples = samples;
+        s.background_secs_excluded = Some(0);
+        s.ended = end;
+        s
+    };
+    let exited = Some(ProcessExited);
+    let mut store = vec![
+        launch("2026-10-03T10:00:00+00:00", 120, 120, exited), // 0: a fragment, opened again 3 minutes later
+        launch("2026-10-03T10:05:00+00:00", 600, 600, exited), // 1: judgeable: stands for {0, 1}
+        launch("2026-10-03T10:16:00+00:00", 600, 600, exited), // 2: judgeable too: a sitting of its own
+        launch("2026-10-03T10:30:00+00:00", 2400, 1170, exited), // 3: long, but under half of it measured: folded into 2
+        launch("2026-10-03T11:15:00+00:00", 120, 120, Some(CaptureStopped)), // 4: another driver: never joins 3
+        launch("2026-10-03T11:20:00+00:00", 120, 120, exited), // 5: after a stopped capture: never joins 4
+        launch("2026-10-03T11:30:00+00:00", 600, 600, exited), // 6: the same game in other letters: stands for {5, 6}
+        launch("2026-10-03T11:31:00+00:00", 120, 120, exited), // 7: another game
+        launch("2026-10-03T12:00:00+00:00", 120, 120, exited), // 8: a fragment...
+        launch("2026-10-03T12:03:00+00:00", 600, 600, None), // 9: ...a row that may hold two games...
+        launch("2026-10-03T12:05:00+00:00", 600, 600, exited), // 10: ...keeps 8 and 10 apart
+        launch("2026-10-03T13:00:00+00:00", 600, 600, None), // 11: no recorded end: never joined to 12
+        launch("2026-10-03T13:12:00+00:00", 120, 120, exited), // 12
+        launch("2026-10-03T14:20:00+00:00", 600, 600, exited), // 13: 18 minutes after 12: its own sitting
+        launch("2026-10-03T14:31:00+00:00", 120, 120, exited), // 14: another refresh rate: never joins 13
+    ];
+    store[4].game_state = Some(crate::game_state::GameStateFingerprint { gpu_driver: Some("9.9.9".into()), ..Default::default() });
+    store[6].process_name = " game-win64-shipping.EXE ".into();
+    store[7].process_name = "Other.exe".into();
+    store[9].fps_series = (0..300).step_by(10).map(|t| (t, 200.0)).chain((500..800).step_by(10).map(|t| (t, 100.0))).collect();
+    store[13].game_state = Some(crate::game_state::GameStateFingerprint { display_refresh_hz: Some(144), ..Default::default() });
+    store[14].game_state = Some(crate::game_state::GameStateFingerprint { display_refresh_hz: Some(60), ..Default::default() });
+    assert!(facts_from(&store[9]).mixed, "row 9 is one the card leaves out as possibly two games");
+    assert!(!facts_from(&store[3]).judgeable() && store[3].samples >= crate::experiment::MIN_BASELINE_SAMPLES);
+
+    let inp = inputs_from_parts(&store, &[], &[]);
+    let card_reps: Vec<String> = ["Game-Win64-Shipping.exe", "Other.exe"]
+        .iter()
+        .flat_map(|g| game_sessions(&inp, g).into_iter().map(|s| s.started_at.clone()).collect::<Vec<_>>())
+        .collect();
+    let folded = crate::noise_floor::folded_into_sitting(&store);
+    for (i, s) in store.iter().enumerate() {
+        let card_row = !facts_from(s).mixed;
+        assert_eq!(folded[i], card_row && !card_reps.contains(&s.started_at), "row {i} ({})", s.started_at);
+    }
+    // Not vacuous, and pinned on both sides: these three, and only these, are folded.
+    let got: Vec<usize> = (0..store.len()).filter(|&i| folded[i]).collect();
+    assert_eq!(got, [0, 3, 5]);
+}
+
 fn sittings_episode(first: SessionFacts, relaunch: SessionFacts) -> Vec<SessionFacts> {
     let mut sess = steady(4);
     sess.push(first);

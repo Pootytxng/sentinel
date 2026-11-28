@@ -472,6 +472,66 @@ pub(crate) fn suspected_split_time(s: &SessionSummary, crashes: &[CrashMark]) ->
     Some(t0 + Duration::seconds(i64::from(found.split_at_secs)))
 }
 
+// ---- Sittings: one rule for every reader ---------------------------------------------------------
+// e12: the Paramedic card's sitting rule, moved here unchanged so the noise bands and real play group launches
+// by the same rule without naming the Paramedic (the elevated helper reaches them, and the test
+// `the_elevated_helper_never_reaches_this_module` keeps the Paramedic out of its reach). The card calls these
+// with its own launch facts; `noise_floor` with recorded rows.
+
+/// A launch that follows the end of an earlier one by no more than this, after the earlier one's process
+/// exited, can be the same sitting: the player closed the game (or it closed) and opened it again.
+pub(crate) const SITTING_GAP_MINUTES: i64 = 10;
+
+/// What the sitting rule reads of one launch.
+pub(crate) trait SittingLaunch {
+    fn launch_start(&self) -> Option<DateTime<Utc>>;
+    fn launch_end(&self) -> Option<DateTime<Utc>>;
+    /// Why the launch stopped; `None` = not recorded (an older row).
+    fn launch_ended(&self) -> Option<SessionEnd>;
+    fn launch_secs(&self) -> u64;
+    /// The card can judge this launch's frame rate.
+    fn launch_judgeable(&self) -> bool;
+    /// No stamp recorded on BOTH launches differs (driver, Windows build, power plan, refresh rate, number
+    /// of changes Compy had on, hardware, frame-cap state).
+    fn same_stamps(&self, other: &Self) -> bool;
+}
+
+/// PURE. Groups one game's rows (oldest first) into sittings, as lists of indices. A row joins the one before
+/// it only when ALL hold: that row's recorded end is `ProcessExited` (the game's process went away); this row
+/// began within `SITTING_GAP_MINUTES` of that row's end; no stamp recorded on both differs (`same_stamps`,
+/// against EVERY launch already in the sitting); no row Compy could not attribute to one game (`mixed`, the
+/// starts of rows the capture flag marks) began between the two launches; and the sitting still has at most
+/// ONE launch that can be judged for frame rate (the others are short fragments). Two judgeable launches are
+/// two sessions, whatever the gap. A row with no recorded end (an older row), one that ended because
+/// monitoring was stopped, or one whose process identity changed is never joined: Compy cannot tell those
+/// from a fresh sitting.
+pub(crate) fn group_sittings<L: SittingLaunch>(rows: &[&L], mixed: &[DateTime<Utc>]) -> Vec<Vec<usize>> {
+    let mut out: Vec<Vec<usize>> = Vec::new();
+    for i in 0..rows.len() {
+        let in_group = out.last().map_or(0, |g: &Vec<usize>| g.iter().filter(|&&k| rows[k].launch_judgeable()).count());
+        let joins = i > 0
+            && rows[i - 1].launch_ended() == Some(SessionEnd::ProcessExited)
+            && matches!((rows[i - 1].launch_end(), rows[i].launch_start()), (Some(e), Some(b)) if b - e <= Duration::minutes(SITTING_GAP_MINUTES))
+            // Against EVERY launch already in the sitting, so X / not recorded / Y never chain into one.
+            && out.last().is_none_or(|g| g.iter().all(|&k| rows[k].same_stamps(rows[i])))
+            // A row Compy could not attribute to one game (suspected mixed) between the two launches breaks it.
+            && !matches!((rows[i - 1].launch_start(), rows[i].launch_start()), (Some(a), Some(b)) if mixed.iter().any(|m| *m >= a && *m <= b))
+            && in_group + usize::from(rows[i].launch_judgeable()) <= 1;
+        match out.last_mut() {
+            Some(g) if joins => g.push(i),
+            _ => out.push(vec![i]),
+        }
+    }
+    out
+}
+
+/// A sitting's one row: its longest judgeable launch (the earliest on a tie), else its longest launch. With at
+/// most one judgeable launch per sitting this is that launch.
+pub(crate) fn sitting_value<L: SittingLaunch>(rows: &[&L], group: &[usize]) -> usize {
+    let longest = |it: &mut dyn Iterator<Item = usize>| it.max_by_key(|&i| (rows[i].launch_secs(), std::cmp::Reverse(i)));
+    longest(&mut group.iter().copied().filter(|&i| rows[i].launch_judgeable())).or_else(|| longest(&mut group.iter().copied())).unwrap_or(group[0])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

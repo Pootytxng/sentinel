@@ -241,6 +241,17 @@ describe("P5-realplay: what the progress read says", () => {
     expect(notCountedWhy("too-short", 1200, t)).toBe("too short to count (about 20 minutes of play needed)");
   });
 
+  // e12: realplay.rs `SameSitting` ("same-sitting"): a launch folded into another launch of its sitting is
+  // named as such, never as a reason this version doesn't know. Break check: drop "same-sitting" from
+  // REASON_KEY and the first expectation reads the "other" sentence.
+  it("a launch counted as part of one sitting says so, in both languages", async () => {
+    expect(notCountedWhy("same-sitting", 600, t)).toBe(
+      "the game closed and was opened again within 10 minutes, and Compy counts those launches as one session",
+    );
+    await i18n.changeLanguage("zh-CN");
+    expect(notCountedWhy("same-sitting", 600, t)).toBe("游戏关闭后在 10 分钟内又重新打开，Compy 把这几次启动算作一次游戏");
+  });
+
   it("a read that failed says the count can't be read and offers nothing but putting it back; no answer yet says nothing", () => {
     const failed = realPlayView(RUNNING, null, t, "en", "Compy can't read its change history");
     expect(failed).toMatchObject({
