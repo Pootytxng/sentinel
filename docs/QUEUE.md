@@ -1,5 +1,5 @@
 # QUEUE — the one work list (PRODUCT_CONSTITUTION §38). Edit it in the same commit as the work.
-One writer per scope: each item below runs on its own branch or worktree; do not touch another writer's scope.
+One session works this list top-down: each item on its own `claude/<slug>` branch, merged by PR when the push check is green.
 Changes to privilege, rollback or measurement code get an independent review before they land.
 No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md for the check).
 The push check can fail on a vitest 15 s timeout when several builds share the PC (one retry passed; not a code failure). On 2026-11-28 it hit `ExperimentBench.test.tsx` three times, each on a worktree's first push while the gate also built Rust from cold; moving that file's `await import()`s did not help (branch `claude/e4-bench-test-timeout`, not landed). Before a new worktree's first push, build Rust there first (`cargo test --no-run --manifest-path src-tauri/Cargo.toml`). A push is confirmed only by the "main -> main" line.
@@ -69,7 +69,7 @@ Rest of NEXT (order unchanged):
 - [ ] Layer 2: game-specific known issues for the user's game, hardware and driver
 - [ ] Layer 3: the Tuning Bay — per-setting Trials on a repeatable workload; BIOS and overclock walkthroughs by hardware
 - [ ] Unprompted "this session ran rough" notice — stays off until the rule is validated on other PCs
-- [ ] Remaining diet steps — agent machinery removal (needs the owner's yes for the project settings file); docs archive
+- [ ] Remaining diet step: docs archive (agent machinery removal done 2026-11-28; its hook half waits on the owner's one command)
 - [ ] Clear play history: a plain apply (Optimize, ledger lock only) can land just after the Trial-gate read, so Trial results may be deleted while that change is on; undo is unaffected. A report-only fix is in progress (branch claude/c4-apply-gap); the stronger fix needs the lock-order guard file and design 3.3 amended by the owner.
 
 ## Waiting on the owner
@@ -90,7 +90,7 @@ Rest of NEXT (order unchanged):
 - US/Canada eligibility and identity for code signing.
 - Name 5-10 outside testers by 2026-12-01, including one NVIDIA, one Intel or laptop PC and two non-enthusiasts (owner ruling 2026-11-26).
 - A VM (or 15 minutes) for the deletion tests ("Clear play history", "Clear everything"), the installer tests and a real UAC-prompt test.
-- Yes or no on editing the project's `.claude/settings.json` in the diet.
+- Run one command to retire the multi-session hooks (answered yes 2026-11-28; the patch only removes): `powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\Kuya\code\sentinel\scripts\apply-agent-diet.ps1`
 - Publish the privacy page wording with the release: site/privacy.html lags docs/PRIVACY.md (the history backup, and now what "Clear play history" and "Clear everything" delete, keep and refuse).
 - Decide: the lock-order guard edit (scripts/store-lock-order-guard.test.mjs) and design 3.3, needed for the stronger "Clear play history" apply-gap fix.
 - Decide: per-user or per-machine install (brief `_train\a3-owner-brief.md`).
@@ -99,6 +99,7 @@ Rest of NEXT (order unchanged):
 - Coordinator defaults the owner may overturn: ship date: none set (owner ruling 2026-11-26: 2026-12-11 is not a v1.0 or paid launch; `docs/product/ROADMAP.md` still shows the old target); v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee"; a strength above the lowest needs two independent supports and no contradicting evidence (in the Paramedic's code and now the Problems room's; not yet written in the constitution); the full health check shows no score ring (removed 2026-11-20, one revert restores it).
 
 ## Done (newest first)
+- 2026-11-28 - Agent-machinery diet: removed the multi-session coordination layer (claims, leases, folder ownership, carriers, disposition records, the work-train and work-control docs, 351 receipt files). Product locks, the mutation boundary, the game rule and the push check are unchanged. The hook half is `docs/agent-diet-2026-11-28.patch`, applied by the owner's one command.
 - 2026-11-26 - Owner ruling recorded at the top of this file. Closed two owner questions: "is 2026-12-11 a free invite-only beta rather than a paid launch" (decided: not a v1.0 or paid launch; the next release is the free invite-only tester build) and "pricing" (deferred: undecided and unscheduled; `_train\m2-business-memo.md` and project doc `claude/CONSUMER_PANEL_2026-11-20.md` stay as references)
 - 2026-11-22 - desk build ec5bae0e installed and stamped (installed over fc01eff9)
 - 2026-11-22 - Security slice and follow-ups: system tools run by absolute path from the real system directory with a pinned child environment; logman with a cleared environment; elevation only for absolute, closed targets; the gaming tier refuses elevation when its receipts file cannot be cleared; where Compy runs from is recorded at each start b19b886c, 7ed20677, 4e8fee63, 8b492da8, 184b4fbf, eb1d26cd
@@ -167,6 +168,7 @@ Rest of NEXT (order unchanged):
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-28 diet session: cut the multi-session agent machinery (line counts in the PR), wrote the hook-removal patch and its apply script for the owner.
 - 2026-11-27 queue session (docs/QUEUE.md only): recorded the owner ruling of 2026-11-26, moved the Phase 1 exit items to the top of NEXT after checking them against main 833cbe64, closed the 2026-12-11 and pricing questions. No code, no build, no other file.
 - 2026-11-22 desk-install session 8: built and installed main ec5bae0e over fc01eff9, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1122a.
 - 2026-11-21 desk-install session 7: built and installed main fc01eff9 over 0c4057c7, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1121d.

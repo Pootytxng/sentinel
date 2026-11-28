@@ -8,7 +8,7 @@ This document supersedes every prior statement of Compy's product identity or st
 
 Historical documents remain evidence of how Compy arrived here. They are not authority for where Compy goes next.
 
-This Constitution does **not** override `ARCHITECTURE_LOCKS.md` on safety/security/immutability, `RELEASE_STATE.md` on current implementation truth, or `WORK_CONTROL.md` on execution ownership.
+This Constitution does **not** override `ARCHITECTURE_LOCKS.md` on safety/security/immutability, `RELEASE_STATE.md` on current implementation truth, or `QUEUE.md` on what is worked next.
 
 If a derived roadmap, issue, spec, implementation plan, marketing document, agent instruction, or old decision conflicts with this Constitution on product direction, **this Constitution wins**.
 
@@ -599,7 +599,7 @@ behavior to adapt and align with proper and easy intuitive usability"); owner ap
 ("add it"), both via the coordinator. Reason and expected effect: Trials on the owner's rig were judged
 against an assumed noise band and could not tell a changed frame cap from a changed setting; P4-judge-noisy
 makes Compy measure each game's own noise and read the frame cap from its own data, and the "Trial
-conditions guard" items in `WORK_TRAIN.md` extend that to every condition it can read. No conflict with
+conditions guard" items (formerly in the retired `WORK_TRAIN.md`) extend that to every condition it can read. No conflict with
 `ARCHITECTURE_LOCKS.md`: nothing here widens privilege, mutation or outbound data.
 
 ## 38. Compy is a PC paramedic: three layers, built in order (owner, 2026-11-20)
@@ -620,7 +620,7 @@ What Compy claims. It shows its evidence, never invents a problem, says 'nothing
 
 What this supersedes. §35's sentence stays true in spirit; the Trial-first reading of it does not. The roadmap's Phase 4-7 exit proofs and the friend-tester halves are retired; `docs/product/ROADMAP.md` is to be rewritten around Layer 1. v1.0 is Layer 1 on the public release path: signed, with a privacy policy and EULA. Target date proposed by the coordinator, pending the owner: Friday 2026-12-11.
 
-How the work runs until Layer 1 ships (owner: 'absolute full send automated persisten build Marathon ... straight as an arrow'): one list, one writer at a time, no new guards or coordination documents, a pre-push gate limited to user safety and correctness, a release at the end. `docs/OWNER_DIRECTIVE_2026-10-23.md` is superseded by this section from 2026-11-20.
+How the work runs until Layer 1 ships (owner: 'absolute full send automated persisten build Marathon ... straight as an arrow'): one list, one writer at a time, no new guards or coordination documents, a pre-push gate limited to user safety and correctness, a release at the end. The 2026-10-23 owner directive is superseded by this section from 2026-11-20 (its file was retired 2026-11-28).
 
 ---
 
@@ -666,10 +666,10 @@ Four domains of truth coexist and must not be collapsed into one:
    - what is installed;
    - what is verified or blocked.
 
-4. **Execution ownership truth — `docs/WORK_CONTROL.md`**
-   - who may write;
-   - current claims/scopes;
-   - proof-bound transitions.
+4. **Work list — `docs/QUEUE.md`**
+   - what is worked now, next and later;
+   - what waits on the owner;
+   - what is done.
 
 No derived document may declare itself supreme across these four domains.
 

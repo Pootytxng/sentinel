@@ -52,13 +52,12 @@ site/assets/og-card*
 # `.claude/hooks/` is deliberately NOT here: ignoring it while tracked settings.json registered those
 # hooks by path is finding 4 — five of six checkouts ran with every hook silently missing, a DENY
 # among them. The hooks are now tracked so they travel with the branch; only per-machine settings and
-# autopilot state stay out. Guarded by tools/entry/tracked-hooks.test.mjs.
+# autopilot state stay out.
 .claude/settings.local.json
 .claude/autopilot.json
 # The compy-entry session store (session records, the Work Control board cache). Before #440 a POSIX
 # session resolved it as the RELATIVE folder CompyEntry under its cwd, i.e. inside the checkout. The
 # resolver is absolute now; this keeps a copy an older session left behind from ever being committed.
-# Guarded by tools/entry/posix-entry-state-dir.test.mjs.
 CompyEntry/
 
 # /.agents/ — machine-local, auto-generated `.claude`->Codex mirror of the canonical tracked

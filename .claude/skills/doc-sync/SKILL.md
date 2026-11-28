@@ -12,7 +12,7 @@ description: >-
 
 State lives in exactly one place; everything else points at it. When they disagree, precedence is:
 **RELEASE_STATE.md wins current state · PRODUCT_CONSTITUTION.md wins product truth ·
-ARCHITECTURE_LOCKS.md wins safety · WORK_CONTROL.md wins ownership · CLAUDE.md is bootstrap, not law ·
+ARCHITECTURE_LOCKS.md wins safety · CLAUDE.md is bootstrap, not law ·
 code wins over any doc claim about what is built** (a code/doc mismatch is a finding to report, not
 silently patch — see gate-drift-audit).
 
@@ -27,8 +27,8 @@ silently patch — see gate-drift-audit).
 3. **`docs/CHANGELOG.md`** — dated stratum for what would once have been a CLAUDE.md state banner.
    Point-in-time records; they are never "fixed" retroactively, they accumulate.
 4. **The doc that owns the law** — ONLY when a standing law/working rule changes: product law →
-   `docs/PRODUCT_CONSTITUTION.md`; a safety rule or new gate class → `docs/ARCHITECTURE_LOCKS.md`; a
-   lane, claim or handoff rule → `docs/WORK_CONTROL.md`. `CLAUDE.md` is bootstrap, not law: where it
+   `docs/PRODUCT_CONSTITUTION.md`; a safety rule or new gate class → `docs/ARCHITECTURE_LOCKS.md`; how
+   work runs → the "How work runs" section of `CLAUDE.md`. `CLAUDE.md` is bootstrap, not law: where it
    summarizes the changed law, correct the summary in the same commit. Current state goes in none of
    these — that's what drifted before RELEASE_STATE existed.
 

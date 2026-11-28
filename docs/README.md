@@ -9,7 +9,7 @@ These files own different domains of truth. Do not use one as a substitute for a
 - [PRODUCT_CONSTITUTION.md](PRODUCT_CONSTITUTION.md) — **supreme product authority**: what Compy is, the two flagship journeys, product/UX doctrine, product strategy, and anti-goals.
 - [ARCHITECTURE_LOCKS.md](ARCHITECTURE_LOCKS.md) — **safety/architecture authority**: mutation, rollback, privilege, security, immutable formats, network/capability constraints.
 - [RELEASE_STATE.md](RELEASE_STATE.md) — **current implementation/release authority**: what is actually built, armed, installed, verified, or blocked.
-- [WORK_CONTROL.md](WORK_CONTROL.md) — **execution ownership authority**: active writers, scopes, claims, and proof-bound transitions.
+- [QUEUE.md](QUEUE.md) — **the one work list**: NOW / NEXT / LATER, waiting on the owner, done.
 - [product/ROADMAP.md](product/ROADMAP.md) — derived build sequence; must conform to the Constitution and current safety/release truth.
 - [BACKLOG.md](BACKLOG.md) — living execution ledger only; it does not define product philosophy.
 
@@ -46,7 +46,6 @@ Historical material must not be used to silently restore the former "Care primar
 
 - [ARCHITECTURE_LOCKS.md](ARCHITECTURE_LOCKS.md) — hard safety/architecture rules.
 - [METHODOLOGY.md](METHODOLOGY.md) — measurement/work methodology.
-- [WORK_CONTROL.md](WORK_CONTROL.md) — ownership/claim protocol.
 - [COUNCIL_PROTOCOL.md](COUNCIL_PROTOCOL.md) — multi-lens review protocol.
 - [OWNER_ACTION_CHECKLIST.md](OWNER_ACTION_CHECKLIST.md) — owner-gated decisions/actions.
 

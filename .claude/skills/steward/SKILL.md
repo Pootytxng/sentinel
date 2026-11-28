@@ -19,10 +19,9 @@ the cloud:
   (its header; owner decree 2026-07-16). No CI event will ever arrive. Dispatching it is spend, which is
   owner-gated, and never a substitute gate.
 - **`scripts/verify-local.ps1` runs on the owner's Windows machine.** A Linux container records it
-  **BLOCKED**, never PASS (`docs/WORK_CONTROL.md` "Proof order").
-- **Proof-dependent transitions need an independent reviewer who is not a mutation author**, plus a
-  `node scripts/work-control-gate.mjs` PASS receipt. A Claude session cannot review a Claude-authored
-  delta.
+  **BLOCKED**, never PASS.
+- **Privilege, rollback and measurement changes need an independent reviewer who is not the author**
+  (CLAUDE.md "How work runs"). A Claude session cannot review a Claude-authored delta.
 - **Owner-hands items** (a `.patch` he applies under `.claude/hooks/`, a visual check that needs the
   running app, a decision) move only when he acts.
 
@@ -35,7 +34,7 @@ through 13:01Z. None of the PRs had a blocker a cloud session could clear. The o
 ## Rules
 
 1. **Park owner-gated PRs, don't watch them.** Sometimes everything left on a PR is in the list
-   above: verify-local, independent review, the gate receipt, owner hands or owner decision. Then post
+   above: verify-local, independent review, owner hands or owner decision. Then post
    **one** PR comment. It names the exact 40-char head and each remaining item with who clears it.
    Stay subscribed with `subscribe_pr_activity` (it costs nothing until an event arrives). End the
    turn. Arm **no** timer of any kind. The owner's verify-local result, a Codex review, or a push
