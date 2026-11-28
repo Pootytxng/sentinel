@@ -488,7 +488,8 @@
       "wontStartWithWindows": "Won't start with Windows",
       "disabled": "Disabled",
       "removedForUser": "Removed for this user",
-      "windowsDefault": "Windows default"
+      "windowsDefault": "Windows default",
+      "inPerfLogUsers": "In Performance Log Users"
     },
     "readiness": {
       "powerProfile": {

@@ -928,6 +928,8 @@ fn applied_label_from_action(action: &Option<AppliedAction>) -> Option<String> {
         | DisableEnergyEfficientEthernet | DisableScheduledTask { .. } => "Disabled",
         // Honest wording: the app is removed for THIS USER, not wiped from the machine.
         RemovePreloadApp { .. } => "Removed for this user",
+        // D1-S3 (dark): the account was added to the Performance Log Users group.
+        GrantPerfLogAccess => "In Performance Log Users",
         // Leftovers v2 restores all return a setting to its Windows stock default.
         RestoreMemoryCompressionDefault | RestoreMmcssDefaults | RestorePrioritySeparationDefault
         | RestoreMpoDefault | RestoreCoreParkingDefault | RestoreTcpAutotuningDefault
@@ -983,6 +985,8 @@ fn payoff_label_from_action(action: &Option<AppliedAction>) -> Option<&'static s
         RestoreMemoryCompressionDefault | RestoreMmcssDefaults | RestorePrioritySeparationDefault
         | RestoreMpoDefault | RestoreCoreParkingDefault | RestoreTcpAutotuningDefault
         | RestorePagefileAutomatic => return None,
+        // D1-S3 (dark): a permission, not a measured gain; no forward payoff claim.
+        GrantPerfLogAccess => return None,
     };
     Some(label)
 }
@@ -2150,6 +2154,24 @@ pub(crate) fn restore_leftover(
         ..Made::new(detector_id, display_title, result)
     };
     record_receipt(&root, &mut history, made)
+}
+
+/// D1-S3 (BUILT DARK, owner-approved 2026-11-28): the one-time grant that adds the interactive user to
+/// Performance Log Users, so frame capture starts without an admin prompt. Hard-refused while
+/// `actions::perf_log_grant_gate()` is false (it is), BEFORE any read or lock. No Tauri command calls this yet:
+/// the arming step (settings screen, a real UAC test on a normal-UAC PC, owner sign-off) adds it. Mirrors
+/// `restore_leftover`: lock, load BEFORE mutate, one audited apply (it reads the prior membership first and
+/// refuses when it cannot), receipt, atomic save. The undo is the ordinary `rollback_change` of that receipt
+/// ("Remove this permission"), resolved from the stored contract alone.
+#[allow(dead_code)]
+pub(crate) fn grant_perf_log_access() -> Result<AppliedChangeView, String> {
+    if !crate::actions::perf_log_grant_gate() {
+        return Err("The frame-capture permission is not enabled in this build.".to_string());
+    }
+    let _lock = lock_history()?;
+    let (root, mut history) = begin_mutation()?;
+    let result = crate::actions::apply_perf_log_grant()?;
+    record_receipt(&root, &mut history, Made::new("perf-log-access", "Let Compy measure frame times without asking", result))
 }
 
 /// Support evidence (spec §12) for the mutation boundary. Only FAILURES are recorded: a

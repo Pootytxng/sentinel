@@ -398,6 +398,11 @@ pub(crate) enum ElevatedOp {
     TcpAutotuning { disabled: bool },
     NagleDisable { interfaces: Vec<NicKey> },
     NagleRestore { interfaces: Vec<NagleSaved> },
+    // D1-S3 (BUILT DARK, owner-approved 2026-11-28): the one-time Performance Log Users grant and its undo. Both
+    // carry NO field (no SID, no account name, no path): the helper resolves the interactive user itself and
+    // refuses, changing nothing, when there are zero or several. The group is addressed by SID in the script.
+    PerfLogGrant {},
+    PerfLogRevoke {},
 }
 
 /// A helper-side read (new elevated code, plan v4 §1 [v2r M5]): a CONSTANT read-only script and its output.
@@ -415,10 +420,17 @@ pub(crate) trait HelperReads {
 }
 
 impl ElevatedOp {
-    /// Whether this op may ride a batch. The Ultimate apply exits with its own codes ([v2r S4]) and the
-    /// combined memory-compression script writes its own nonce lines, so both run alone.
+    /// Whether this op may ride a batch. The Ultimate apply exits with its own codes ([v2r S4]), the
+    /// combined memory-compression script writes its own nonce lines, and the Performance Log Users grant and
+    /// revoke exit 2 on an ambiguous user, so all of them run alone.
     pub(crate) fn is_batchable(&self) -> bool {
-        !matches!(self, ElevatedOp::UltimatePlanApply {} | ElevatedOp::MemoryCompressionCombined {})
+        !matches!(
+            self,
+            ElevatedOp::UltimatePlanApply {}
+                | ElevatedOp::MemoryCompressionCombined {}
+                | ElevatedOp::PerfLogGrant {}
+                | ElevatedOp::PerfLogRevoke {}
+        )
     }
 
     /// Whether this op's output must reach the app (it reports over the results pipe).
@@ -556,6 +568,15 @@ impl ElevatedOp {
                     .collect();
                 built(actions::nagle_rollback_script(&snaps))?
             }
+            // Dark (D1-S3 review r1): the helper refuses the grant while its gate is false, so no request can
+            // reach it before arming. The undo stays ungated so an earlier grant can always be rolled back.
+            Op::PerfLogGrant {} => {
+                if !actions::perf_log_grant_gate() {
+                    return Err(Refused::Request);
+                }
+                actions::PERF_LOG_GRANT_SCRIPT.to_string()
+            }
+            Op::PerfLogRevoke {} => actions::PERF_LOG_REVOKE_SCRIPT.to_string(),
         })
     }
 }
@@ -1768,6 +1789,26 @@ mod tests {
             assert!(fx.events.is_empty(), "{why}: nothing read or run, got {:?}", fx.events);
             assert_eq!(connects.get(), 0, "{why}: the pipe is not touched");
         }
+    }
+
+    /// D1-S3 review r1: while `perf_log_grant_gate()` is false the typed helper refuses a well-formed
+    /// PerfLogGrant request whole, before any read, run or pipe connect; the undo still composes, so an earlier
+    /// grant stays undoable. Break: drop the gate check in `script()` and the helper runs the grant.
+    #[test]
+    fn the_helper_refuses_the_perf_log_grant_while_dark() {
+        assert!(!actions::perf_log_grant_gate(), "this test pins the dark state");
+        let op = serde_json::to_string(&ElevatedOp::PerfLogGrant {}).expect("json");
+        let mut fx = Fake::default();
+        let connects = std::cell::Cell::new(0);
+        let code = helper_argv_with(&[hex(&request_json("single", &format!(r#"{{"ops":[{op}]}}"#)))], &mut fx, &|_, _| {
+            connects.set(connects.get() + 1);
+            Ok(Box::new(SharedBuf::default()) as PipeOut)
+        });
+        assert_eq!(code, actions::HELPER_REQUEST_REFUSED, "the dark grant is refused whole");
+        assert!(fx.events.is_empty(), "nothing read or run, got {:?}", fx.events);
+        assert_eq!(connects.get(), 0, "the pipe is not touched");
+        assert!(script_of(&ElevatedOp::PerfLogGrant {}).starts_with("<refused"), "no grant script while dark");
+        assert_eq!(script_of(&ElevatedOp::PerfLogRevoke {}), actions::PERF_LOG_REVOKE_SCRIPT, "the undo still composes");
     }
 
     /// Review r2 R2-2: an EEE undo restores at most MAX_EEE_RESTORE (128) targets and a Nagle undo at most

@@ -525,7 +525,8 @@ pub(crate) fn session_change_rec(c: &SessionChange) -> Option<&'static str> {
         | RollbackAction::RestoreTcpAutotuningFromSnapshot
         | RollbackAction::RestorePagefileFromSnapshot
         | RollbackAction::EnableScheduledTask { .. }
-        | RollbackAction::ReinstallPreloadApp { .. } => return None,
+        | RollbackAction::ReinstallPreloadApp { .. }
+        | RollbackAction::RevokePerfLogAccessFromSnapshot => return None,
     })
 }
 

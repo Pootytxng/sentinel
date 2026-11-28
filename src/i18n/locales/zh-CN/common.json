@@ -476,7 +476,8 @@
       "wontStartWithWindows": "不随 Windows 启动",
       "disabled": "已禁用",
       "removedForUser": "已为此用户移除",
-      "windowsDefault": "Windows 默认值"
+      "windowsDefault": "Windows 默认值",
+      "inPerfLogUsers": "已加入性能日志用户组"
     },
     "readiness": {
       "powerProfile": {

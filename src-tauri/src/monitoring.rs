@@ -3482,25 +3482,70 @@ mod plain_start_tests {
         let mut files = Vec::new();
         walk(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut files);
         assert!(files.len() > 40, "the walk found only {} files", files.len());
+        // Every name below is built from pieces, so this guard's own source holds none of the fragments it hunts.
         let forbidden = [
-            concat!("netlocalgroup", "addmembers"),
-            concat!("netlocalgroup", "setmembers"),
-            concat!("netlocalgroup", "delmembers"),
-            concat!("netlocalgroup", "add("),
+            concat!("net", "local", "group", "addmembers"),
+            concat!("net", "local", "group", "setmembers"),
+            concat!("net", "local", "group", "delmembers"),
+            concat!("net", "local", "group", "add("),
             concat!("netgroup", "adduser"),
             concat!("netuser", "setgroups"),
             concat!("net local", "group"),
             concat!("net.exe local", "group"),
-            concat!("add-local", "groupmember"),
-            concat!("remove-local", "groupmember"),
+            concat!("add-", "local", "group", "member"),
+            concat!("remove-", "local", "group", "member"),
             concat!("add-adgroup", "member"),
         ];
+        // Owner ruling 2026-11-28: the ONE approved exception is the one-time Performance Log Users grant and
+        // its undo, in src/actions.rs only (the mutation boundary, matched by its exact path), by SID, never by
+        // name. There each cmdlet appears exactly twice (the script constant and its golden copy), and only as
+        // the one whole approved statement. Every other token, and every other file, stays forbidden.
+        let actions_rs = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("actions.rs");
+        let add = concat!("add-", "local", "group", "member");
+        let remove = concat!("remove-", "local", "group", "member");
+        let read = concat!("get-", "local", "group", "member");
+        let approved = [
+            (add, format!("\"if (-not $ismember) {{ {add} -sid 's-1-5-32-559' -member $sid.value }}\"")),
+            (remove, format!("\"if ($ismember) {{ {remove} -sid 's-1-5-32-559' -member $sid.value }}\"")),
+        ];
+        // D1-S3 review r2: a cmdlet assembled from pieces (concat!, format!, a split literal) holds no whole
+        // token, so every fragment of these names must also sit inside one whole allowed name, and only in
+        // actions.rs. A split finer than these fragments is not caught here; review covers that.
+        let fragments = [concat!("local", "group"), concat!("group", "member"), concat!("add-", "local"), concat!("remove-", "local")];
+        let mut saw_actions = false;
         for f in files {
             let text = std::fs::read_to_string(&f).unwrap_or_default().to_lowercase();
+            let is_actions = f == actions_rs;
+            saw_actions |= is_actions;
+            let whole: Vec<(usize, usize)> = if is_actions {
+                [add, remove, read].iter().flat_map(|w| text.match_indices(w).map(|(at, m)| (at, at + m.len()))).collect()
+            } else {
+                Vec::new()
+            };
+            for frag in fragments {
+                for (at, _) in text.match_indices(frag) {
+                    assert!(
+                        whole.iter().any(|&(s, e)| s <= at && at + frag.len() <= e),
+                        "{} holds a piece of a group-changing cmdlet ({frag}) outside a whole approved name",
+                        f.display()
+                    );
+                }
+            }
             for token in forbidden {
+                if let Some((_, statement)) = approved.iter().find(|(t, _)| is_actions && *t == token) {
+                    assert_eq!(text.matches(token).count(), 2, "{} uses {token} outside the approved pair", f.display());
+                    assert_eq!(
+                        text.matches(statement.as_str()).count(),
+                        2,
+                        "{} uses {token} other than as the one approved statement",
+                        f.display()
+                    );
+                    continue;
+                }
                 assert!(!text.contains(token), "{} changes group membership ({token})", f.display());
             }
         }
+        assert!(saw_actions, "the walk did not reach {}", actions_rs.display());
     }
 }
 
