@@ -25,10 +25,11 @@ use std::path::Path;
 use super::*;
 use crate::blackbox::AppCrashes;
 
-/// A rough-session peak this many degrees above the normal ones' median peak (or less) is "about the same".
-pub(crate) const TEMP_SAME_C: i64 = 5;
-/// A rough-session peak MORE than this many degrees above the normal ones' median peak is a candidate.
-pub(crate) const TEMP_HOTTER_C: i64 = 10;
+/// A rough-session peak `TEMP_SAME_C` degrees above the normal ones' median peak (or less) is "about the same";
+/// MORE than `TEMP_HOTTER_C` above it is a candidate. e10: defined once in `blackbox.rs`, which compares a crash
+/// session's peak with the same two lines (the Black Box sits on the elevated helper's path, so it may not
+/// depend on this module; this one depends on it instead).
+pub(crate) use crate::blackbox::{TEMP_HOTTER_C, TEMP_SAME_C};
 
 /// One app crash, reduced from a Windows Error Reporting file (`blackbox::AppCrash`).
 #[derive(Clone, Debug, PartialEq)]

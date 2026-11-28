@@ -196,7 +196,12 @@ export function CareNextStep({
                   label={rk("consistentWith")}
                   value={
                     step.statement
-                      ? assessStatementText(t, { statement: step.statement, subject: step.subject ?? undefined, temp_c: step.tempC ?? undefined })
+                      ? assessStatementText(t, {
+                          statement: step.statement,
+                          subject: step.subject ?? undefined,
+                          temp_c: step.tempC ?? undefined,
+                          temp_vs_usual: step.tempVsUsual ?? undefined,
+                        })
                       : step.consistentWith
                   }
                 />

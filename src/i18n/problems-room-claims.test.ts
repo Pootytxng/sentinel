@@ -141,9 +141,12 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
         expect(en).toContain("{{subject}}");
         expect(zh).toContain("{{subject}}");
       }
-      // every statement says what the record alone can't tell, and none names a cause
-      expect(en).toMatch(/can't tell|doesn't say which/);
-      expect(zh).toMatch(/无法判断/);
+      // every statement says what the record alone can't tell, and none names a cause. e10: the GPU
+      // timeout and shutdown statements say it in the {{compare}} sentence they end with (checked below).
+      if (!["gpuTimeoutPeak", "shutdownPeak"].includes(key)) {
+        expect(en).toMatch(/can't tell|doesn't say which/);
+        expect(zh).toMatch(/无法判断/);
+      }
     }
     for (const key of ["appCrash", "appHang"] as const) {
       expect(enGaming.blackBox.assessStatement[key]).toContain("in your PC");
@@ -152,8 +155,38 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
     for (const key of ["gpuTimeoutPeak", "shutdownPeak", "hardwareErrorPeak"] as const) {
       expect(enGaming.blackBox.assessStatement[key]).toContain("{{temp}}");
       expect(zhGaming.blackBox.assessStatement[key]).toContain("{{temp}}");
-      expect(enGaming.blackBox.assessStatement[key]).toContain("can't tell whether heat played a part");
+      // e10: each peak statement ends with the comparison sentence, and EVERY comparison sentence (hotter
+      // than usual included) still says Compy can't tell whether heat played a part, and none says "caused".
+      expect(enGaming.blackBox.assessStatement[key]).toMatch(/\{\{compare\}\}$/);
+      expect(zhGaming.blackBox.assessStatement[key]).toMatch(/\{\{compare\}\}$/);
     }
+    const variants = [
+      "hotter", "higher", "same", "lower", "tooFew", "cardUnknown", "shortSession", "logUnread", "reliabilityUnread",
+      "beforeScan", "unreadable", "notCompared",
+    ] as const;
+    expect(Object.keys(enGaming.blackBox.assessStatement.peakVsUsual).sort()).toEqual([...variants].sort());
+    expect(Object.keys(zhGaming.blackBox.assessStatement.peakVsUsual).sort()).toEqual([...variants].sort());
+    for (const v of variants) {
+      expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("can't tell whether heat played a part");
+      expect(zhGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("无法判断发热是否起了作用");
+      expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).not.toMatch(/\bcaused\b|\bcausing\b/i);
+      // e10 r2: Compy never read how far back the user's log goes, so no sentence says it doesn't reach back.
+      expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).not.toMatch(/reach\w*\s+(\w+\s+)?back/i);
+      expect(zhGaming.blackBox.assessStatement.peakVsUsual[v]).not.toMatch(/追溯/);
+      // e10 r3: a crash record can roll out of a log, so no sentence says a session HAS no crash record.
+      expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).not.toContain("with no crash record");
+      expect(zhGaming.blackBox.assessStatement.peakVsUsual[v]).not.toContain("没有崩溃记录的");
+    }
+    for (const v of ["hotter", "higher", "same", "lower", "tooFew"] as const) {
+      expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("for which Compy found no crash record");
+      expect(zhGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("Compy 未发现崩溃记录");
+    }
+    // e10 r3 F2: true whether some or all of the earlier sessions fall before the scan's period.
+    expect(enGaming.blackBox.assessStatement.peakVsUsual.beforeScan).toMatch(/^Some or all of /);
+    expect(zhGaming.blackBox.assessStatement.peakVsUsual.beforeScan).toContain("部分或全部");
+    // The one outcome that leans toward heat carries the shared caveat in both languages.
+    expect(enGaming.blackBox.assessStatement.peakVsUsual.hotter).toContain("not shown to be the cause");
+    expect(zhGaming.blackBox.assessStatement.peakVsUsual.hotter).toContain("未证实是原因");
     expect(enLab.labConsole.rigFocus.away).toContain("can't say whether a part was involved");
     expect(zhLab.labConsole.rigFocus.away).toContain("无法判断是否与某个部件有关");
   });

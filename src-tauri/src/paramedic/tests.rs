@@ -5424,6 +5424,83 @@ mod temperature_and_crashes {
     }
 
     // ---- temperature ----
+    /// e10: the Black Box compares a crash session's peak with this card's usual one by the card's own rule.
+    /// The two lines are one definition (blackbox.rs, re-exported by extras.rs); the session minimum and
+    /// window are the card's baseline ones, pinned here because the Black Box may not depend on this module.
+    #[test]
+    fn the_crash_peak_comparison_uses_the_cards_lines_and_baseline_size() {
+        assert_eq!((TEMP_SAME_C, TEMP_HOTTER_C), (crate::blackbox::TEMP_SAME_C, crate::blackbox::TEMP_HOTTER_C));
+        assert_eq!(crate::blackbox::PEAK_BASELINE_MIN, BASELINE_MIN);
+        assert_eq!(crate::blackbox::PEAK_BASELINE_MAX, BASELINE_MAX);
+        // e10 r1 F1: which sessions count is the card's own rule, mirrored in blackbox.rs. The numbers...
+        assert_eq!(crate::blackbox::PEAK_MIN_SECS, MIN_JUDGE_SECS);
+        assert_eq!(crate::blackbox::PEAK_MIN_SAMPLES, MIN_JUDGE_SAMPLES);
+        assert_eq!(crate::blackbox::PEAK_MIN_COVERAGE, MIN_JUDGE_COVERAGE);
+        assert_eq!(crate::blackbox::PEAK_BASELINE_COVERAGE, BASELINE_COVERAGE);
+        // ...and the predicate: on each case, the mirror answers what the card's `judgeable` (and its
+        // baseline coverage) answers for the same recorded session.
+        let with = |f: &dyn Fn(&mut crate::sessions::SessionSummary)| {
+            let mut s = summary();
+            f(&mut s);
+            s
+        };
+        let cases = [
+            summary(),
+            with(&|s| s.duration_secs = 299),
+            with(&|s| {
+                s.duration_secs = 300;
+                s.samples = 250;
+                s.background_secs_excluded = Some(0);
+            }),
+            with(&|s| s.samples = 249),
+            with(&|s| s.samples = 360),
+            with(&|s| s.samples = 470),
+            with(&|s| {
+                s.samples = 0;
+                s.background_secs_excluded = Some(600);
+            }),
+            with(&|s| s.unreadable_seconds = 300),
+            with(&|s| s.low1_fps_est = 0.0),
+            with(&|s| s.avg_fps = f64::NAN),
+        ];
+        let mut judged = 0;
+        let mut normal = 0;
+        for (i, s) in cases.iter().enumerate() {
+            let f = facts_from(s);
+            assert_eq!(crate::blackbox::peak_judgeable(s), f.judgeable(), "case {i}");
+            let card_normal = f.judgeable() && f.coverage() >= BASELINE_COVERAGE;
+            assert_eq!(crate::blackbox::peak_reference_eligible(s), card_normal, "case {i}");
+            judged += usize::from(f.judgeable());
+            normal += usize::from(card_normal);
+        }
+        // Not vacuous: some cases pass each rule and some fail it.
+        assert!(judged > normal && normal > 0 && judged < cases.len(), "{judged} judged, {normal} normal");
+        // e10 r2 F2: the edges, pinned on BOTH sides, so changing the background subtraction or a >= to a > on
+        // either side fails here (not only a mismatch between the two). All are 600 s sessions.
+        let edge = |bg: u32, samples: u32| {
+            with(&|s| {
+                s.background_secs_excluded = Some(bg);
+                s.samples = samples;
+            })
+        };
+        // (session, judged, normal): 330 of 400 foreground seconds is 0.825 (0.55 if background were not
+        // subtracted); 480 of 600 is exactly 0.80; 479 just under; 300 of 600 exactly 0.50; 299 just under.
+        let edges = [
+            (edge(200, 330), true, true),
+            (edge(0, 480), true, true),
+            (edge(0, 479), true, false),
+            (edge(0, 300), true, false),
+            (edge(0, 299), false, false),
+        ];
+        for (i, (s, judged, normal)) in edges.iter().enumerate() {
+            let f = facts_from(s);
+            assert_eq!(f.judgeable(), *judged, "card, edge {i}");
+            assert_eq!(f.judgeable() && f.coverage() >= BASELINE_COVERAGE, *normal, "card, edge {i}");
+            assert_eq!(crate::blackbox::peak_judgeable(s), *judged, "mirror, edge {i}");
+            assert_eq!(crate::blackbox::peak_reference_eligible(s), *normal, "mirror, edge {i}");
+        }
+    }
+
     #[test]
     fn five_degrees_above_the_normal_peak_is_unchanged_and_six_is_neither_unchanged_nor_a_candidate() {
         assert_eq!(TEMP_SAME_C, 5);
