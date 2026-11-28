@@ -707,6 +707,7 @@
     "identityUnreadable": "它的显卡驱动和电源计划检查记录（读取失败）",
     "modsNoFolder": "{{game}} 的文件夹里有没有图形 mod(Compy 没能把游戏对应到安装文件夹)",
     "modsFolderUnreadable": "{{game}} 的文件夹里有没有图形 mod(文件夹读不了)",
+    "modsDriveNoAnswer": "{{game}} 的文件夹里有没有图形 mod(它所在的磁盘没有及时响应，所以那里什么都没有检查)",
     "modsPartial": "{{game}} 的文件夹里有没有图形 mod(只扫描了文件夹的一部分)",
     "modsUnavailable": "{{game}} 的文件夹里有没有图形 mod(查看用时太长)",
     "gpuTemp": "显卡温度有多高（出问题的那次和正常的几次没有都记录到）",
