@@ -32,6 +32,7 @@ const PEAK_KEY: Record<PeakVsUsual["outcome"] | "not-compared", string> = {
 const UNREADABLE_KEY: Record<PeakUnreadable, string> = {
   "card-unknown": "gaming.blackBox.assessStatement.peakVsUsual.cardUnknown",
   "short-session": "gaming.blackBox.assessStatement.peakVsUsual.shortSession",
+  "maybe-two-games": "gaming.blackBox.assessStatement.peakVsUsual.maybeTwoGames",
   "log-unread": "gaming.blackBox.assessStatement.peakVsUsual.logUnread",
   "reliability-unread": "gaming.blackBox.assessStatement.peakVsUsual.reliabilityUnread",
   "before-scan": "gaming.blackBox.assessStatement.peakVsUsual.beforeScan",
