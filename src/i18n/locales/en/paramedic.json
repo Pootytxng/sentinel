@@ -202,10 +202,13 @@
       "undone": "Compy changed “{{title}}” on {{when}}, and it was undone on {{undone}}.",
       "undoneNoDate": "Compy changed “{{title}}” on {{when}}, and it has since been undone.",
       "undoHint": "Changes that History lists as applied can be undone there.",
-      "offNowSeen": "“{{title}}”, a setting Compy applied, is no longer on, and Compy has no record of turning it off. Compy last saw it on at {{seen}} and noticed it off at {{noticed}}.",
-      "offNowNoticed": "“{{title}}”, a setting Compy applied, is no longer on, and Compy has no record of turning it off. Compy noticed it off at {{noticed}}.",
-      "offNowUnnamedSeen": "A setting Compy applied is no longer on, and Compy has no record of turning it off. Compy last saw it on at {{seen}} and noticed it off at {{noticed}}.",
-      "offNowUnnamedNoticed": "A setting Compy applied is no longer on, and Compy has no record of turning it off. Compy noticed it off at {{noticed}}."
+      "offNowSeen": "Compy's check last found none of the settings Compy applied off at {{seen}}, and first found one off at {{noticed}}.",
+      "offNowNoticed": "Compy's check first found a setting Compy applied off at {{noticed}}.",
+      "offNowTitles_one": "Off now, with no undo of it in Compy's history: {{titles}}.",
+      "offNowTitles_other": "Off now, with no undo of them in Compy's history: {{titles}}.",
+      "offNowItem": "“{{title}}”",
+      "offNowUnnamed": "The check didn't keep which one.",
+      "offNowLine": "{{when}} {{which}}"
     },
     "fact": {
       "monitorRefresh": "Your main monitor is running at {{now}} Hz; at this resolution it supports {{max}} Hz.",

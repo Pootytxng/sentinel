@@ -330,9 +330,13 @@ export function undoneInWindow(changes: AppliedChange[] | null | undefined, a: P
     .map((c) => ({ title: c.rec_title.trim(), at: c.applied_at, undone: true, undone_at: c.rolled_back_at ?? null }));
 }
 
-/** e6: a setting Compy applied that reads off now, from the live drift list Home names it from, when Compy noticed it
- *  off inside the window. One row per title; no title kept is the unnamed row. An unreadable check is not listed. */
-export type OffNow = { title: string | null; seen: string | null; noticed: string };
+/** e6: the notice that settings Compy applied read off now, from the live drift list Home names them from, when Compy
+ *  noticed it inside the window. ONE row per notice: its two times are the notice's (when the check first found one
+ *  off, and when it last found none off), not any one title's, because a title can go off later on a standing notice
+ *  and the list the card reads has no time per title (review r1 F1). The titles are listed with no time each; none
+ *  kept is the unnamed row. Left out, as the engine leaves it out (paramedic.rs `ambiguous`): a notice last found
+ *  fine before the window, since when it changed isn't recorded. An unreadable check is not listed. */
+export type OffNow = { titles: string[]; seen: string | null; noticed: string };
 
 export function offNowInWindow(drifts: Drift[] | null | undefined, a: ParamedicFirstLook): OffNow[] {
   const from = instant(a.told.from);
@@ -340,23 +344,29 @@ export function offNowInWindow(drifts: Drift[] | null | undefined, a: ParamedicF
   if (!drifts || from === null || to === null || !a.changes_listed) return [];
   return drifts
     .filter((d) => d.id === "applied-changes" && d.unreadable_now !== true && inWindow(instant(d.noticed_at), from, to))
-    .flatMap((d): OffNow[] => {
-      const seen = instant(d.last_ready_at) !== null ? (d.last_ready_at as string) : null;
-      const titles = (d.titles ?? []).map((x) => x.trim()).filter(Boolean);
-      return titles.length > 0 ? titles.map((title) => ({ title, seen, noticed: d.noticed_at })) : [{ title: null, seen, noticed: d.noticed_at }];
-    });
+    .filter((d) => {
+      const ready = instant(d.last_ready_at);
+      return ready === null || ready >= from;
+    })
+    .map((d) => ({
+      titles: (d.titles ?? []).map((x) => x.trim()).filter(Boolean),
+      seen: instant(d.last_ready_at) !== null ? (d.last_ready_at as string) : null,
+      noticed: d.noticed_at,
+    }));
 }
 
 function offNowText(o: OffNow, t: T, dates: Dates): string {
   const noticed = dates.dayTime(o.noticed);
-  if (o.title) {
-    return o.seen
-      ? t("paramedic.firstLook.compy.offNowSeen", { title: o.title, seen: dates.dayTime(o.seen), noticed })
-      : t("paramedic.firstLook.compy.offNowNoticed", { title: o.title, noticed });
-  }
-  return o.seen
-    ? t("paramedic.firstLook.compy.offNowUnnamedSeen", { seen: dates.dayTime(o.seen), noticed })
-    : t("paramedic.firstLook.compy.offNowUnnamedNoticed", { noticed });
+  const seen = o.seen ? dates.dayTime(o.seen) : null;
+  const when = seen ? t("paramedic.firstLook.compy.offNowSeen", { seen, noticed }) : t("paramedic.firstLook.compy.offNowNoticed", { noticed });
+  const which =
+    o.titles.length > 0
+      ? t("paramedic.firstLook.compy.offNowTitles", {
+          count: o.titles.length,
+          titles: o.titles.map((title) => t("paramedic.firstLook.compy.offNowItem", { title })).join(t("paramedic.firstLook.running.separator")),
+        })
+      : t("paramedic.firstLook.compy.offNowUnnamed");
+  return t("paramedic.firstLook.compy.offNowLine", { when, which });
 }
 
 /** The readings a "couldn't read" line can name. */
@@ -1019,7 +1029,7 @@ export function ParamedicFirstLook({
   const offRows = (rows: OffNow[]) => (
     <ul className="gl-para-lines" data-testid="first-look-off-now-rows">
       {rows.map((o, i) => (
-        <li key={`${o.noticed}-${o.title ?? ""}-${i}`}>
+        <li key={`${o.noticed}-${i}`}>
           <p>{offNowText(o, t, dates)}</p>
         </li>
       ))}

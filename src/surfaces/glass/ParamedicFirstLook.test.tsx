@@ -1686,28 +1686,66 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
     expect(rowsOf("first-look-off-now")).toHaveLength(1);
     expect(rowsOf("first-look-off-now")[0]).toMatch(
       new RegExp(
-        `^“${TRIM}”, a setting Compy applied, is no longer on, and Compy has no record of turning it off\\. Compy last saw it on at [A-Z][a-z]{2} \\d+.* and noticed it off at [A-Z][a-z]{2} \\d+.*\\.$`,
+        `^Compy's check last found none of the settings Compy applied off at [A-Z][a-z]{2} \\d+.*, and first found one off at [A-Z][a-z]{2} \\d+.*\\. Off now, with no undo of it in Compy's history: “${TRIM}”\\.$`,
       ),
     );
-    expect(group.textContent).not.toMatch(/outside Compy/);
+    expect(group.textContent).not.toMatch(/outside Compy|no record of turning it off/);
     expect(within(group).getByTestId("first-look-not-cause").textContent).toBe("Not shown to be the cause");
     expect(screen.queryByTestId("first-look-nothing")).toBeNull();
     // It is not a change Compy made: it is not in that group.
     expect(screen.queryByTestId("first-look-compy")).toBeNull();
   });
 
-  // Break check: name every title from `titles` only when it is non-empty, or drop the `seen` test, and the unnamed
-  // and no-last-seen sentences change.
-  it("one row per title; no title kept is the unnamed row; no last-seen time is the noticed-only sentence", async () => {
-    await lookWith({ drifts: [offDrift({ titles: [TRIM, "Enable Windows Game Mode"], applied_at: ["", ""] })] }, gameAnswer());
-    const two = rowsOf("first-look-off-now");
-    expect(two).toHaveLength(2);
-    expect(two[1]).toMatch(/^“Enable Windows Game Mode”, a setting Compy applied, is no longer on, and Compy has no record of turning it off\./);
+  // r1 F1. A standing notice can pick up a title that went off later (drift.rs keeps one notice time for the row), and
+  // the list the card reads has no time per title. So the notice's two times are said ONCE, as the notice's, and the
+  // titles carry none. Break check: go back to one row per title with the notice's times, and this fails (two rows,
+  // each time said twice, one beside the later title).
+  it("a notice with a title that went off later: one row, the notice's times once, the titles with no time each", async () => {
+    const LATER = "Enable Windows Game Mode";
+    await lookWith({ drifts: [offDrift({ titles: [TRIM, LATER], applied_at: ["", ""] })] }, gameAnswer());
+    const rows = rowsOf("first-look-off-now");
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row).toMatch(new RegExp(`Off now, with no undo of them in Compy's history: “${TRIM}”, “${LATER}”\\.$`));
+    // Each of the notice's times appears once in the row, and no time sits beside a title.
+    expect(row.match(/last found none of the settings Compy applied off at/g)).toHaveLength(1);
+    expect(row.match(/first found one off at/g)).toHaveLength(1);
+    expect(row).not.toMatch(new RegExp(`“${LATER}”[^“]*\\d`));
+    expect(row).not.toMatch(/saw it on|noticed it off/);
     cleanup();
     await lookWith({ drifts: [offDrift({ titles: [], applied_at: [], last_ready_at: null })] }, gameAnswer());
     expect(rowsOf("first-look-off-now")).toEqual([
-      expect.stringMatching(/^A setting Compy applied is no longer on, and Compy has no record of turning it off\. Compy noticed it off at [A-Z][a-z]{2} \d+.*\.$/),
+      expect.stringMatching(/^Compy's check first found a setting Compy applied off at [A-Z][a-z]{2} \d+.*\. The check didn't keep which one\.$/),
     ]);
+  });
+
+  // r1 F2 (2): as the engine (paramedic.rs `ambiguous`): noticed in the window but last found fine before it, when it
+  // changed isn't recorded, so it is not listed. Last found fine exactly at the window's start is inside it.
+  // Break check: drop the last-ready filter in `offNowInWindow` and the first case lists a row.
+  it("leaves out a notice last found fine before the window, as the engine does", async () => {
+    await lookWith({ drifts: [offDrift({ last_ready_at: "2026-11-10T09:00:00Z" })] }, gameAnswer());
+    expect(screen.queryByTestId("first-look-off-now")).toBeNull();
+    cleanup();
+    await lookWith({ drifts: [offDrift({ last_ready_at: "2026-11-12T12:00:00Z" })] }, gameAnswer());
+    expect(screen.getByTestId("first-look-off-now")).toBeTruthy();
+  });
+
+  // r1 F4: the window is (from, to], as the engine's. Break check: make `inWindow` `>=` and the first case lists a row;
+  // make it `<` and the last one doesn't.
+  it("window edges: noticed or undone exactly at the start is outside, exactly at the end is inside", async () => {
+    const FROM = "2026-11-12T12:00:00Z";
+    const TO = "2026-11-20T12:00:00Z";
+    await lookWith({ drifts: [offDrift({ noticed_at: FROM, last_ready_at: null })] }, gameAnswer());
+    expect(screen.queryByTestId("first-look-off-now")).toBeNull();
+    cleanup();
+    await lookWith({ drifts: [offDrift({ noticed_at: TO, last_ready_at: null })] }, gameAnswer());
+    expect(screen.getByTestId("first-look-off-now")).toBeTruthy();
+    cleanup();
+    await lookWith({ changes: [ledger("At the start", "2026-11-01T10:00:00Z", { rolled_back_at: FROM })] }, gameAnswer());
+    expect(screen.queryByTestId("first-look-compy")).toBeNull();
+    cleanup();
+    await lookWith({ changes: [ledger("At the end", "2026-11-01T10:00:00Z", { rolled_back_at: TO })] }, gameAnswer());
+    expect(rowsOf("first-look-compy")).toEqual([expect.stringMatching(/^Compy changed “At the end” on /)]);
   });
 
   // Break check: drop the window, unreadable or id test in `offNowInWindow` and one of these lists a row.
@@ -1719,6 +1757,9 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
       { drifts: null },
       { drifts: undefined },
       { drifts: [offDrift()], a: gameAnswer({ told: { since: "always", from: null, to: "2026-11-20T12:00:00Z", hours: null }, changes_listed: false }) },
+      // r1 F4: each guard alone (no window start; the engine listed no changes).
+      { drifts: [offDrift()], a: gameAnswer({ told: { since: "always", from: null, to: "2026-11-20T12:00:00Z", hours: null } }) },
+      { drifts: [offDrift()], a: gameAnswer({ changes_listed: false }) },
     ];
     for (const c of cases) {
       cleanup();
@@ -1777,11 +1818,13 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await pick("这周", gameAnswer());
       const off = screen.getByTestId("first-look-off-now");
-      expect(within(off).getByText("Compy 开启过、现在已关闭的设置")).toBeTruthy();
+      expect(within(off).getByText("Compy 开启过、现在未开启的设置")).toBeTruthy();
       expect(rowsOf("first-look-off-now")[0]).toMatch(
-        new RegExp(`^Compy 开启过的设置“${TRIM}”已不再开启，Compy 没有关闭它的记录。Compy 在 .+ 最后一次看到它是开启的，并在 .+ 发现它已关闭。$`),
+        new RegExp(
+          `^Compy 的检查在 .+ 最后一次读到 Compy 开启过的设置中没有一项未开启，并在 .+ 首次发现其中有一项未开启。现在未开启、且 Compy 的历史里没有撤销记录的：“${TRIM}”。$`,
+        ),
       );
-      expect(off.textContent).not.toMatch(/之外/);
+      expect(off.textContent).not.toMatch(/之外|已关闭/);
       expect(rowsOf("first-look-compy")[0]).toMatch(/^Compy 在 .+ 更改了“Enable Windows Game Mode”，并已在 .+ 被撤销。$/);
       for (const tag of screen.getAllByTestId("first-look-not-cause")) expect(tag.textContent).toBe("未证实是原因");
     } finally {

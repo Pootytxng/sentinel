@@ -31,7 +31,7 @@
       "other": "其他变化",
       "looksOff": "这台电脑上看起来不对劲的地方",
       "compy": "Compy 做过的更改",
-      "offNow": "Compy 开启过、现在已关闭的设置",
+      "offNow": "Compy 开启过、现在未开启的设置",
       "looksOffNote": "这些是 Compy 刚刚在这台电脑上读到的。Compy 还没有测量过其中任何一项是否会影响游戏的运行。"
     },
     "change": {
@@ -202,10 +202,13 @@
       "undone": "Compy 在 {{when}} 更改了“{{title}}”，并已在 {{undone}} 被撤销。",
       "undoneNoDate": "Compy 在 {{when}} 更改了“{{title}}”，之后已被撤销。",
       "undoHint": "“历史”里列为已应用的更改，可以在那里撤销。",
-      "offNowSeen": "Compy 开启过的设置“{{title}}”已不再开启，Compy 没有关闭它的记录。Compy 在 {{seen}} 最后一次看到它是开启的，并在 {{noticed}} 发现它已关闭。",
-      "offNowNoticed": "Compy 开启过的设置“{{title}}”已不再开启，Compy 没有关闭它的记录。Compy 在 {{noticed}} 发现它已关闭。",
-      "offNowUnnamedSeen": "Compy 开启过的某项设置已不再开启，Compy 没有关闭它的记录。Compy 在 {{seen}} 最后一次看到它是开启的，并在 {{noticed}} 发现它已关闭。",
-      "offNowUnnamedNoticed": "Compy 开启过的某项设置已不再开启，Compy 没有关闭它的记录。Compy 在 {{noticed}} 发现它已关闭。"
+      "offNowSeen": "Compy 的检查在 {{seen}} 最后一次读到 Compy 开启过的设置中没有一项未开启，并在 {{noticed}} 首次发现其中有一项未开启。",
+      "offNowNoticed": "Compy 的检查在 {{noticed}} 首次发现 Compy 开启过的某项设置未开启。",
+      "offNowTitles_one": "现在未开启、且 Compy 的历史里没有撤销记录的：{{titles}}。",
+      "offNowTitles_other": "现在未开启、且 Compy 的历史里没有撤销记录的：{{titles}}。",
+      "offNowItem": "“{{title}}”",
+      "offNowUnnamed": "检查没有记下是哪一项。",
+      "offNowLine": "{{when}}{{which}}"
     },
     "fact": {
       "monitorRefresh": "你的主显示器正以 {{now}} Hz 运行；在当前分辨率下它支持 {{max}} Hz。",
