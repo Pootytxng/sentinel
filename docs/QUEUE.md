@@ -46,7 +46,7 @@ Rest of NEXT (order unchanged):
 - [ ] PRIVACY.md additions (`_train\d4i-privacy-additions.md`, `_train\d1s1-privacy-line.txt`)
 - [x] Crash-record headlines in the user's language (d10, `claude/d10-incident-headlines`): Rust sends a closed code plus values beside the English; Black Box rows, group lines, kind chips, "Since it last worked" and the Home Care card word it through i18n. A Care card stored before d10 shows its stored English in English and is worded from its kind tag in zh-CN (no game tail)
 - [ ] The OS notification popup for a crash record is still English (incident_observer.rs `notify` → lib.rs `notify_care_incident`: English title, the card's English summary, English tail); Rust has no UI language today
-- [ ] Self-delimiting stamp marker for verify-release-state
+- [x] Self-delimiting stamp marker for verify-release-state: builds now carry `COMPY_BUILD_STAMP[<hash>]` (lib.rs `BUILD_STAMP_MARKER`); check 7 reads that one value and falls back to the loose hex scan for older builds (2026-11-28)
 - [ ] Layer 2 design is written and parked (`_train\d2-layer2-design.md`); not before Layer 1 ships
 - [ ] first look S6-S7 (start measuring + one-session statement; local store for answers)
 - [ ] Group a crash-and-relaunch into one sitting for baselines, noise bands and real-play counts — a crash and relaunch no longer counts as two independent sessions
