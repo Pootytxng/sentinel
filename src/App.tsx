@@ -52,6 +52,7 @@ import {
   type SlotRead,
 } from "./data/tuning-tools";
 import { ledgerReadState, settleLedgerRead, settleListRead, useLedgerReadRetry, useListReadRetry } from "./data/applied-changes-retry";
+import { rerankAfterSessionRead, type PendingRank } from "./data/session-rerank";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
@@ -577,6 +578,16 @@ function App() {
   const [changesReadFailed, setChangesReadFailed] = useState(false);
   // Review r2: a refresh that begins while a retry is reading makes that retry's rows stale.
   const refreshSeq = useRef(0);
+  // A refresh whose session read failed keeps its other three ranking inputs here, and a session
+  // re-read that lands first keeps its list here, so the ranking runs once both are in.
+  const rankPendingRef = useRef<PendingRank<GameReadiness, Recommendation[], StartupEntry[]> | null>(null);
+  const retriedSessionsRef = useRef<{ seq: number; sessions: SessionSummary[] } | null>(null);
+  const rankPriorities = (args: {
+    readiness: GameReadiness;
+    recommendations: Recommendation[];
+    startup: StartupEntry[];
+    sessions: SessionSummary[];
+  }) => invoke<Priorities>("priorities_from", args);
   useLedgerReadRetry(
     changesReadFailed,
     () => {
@@ -639,6 +650,15 @@ function App() {
       setSessions(s);
       setSessionsRead(true);
       setSessionsReadFailed(false);
+      // The refresh skipped ranking for want of this list: rank now with its other three answers
+      // (session-rerank.ts). Landed before that refresh's other reads? Keep the list for it.
+      if (rankPendingRef.current) {
+        const pend = rankPendingRef.current;
+        rankPendingRef.current = null;
+        void rerankAfterSessionRead(pend, () => refreshSeq.current, s, rankPriorities, setPriorities);
+      } else {
+        retriedSessionsRef.current = { seq: refreshSeq.current, sessions: s };
+      }
     },
     "session list",
   );
@@ -939,6 +959,9 @@ function App() {
     // older one's slow read must not land over the newer one's answer, nor its error re-raise a toast.
     const current = refreshGenerations.current.begin();
     refreshSeq.current += 1;
+    const rankSeq = refreshSeq.current;
+    rankPendingRef.current = null;
+    retriedSessionsRef.current = null;
     setError(null);
     // A refresh follows app start and every apply/rollback — drop the per-surface probe cache so
     // Advanced/Optimize re-read fresh after any change (between mutations the cache serves instantly).
@@ -991,6 +1014,17 @@ function App() {
           startup === undefined ||
           sessions === undefined
         ) {
+          // Only the session list failed: its re-read ranks with these three once it lands, or ranks
+          // now if it already landed for this refresh.
+          if (readiness !== undefined && recommendations !== undefined && startup !== undefined) {
+            const pend = { seq: rankSeq, readiness, recommendations, startup };
+            const landed = retriedSessionsRef.current;
+            if (landed && landed.seq === rankSeq) {
+              retriedSessionsRef.current = null;
+              return rerankAfterSessionRead(pend, () => refreshSeq.current, landed.sessions, rankPriorities, setPriorities);
+            }
+            rankPendingRef.current = pend;
+          }
           return;
         }
         return invoke<Priorities>("priorities_from", {
