@@ -771,6 +771,8 @@
       "lowNote": "{{game}} 最卡的时刻 · 实测",
       "lowNoneNote": "{{game}} 最卡的时刻没有测到",
       "none": "还没有记录",
+      "notReadYet": "还没读取",
+      "unread": "暂时读不到",
       "unmeasuredNote": "{{game}} 上一次没有测到"
     },
     "checks": {

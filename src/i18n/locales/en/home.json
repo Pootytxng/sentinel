@@ -804,6 +804,8 @@
       "lowNote": "{{game}}'s worst moments · Measured",
       "lowNoneNote": "{{game}}'s worst moments weren't measured",
       "none": "No session yet",
+      "notReadYet": "Not read yet",
+      "unread": "Couldn't read",
       "unmeasuredNote": "{{game}}'s last session wasn't measured"
     },
     "checks": {

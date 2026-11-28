@@ -12,6 +12,7 @@ import { TuningGuideBody } from "./TuningGuide";
 import { TuningVerdictCard } from "./TuningVerdict";
 import "../i18n";
 import "./TuningInstrument.css";
+import { sessionsReadLine, type SessionsReadState } from "../lib/session-metrics";
 
 // The Lab "Tuning" instrument body (spec 2026-06-08) — the guide (shared single source) PLUS the
 // read-only Stability & thermal readout. doorknob law: this is a GAUGE, not a control — nothing here
@@ -38,6 +39,7 @@ export function TuningInstrument({
   measurement,
   recentSessions,
   evidence,
+  sessionsRead,
 }: {
   guide: TuningGuide;
   vendor: GpuVendor;
@@ -47,13 +49,19 @@ export function TuningInstrument({
    *  evidence from THIS rig; the why-line quotes the real signal. No evidence → the honest
    *  not-for-this-rig state below — the guide itself stays free in Learn. */
   evidence: TuningEvidence;
+  /** The session list's read: "pending"/"failed" while `recentSessions` is [] only because it is
+   *  unread. Then the evidence (built off that empty list) is not judged; the read line shows. */
+  sessionsRead?: SessionsReadState;
 }) {
   const { t, i18n } = useTranslation();
   const walkthrough = walkthroughForKeyForLanguage(guide.id, i18n.language);
 
   return (
     <div className="tg-instrument">
-      {evidence.qualifies ? (
+      {sessionsRead ? (
+        // An unread list is not "nothing measured on this rig": say the read hasn't happened or failed.
+        <p className="tg-not-for-rig" data-testid="tg-sessions-unread">{sessionsReadLine(sessionsRead, t)}</p>
+      ) : evidence.qualifies ? (
         <>
           <p className="tg-evidence">
             <span className="tg-evidence-mark">{t("blackbook.tuningInstrument.qualifiesMark")}</span>

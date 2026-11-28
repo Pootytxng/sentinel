@@ -180,6 +180,7 @@ const props: {
   readiness: GameReadiness | null;
   priorities: Priorities | null;
   sessions: SessionSummary[];
+  sessionsRead?: "pending" | "failed";
   changes: AppliedChange[];
   onRunCheck: () => void;
   onSeeInFix: () => void;
@@ -1052,6 +1053,29 @@ describe("HomeConsole — the last-session intelligence line (Intelligence Phase
     const c = mount({ ...props, sessions: [], rooms: groundRooms, onNavigate: () => {} }).container;
     await waitFor(() => expect(state.calls).toContain("get_intelligence_headline"));
     expect(c.querySelector(".hc-lastsession")!.textContent).toBe("No before-and-after yet — play a monitored session.");
+  });
+
+  // An unread session list is [] too: before App's read answers, or after it failed, the tile said
+  // "No before-and-after yet" about a list Compy had not read. Break check: drop the
+  // sessionsReadLine(sessionsRead, t) branch in HomeConsole's last-session tile.
+  it.each([
+    ["pending", "Compy hasn't read its recorded sessions yet."],
+    ["failed", "Compy couldn't read its recorded sessions just now."],
+  ] as const)("an unread session list (%s) ⇒ the tile says so, never 'No before-and-after yet'", async (read, line) => {
+    state.headline = null;
+    const c = mount({ ...props, sessions: [], sessionsRead: read, rooms: groundRooms, onNavigate: () => {} }).container;
+    await waitFor(() => expect(state.calls).toContain("get_intelligence_headline"));
+    const tile = c.querySelector(".hc-lastsession")!.textContent!;
+    expect(tile).not.toMatch(/No before-and-after yet/);
+    expect(tile).toBe(line);
+  });
+
+  // A list read earlier keeps its session when a later read fails: the tile still names it.
+  it("a session on record + a failed re-read ⇒ the tile still names that session", async () => {
+    state.headline = null;
+    const c = mount({ ...props, sessionsRead: "failed", rooms: groundRooms, onNavigate: () => {} }).container;
+    await waitFor(() => expect(state.calls).toContain("get_intelligence_headline"));
+    expect(c.querySelector(".hc-lastsession")!.textContent).toMatch(/^Your last session \(/);
   });
 
   it('compy_intelligence "0" failsafe: no line AND the IPC is never invoked', async () => {

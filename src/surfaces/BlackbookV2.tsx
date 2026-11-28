@@ -17,6 +17,7 @@ import { PatternsTile } from "./blackbook/PatternsTile";
 import { buildLogbook } from "./blackbook/logbook";
 import { inEffectCounts, useMachineModel } from "../data/machine-model";
 import type { AppliedChange, SessionSummary } from "../types";
+import type { SessionsReadState } from "../lib/session-metrics";
 import type { GpuVendor } from "./walkthroughs";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "../i18n";
@@ -56,6 +57,7 @@ export function BlackbookV2({
   onClose,
   changes = [],
   sessions = [],
+  sessionsRead,
   onOpenLab,
 }: {
   focusId: string | null;
@@ -65,6 +67,9 @@ export function BlackbookV2({
   changes?: AppliedChange[];
   /** Recorded gaming sessions — the tape's Session records. */
   sessions?: SessionSummary[];
+  /** First-run follow-up (e3 review r1): App's session-list read state, so the empty tape and the
+   *  Sessions tile don't say "none" off an unread list. Omitted = read and current. */
+  sessionsRead?: SessionsReadState;
   /** Route to the Lab's Optimize station — the Logbook's read view sends undo there, not in-room. */
   onOpenLab?: () => void;
 }) {
@@ -208,6 +213,7 @@ export function BlackbookV2({
             onReviewSession={reviewLatest ?? undefined}
             onOpenLive={openLive}
             chronology={chronology}
+            sessionsRead={sessionsRead}
           />
         ) : undefined
       }
@@ -225,6 +231,7 @@ export function BlackbookV2({
             onOpenLab={() => onOpenLab?.()}
             onOpenGuide={openGuide}
             inEffect={inEffect}
+            sessionsRead={sessionsRead}
           />
         ) : undefined
       }
@@ -256,6 +263,7 @@ export function BlackbookV2({
                 onReviewSession={reviewLatest ?? undefined}
                 onOpenLive={openLive}
                 chronology={chronology}
+                sessionsRead={sessionsRead}
               />
               <BlackbookConsole
                 view={view}
@@ -264,6 +272,7 @@ export function BlackbookV2({
                 onOpenLab={() => onOpenLab?.()}
                 onOpenGuide={openGuide}
                 inEffect={inEffect}
+                sessionsRead={sessionsRead}
               />
             </>
           ) : (

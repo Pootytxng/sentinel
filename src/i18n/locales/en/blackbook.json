@@ -75,6 +75,8 @@
       "changesUnconfirmedPartial": "{{count}} still on · {{unknown}} can't confirm · part of the record is missing",
       "sessionsTitle": "Gaming sessions",
       "sessionsNone": "none watched yet",
+      "sessionsNotRead": "not read yet",
+      "sessionsUnread": "couldn't read",
       "sessionsSome": "measured, not guessed",
       "autopsyTitle": "Guides fact-checked",
       "autopsyNone": "none checked yet",

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { LEDGER_RETRY_MS, ledgerReadState, ledgerRetryDelay, settleLedgerRead, settleListRead, useLedgerReadRetry } from "./applied-changes-retry";
+import { LEDGER_RETRY_MS, ledgerReadState, ledgerRetryDelay, settleLedgerRead, settleListRead, useLedgerReadRetry, useListReadRetry } from "./applied-changes-retry";
 import type { AppliedChange } from "../types";
 
 const rows = [{ id: "c1" }] as unknown as AppliedChange[];
@@ -190,6 +190,71 @@ describe("useLedgerReadRetry", () => {
 // Lab's ledger views. Named fields so the two booleans cannot be swapped at the call site (review r2).
 // Break check: make "pending" win over "failed" (or return undefined while unread) and a row here fails.
 // Not covered: deleting the prop in App.tsx (no source guard, by the no-new-guards rule).
+// First-run follow-up (e3 review r1 F3): App's session-list read had no retry, so a failed read said
+// "couldn't read" until the next refresh. App now re-reads it through useListReadRetry.
+// Break check: make useListReadRetry stop after one failure and the "re-reads" case fails; drop the
+// null rule and the "refresh overtook" case fails; hard-code "ledger" in the log and the name case fails.
+describe("useListReadRetry (App's session-list re-read)", () => {
+  const sessions = [{ started_at: "s1" }];
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+  const tick = async (ms: number) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  };
+
+  it("re-reads on the ledger's backoff and hands over the first list that lands, then stops", async () => {
+    const read = vi
+      .fn<() => Promise<typeof sessions>>()
+      .mockRejectedValueOnce(new Error("ipc"))
+      .mockResolvedValue(sessions);
+    const onRead = vi.fn();
+    renderHook(() => useListReadRetry(true, read, onRead, "session list"));
+    await tick(2000);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(onRead).not.toHaveBeenCalled();
+    await tick(5000);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(onRead).toHaveBeenCalledWith(sessions);
+    await tick(900000);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("names the list it failed to read in the console line", async () => {
+    const read = vi.fn<() => Promise<typeof sessions>>().mockRejectedValue(new Error("ipc"));
+    renderHook(() => useListReadRetry(true, read, vi.fn(), "session list"));
+    await tick(2000);
+    expect(console.error).toHaveBeenCalledWith("[compy] session list re-read failed", expect.any(Error));
+  });
+
+  it("drops a list a refresh overtook and keeps waiting", async () => {
+    const read = vi
+      .fn<() => Promise<typeof sessions | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(sessions);
+    const onRead = vi.fn();
+    renderHook(() => useListReadRetry(true, read, onRead, "session list"));
+    await tick(2000);
+    expect(onRead).not.toHaveBeenCalled();
+    await tick(2000);
+    expect(onRead).toHaveBeenCalledWith(sessions);
+  });
+
+  it("reads nothing while the read hasn't failed", async () => {
+    const read = vi.fn<() => Promise<typeof sessions>>().mockResolvedValue(sessions);
+    renderHook(() => useListReadRetry(false, read, vi.fn(), "session list"));
+    await tick(900000);
+    expect(read).not.toHaveBeenCalled();
+  });
+});
+
 describe("ledgerReadState", () => {
   it("unread → pending; read → undefined; failed → failed, before or after a good read", () => {
     expect(ledgerReadState({ read: false, failed: false })).toBe("pending");

@@ -6,6 +6,7 @@ import { startHereEntries, type LogbookRecord } from "./logbook";
 import { manageJumpLabel, type LogbookView } from "./logbook-view";
 import type { InEffectCounts } from "../../data/machine-model";
 import type { LedgerHealth } from "../../types";
+import type { SessionsReadState } from "../../lib/session-metrics";
 import type { TFunction } from "i18next";
 import "../../i18n";
 import "./blackbook-console.css";
@@ -42,12 +43,16 @@ export function BlackbookConsole({
   onOpenGuide,
   patterns = null,
   inEffect,
+  sessionsRead,
 }: {
   /** The Logbook's shared view state (see `logbook-view.ts`) — the same object the tape reads. */
   view: LogbookView;
   /** How many Compy changes are in effect on this PC — the Machine Model's count, the one Health
    *  prints (#625). Handed in so this file stays zero-IPC. */
   inEffect: InEffectCounts;
+  /** First-run follow-up (e3 review r1): App's session-list read state. While unread or unreadable
+   *  the Sessions tile shows no number (a 0 would say none were recorded). Omitted = read. */
+  sessionsRead?: SessionsReadState;
   vendor: GpuVendor;
   /** Route to the Lab's Optimize station — the ONE audited undo home (owner decision 2026-07-10). */
   onOpenLab: () => void;
@@ -109,10 +114,16 @@ export function BlackbookConsole({
               <span className="bc-tile-k">
                 {t("blackbook.blackbookConsole.tiles.sessionsTitle")}
               </span>
-              <span className="bc-tile-n bc-mono">{counts.session}</span>
+              {/* Same rule as the Changes tile: an unread list is no number, never a 0. A list read
+                  earlier and failing now keeps its count (the rows on screen are that read). */}
+              <span className="bc-tile-n bc-mono">{counts.session === 0 && sessionsRead ? "—" : counts.session}</span>
               <span className="bc-tile-d">
                 {counts.session === 0
-                  ? t("blackbook.blackbookConsole.tiles.sessionsNone")
+                  ? sessionsRead === "failed"
+                    ? t("blackbook.blackbookConsole.tiles.sessionsUnread")
+                    : sessionsRead === "pending"
+                      ? t("blackbook.blackbookConsole.tiles.sessionsNotRead")
+                      : t("blackbook.blackbookConsole.tiles.sessionsNone")
                   : t("blackbook.blackbookConsole.tiles.sessionsSome")}
               </span>
             </button>

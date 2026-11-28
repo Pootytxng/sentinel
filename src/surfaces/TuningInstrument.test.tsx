@@ -129,6 +129,28 @@ describe("TuningInstrument (Lab gauge)", () => {
     expect(screen.getByText(/stays in History/)).toBeInTheDocument();
   });
 
+  // LabConsole's session list is [] before its read answers and after it fails; the evidence built off
+  // it said "nothing measured on this rig suggests an undervolt would help". Break check: drop the
+  // sessionsRead branch in TuningInstrument.
+  it.each([
+    ["pending", "Compy hasn't read its recorded sessions yet."],
+    ["failed", "Compy couldn't read its recorded sessions just now."],
+  ] as const)("an unread session list (%s): the read line, never 'Not for this rig' or the guide", (read, line) => {
+    render(
+      <TuningInstrument
+        guide={guide}
+        vendor="amd"
+        measurement={null}
+        recentSessions={[]}
+        evidence={noEvidence}
+        sessionsRead={read}
+      />,
+    );
+    expect(screen.getByTestId("tg-sessions-unread")).toHaveTextContent(line);
+    expect(screen.queryByText(/Not for this rig right now:/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Show me the way")).not.toBeInTheDocument();
+  });
+
   it("without evidence, an ALREADY-armed tune still gets its measurement (gauge never stranded)", () => {
     render(
       <TuningInstrument

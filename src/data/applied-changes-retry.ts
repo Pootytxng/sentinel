@@ -23,11 +23,25 @@ export function useLedgerReadRetry(
   read: () => Promise<AppliedChange[] | null>,
   onRead: (changes: AppliedChange[]) => void,
 ): void {
+  useListReadRetry(failed, read, onRead, "ledger");
+}
+
+/** First-run follow-up (e3 review r1 F3): the same retry for any list App reads, so a failed
+ *  session-list read does not stay "couldn't read" until the next refresh. `what` names the list in
+ *  the console line only. Same backoff, same supersede rule (`read` resolves null), reads only. */
+export function useListReadRetry<T>(
+  failed: boolean,
+  read: () => Promise<T | null>,
+  onRead: (value: T) => void,
+  what: string,
+): void {
+  const whatRef = useRef(what);
   const readRef = useRef(read);
   const onReadRef = useRef(onRead);
   useEffect(() => {
     readRef.current = read;
     onReadRef.current = onRead;
+    whatRef.current = what;
   });
   useEffect(() => {
     if (!failed) return;
@@ -43,21 +57,21 @@ export function useLedgerReadRetry(
         Promise.resolve()
           .then(() => readRef.current())
           .then(
-            (changes) => ({ ok: true as const, changes }),
+            (value) => ({ ok: true as const, value }),
             (error: unknown) => ({ ok: false as const, error }),
           )
           .then((r) => {
             if (!live) return;
             if (r.ok) {
-              const changes = r.changes;
-              if (changes === null) schedule(); // superseded by a refresh: not a failure, not a read
-              else onReadRef.current(changes);
+              const value = r.value;
+              if (value === null) schedule(); // superseded by a refresh: not a failure, not a read
+              else onReadRef.current(value);
               return;
             }
             const said = String(r.error);
             if (said !== lastLogged) {
               lastLogged = said;
-              console.error("[compy] ledger re-read failed", r.error);
+              console.error(`[compy] ${whatRef.current} re-read failed`, r.error);
             }
             attempt += 1;
             schedule();

@@ -11,6 +11,7 @@ import {
 } from "./logbook";
 import type { LogbookView } from "./logbook-view";
 import type { ChangeChronology } from "../../types";
+import { sessionsReadLine, type SessionsReadState } from "../../lib/session-metrics";
 import "../../i18n";
 import "./blackbook-console.css";
 
@@ -209,6 +210,7 @@ export function LogbookTape({
   onReviewSession,
   onOpenLive,
   chronology = null,
+  sessionsRead,
 }: {
   view: LogbookView;
   /** Reduced motion ⇒ the tape is still (no staggered reveal). */
@@ -222,6 +224,10 @@ export function LogbookTape({
   /** The Machine Model's chronology (#450), for its own caveat and unknown-reason sentences. Null
    *  while the model has not been read — the tape then prints no note rather than inventing one. */
   chronology?: ChangeChronology | null;
+  /** First-run follow-up (e3 review r1): App's session-list read state. While it is unread or
+   *  unreadable, an empty tape can't say "No record yet" (or "No gaming sessions"): sessions recorded
+   *  earlier may exist, unread. Omitted = read and current. */
+  sessionsRead?: SessionsReadState;
 }) {
   const { t, i18n } = useTranslation();
   const { records, filter, tape, older, sinceDate, incomplete, latestSession } = view;
@@ -236,6 +242,26 @@ export function LogbookTape({
   const unknownReason = incomplete ? null : (chronology?.unknown_reason ?? null);
 
   if (records.length === 0) {
+    // The Games room's own line for an unread or unreadable session list (e3) takes the title, so
+    // neither "No record yet" nor the narrowed "No gaming sessions…" sub is said off an unread list.
+    const sessionsLine = sessionsReadLine(sessionsRead, t);
+    if (sessionsLine) {
+      const sub = unknownReason ?? (incomplete ? null : t("blackbook.blackbookConsole.empty.sub"));
+      return (
+        <div className="bc-empty">
+          <span className="bc-empty-title">{sessionsLine}</span>
+          {sub && <span className="bc-empty-sub">{sub}</span>}
+          {onOpenLive && (
+            <button type="button" className="bc-manage" onClick={onOpenLive}>
+              <span>{t("common.games.emptyCta")}</span>
+              <span className="bc-chevron" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          )}
+        </div>
+      );
+    }
     return (
       <div className="bc-empty">
         {/* "No record yet" is a claim about the MACHINE, and an unreadable ledger is the one
@@ -276,6 +302,8 @@ export function LogbookTape({
     );
   }
 
+  const unreadSessionsLine = !filter || filter === "session" ? sessionsReadLine(sessionsRead, t) : null;
+
   return (
     <>
       {/* The record's scent line — WHEN IT HAS SOMETHING TO SAY. It was the hero tile's badge
@@ -287,6 +315,14 @@ export function LogbookTape({
           slice and must say so), or the ledger is KNOWN incomplete (the record cannot speak for
           the whole machine). Either of those printing is the honest state; both silent is the
           comp. */}
+      {/* Records are on the tape but the session list is unread (before App's read answers, or after it
+          failed): sessions would be missing from it with nothing saying so. Shown wherever sessions
+          belong on the tape: no filter, or the sessions filter. */}
+      {unreadSessionsLine && (
+        <div className="bc-sect" data-testid="bc-sessions-unread">
+          <span className="bc-sect-s">{unreadSessionsLine}</span>
+        </div>
+      )}
       {(filter || incomplete) && (
         <div className="bc-sect">
           {filter && (
