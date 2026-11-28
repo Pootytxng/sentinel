@@ -29,7 +29,7 @@ use self::crash_split::CrashSplit;
 use self::recorded::{RecordedOut, SessionsRead};
 use self::running_now::{RunningNowOut, RunningRead};
 use super::changes::{collect_reader, spawn_reader, status_limits, Limit, Slots, CHANGES_BUDGET};
-use super::extras::{crash_dto, crash_outcome, earliest_dated_change, CrashMatch, CrashOutcome, CrashRead, EarliestChange};
+use super::extras::{crash_dto, crash_outcome, crashes_elsewhere, earliest_dated_change, CrashMatch, CrashOutcome, CrashRead, EarliestChange};
 use super::facts::{self, CompyChange, Fact, FactsInput, FactsRead, HistoryRead};
 use super::mods::{CouldNot, ModFound, ModsRead, ModsVerdict};
 use super::{iso, Certainty, EvidenceKind};
@@ -137,8 +137,13 @@ pub(crate) struct FirstLook {
     pub game_files_since: Option<String>,
     /// The picked game's crash records, when any were counted.
     pub crashes: Option<Crashes>,
-    /// Windows' crash records were read completely and none is the picked game's.
+    /// Windows' crash records were read completely, none is the picked game's, and none of its program name came from
+    /// another folder (then `crashes_elsewhere` is said instead).
     pub crashes_none: bool,
+    /// e13: reports of the picked game's program name that ran from another folder, not counted above: the measured
+    /// flow's own args (`n`, `exe`, `folder`, `folders` when more than one, `partial` on a partial read;
+    /// `extras::crashes_elsewhere`).
+    pub crashes_elsewhere: Option<BTreeMap<&'static str, String>>,
     /// Facts about the PC or the game's folder with their dates or numbers (not a change in the window).
     pub looks_off: Vec<Change>,
     /// The picked game's folder was scanned completely and holds no mod Compy knows.
@@ -294,6 +299,7 @@ pub(crate) fn build_with(since: Since, now: DateTime<Utc>, game: &GameCtx, src: 
         game_files_since: None,
         crashes: None,
         crashes_none: false,
+        crashes_elsewhere: None,
         looks_off: Vec::new(),
         mods_none: false,
         mods_settings_only: Vec::new(),
@@ -488,6 +494,8 @@ fn crashes_part(game: &GameCtx, crashes: &CrashRead, out: &mut FirstLook) {
                 None => CrashMatch::InstallFolder,
             };
             let earliest = earliest_exact(out);
+            // e13: the same program name from another folder is said, never dropped silently (the measured flow's rule).
+            out.crashes_elsewhere = crashes_elsewhere(h, how).map(|e| e.args().into_iter().collect());
             match crash_outcome(h, how, earliest.map(|e| e.at)) {
                 CrashOutcome::Line(l) => {
                     let (module, before) = l.signature.unzip();
@@ -496,8 +504,15 @@ fn crashes_part(game: &GameCtx, crashes: &CrashRead, out: &mut FirstLook) {
                     out.crashes = Some(Crashes { args: l.args.into_iter().collect(), signature_module: module, signature_before: before, change_kind, split });
                 }
                 // Not "no crashes": some reports were not read.
-                CrashOutcome::NoneCounted { partial: true } => out.limits.push(limit("crashes", "partial", &[])),
-                CrashOutcome::NoneCounted { partial: false } => out.crashes_none = true,
+                // e13 r2: beside records of the program name from another folder, the limit never adds "found none
+                // for the game" (that folder may be the game's own, through an 8.3 name or a junction).
+                CrashOutcome::NoneCounted { partial: true } => {
+                    let code = if out.crashes_elsewhere.is_some() { "partial-elsewhere" } else { "partial" };
+                    out.limits.push(limit("crashes", code, &[]));
+                }
+                // "No crash record for the game" only when no record of its program name came from another folder
+                // either: an 8.3 name or a junction can make the game's own folder look like another one.
+                CrashOutcome::NoneCounted { partial: false } => out.crashes_none = out.crashes_elsewhere.is_none(),
             }
         }
     }
@@ -1711,6 +1726,7 @@ mod tests {
             code: Some("0xc0000005".into()),
             version: Some("1.0".into()),
             path_ok,
+            folder: None,
         }
     }
 
@@ -1783,6 +1799,51 @@ mod tests {
         src.crashes = CrashRead::Read(history(vec![crash("robrun.exe", "2026-11-02T10:00:00Z", None)], false));
         let a = build_with(Since::ThisWeek, utc(NOW), &by_folder, &src);
         assert!(a.crashes.is_none() && !a.crashes_none && has_limit(&a, "crashes", "partial"));
+        // e13: with no program name there is no name to share, so no other-folder line.
+        let elsewhere = crate::paramedic::extras::CrashFact { folder: Some(r"D:\Old".into()), ..crash("robrun.exe", "2026-11-03T10:00:00Z", Some(false)) };
+        src.crashes = CrashRead::Read(history(vec![elsewhere], false));
+        assert!(build_with(Since::ThisWeek, utc(NOW), &by_folder, &src).crashes_elsewhere.is_none());
+        // A report that names only the program (no folder) could be this game's: the read is partial, never "none".
+        let bare = crate::blackbox::AppCrashes {
+            crashes: vec![crate::blackbox::AppCrash { app: "robrun.exe".into(), when: utc("2026-11-03T10:00:00Z"), module: None, code: None, version: None, path: Some("robrun.exe".into()) }],
+            listed_any: true,
+            needs_admin: false,
+            complete_from: None,
+        };
+        src.crashes = crash_dto(bare, Some(std::path::Path::new(r"C:\Steam\steamapps\common\RobRun")));
+        let a = build_with(Since::ThisWeek, utc(NOW), &by_folder, &src);
+        assert!(a.crashes.is_none() && !a.crashes_none && has_limit(&a, "crashes", "partial"), "{:?}", a.limits);
+    }
+
+    /// e13: a recorded game's reports of the same program name from another folder are the measured flow's line,
+    /// beside "none" or the count, never dropped silently.
+    #[test]
+    fn the_same_program_name_from_another_folder_is_said_beside_the_count_or_none() {
+        let away = |at: &str, folder: &str| crate::paramedic::extras::CrashFact { folder: Some(folder.into()), ..crash("robrun.exe", at, Some(false)) };
+        let h = history(vec![away("2026-11-02T10:00:00Z", r"D:\Old\RobRun"), away("2026-11-04T10:00:00Z", r"E:\Copy")], false);
+        let a = with_crashes(h.clone(), read(vec![]));
+        // None of them is counted, and "no crash record for the game" is not said beside them (an 8.3 name or a
+        // junction can make the game's own folder look like another one).
+        assert!(!a.crashes_none && a.crashes.is_none(), "none counted, and 'none' is not said");
+        let want = crate::paramedic::extras::crashes_elsewhere(&h, CrashMatch::Program("robrun.exe")).expect("the measured flow says it");
+        let got = a.crashes_elsewhere.as_ref().expect("said beside none");
+        assert_eq!(got, &want.args().into_iter().collect::<BTreeMap<_, _>>());
+        assert_eq!((got["n"].as_str(), got["folder"].as_str(), got["folders"].as_str()), ("2", r"E:\Copy", "2"));
+        // Beside a count line too.
+        let h = history(vec![crash("robrun.exe", "2026-11-01T10:00:00Z", Some(true)), away("2026-11-02T10:00:00Z", r"D:\Old\RobRun")], false);
+        let a = with_crashes(h, read(vec![]));
+        assert_eq!(a.crashes.as_ref().unwrap().args.get("n").map(String::as_str), Some("1"));
+        assert_eq!(a.crashes_elsewhere.as_ref().map(|e| e["n"].as_str()), Some("1"));
+        // None from another folder: nothing extra.
+        let a = with_crashes(history(vec![crash("robrun.exe", "2026-11-01T10:00:00Z", Some(true))], false), read(vec![]));
+        assert!(a.crashes_elsewhere.is_none());
+        // r2: a partial read with only other-folder records: the limit never says "found none for the game"; with
+        // nothing of the name at all it still does.
+        let a = with_crashes(history(vec![away("2026-11-02T10:00:00Z", r"D:\Old\RobRun")], true), read(vec![]));
+        assert_eq!(a.crashes_elsewhere.as_ref().and_then(|e| e.get("partial")).map(String::as_str), Some("true"));
+        assert!(has_limit(&a, "crashes", "partial-elsewhere") && !has_limit(&a, "crashes", "partial") && !a.crashes_none, "{:?}", a.limits);
+        let a = with_crashes(history(vec![], true), read(vec![]));
+        assert!(has_limit(&a, "crashes", "partial") && !has_limit(&a, "crashes", "partial-elsewhere"));
     }
 
     fn found_mod(name: &'static str, strong: bool, loader: bool, first: Option<&str>, settings: Option<&str>) -> crate::paramedic::mods::ModFound {

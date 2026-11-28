@@ -1606,7 +1606,7 @@ mod windows_records {
 
     fn same_file_crashes() -> super::super::extras::CrashRead {
         use super::super::extras::{CrashFact, CrashHistory, CrashRead};
-        let k = |when: &str| CrashFact { app: "g".into(), when: utc(when), module: Some("nvwgf2umx.dll".into()), code: Some("c0000005".into()), version: None, path_ok: None };
+        let k = |when: &str| CrashFact { app: "g".into(), when: utc(when), module: Some("nvwgf2umx.dll".into()), code: Some("c0000005".into()), version: None, path_ok: None, folder: None };
         CrashRead::Read(CrashHistory { crashes: vec![k("2026-09-28T08:00:00Z"), k("2026-10-08T08:00:00Z")], listed: true, partial: false })
     }
 
@@ -4465,7 +4465,7 @@ mod recovery_f3 {
         use super::super::extras::{CompyApplies, CrashFact, CrashHistory, CrashRead};
         let rough = || vec![day_count(10, 30.0, 3)];
         let When::ObservedBetween { from, to } = finding_of(&undo_case(rough(), Vec::new()), "compy-change").since_when.clone() else { panic!("no window") };
-        let k = |when: &str| CrashFact { app: "g".into(), when: utc(when), module: Some("nvwgf2umx.dll".into()), code: Some("c0000005".into()), version: None, path_ok: None };
+        let k = |when: &str| CrashFact { app: "g".into(), when: utc(when), module: Some("nvwgf2umx.dll".into()), code: Some("c0000005".into()), version: None, path_ok: None, folder: None };
         // Two same-signature crashes before the window, and one Compy record applied (then undone) at `at`.
         let read = |at: &str| -> (Option<(String, String)>, Vec<&'static str>) {
             let mut inp = undo_inputs(rough(), vec![record(at, Some(B10B_UNDONE))]);
@@ -5644,7 +5644,7 @@ mod temperature_and_crashes {
 
     // ---- crashes ----
     fn crash(app: &str, when: &str, module: Option<&str>, code: Option<&str>) -> CrashFact {
-        CrashFact { app: app.into(), when: utc(when), module: module.map(Into::into), code: code.map(Into::into), version: None, path_ok: None }
+        CrashFact { app: app.into(), when: utc(when), module: module.map(Into::into), code: code.map(Into::into), version: None, path_ok: None, folder: None }
     }
 
     fn sig(when: &str) -> CrashFact {
@@ -5735,6 +5735,89 @@ mod temperature_and_crashes {
         // Only reports from another folder: nothing of this game's.
         let d = with_crashes(history(vec![under("2026-10-02T08:00:00Z", Some(false), None)]), false);
         assert!(crash_line(&d).is_none());
+    }
+
+    #[test]
+    fn reports_of_the_same_program_name_from_another_folder_are_said_never_dropped_silently() {
+        let at = |app: &str, when: &str, ok: Option<bool>, folder: Option<&str>| CrashFact { path_ok: ok, folder: folder.map(Into::into), ..crash(app, when, None, None) };
+        let elsewhere = |d: &Diagnosis| d.seen.iter().find(|s| s.id == "game-crashes-elsewhere").map(|s| s.args.clone());
+        let mine = r"C:\Steam\common\G";
+        // Two counted, two from ONE other folder spelled two ways: the count line stays 2, and one line says the
+        // other 2 and shows the newest report's folder as written.
+        let d = with_crashes(
+            history(vec![
+                at("g", "2026-10-02T08:00:00Z", Some(true), Some(mine)),
+                at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Old\G")),
+                at("G", "2026-10-05T08:00:00Z", Some(false), Some(r"d:\OLD\g")),
+                at("g", "2026-10-04T08:00:00Z", Some(true), Some(mine)),
+            ]),
+            false,
+        );
+        assert_eq!(crash_line(&d).expect("said").args["n"], "2");
+        let e = elsewhere(&d).expect("the other folder is said");
+        assert_eq!((e["n"].as_str(), e["exe"].as_str(), e["folder"].as_str()), ("2", "G", r"d:\OLD\g"));
+        assert!(!e.contains_key("folders"), "one folder, spelled two ways, is one folder");
+        assert!(!e.contains_key("partial"), "a complete read gives the count as it is");
+        // Two different other folders: how many is sent, with ONE example folder (the newest report's).
+        let d = with_crashes(
+            history(vec![at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Old\G")), at("g", "2026-10-06T08:00:00Z", Some(false), Some(r"E:\Copy"))]),
+            false,
+        );
+        let e = elsewhere(&d).expect("said");
+        assert_eq!((e["n"].as_str(), e["folder"].as_str(), e.get("folders").map(String::as_str)), ("2", r"E:\Copy", Some("2")));
+        // Only from another folder: no count line, and the other-folder line is still said.
+        assert!(crash_line(&d).is_none());
+        // A partial read: the count is a lower bound, and the args say so (the card words it "at least").
+        let part = CrashRead::Read(CrashHistory { crashes: vec![at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Old\G"))], listed: true, partial: true });
+        let pd = with_crashes(part, false);
+        assert_eq!(elsewhere(&pd).expect("said").get("partial").map(String::as_str), Some("true"));
+        // r2: and the couldn't-see line beside it never says "found none for the game".
+        assert!(pd.unknowns.contains(&"crashes-partial-elsewhere") && !pd.unknowns.contains(&"crashes-partial"), "{:?}", pd.unknowns);
+        // Equal times: the shorter folder is the example.
+        let d = with_crashes(history(vec![at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Long\Folder")), at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"E:\G"))]), false);
+        assert_eq!(elsewhere(&d).expect("said")["folder"], r"E:\G");
+        // Nothing to say: another program's name from another folder, a report under the install folder, one whose
+        // folder could not be checked, or one with no folder at all.
+        for k in [
+            at("other", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Old\G")),
+            at("g", "2026-10-03T08:00:00Z", Some(true), Some(mine)),
+            at("g", "2026-10-03T08:00:00Z", None, Some(r"D:\Old\G")),
+            at("g", "2026-10-03T08:00:00Z", Some(false), None),
+        ] {
+            assert!(elsewhere(&with_crashes(history(vec![k.clone()]), false)).is_none(), "{k:?}");
+        }
+    }
+
+    #[test]
+    fn the_reader_compares_a_reports_path_by_its_text_form_and_a_bare_name_is_only_a_name() {
+        use crate::blackbox::{AppCrash, AppCrashes};
+        use std::path::Path;
+        let report = |path: &str| AppCrash { app: "game.exe".into(), when: utc("2026-10-02T08:00:00Z"), module: None, code: None, version: None, path: Some(path.into()) };
+        let all = AppCrashes {
+            crashes: vec![report(r"\\?\C:\STEAM\steamapps\common\G\game.exe"), report(r"c:/steam/steamapps/common/g/Bin/game.exe"), report(r"\\?\D:\Old\G\game.exe"), report("game.exe")],
+            listed_any: true,
+            needs_admin: false,
+            complete_from: None,
+        };
+        match super::super::extras::crash_dto(all, Some(Path::new(r"C:\Steam\steamapps\common\G"))) {
+            CrashRead::Read(h) => assert_eq!(
+                h.crashes.iter().map(|k| (k.path_ok, k.folder.as_deref())).collect::<Vec<_>>(),
+                [(Some(true), Some(r"C:\STEAM\steamapps\common\G")), (Some(true), Some("c:/steam/steamapps/common/g/Bin")), (Some(false), Some(r"D:\Old\G")), (None, None)]
+            ),
+            other => panic!("{other:?}"),
+        }
+        // A bare program name (no folder) with the install folder known: on main it was dropped as "another folder";
+        // now it is counted, and the line says it went by program name only.
+        let bare = AppCrashes {
+            crashes: vec![AppCrash { app: "g".into(), when: utc("2026-10-02T08:00:00Z"), module: None, code: None, version: None, path: Some("g".into()) }],
+            listed_any: true,
+            needs_admin: false,
+            complete_from: None,
+        };
+        let d = with_crashes(super::super::extras::crash_dto(bare, Some(Path::new(r"C:\Steam\steamapps\common\G"))), false);
+        let l = crash_line(&d).expect("counted");
+        assert_eq!((l.args["n"].as_str(), l.args.get("byName").map(String::as_str)), ("1", Some("true")));
+        assert!(!d.seen.iter().any(|s| s.id == "game-crashes-elsewhere"), "no folder, so not 'another folder'");
     }
 
     #[test]

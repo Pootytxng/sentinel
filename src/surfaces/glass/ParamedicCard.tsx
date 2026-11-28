@@ -834,6 +834,9 @@ function unknownLine(code: string, { t, game, startRecord }: Ctx): string | null
       return t("paramedic.unknown.crashesUnreadable", { game });
     case "crashes-partial":
       return t("paramedic.unknown.crashesPartial", { game });
+    // e13 r2: beside records of the program name from another folder: no "found none for the game".
+    case "crashes-partial-elsewhere":
+      return t("paramedic.unknown.crashesPartialElsewhere");
     case "compy-ledger-unreadable":
       return t("paramedic.unknown.compyLedger");
     case "startup-programs":
@@ -962,6 +965,18 @@ function seenLine(s: ParamedicRuledOut, ctx: Ctx): string | null {
       const byName = a.byName === "true" ? t("paramedic.seen.crashesByName") : "";
       const versions = a.versions ? t("paramedic.seen.crashesVersions", { n: Number(a.versions) }) : "";
       return `${base}${byName}${versions}`;
+    }
+    case "game-crashes-elsewhere": {
+      // e13: records of the same program name whose path lies outside the game's folder (an 8.3 name or a junction can
+      // look like that too): said with one folder, never called the same game or another game.
+      const where = a.folders
+        ? t("paramedic.seen.crashesElsewhereFolders", { n: Number(a.folders), folder: a.folder })
+        : t("paramedic.seen.crashesElsewhereFolder", { folder: a.folder });
+      // A partial read says "at least", as the count line does.
+      const count = Number(a.n);
+      return a.partial === "true"
+        ? t("paramedic.seen.crashesElsewherePartial", { count, exe: a.exe, where })
+        : t("paramedic.seen.crashesElsewhere", { count, exe: a.exe, where });
     }
     case "starts-dropped":
       return t("paramedic.seen.startsDropped", { n: Number(a.n) });

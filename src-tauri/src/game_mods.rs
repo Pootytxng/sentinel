@@ -1625,11 +1625,62 @@ pub(crate) fn scan_install_folder(root: &Path, exe: Option<&str>, budget: Durati
     merge(scans, extra, coverage)
 }
 
-/// A path for comparing, not for opening: no `\\?\`, one separator, no trailing one, lower-case.
-fn compare_form(p: &Path) -> String {
+/// A path for comparing, not for opening: one separator, no repeated or trailing one, ASCII lower-case, and none of the
+/// prefixes that name the same file another way (`\\?\`, `\\.\` and `\??\`; their `UNC\` forms become `\\`).
+/// Text only: nothing on disk is asked, so an 8.3 short name or a junction is NOT resolved and stays a different
+/// spelling. Trailing dots and spaces are kept (after `\\?\` they are part of the name).
+pub(crate) fn compare_form(p: &Path) -> String {
     let s = p.to_string_lossy().replace('/', "\\");
-    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
-    s.trim_end_matches('\\').to_ascii_lowercase()
+    let lower = s.to_ascii_lowercase();
+    let mut unc = s.starts_with(r"\\") && !s.starts_with(r"\\?\") && !s.starts_with(r"\\.\");
+    let mut rest: &str = &s;
+    for prefix in [r"\\?\unc\", r"\\.\unc\", r"\??\unc\"] {
+        if lower.starts_with(prefix) {
+            rest = &s[prefix.len()..];
+            unc = true;
+            break;
+        }
+    }
+    if !unc {
+        for prefix in [r"\\?\", r"\\.\", r"\??\"] {
+            if lower.starts_with(prefix) {
+                rest = &s[prefix.len()..];
+                break;
+            }
+        }
+    }
+    // A rooted path without a drive (`\Games\X`) keeps its root, so it never equals the relative `Games\X`.
+    let rooted = !unc && rest.starts_with('\\');
+    let joined = rest.split('\\').filter(|part| !part.is_empty()).collect::<Vec<_>>().join("\\");
+    let joined = if unc {
+        format!(r"\\{joined}")
+    } else if rooted {
+        format!(r"\{joined}")
+    } else {
+        joined
+    };
+    // ASCII case only. Compy treats ASCII case as the same, which matches NTFS's default; a folder made
+    // case-sensitive (per directory, e.g. for WSL) is the rare exception, where two names differing only in ASCII
+    // case are two folders. Folding beyond ASCII (`Ü`/`ü`, but also the Kelvin sign and `k`, or `ẞ` and `ß`, which
+    // NTFS keeps apart) is left out, so such a spelling reads as another folder rather than as the game's own.
+    joined.to_ascii_lowercase()
+}
+
+/// The folder a program's full path names, for showing (not for comparing or opening): the path's parent as it was
+/// written, without a `\\?\`-style prefix. `None` when the text has no folder part.
+pub(crate) fn display_folder(image: &str) -> Option<String> {
+    let s = image.trim();
+    let lower = s.to_ascii_lowercase();
+    let s = [r"\\?\unc\", r"\\.\unc\", r"\??\unc\"]
+        .iter()
+        .find(|p| lower.starts_with(*p))
+        .map(|p| format!(r"\\{}", &s[p.len()..]))
+        .or_else(|| [r"\\?\", r"\\.\", r"\??\"].iter().find(|p| lower.starts_with(*p)).map(|p| s[p.len()..].to_string()))
+        .unwrap_or_else(|| s.to_string());
+    let cut = s.rfind(['\\', '/'])?;
+    let folder = s[..cut].trim_end_matches(['\\', '/']);
+    // A drive's own folder is shown as `C:\`, not `C:`.
+    (!folder.is_empty()).then(|| if folder.ends_with(':') { format!("{folder}\\") } else { folder.to_string() })
 }
 
 /// The folder of `image` when it lies under `root` (lexically; no `..`), else `None`.
@@ -3431,6 +3482,19 @@ mod tests {
         assert_eq!(kinds(&scan.found), vec![ModKind::ReShade], "found by name instead");
         let dotted = root.join("Game").join("..").join("Game").join("Binaries").join("Win64").join("Game-Win64-Shipping.exe");
         assert_eq!(scan_for_image(&root, &dotted, Duration::from_secs(10)).coverage.exe_search, ExeSearch::ForProgram);
+        // e13: other spellings of the same exe (a `\\?\` prefix with other ASCII case; a `\\.\` prefix, which only the
+        // e13 form accepts; forward slashes and a doubled separator) are still under the install folder: its folder is
+        // scanned directly, no search.
+        let plain = root.to_string_lossy().into_owned();
+        for spelled in [
+            format!(r"\\?\{}\GAME\binaries\Win64\Game-Win64-Shipping.exe", plain.to_ascii_uppercase()),
+            format!(r"\\.\{plain}\Game\Binaries\Win64\Game-Win64-Shipping.exe"),
+            format!("{plain}//Game/Binaries\\\\Win64/Game-Win64-Shipping.exe"),
+        ] {
+            let scan = scan_for_image(&root, Path::new(&spelled), Duration::from_secs(10));
+            assert_eq!((scan.coverage.exe_search, scan.coverage.exe_folders_scanned), (ExeSearch::FromProcessPath, 1), "{spelled}");
+            assert_eq!(kinds(&scan.found), vec![ModKind::ReShade], "{spelled}");
+        }
         // A folder that cannot be read is Partial, not clean.
         let gone = root.join("Game").join("Binaries").join("Nope").join("Game-Win64-Shipping.exe");
         let scan = scan_for_image(&root, &gone, Duration::from_secs(10));
@@ -3440,6 +3504,42 @@ mod tests {
         assert!(image_folder_under(Path::new(r"C:\Games\X"), Path::new(r"c:/games/x/Bin/a.exe")).is_some());
         assert!(image_folder_under(Path::new(r"C:\Games\X"), Path::new(r"C:\Games\XY\a.exe")).is_none(), "a sibling with the same prefix is not under it");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn spellings_of_one_path_compare_alike_and_an_8_3_name_or_junction_is_not_resolved() {
+        let cf = |s: &str| compare_form(Path::new(s));
+        // Prefixes that name the same file: `\\?\`, `\\.\`, `\??\`, and their UNC forms against a plain `\\server`.
+        for same in [r"\\?\C:\Games\X", r"\\.\C:\Games\X", r"\??\C:\Games\X", r"C:\Games\X\"] {
+            assert_eq!(cf(same), r"c:\games\x", "{same}");
+        }
+        for same in [r"\\?\UNC\nas\share\G", r"\\?\unc\NAS\Share\G\", r"\\.\UNC\nas\share\G", r"\\nas\share\G"] {
+            assert_eq!(cf(same), r"\\nas\share\g", "{same}");
+        }
+        // ASCII case, forward slashes and doubled separators.
+        assert_eq!(cf(r"C:/GAMES//Spiele\Über"), cf(r"c:\games\spiele\Über"));
+        // Case beyond ASCII is not folded (NTFS keeps the Kelvin sign and `k`, `ẞ` and `ß` apart; a simple Unicode
+        // fold would make them equal): such a spelling reads as another folder, never as the game's own.
+        assert_ne!(cf("C:\\Games\\\u{212A}art"), cf(r"C:\Games\kart"));
+        assert_ne!(cf("C:\\Games\\\u{1E9E}"), cf("C:\\Games\\\u{DF}"));
+        assert_ne!(cf(r"C:\Games\ÜBER"), cf(r"C:\Games\über"));
+        // A UNC path is not the same as a drive path with the same folder names, and a rooted path without a drive
+        // keeps its root (it is not the relative path with the same names).
+        assert_ne!(cf(r"\\nas\share\G"), cf(r"nas\share\G"));
+        assert_ne!(cf(r"\Games\X"), cf(r"Games\X"));
+        assert_eq!(cf(r"\Games\\X\"), r"\games\x");
+        // Text only: an 8.3 short name and a junction's target stay different spellings (no disk call resolves them).
+        assert_ne!(cf(r"C:\PROGRA~2\Steam"), cf(r"C:\Program Files (x86)\Steam"));
+        // Under the install folder, through any of those spellings; a sibling with the same letters is not.
+        let root = Path::new(r"C:\Games\X");
+        assert!(image_is_under(root, Path::new(r"\\?\c:\games\x\Bin\a.exe")));
+        assert!(image_is_under(Path::new(r"\\nas\share\G"), Path::new(r"\\?\UNC\nas\share\G\a.exe")));
+        assert!(!image_is_under(root, Path::new(r"\\?\C:\Games\XY\a.exe")));
+        // The folder shown to the reader: as written, without the prefix.
+        assert_eq!(display_folder(r"\\?\D:\Old Games\G\game.exe").as_deref(), Some(r"D:\Old Games\G"));
+        assert_eq!(display_folder(r"\\?\UNC\nas\share\game.exe").as_deref(), Some(r"\\nas\share"));
+        assert_eq!(display_folder(r"C:\game.exe").as_deref(), Some(r"C:\"));
+        assert_eq!(display_folder("game.exe"), None);
     }
 
     #[test]
