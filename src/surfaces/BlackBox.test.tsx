@@ -213,8 +213,8 @@ describe("BlackBox surface (v2 triage UI)", () => {
     [
       "too few",
       { outcome: "too-few", sessions: 2 },
-      "To compare it, Compy needs at least 3 earlier sessions of this game on this card, each at least 5 minutes long and mostly measured, with a temperature reading, and for which Compy found no crash record, and it has 2. So it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
-      "要做对比，Compy 至少需要这张显卡在该游戏中 3 次较早的会话，每次至少 5 分钟且大部分被测到，有温度读数且 Compy 未发现崩溃记录，目前只有 2 次。所以它无法判断这个峰值对这张显卡来说是否正常，也无法判断发热是否起了作用。",
+      "To compare it, Compy needs at least 3 earlier sessions of this game on this card, each at least 5 minutes long and mostly measured, with a temperature reading, for which Compy found no crash record, and whose record shows no sign of holding two games, and it has 2. So it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
+      "要做对比，Compy 至少需要这张显卡在该游戏中 3 次较早的会话，每次至少 5 分钟且大部分被测到，有温度读数且 Compy 未发现崩溃记录，记录中也没有包含两款游戏的迹象，目前只有 2 次。所以它无法判断这个峰值对这张显卡来说是否正常，也无法判断发热是否起了作用。",
     ],
     // e10 r1 (F2-F4): each thing that kept the comparison from being made is said in plain words.
     [

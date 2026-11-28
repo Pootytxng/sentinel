@@ -181,6 +181,10 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
       expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("for which Compy found no crash record");
       expect(zhGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("Compy 未发现崩溃记录");
     }
+    // e11 review r1 F2: "too few" lists every condition a session must meet, including the two-games flag.
+    // Break check: drop the clause from en tooFew -> fails.
+    expect(enGaming.blackBox.assessStatement.peakVsUsual.tooFew).toContain("whose record shows no sign of holding two games");
+    expect(zhGaming.blackBox.assessStatement.peakVsUsual.tooFew).toContain("记录中也没有包含两款游戏的迹象");
     // e10 r3 F2: true whether some or all of the earlier sessions fall before the scan's period.
     expect(enGaming.blackBox.assessStatement.peakVsUsual.beforeScan).toMatch(/^Some or all of /);
     expect(zhGaming.blackBox.assessStatement.peakVsUsual.beforeScan).toContain("部分或全部");
