@@ -10396,12 +10396,17 @@ mod elevated_goldens {
             (r#"{"op":"tcp-autotuning","disabled":true}"#, G_TCP_DISABLED),
             (concat!(r#"{"op":"nagle-disable","interfaces":[""#, nic!(), r#""]}"#), G_NAGLE_APPLY),
             (concat!(r#"{"op":"nagle-restore","interfaces":[{"key":""#, nic!(), r#"","ack":1,"nodelay":null}]}"#), G_NAGLE_RESTORE),
-            (r#"{"op":"perf-log-grant"}"#, G_PERF_LOG_GRANT),
             (r#"{"op":"perf-log-revoke"}"#, G_PERF_LOG_REVOKE),
         ];
         for (json, golden) in cases {
             assert_eq!(typed(json), *golden, "{json}");
         }
+        // The grant is dark (D1-S3 review r1): the typed set refuses it, so its golden pins the constant the
+        // armed helper will run, byte for byte. Arming flips the first assert to the golden, like the rest.
+        let nonce = crate::elevated_ops::Nonce::parse(NONCE).expect("nonce");
+        let grant = crate::elevated_ops::ElevatedOp::PerfLogGrant {}.script(&nonce, &mut DriftedTaskReads);
+        assert_eq!(grant, Err(crate::elevated_ops::Refused::Request), "the dark grant does not compose");
+        assert_eq!(crate::actions::PERF_LOG_GRANT_SCRIPT, G_PERF_LOG_GRANT, "the grant script's bytes");
     }
 
     /// The helper's own wrappers: a Single op runs with today's `$ErrorActionPreference='Stop'` prefix and a

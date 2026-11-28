@@ -3496,27 +3496,36 @@ mod plain_start_tests {
             concat!("add-adgroup", "member"),
         ];
         // Owner ruling 2026-11-28: the ONE approved exception is the one-time Performance Log Users grant and
-        // its undo, which live in actions.rs only (the mutation boundary), by SID, never by name. Every other
-        // token stays forbidden everywhere, and in actions.rs the two cmdlets may only name that one SID.
-        let exempt = [concat!("add-local", "groupmember"), concat!("remove-local", "groupmember")];
+        // its undo, in src/actions.rs only (the mutation boundary, matched by its exact path), by SID, never by
+        // name. There each cmdlet appears exactly twice (the script constant and its golden copy), and only as
+        // the one whole approved statement. Every other token, and every other file, stays forbidden.
+        let actions_rs = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("actions.rs");
+        let add = concat!("add-local", "groupmember");
+        let remove = concat!("remove-local", "groupmember");
+        let approved = [
+            (add, format!("\"if (-not $ismember) {{ {add} -sid 's-1-5-32-559' -member $sid.value }}\"")),
+            (remove, format!("\"if ($ismember) {{ {remove} -sid 's-1-5-32-559' -member $sid.value }}\"")),
+        ];
+        let mut saw_actions = false;
         for f in files {
             let text = std::fs::read_to_string(&f).unwrap_or_default().to_lowercase();
-            let is_actions = f.file_name().is_some_and(|n| n == "actions.rs");
+            let is_actions = f == actions_rs;
+            saw_actions |= is_actions;
             for token in forbidden {
-                if is_actions && exempt.contains(&token) {
-                    for (at, _) in text.match_indices(token) {
-                        let tail = &text[at + token.len()..];
-                        assert!(
-                            tail.starts_with(" -sid 's-1-5-32-559' -member $sid.value }"),
-                            "{} uses {token} on something other than the one approved group SID",
-                            f.display()
-                        );
-                    }
+                if let Some((_, statement)) = approved.iter().find(|(t, _)| is_actions && *t == token) {
+                    assert_eq!(text.matches(token).count(), 2, "{} uses {token} outside the approved pair", f.display());
+                    assert_eq!(
+                        text.matches(statement.as_str()).count(),
+                        2,
+                        "{} uses {token} other than as the one approved statement",
+                        f.display()
+                    );
                     continue;
                 }
                 assert!(!text.contains(token), "{} changes group membership ({token})", f.display());
             }
         }
+        assert!(saw_actions, "the walk did not reach {}", actions_rs.display());
     }
 }
 
