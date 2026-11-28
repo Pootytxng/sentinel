@@ -2085,6 +2085,10 @@ export function ParamedicCard({
   // answer (which "Back" and "Check again" bring back). Nothing here is stored.
   const [questions, setQuestions] = useState(false);
   const [lookAsking, setLookAsking] = useState(false);
+  // e9: in a short window (glass-rooms.css, max-height 899.98px) the open card folds the rest of Home under one
+  // row, "The rest of this page", so the answer gets the room and nothing hides below the fold unannounced. The row
+  // shows it again; closing the card brings Home back and the next open folds it again.
+  const [homeShown, setHomeShown] = useState(false);
   // Bumped when the card is closed or asks anew, so an answer to an earlier ask is dropped.
   const gen = useRef(0);
   const doorRef = useRef<HTMLButtonElement>(null);
@@ -2147,6 +2151,7 @@ export function ParamedicCard({
     gen.current += 1;
     refocus.current = true;
     setQuestions(false);
+    setHomeShown(false);
     setView({ kind: "idle" });
     doorRef.current?.focus();
   };
@@ -2316,7 +2321,7 @@ export function ParamedicCard({
   }, [answer, showQuestions, measure]);
 
   return (
-    <section ref={sectionRef} tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
+    <section ref={sectionRef} tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"} data-home-fold={open ? (homeShown ? "shown" : "folded") : undefined}>
       <div className="gl-card-top">
         <p className="gl-card-sub" data-testid={idleRough ? "paramedic-rough" : undefined}>
           {idleRough || (noGames ? t("paramedic.firstLook.door.sub") : t("paramedic.door.sub"))}
@@ -2434,6 +2439,19 @@ export function ParamedicCard({
           >
             {t("paramedic.card.somethingElse")}
           </button>
+        </div>
+      )}
+      {/* e9: the row that stands for the rest of Home while the open card folds it (CSS shows it, and folds Home,
+          only in a short window). An open disclosure like the card's others: Escape on it folds Home again first,
+          the next Escape closes the card. Folded, Home's content is display:none, so it leaves the tab order and
+          the accessibility tree together and comes back unchanged. */}
+      {open && (
+        <div className="gl-para-homefold" data-testid="paramedic-home-fold">
+          <button type="button" className="gl-para-fold-btn" aria-expanded={homeShown} onClick={() => setHomeShown((s) => !s)}>
+            <Chevron />
+            {t("paramedic.card.restOfPage")}
+          </button>
+          {!homeShown && <span className="gl-para-homefold-note">{t("paramedic.card.restOfPageFolded")}</span>}
         </div>
       )}
     </section>

@@ -865,3 +865,36 @@
   gap: 8px;
   padding: 0 12px 12px;
 }
+/* e9 (card at 720): in a short window the open card folds the rest of Home (everything after it but the crash
+   banner) under its own one-line row, "The rest of this page", which shows it again. While Home is folded the
+   card may grow to the window less ~240 px (480 px at 720 high; 520 px stays the ceiling), so the answer gets
+   the room the tiles had. A tall window keeps e8's layout: no row, nothing folded. No motion is added.
+   Real geometry was not measured: check it on the next installed-build look. */
+:root[data-v2="on"] .gl-para-homefold {
+  display: none;
+}
+@media (max-height: 899.98px) {
+  :root[data-v2="on"] .gl-para-homefold {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    margin-top: 8px;
+    padding-top: 4px;
+    border-top: 1px solid var(--v2-line);
+  }
+  :root[data-v2="on"] .gl-para-homefold .gl-para-fold-btn {
+    width: auto;
+  }
+  :root[data-v2="on"] .gl-para-homefold-note {
+    color: var(--v2-muted);
+    font-size: var(--type-label);
+  }
+  :root[data-v2="on"] .gl-para-card[data-home-fold="folded"] {
+    --para-card-max: clamp(260px, calc(100vh - 240px), 520px);
+  }
+  :root[data-v2="on"] .gl-room[data-room="home"] > .gl-para-card[data-home-fold="folded"] ~ :not(.gl-banner) {
+    display: none;
+  }
+}
