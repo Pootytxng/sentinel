@@ -1585,6 +1585,21 @@ const EVENT_LOG_PROJECTION: &str = "@($e |\
  Select-Object @{n='time';e={$_.TimeCreated.ToString('o')}}, @{n='id';e={[int]$_.Id}}, @{n='provider';e={[string]$_.ProviderName}}, @{n='message';e={[string]$_.Message}}, @{n='props';e={@($_.Properties | ForEach-Object {[string]$_.Value})}}) |\
  ConvertTo-Json -Depth 4 -Compress";
 
+/// e7: how long the Event Log read may take. It starts PowerShell and renders up to
+/// 2 × EVENTS_PER_CHANNEL messages, so it is given more than the shared 30 s query limit; past this it
+/// is ended and the System log reads as not read (never as "nothing found").
+const EVENT_LOG_READ_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Pure: the skipped-source note when the Event Log reader gave no output: it ran out of time, or it
+/// couldn't be started at all. Shown after "Couldn't be read this time:", so neither says "nothing".
+fn event_log_unread_note(timed_out: bool) -> String {
+    if timed_out {
+        "Windows Event Log (the reader didn't finish in time)".into()
+    } else {
+        "Windows Event Log (couldn't run the reader)".into()
+    }
+}
+
 /// Read the crash/instability events Windows recorded (System + Application channels). Read-only,
 /// non-elevated, no window. Returns the parsed rows and an optional "skipped" note if the reader
 /// could not run at all (a clean machine returns an empty list, NOT a skip).
@@ -1595,11 +1610,13 @@ fn collect_event_log() -> (Vec<RawEvent>, Option<String>, bool) {
     // `props` gives language-independent faulting app/module/code. Errors are swallowed
     // (SilentlyContinue) so "no events found" on a clean machine yields empty output, not a failure.
     let script = event_log_script();
-    let Ok(out) = crate::actions::quiet_command(crate::sys_exe::SysTool::PowerShell)
-        .args(["-NoProfile", "-NonInteractive", "-Command", script.as_str()])
-        .output()
-    else {
-        return (Vec::new(), Some("Windows Event Log (couldn't run the reader)".into()), false);
+    let mut cmd = crate::actions::quiet_command(crate::sys_exe::SysTool::PowerShell);
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", script.as_str()]);
+    // e7 (p1 r2 F7): bounded. A read that doesn't finish in EVENT_LOG_READ_LIMIT is ended and reads as
+    // "couldn't be read this time", never as a read; the scan no longer waits on it forever.
+    let started = std::time::Instant::now();
+    let Some(out) = crate::actions::output_within(cmd, EVENT_LOG_READ_LIMIT) else {
+        return (Vec::new(), Some(event_log_unread_note(started.elapsed() >= EVENT_LOG_READ_LIMIT)), false);
     };
     let stderr = String::from_utf8_lossy(&out.stderr);
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -3624,6 +3641,25 @@ mod blackbox_tests {
         // only Get-WinEvent's "no matching events" is a non-failure
         assert!(script.contains("NoMatchingEventsFound"));
         assert!(script.contains(EVENT_LOG_READ_OK_MARK));
+    }
+
+    // e7 (p1 r2 F7): the Event Log read is bounded. A stuck read is ended and reads as "couldn't be read
+    // this time", never as a read. Break check: put back `.output()` in collect_event_log (the first
+    // assertions fail), or let a timeout fall through to the "couldn't run" note (the last ones fail).
+    #[test]
+    fn a_stuck_event_log_read_is_ended_and_reads_as_not_read_in_time() {
+        let src = include_str!("blackbox.rs").replace("\r\n", "\n");
+        let at = src.find("fn collect_event_log(").expect("the reader");
+        let body = &src[at..at + src[at..].find("\n}\n").expect("its end")];
+        assert!(body.contains("output_within(cmd, EVENT_LOG_READ_LIMIT)"), "the read has a time limit");
+        assert!(!body.contains(".output()"), "the read never waits on PowerShell with no limit");
+        let late = event_log_unread_note(true);
+        assert!(late.starts_with("Windows Event Log") && late.contains("didn't finish in time"), "{late}");
+        assert!(!event_log_unread_note(false).contains("in time"));
+        // A note that isn't an admin matter: the room says "Couldn't be read this time", never "run as admin".
+        let (all, admin) = classify_skips(Some(late.clone()), None, None, None);
+        assert_eq!(all, vec![late]);
+        assert!(admin.is_empty());
     }
 
     #[test]

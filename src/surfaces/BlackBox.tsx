@@ -554,7 +554,14 @@ function AssessmentBlock({
     // e5a r1 (F4): the box's emphasis follows the mapped strength too, so it never reads louder than its word.
     <div className={`bb-assess bb-assess-${strength ? strengthWire(strength) : "none"}`} data-testid="bb-assess">
       <div className="bb-assess-head">
-        <span className="bb-assess-label">{t("gaming.blackBox.whatThisPointsTo")}</span>
+        {/* e7 (p1 r2 F1): "What this points to" only above the one reading that names something (the
+            same driver timing out again). Every other reading says the record can't tell, so its
+            heading promises no answer. A new rule gets the plain heading until it is worded. */}
+        <span className="bb-assess-label">
+          {a.rule === "graphics-driver"
+            ? t("gaming.blackBox.whatThisPointsTo")
+            : t("gaming.blackBox.whatTheRecordShows")}
+        </span>
         {strength && (
           <span className={`bb-strength bb-strength-${strengthWire(strength)}`} data-testid="bb-strength">
             {strengthWord(strength, t)}

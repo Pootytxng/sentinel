@@ -502,6 +502,7 @@
     "codeLabel": "错误代码",
     "rawLabel": "原始数据",
     "whatThisPointsTo": "指向的可能原因",
+    "whatTheRecordShows": "记录显示的内容",
     "knownIssue": {
       "label": "已收录的已知问题",
       "matchedLine": "这与厂商公布的一个已知问题相符。",

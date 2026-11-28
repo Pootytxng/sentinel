@@ -645,6 +645,32 @@ describe("a reworded reading keeps its earlier 'Did this help?' answers", () => 
     const all = [rob()];
     expect(anchorFor(pickCareStep(all, null)!, all).basis).toBe("shown");
   });
+  // e7 (p1 r2 F4): the rule key alone let an answer on one driver's timeout anchor another driver's step.
+  // Break check: drop `moduleOf(inc) === step.module` from anchorFor and the nvlddmkm step reads "taken".
+  it("an answer on one driver's timeout never anchors another driver's timeout step", () => {
+    const gpu = (when: string, module: string): CrashIncident => {
+      const rec = inc(when, { tag: "GPU timeout", step: "Clean-reinstall the driver" });
+      rec.receipt = { ...rec.receipt, faulting_module: module };
+      rec.assessment = { ...rec.assessment!, rule: "graphics-driver", consistent_with: `your graphics driver (${module}) repeatedly timing out` };
+      return rec;
+    };
+    const amd = gpu("2026-10-20T10:00:00Z", "amdkmdag");
+    const nv = gpu("2026-10-25T10:00:00Z", "nvlddmkm");
+    localStorage.setItem("compy_bb_feedback", JSON.stringify([
+      { when: amd.when, consistent_with: amd.assessment!.consistent_with, rule: "graphics-driver", vote: "yes", at: "2026-10-22T09:00:00Z" },
+    ]));
+    const all = [amd, nv];
+    const step = pickCareStep(all, null)!;
+    expect(step.source === "incident" && step.module).toBe("nvlddmkm");
+    expect(anchorFor(step, all).basis).toBe("shown");
+    // The same driver, named in another case, still anchors as "taken".
+    const nv2 = gpu("2026-10-26T10:00:00Z", "NVLDDMKM");
+    localStorage.setItem("compy_bb_feedback", JSON.stringify([
+      { when: nv.when, consistent_with: nv.assessment!.consistent_with, rule: "graphics-driver", vote: "yes", at: "2026-10-25T12:00:00Z" },
+    ]));
+    const all2 = [amd, nv, nv2];
+    expect(anchorFor(pickCareStep(all2, null)!, all2)).toEqual({ at: Date.parse("2026-10-25T12:00:00Z"), basis: "taken" });
+  });
   it("the Care receipt shows the translated statement, not the engine's raw English", async () => {
     h.incidents = [rob()];
     const { container } = render(<BlackBox />);
