@@ -113,6 +113,8 @@ export function appliedValueLabel(label: string, t: TFunction): string {
       return t("common.backendWords.applied.removedForUser");
     case "Windows default":
       return t("common.backendWords.applied.windowsDefault");
+    case "In Performance Log Users":
+      return t("common.backendWords.applied.inPerfLogUsers");
     default:
       return label;
   }
