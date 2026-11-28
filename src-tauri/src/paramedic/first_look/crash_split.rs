@@ -86,7 +86,7 @@ mod tests {
     }
 
     fn crash(app: &str, at: &str, path_ok: Option<bool>) -> CrashFact {
-        CrashFact { app: app.into(), when: utc(at), module: None, code: None, version: None, path_ok }
+        CrashFact { app: app.into(), when: utc(at), module: None, code: None, version: None, path_ok, folder: None }
     }
 
     fn hist(crashes: Vec<CrashFact>, partial: bool) -> CrashHistory {

@@ -41,8 +41,11 @@ pub(crate) struct CrashFact {
     /// The program's own version string, when the report carries one.
     pub version: Option<String>,
     /// Whether the report's exe path lies under the game's install folder: `None` when the report has no
-    /// path or the install folder is unknown (then only the program name matched).
+    /// path (or a path with no folder part) or the install folder is unknown (then only the program name matched).
     pub path_ok: Option<bool>,
+    /// e13: the folder the report says the exe ran from, as written (for showing, never for opening); `None`
+    /// when the report has no path with a folder part.
+    pub folder: Option<String>,
 }
 
 /// What the command could read of the crash history.
@@ -72,11 +75,13 @@ pub(crate) fn crash_dto(a: AppCrashes, game_dir: Option<&Path>) -> CrashRead {
             .crashes
             .into_iter()
             .map(|c| {
+                // A bare program name is no folder to check: only the name matched.
+                let folder = c.path.as_deref().and_then(crate::game_mods::display_folder);
                 let path_ok = match (&c.path, game_dir) {
-                    (Some(p), Some(dir)) => Some(crate::game_mods::image_is_under(dir, Path::new(p))),
+                    (Some(p), Some(dir)) if folder.is_some() => Some(crate::game_mods::image_is_under(dir, Path::new(p))),
                     _ => None,
                 };
-                CrashFact { app: c.app, when: c.when, module: c.module, code: c.code, version: c.version, path_ok }
+                CrashFact { app: c.app, when: c.when, module: c.module, code: c.code, version: c.version, path_ok, folder }
             })
             .collect(),
         listed: a.listed_any,
@@ -181,8 +186,48 @@ pub(super) fn detect_crashes(c: &Ctx, out: &mut Out) {
                     }
                 }
             }
+            // e13: reports of the same program name from another folder are said, never dropped silently.
+            if let Some(e) = crashes_elsewhere(h, CrashMatch::Program(game)) {
+                out.see("game-crashes-elsewhere", &e.args());
+            }
         }
     }
+}
+
+/// e13: the reports whose program name matches but whose exe ran from a folder that is not under the game's install
+/// folder, even after `game_mods::compare_form` (case, slashes, `\\?\`-style prefixes; it asks no disk). The crash
+/// line does not count them; this says how many there were and shows ONE folder (the newest report's; on a tie the
+/// shortest), never a list. An 8.3 short name or a junction can make the game's own folder look like another one,
+/// and another program can share the name, so the sentence says neither "the same game" nor "another game".
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CrashesElsewhere {
+    pub n: usize,
+    /// The program name as the newest such report gives it.
+    pub exe: String,
+    pub folder: String,
+    /// How many different folders (by the comparison form) the reports came from.
+    pub folders: usize,
+}
+
+impl CrashesElsewhere {
+    /// `n`, `exe`, `folder`, and `folders` when there is more than one (the card's own args).
+    pub(crate) fn args(&self) -> Vec<(&'static str, String)> {
+        let mut args = vec![("n", self.n.to_string()), ("exe", self.exe.clone()), ("folder", self.folder.clone())];
+        if self.folders > 1 {
+            args.push(("folders", self.folders.to_string()));
+        }
+        args
+    }
+}
+
+/// Only for a match by program name: a game matched by its install folder alone has no name to share.
+pub(crate) fn crashes_elsewhere(h: &CrashHistory, how: CrashMatch<'_>) -> Option<CrashesElsewhere> {
+    let CrashMatch::Program(game) = how else { return None };
+    let other: Vec<(&CrashFact, &str)> =
+        h.crashes.iter().filter(|k| same_game(&k.app, game) && k.path_ok == Some(false)).filter_map(|k| Some((k, k.folder.as_deref()?))).collect();
+    let (newest, folder) = other.iter().copied().max_by(|(a, fa), (b, fb)| a.when.cmp(&b.when).then_with(|| fb.len().cmp(&fa.len())))?;
+    let folders: BTreeSet<String> = other.iter().map(|(_, f)| crate::game_mods::compare_form(Path::new(f))).collect();
+    Some(CrashesElsewhere { n: other.len(), exe: newest.app.trim().to_string(), folder: folder.to_string(), folders: folders.len() })
 }
 
 /// How a crash report is tied to the game asked about.

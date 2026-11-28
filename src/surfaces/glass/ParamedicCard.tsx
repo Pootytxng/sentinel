@@ -963,6 +963,14 @@ function seenLine(s: ParamedicRuledOut, ctx: Ctx): string | null {
       const versions = a.versions ? t("paramedic.seen.crashesVersions", { n: Number(a.versions) }) : "";
       return `${base}${byName}${versions}`;
     }
+    case "game-crashes-elsewhere": {
+      // e13: records of the same program name whose path lies outside the game's folder (an 8.3 name or a junction can
+      // look like that too): said with one folder, never called the same game or another game.
+      const where = a.folders
+        ? t("paramedic.seen.crashesElsewhereFolders", { n: Number(a.folders), folder: a.folder })
+        : t("paramedic.seen.crashesElsewhereFolder", { folder: a.folder });
+      return t("paramedic.seen.crashesElsewhere", { count: Number(a.n), exe: a.exe, where });
+    }
     case "starts-dropped":
       return t("paramedic.seen.startsDropped", { n: Number(a.n) });
     case "starts-skipped":

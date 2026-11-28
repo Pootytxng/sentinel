@@ -705,6 +705,19 @@ describe("the first look for a picked game", () => {
     expect(screen.getByTestId("first-look-limits").textContent).toContain("Compy could only read some of Windows' crash records, and found none for ROB RUN in those.");
   });
 
+  // e13. Break check: drop the first-look-crashes-elsewhere paragraph -> both lookups fail.
+  it("records of the program name from another folder are said beside 'none', with one folder, in the measured flow's words", async () => {
+    await look(gameAnswer({ crashes_none: true, crashes_elsewhere: { n: "2", exe: "robrun.exe", folder: String.raw`D:\Old\RobRun` } }));
+    expect(screen.getByTestId("first-look-crashes-none")).toBeTruthy();
+    expect(screen.getByTestId("first-look-crashes-elsewhere").textContent).toBe(
+      String.raw`Windows has 2 crash records of a program named robrun.exe that ran from another folder (D:\Old\RobRun), so Compy didn't count them here.`,
+    );
+    cleanup();
+    // Even when it is the only thing in the block, the block is shown.
+    await look(gameAnswer({ crashes_elsewhere: { n: "1", exe: "robrun.exe", folder: String.raw`E:\Copy` } }));
+    expect(screen.getByTestId("first-look-crashes-elsewhere").textContent).toContain(String.raw`Windows has 1 crash record of a program named robrun.exe`);
+  });
+
   it("a graphics mod whose loader file is dated in the window sits under 'Changes that touch games', in the measured flow's words, with its dates", async () => {
     await look(gameAnswer({ touch_games: [modRow({ settings: "2026-11-19T10:00:00Z" })] }), "This week");
     const row = within(screen.getByTestId("first-look-touch")).getByRole("listitem");

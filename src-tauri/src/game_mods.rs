@@ -1625,11 +1625,50 @@ pub(crate) fn scan_install_folder(root: &Path, exe: Option<&str>, budget: Durati
     merge(scans, extra, coverage)
 }
 
-/// A path for comparing, not for opening: no `\\?\`, one separator, no trailing one, lower-case.
-fn compare_form(p: &Path) -> String {
+/// A path for comparing, not for opening: one separator, no repeated or trailing one, lower-case, and none of the
+/// prefixes that name the same file another way (`\\?\`, `\\.\` and `\??\`; their `UNC\` forms become `\\`).
+/// Text only: nothing on disk is asked, so an 8.3 short name or a junction is NOT resolved and stays a different
+/// spelling. Trailing dots and spaces are kept (after `\\?\` they are part of the name).
+pub(crate) fn compare_form(p: &Path) -> String {
     let s = p.to_string_lossy().replace('/', "\\");
-    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
-    s.trim_end_matches('\\').to_ascii_lowercase()
+    let lower = s.to_ascii_lowercase();
+    let mut unc = s.starts_with(r"\\") && !s.starts_with(r"\\?\") && !s.starts_with(r"\\.\");
+    let mut rest: &str = &s;
+    for prefix in [r"\\?\unc\", r"\\.\unc\", r"\??\unc\"] {
+        if lower.starts_with(prefix) {
+            rest = &s[prefix.len()..];
+            unc = true;
+            break;
+        }
+    }
+    if !unc {
+        for prefix in [r"\\?\", r"\\.\", r"\??\"] {
+            if lower.starts_with(prefix) {
+                rest = &s[prefix.len()..];
+                break;
+            }
+        }
+    }
+    let joined = rest.split('\\').filter(|part| !part.is_empty()).collect::<Vec<_>>().join("\\");
+    let joined = if unc { format!(r"\\{joined}") } else { joined };
+    joined.to_lowercase()
+}
+
+/// The folder a program's full path names, for showing (not for comparing or opening): the path's parent as it was
+/// written, without a `\\?\`-style prefix. `None` when the text has no folder part.
+pub(crate) fn display_folder(image: &str) -> Option<String> {
+    let s = image.trim();
+    let lower = s.to_ascii_lowercase();
+    let s = [r"\\?\unc\", r"\\.\unc\", r"\??\unc\"]
+        .iter()
+        .find(|p| lower.starts_with(*p))
+        .map(|p| format!(r"\\{}", &s[p.len()..]))
+        .or_else(|| [r"\\?\", r"\\.\", r"\??\"].iter().find(|p| lower.starts_with(*p)).map(|p| s[p.len()..].to_string()))
+        .unwrap_or_else(|| s.to_string());
+    let cut = s.rfind(['\\', '/'])?;
+    let folder = s[..cut].trim_end_matches(['\\', '/']);
+    // A drive's own folder is shown as `C:\`, not `C:`.
+    (!folder.is_empty()).then(|| if folder.ends_with(':') { format!("{folder}\\") } else { folder.to_string() })
 }
 
 /// The folder of `image` when it lies under `root` (lexically; no `..`), else `None`.
@@ -3440,6 +3479,34 @@ mod tests {
         assert!(image_folder_under(Path::new(r"C:\Games\X"), Path::new(r"c:/games/x/Bin/a.exe")).is_some());
         assert!(image_folder_under(Path::new(r"C:\Games\X"), Path::new(r"C:\Games\XY\a.exe")).is_none(), "a sibling with the same prefix is not under it");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn spellings_of_one_path_compare_alike_and_an_8_3_name_or_junction_is_not_resolved() {
+        let cf = |s: &str| compare_form(Path::new(s));
+        // Prefixes that name the same file: `\\?\`, `\\.\`, `\??\`, and their UNC forms against a plain `\\server`.
+        for same in [r"\\?\C:\Games\X", r"\\.\C:\Games\X", r"\??\C:\Games\X", r"C:\Games\X\"] {
+            assert_eq!(cf(same), r"c:\games\x", "{same}");
+        }
+        for same in [r"\\?\UNC\nas\share\G", r"\\?\unc\NAS\Share\G\", r"\\.\UNC\nas\share\G", r"\\nas\share\G"] {
+            assert_eq!(cf(same), r"\\nas\share\g", "{same}");
+        }
+        // Case (also beyond ASCII), forward slashes and doubled separators.
+        assert_eq!(cf(r"C:/GAMES//Spiele\ÜBER"), cf(r"c:\games\spiele\über"));
+        // A UNC path is not the same as a drive path with the same folder names.
+        assert_ne!(cf(r"\\nas\share\G"), cf(r"nas\share\G"));
+        // Text only: an 8.3 short name and a junction's target stay different spellings (no disk call resolves them).
+        assert_ne!(cf(r"C:\PROGRA~2\Steam"), cf(r"C:\Program Files (x86)\Steam"));
+        // Under the install folder, through any of those spellings; a sibling with the same letters is not.
+        let root = Path::new(r"C:\Games\X");
+        assert!(image_is_under(root, Path::new(r"\\?\c:\games\x\Bin\a.exe")));
+        assert!(image_is_under(Path::new(r"\\nas\share\G"), Path::new(r"\\?\UNC\nas\share\G\a.exe")));
+        assert!(!image_is_under(root, Path::new(r"\\?\C:\Games\XY\a.exe")));
+        // The folder shown to the reader: as written, without the prefix.
+        assert_eq!(display_folder(r"\\?\D:\Old Games\G\game.exe").as_deref(), Some(r"D:\Old Games\G"));
+        assert_eq!(display_folder(r"\\?\UNC\nas\share\game.exe").as_deref(), Some(r"\\nas\share"));
+        assert_eq!(display_folder(r"C:\game.exe").as_deref(), Some(r"C:\"));
+        assert_eq!(display_folder("game.exe"), None);
     }
 
     #[test]

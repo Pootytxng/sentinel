@@ -1625,6 +1625,40 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).not.toMatch(/same signature|probably/);
   });
 
+  // e13. Break check: drop the "game-crashes-elsewhere" case in seenLine -> these sentences are missing and both fail.
+  it("records of the same program name from another folder are said with one folder, never as the same or another game", async () => {
+    const seen: ParamedicDiagnosis["seen"] = [
+      { id: "game-crashes", args: { n: "2", since: "2026-11-02T09:00:00Z" } },
+      { id: "game-crashes-elsewhere", args: { n: "1", exe: "game.exe", folder: String.raw`D:\Old Games\G` } },
+    ];
+    await ask(answerOf([background()], { seen }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(String.raw`Windows has 1 crash record of a program named game.exe that ran from another folder (D:\Old Games\G), so Compy didn't count it here.`);
+    expect(checked()).not.toMatch(/same game|different game|another game/);
+  });
+
+  it("several other folders: how many, and one of them, in English and Chinese", async () => {
+    const seen: ParamedicDiagnosis["seen"] = [{ id: "game-crashes-elsewhere", args: { n: "3", exe: "game.exe", folder: String.raw`E:\Copy`, folders: "2" } }];
+    await ask(answerOf([background()], { seen }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(String.raw`Windows has 3 crash records of a program named game.exe that ran from 2 other folders (one is E:\Copy), so Compy didn't count them here.`);
+    cleanup();
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      answer.value = answerOf([background()], { seen });
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      expect(checked()).toContain(String.raw`Windows 有 3 条名为 game.exe 的程序的崩溃记录，该程序是从多个其他文件夹（共 2 个，其中一个是 E:\Copy）运行的，所以 Compy 没有把它们算在这里。`);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("a partial read says 'at least' in the line itself, and the line says when it went by program name or spans versions", async () => {
     const first = "2026-11-02T09:00:00Z";
     await ask(answerOf([background()], { seen: [{ id: "game-crashes", args: { n: "3", since: first, partial: "true", byName: "true", versions: "2" } }] }));

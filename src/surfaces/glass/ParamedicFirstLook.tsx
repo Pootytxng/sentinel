@@ -72,6 +72,8 @@ export type ParamedicFirstLook = {
   crashes: { args: Record<string, string>; signature_module: string | null; signature_before: string | null; change_kind?: string | null; split: FirstLookCrashSplit | null } | null;
   /** Windows' crash records were read completely and none is the game's. */
   crashes_none: boolean;
+  /** e13: records of the game's program name that ran from another folder, not counted (n, exe, folder, folders). */
+  crashes_elsewhere?: Record<string, string> | null;
   /** Facts with dates or numbers that are not a change in the window (a mod's files outside it). */
   looks_off: FirstLookChange[];
   /** The game's folder was scanned completely and holds no mod Compy knows. */
@@ -708,6 +710,15 @@ function crashSentence(c: NonNullable<ParamedicFirstLook["crashes"]>, game: stri
   return out;
 }
 
+/** e13: the measured flow's own sentence for records of the same program name from another folder (one folder shown;
+ *  never called the same game or another game). */
+function elsewhereSentence(a: Record<string, string>, t: T): string {
+  const where = a.folders
+    ? t("paramedic.seen.crashesElsewhereFolders", { n: Number(a.folders), folder: a.folder })
+    : t("paramedic.seen.crashesElsewhereFolder", { folder: a.folder });
+  return t("paramedic.seen.crashesElsewhere", { count: Number(a.n), exe: a.exe, where });
+}
+
 /** What kind of change the earliest change is: one Compy applied, or one Windows recorded. The engine sends it with
  *  every date it names; when it is missing the kind is left out, never defaulted. */
 function changeKindText(kind: string | null | undefined, t: T): string | null {
@@ -1035,7 +1046,7 @@ export function ParamedicFirstLook({
   // "Still reading this PC's hardware" is said in the block it empties, not only in the limits fold.
   const waiting = a.limits.find((l) => l.kind === "facts" && l.code === "hardware-not-ready");
   const foldLimits = a.limits.filter((l) => l !== waiting);
-  const offBlock = a.crashes !== null || a.crashes_none || a.looks_off.length > 0 || a.facts.length > 0 || !!waiting;
+  const offBlock = a.crashes !== null || a.crashes_none || !!a.crashes_elsewhere || a.looks_off.length > 0 || a.facts.length > 0 || !!waiting;
   // A settings or data file of a mod is not something "off": it is said beside what Compy also looked at.
   const settingsOnly = gameName ? a.mods_settings_only : [];
   const factsOpen = a.facts.slice(0, ROWS_OPEN);
@@ -1117,6 +1128,11 @@ export function ParamedicFirstLook({
               {gameName && a.crashes_none && (
                 <p className="gl-para-note" data-testid="first-look-crashes-none">
                   {t("paramedic.firstLook.crash.none", { game: gameName })}
+                </p>
+              )}
+              {gameName && a.crashes_elsewhere && (
+                <p className="gl-para-note" data-testid="first-look-crashes-elsewhere">
+                  {elsewhereSentence(a.crashes_elsewhere, t)}
                 </p>
               )}
               {gameName && a.looks_off.length > 0 && <Rows rows={a.looks_off} t={t} dates={dates} game={gameName} />}
