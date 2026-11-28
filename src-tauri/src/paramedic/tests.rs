@@ -7180,8 +7180,8 @@ fn the_noise_bands_and_real_play_fold_launches_into_the_cards_own_sittings() {
         launch("2026-10-03T12:05:00+00:00", 600, 600, exited), // 10: ...keeps 8 and 10 apart
         launch("2026-10-03T13:00:00+00:00", 600, 600, None), // 11: no recorded end: never joined to 12
         launch("2026-10-03T13:12:00+00:00", 120, 120, exited), // 12
-        launch("2026-10-03T14:20:00+00:00", 600, 600, exited), // 13: 18 minutes after 12: its own sitting
-        launch("2026-10-03T14:31:00+00:00", 120, 120, exited), // 14: another refresh rate: never joins 13
+        launch("2026-10-03T13:32:00+00:00", 600, 600, exited), // 13: 18 minutes after 12 ended: its own sitting
+        launch("2026-10-03T13:43:00+00:00", 120, 120, exited), // 14: another refresh rate: never joins 13
     ];
     store[4].game_state = Some(crate::game_state::GameStateFingerprint { gpu_driver: Some("9.9.9".into()), ..Default::default() });
     store[6].process_name = " game-win64-shipping.EXE ".into();
@@ -7197,7 +7197,8 @@ fn the_noise_bands_and_real_play_fold_launches_into_the_cards_own_sittings() {
         .iter()
         .flat_map(|g| game_sessions(&inp, g).into_iter().map(|s| s.started_at.clone()).collect::<Vec<_>>())
         .collect();
-    let folded = crate::noise_floor::folded_into_sitting(&store);
+    // Every launch usable, so the kept one is the card's own pick (`session_boundary::sitting_value_for`).
+    let folded = crate::noise_floor::folded_into_sitting(&store.iter().collect::<Vec<_>>(), |_| true);
     for (i, s) in store.iter().enumerate() {
         let card_row = !facts_from(s).mixed;
         assert_eq!(folded[i], card_row && !card_reps.contains(&s.started_at), "row {i} ({})", s.started_at);

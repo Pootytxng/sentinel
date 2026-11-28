@@ -326,7 +326,7 @@ pub(crate) fn reference_session<'s>(before: &[RealPlaySession], sessions: &'s [S
 /// pin as its newest as-is session. e12: never a launch folded into another launch of its sitting
 /// (`noise_floor::folded_into_sitting`), which the as-is run leaves out.
 pub(crate) fn newest_countable<'s>(game: &str, sessions: &'s [SessionSummary]) -> Option<&'s SessionSummary> {
-    let folded = crate::noise_floor::folded_into_sitting(sessions);
+    let folded = crate::noise_floor::folded_into_sitting(&sessions.iter().collect::<Vec<_>>(), countable);
     sessions
         .iter()
         .zip(&folded)
@@ -574,8 +574,9 @@ pub(crate) fn with_arm<'s>(
     let mut timeline: Vec<(DateTime<Utc>, &SessionSummary)> =
         sessions.iter().filter_map(|s| Some((instant(&s.started_at)?, s))).collect();
     timeline.sort_by_key(|(at, _)| *at);
-    // e12: one sitting counts once; a launch folded into another launch of its sitting is not counted.
-    let folded_rows = crate::noise_floor::folded_into_sitting(sessions);
+    // e12: one sitting counts once; a launch folded into another launch of its sitting is not counted. e12 r1
+    // F1: the launch kept is one that can count (`countable`), when the sitting has one.
+    let folded_rows = crate::noise_floor::folded_into_sitting(&sessions.iter().collect::<Vec<_>>(), countable);
     let folded = |s: &SessionSummary| sessions.iter().zip(&folded_rows).any(|(x, f)| *f && std::ptr::eq(x, s));
 
     let mut arm = WithArm { counted: Vec::new(), not_counted: Vec::new(), stop: None, changed: None, reference };
@@ -1460,6 +1461,26 @@ mod tests {
         let l = arm(&later, &ledger(), Some(true), &pinned());
         assert!(reasons(&l).iter().all(|(_, r)| *r != NotCountedReason::SameSitting), "{:?}", l.not_counted);
         assert_eq!(l.counted.len() + l.not_counted.len(), 4, "{:?}", l.not_counted);
+    }
+
+    /// e12 r1 F1: a sitting with no launch the card can judge still counts once, by the launch that can count.
+    /// The 19:00 with-change launch (700 readings over 30 minutes) closed and the game was opened again at
+    /// 19:35 for an hour that recorded 100 readings. The card's pick is the longer one, which can't count; real
+    /// play keeps the 19:00 one and lists the relaunch as too short, never as `same-sitting`. Break check: make
+    /// `session_boundary::sitting_value_for` return the card's `sitting_value` and only two are counted.
+    #[test]
+    fn a_sitting_counts_by_the_launch_that_can_count_not_a_longer_one_that_cant() {
+        let mut with = with_sessions();
+        (with[2].duration_secs, with[2].samples, with[2].background_secs_excluded) = (1800, 700, Some(0));
+        with[2].ended = Some(crate::session_boundary::SessionEnd::ProcessExited);
+        let mut relaunch = played("2026-10-21T19:35:00+00:00", 205.0, 238.0, 15);
+        (relaunch.duration_secs, relaunch.samples, relaunch.background_secs_excluded) = (3600, 100, Some(0));
+        assert!(countable(&with[2]) && !countable(&relaunch));
+        assert!(!crate::blackbox::peak_judgeable(&with[2]) && !crate::blackbox::peak_judgeable(&relaunch));
+        let sessions: Vec<SessionSummary> = as_is().into_iter().chain(with).chain([relaunch]).collect();
+        let a = arm(&sessions, &ledger(), Some(true), &pinned());
+        assert_eq!(a.counted.iter().map(|s| s.started_at.as_str()).collect::<Vec<_>>(), with_sessions().iter().map(|s| s.started_at.clone()).collect::<Vec<_>>());
+        assert_eq!(reasons(&a), [("2026-10-21T19:35:00+00:00".to_string(), NotCountedReason::TooShort)]);
     }
 
     /// CR-plan-compare-rest: real play pools only sessions shown to run on the as-is sessions' Windows

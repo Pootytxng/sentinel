@@ -532,6 +532,19 @@ pub(crate) fn sitting_value<L: SittingLaunch>(rows: &[&L], group: &[usize]) -> u
     longest(&mut group.iter().copied().filter(|&i| rows[i].launch_judgeable())).or_else(|| longest(&mut group.iter().copied())).unwrap_or(group[0])
 }
 
+/// e12 r1 F1: a sitting's one row for a reader with its own rule for which launches it can use (the noise
+/// bands, real play): among the launches `usable` accepts, the card's pick ([`sitting_value`]); with none
+/// usable, the card's pick. So a usable launch is never folded behind a longer one the reader can't use, and
+/// the sitting still gives that reader at most one launch. The card itself keeps [`sitting_value`].
+pub(crate) fn sitting_value_for<L: SittingLaunch>(rows: &[&L], group: &[usize], usable: impl Fn(usize) -> bool) -> usize {
+    let mine: Vec<usize> = group.iter().copied().filter(|&i| usable(i)).collect();
+    if mine.is_empty() {
+        sitting_value(rows, group)
+    } else {
+        sitting_value(rows, &mine)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -826,6 +839,47 @@ mod tests {
         }
         println!("suspected: {flagged:?} | clean: {clean} | cant_tell: {cant_tell} | total: {}", sessions.len());
         assert!(flagged.iter().all(|t| !t.starts_with("2026-11-11")), "an ordinary 2026-11-11 session was flagged");
+    }
+
+    /// A launch as the sitting rule reads it: length, and whether the card can judge it.
+    struct Fake(u64, bool);
+
+    impl SittingLaunch for Fake {
+        fn launch_start(&self) -> Option<DateTime<Utc>> {
+            None
+        }
+        fn launch_end(&self) -> Option<DateTime<Utc>> {
+            None
+        }
+        fn launch_ended(&self) -> Option<SessionEnd> {
+            None
+        }
+        fn launch_secs(&self) -> u64 {
+            self.0
+        }
+        fn launch_judgeable(&self) -> bool {
+            self.1
+        }
+        fn same_stamps(&self, _: &Self) -> bool {
+            true
+        }
+    }
+
+    /// e12 r1 F1: a reader keeps the launch IT can use. With no judgeable launch, the card keeps the longest
+    /// (here the unusable 3600 s one); the reader keeps the usable 1800 s one. Among usable launches the card's
+    /// order holds (judgeable first, then longest, then earliest); with none usable it is the card's pick.
+    /// Break check: make `sitting_value_for` return `sitting_value(rows, group)` and the first assert fails.
+    #[test]
+    fn a_reader_keeps_the_launch_it_can_use_and_otherwise_the_cards_pick() {
+        let (a, b, c) = (Fake(1800, false), Fake(3600, false), Fake(600, true));
+        let rows = [&a, &b];
+        assert_eq!(sitting_value(&rows, &[0, 1]), 1, "the card: the longest");
+        assert_eq!(sitting_value_for(&rows, &[0, 1], |i| i == 0), 0, "the reader: the one it can use");
+        assert_eq!(sitting_value_for(&rows, &[0, 1], |_| true), 1, "both usable: the card's order");
+        assert_eq!(sitting_value_for(&rows, &[0, 1], |_| false), 1, "none usable: the card's pick");
+        let rows = [&a, &b, &c];
+        assert_eq!(sitting_value_for(&rows, &[0, 1, 2], |_| true), 2, "a judgeable usable launch wins");
+        assert_eq!(sitting_value_for(&rows, &[0, 1, 2], |i| i != 2), 1, "the longest usable one otherwise");
     }
 }
 
