@@ -242,10 +242,10 @@ describe("BlackBox surface (v2 triage UI)", () => {
       "Compy 这次没能读取 Windows 可靠性历史记录，所以无法判断这张显卡之前的哪些会话没有崩溃记录。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
     ],
     [
-      "unreadable: the log doesn't reach back",
-      { outcome: "unreadable", why: "log-too-short" },
-      "The Windows System log Compy read doesn't reach back to this card's earlier sessions of this game, so it can't tell whether they had a crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
-      "Compy 读取到的 Windows 系统日志没有追溯到这张显卡在该游戏中之前的会话，所以无法判断那些会话是否有崩溃记录。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+      "unreadable: older than the period the crash scan covers",
+      { outcome: "unreadable", why: "before-scan" },
+      "This card's earlier sessions of this game are older than the period Compy's crash scan covers, so it can't tell whether they had a crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "这张显卡在该游戏中之前的会话早于 Compy 这次崩溃扫描覆盖的时段，所以无法判断那些会话是否有崩溃记录。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
     ],
     [
       "unreadable with no reason given",

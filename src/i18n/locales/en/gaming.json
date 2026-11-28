@@ -571,7 +571,7 @@
         "shortSession": "That session was shorter than 5 minutes, or too little of it was measured, so Compy can't compare its peak with this card's full sessions, and it can't tell whether heat played a part.",
         "logUnread": "Compy couldn't read the Windows System log this time, so it can't tell which of this card's earlier sessions had no crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
         "reliabilityUnread": "Compy couldn't read Windows' Reliability history this time, so it can't tell which of this card's earlier sessions had no crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
-        "logTooShort": "The Windows System log Compy read doesn't reach back to this card's earlier sessions of this game, so it can't tell whether they had a crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
+        "beforeScan": "This card's earlier sessions of this game are older than the period Compy's crash scan covers, so it can't tell whether they had a crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
         "unreadable": "Compy couldn't read enough to compare that peak with this card's other sessions, so it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
         "notCompared": "Compy hasn't compared that with this card's other sessions, so it can't tell whether heat played a part."
       },

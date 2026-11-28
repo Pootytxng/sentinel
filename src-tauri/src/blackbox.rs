@@ -344,26 +344,21 @@ pub(crate) struct SystemLogCoverage {
     read_ok: bool,
     /// How far back the scan is complete (`BlackBoxReport::clean_judgeable_from`); None = no read was cut.
     judgeable_from: Option<DateTime<Utc>>,
-    /// e10 r1 (F3): the oldest System-log row the read returned. The log is known to hold records back to
-    /// here; before it, rollover may have dropped one. None = no row came back, so no earlier time is known.
-    /// Only the crash-peak comparison reads it.
-    history_from: Option<DateTime<Utc>>,
     /// e10 r1 (F3): the Reliability history was read (its reader ran). Only the crash-peak comparison reads it.
     reliability_read: bool,
 }
 
 impl SystemLogCoverage {
     /// Nothing proven: the safe default. No absence line is ever said under this.
-    pub(crate) const UNPROVEN: Self = Self { read_ok: false, judgeable_from: None, history_from: None, reliability_read: false };
+    pub(crate) const UNPROVEN: Self = Self { read_ok: false, judgeable_from: None, reliability_read: false };
 
     pub(crate) fn new(read_ok: bool, judgeable_from: Option<DateTime<Utc>>) -> Self {
-        Self { read_ok, judgeable_from, history_from: None, reliability_read: false }
+        Self { read_ok, judgeable_from, reliability_read: false }
     }
 
-    /// e10 r1 (F3): what the crash-peak comparison needs on top: how far back the System log is known to
-    /// reach, and whether the Reliability history was read.
-    pub(crate) fn with_history(self, history_from: Option<DateTime<Utc>>, reliability_read: bool) -> Self {
-        Self { history_from, reliability_read, ..self }
+    /// e10 r1 (F3): what the crash-peak comparison needs on top: whether the Reliability history was read.
+    pub(crate) fn with_reliability(self, reliability_read: bool) -> Self {
+        Self { reliability_read, ..self }
     }
 
     /// True only when the System log was read and this incident's whole ±10 minute window lies inside
@@ -502,7 +497,8 @@ pub(crate) fn peak_judgeable(s: &SessionSummary) -> bool {
         && ratio_ok
 }
 
-/// e10 r1 (F1): a session the card could use as a normal one (judgeable, and `PEAK_BASELINE_COVERAGE` measured).
+/// e10 r1 (F1): a session the card would judge, measured to the card's baseline coverage
+/// (`PEAK_BASELINE_COVERAGE`). The card's frame-rule flag is not applied, so a session it calls rough can pass.
 pub(crate) fn peak_reference_eligible(s: &SessionSummary) -> bool {
     peak_judgeable(s) && peak_coverage(s) >= PEAK_BASELINE_COVERAGE
 }
@@ -542,19 +538,20 @@ pub(crate) enum PeakUnreadable {
     LogUnread,
     /// Windows' Reliability history was not read this time.
     ReliabilityUnread,
-    /// There are enough earlier sessions, but the System log Compy read doesn't reach back to them.
-    LogTooShort,
+    /// e10 r2: there are enough earlier sessions, but they are older than the period the crash scan covers
+    /// (a capped read's cut, `judgeable_from`), so Compy can't tell whether they had a crash record.
+    BeforeScan,
 }
 
 /// e10: the comparison for one record. `None` when the record carries no peak (nothing to compare).
 /// "No crash record" is said of a session only where the scan could have seen one (r1 F3): the System log
 /// was read (`coverage.read_ok`) and so was the Reliability history (`coverage.reliability_read`); the
-/// session started at or after the oldest System-log row the read returned (`coverage.history_from`: the
-/// log is known to hold that far back, nothing earlier is) and after any capped read's cut
-/// (`judgeable_from`); no record in `ctx` falls inside it (its start up to `VITALS_GRACE_SECS` after its
-/// end, the window `correlate_vitals` and the card's hardware-record match use); and no unexpected-shutdown
-/// record (written by Windows at the next start, so it can land long after the session's recorded end)
-/// follows it with no other session started in between.
+/// session started inside the period the crash scan covers (r2 F1): the crash queries ask for no start
+/// time, so an uncapped scan covers every session, and a capped read covers from its cut on
+/// (`judgeable_from`, the latest such cut); no record in `ctx` falls inside it (its start up to
+/// `VITALS_GRACE_SECS` after its end, the window `correlate_vitals` and the card's hardware-record match
+/// use); and no unexpected-shutdown or blue-screen record (Windows writes both at the next start, so they
+/// can land long after the session's recorded end) follows it with no other session started in between.
 pub(crate) fn peak_vs_usual(
     inc: &Incident,
     ctx: &[Incident],
@@ -585,18 +582,17 @@ pub(crate) fn peak_vs_usual(
     }
     let record_times: Vec<(DateTime<Utc>, IncidentKind)> =
         ctx.iter().filter_map(|i| parse_ts(&i.when).map(|t| (t.with_timezone(&Utc), i.kind))).collect();
-    // A shutdown record belongs to the last session started before it, whatever its recorded end.
+    // A shutdown or blue-screen record belongs to the last session started before it, whatever its recorded end.
     let starts: Vec<DateTime<Utc>> = sessions.iter().filter_map(|s| session_window(s).map(|w| w.0)).collect();
+    let next_boot = |k: IncidentKind| matches!(k, IncidentKind::UnexpectedShutdown | IncidentKind::BlueScreen);
     let followed_by_shutdown = |start: DateTime<Utc>| {
-        record_times.iter().any(|(t, k)| {
-            *k == IncidentKind::UnexpectedShutdown && *t >= start && !starts.iter().any(|o| *o > start && *o <= *t)
-        })
+        record_times
+            .iter()
+            .any(|(t, k)| next_boot(*k) && *t >= start && !starts.iter().any(|o| *o > start && *o <= *t))
     };
-    let checked_from = match (coverage.history_from, coverage.judgeable_from) {
-        (Some(h), Some(j)) => Some(h.max(j)),
-        (Some(h), None) => Some(h),
-        (None, _) => None,
-    };
+    // r2 F1: the period the crash scan covers. Its queries ask for no start time, so only a capped read
+    // narrows it: from that read's cut on. None: no read was cut, every session is inside it.
+    let covered_from = coverage.judgeable_from;
     // The card's reference sessions of this game on this card, before the crash session, with a reading.
     let mut usable: Vec<(DateTime<Utc>, u32)> = Vec::new();
     let mut unchecked = 0usize;
@@ -612,7 +608,7 @@ pub(crate) fn peak_vs_usual(
         if start >= crash_start {
             continue;
         }
-        if !checked_from.is_some_and(|from| start >= from) {
+        if covered_from.is_some_and(|from| start < from) {
             unchecked += 1;
             continue;
         }
@@ -625,9 +621,9 @@ pub(crate) fn peak_vs_usual(
     let newest = &usable[usable.len().saturating_sub(PEAK_BASELINE_MAX)..];
     let sessions_n = newest.len() as u32;
     if newest.len() < PEAK_BASELINE_MIN {
-        // Enough sessions exist, but the log doesn't reach back far enough to check them: say that.
+        // Enough sessions exist, but some are older than the period the scan covers: say that.
         return if newest.len() + unchecked >= PEAK_BASELINE_MIN {
-            unreadable(Why::LogTooShort)
+            unreadable(Why::BeforeScan)
         } else {
             Some(PeakVsUsual::TooFew { sessions: sessions_n })
         };
@@ -677,7 +673,7 @@ fn usual_evidence(cmp: PeakVsUsual) -> String {
             PeakUnreadable::ShortSession => "This session was too short, or too little of it was measured, for Compy to compare its peak with this card's other sessions".into(),
             PeakUnreadable::LogUnread => "Compy couldn't read the Windows System log this time, so it can't tell which earlier sessions had no crash record".into(),
             PeakUnreadable::ReliabilityUnread => "Compy couldn't read Windows' Reliability history this time, so it can't tell which earlier sessions had no crash record".into(),
-            PeakUnreadable::LogTooShort => "The Windows System log Compy read doesn't reach back to this card's earlier sessions of this game, so it can't tell whether they had a crash record".into(),
+            PeakUnreadable::BeforeScan => "This card's earlier sessions of this game are older than the period Compy's crash scan covers, so it can't tell whether they had a crash record".into(),
         },
     }
 }
@@ -733,10 +729,10 @@ fn peak_next_step(cmp: Option<PeakVsUsual>) -> NextStep {
                 "Compy couldn't read Windows' Reliability history this time, so it can't tell which of this card's \
                  earlier sessions had no crash record, and it can't compare this peak. A later scan may read it.",
             ),
-            PeakUnreadable::LogTooShort => NextStep::safe(
+            PeakUnreadable::BeforeScan => NextStep::safe(
                 "Compy can't compare this peak",
-                "The Windows System log Compy read doesn't reach back to this card's earlier sessions of this game, so \
-                 it can't tell whether they had a crash record, and it can't compare this peak with them.",
+                "This card's earlier sessions of this game are older than the period Compy's crash scan covers, so it \
+                 can't tell whether they had a crash record, and it can't compare this peak with them.",
             ),
         },
     }
@@ -2371,17 +2367,6 @@ fn report_from(
     report_from_reads(events, wer, wer_cut, reliability, sessions, skipped_sources, event_log_read, true)
 }
 
-/// e10 r1 (F3): the oldest System-log row among the rows read: the log is known to hold records back to
-/// here. Pure, from the rows already fetched.
-fn system_history_from(events: &[RawEvent]) -> Option<DateTime<Utc>> {
-    events
-        .iter()
-        .filter(|e| EVENT_LOG_SOURCES.iter().any(|(c, p, _)| *c == "System" && p.eq_ignore_ascii_case(e.provider.trim())))
-        .filter_map(|e| parse_ts(&e.time))
-        .map(|t| t.with_timezone(&Utc))
-        .min()
-}
-
 /// Pure: the report from already-fetched rows, with the scan's truncation point computed BEFORE the
 /// rows are consumed. `reliability_read`: the Reliability reader ran (e10 r1 F3).
 #[allow(clippy::too_many_arguments)]
@@ -2395,7 +2380,6 @@ fn report_from_reads(
     event_log_read: bool,
     reliability_read: bool,
 ) -> BlackBoxReport {
-    let history_from = system_history_from(&events);
     let read_cut = read_truncated_from(&events, &reliability).max(wer_cut);
     let mut incidents = assemble_incidents(events, wer, reliability, sessions);
     let incident_cut = (incidents.len() >= MAX_INCIDENTS)
@@ -2410,7 +2394,7 @@ fn report_from_reads(
     // Now that what was read is known, re-assess with it: an absence line ("found nothing around it")
     // is allowed only for a window the System log was read for and the scan did not cut.
     if blackbox_v2_gate() {
-        let coverage = SystemLogCoverage::new(event_log_read, clean_judgeable_from).with_history(history_from, reliability_read);
+        let coverage = SystemLogCoverage::new(event_log_read, clean_judgeable_from).with_reliability(reliability_read);
         apply_assessments(&mut incidents, coverage, sessions);
     }
     BlackBoxReport {
@@ -4221,9 +4205,9 @@ mod blackbox_tests {
         mk(IncidentKind::GpuTimeout, E10_CRASH, Some("amdkmdag"), None, None, peak)
     }
 
-    /// Both logs read, and the System log returned a row from May 1, so it is known to reach back there.
+    /// Both logs read and no read cut: the crash scan covers every session.
     fn log_read() -> SystemLogCoverage {
-        SystemLogCoverage::new(true, None).with_history(Some(utc("2026-05-01T00:00:00Z")), true)
+        SystemLogCoverage::new(true, None).with_reliability(true)
     }
 
     fn e10_cmp(earlier: &[Option<u32>], crash_peak: u32) -> Option<PeakVsUsual> {
@@ -4299,7 +4283,7 @@ mod blackbox_tests {
         background.samples = 0;
         background.background_secs_excluded = Some(3600);
         sessions.push(background);
-        // An hour with a fifth of it unreadable is not judged either (the card's mostly-unread rule).
+        // An hour with half of it unreadable is not judged either (the card's mostly-unread rule: over a fifth).
         let mut unread = card_session("2026-06-05T18:00:00Z", Some(50));
         unread.unreadable_seconds = 1800;
         sessions.push(unread);
@@ -4368,18 +4352,21 @@ mod blackbox_tests {
         let inc = e10_timeout(Some(88));
         let one = std::slice::from_ref(&inc);
         let sessions = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
-        // The System log's oldest returned row is June 10: it is not known to reach back to June 1-3.
-        let short_log = SystemLogCoverage::new(true, None).with_history(Some(utc("2026-06-10T00:00:00Z")), true);
-        assert_eq!(peak_vs_usual(&inc, one, &sessions, short_log), unreadable(PeakUnreadable::LogTooShort));
-        // No System row came back at all: nothing earlier is known to be held.
-        let no_rows = SystemLogCoverage::new(true, None).with_history(None, true);
-        assert_eq!(peak_vs_usual(&inc, one, &sessions, no_rows), unreadable(PeakUnreadable::LogTooShort));
-        // A capped read's cut after the sessions does the same.
-        let cut = SystemLogCoverage::new(true, Some(utc("2026-06-10T00:00:00Z"))).with_history(Some(utc("2026-05-01T00:00:00Z")), true);
-        assert_eq!(peak_vs_usual(&inc, one, &sessions, cut), unreadable(PeakUnreadable::LogTooShort));
+        // No read was cut: the scan covers every session, and all three count.
+        assert_eq!(peak_vs_usual(&inc, one, &sessions, log_read()), Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
+        // A capped read's cut on June 10: June 1-3 are older than the period the scan covers.
+        let cut = SystemLogCoverage::new(true, Some(utc("2026-06-10T00:00:00Z"))).with_reliability(true);
+        assert_eq!(peak_vs_usual(&inc, one, &sessions, cut), unreadable(PeakUnreadable::BeforeScan));
+        // A cut on June 2: June 1 is outside, June 2 and 3 inside; 2 + 1 outside is enough sessions, so it says why.
+        let cut2 = SystemLogCoverage::new(true, Some(utc("2026-06-02T00:00:00Z"))).with_reliability(true);
+        assert_eq!(peak_vs_usual(&inc, one, &sessions, cut2), unreadable(PeakUnreadable::BeforeScan));
         // The Reliability history was not read: can't tell.
-        let no_rel = SystemLogCoverage::new(true, None).with_history(Some(utc("2026-05-01T00:00:00Z")), false);
+        let no_rel = SystemLogCoverage::new(true, None).with_reliability(false);
         assert_eq!(peak_vs_usual(&inc, one, &sessions, no_rel), unreadable(PeakUnreadable::ReliabilityUnread));
+        // r2 NIT: a blue-screen record written at the next start belongs to the session before it too.
+        let bsod = mk(IncidentKind::BlueScreen, "2026-06-02T23:30:00Z", None, None, None, None);
+        let ctx = vec![inc.clone(), bsod];
+        assert_eq!(peak_vs_usual(&inc, &ctx, &sessions, log_read()), Some(PeakVsUsual::TooFew { sessions: 2 }));
         // An unexpected-shutdown record written at the next start, hours after June 2's session ended, with no
         // session started in between, belongs to June 2: that session is not clear.
         let next_boot = mk(IncidentKind::UnexpectedShutdown, "2026-06-02T23:30:00Z", None, None, None, None);
@@ -4423,7 +4410,7 @@ mod blackbox_tests {
             (PeakUnreadable::ShortSession, "shorter than 5 minutes"),
             (PeakUnreadable::LogUnread, "couldn't read the Windows System log"),
             (PeakUnreadable::ReliabilityUnread, "couldn't read Windows' Reliability history"),
-            (PeakUnreadable::LogTooShort, "doesn't reach back"),
+            (PeakUnreadable::BeforeScan, "older than the period Compy's crash scan covers"),
         ];
         for (why, says) in whys {
             let step = peak_next_step(unreadable(why));
@@ -4438,16 +4425,29 @@ mod blackbox_tests {
         assert_eq!(w.temp_vs_usual, Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
     }
 
+    /// e10 r2 F1: a PC whose first crash ever is this one. The scan's only System row is the crash itself;
+    /// nothing was cut, so the earlier clean sessions are inside the period the scan covers and count.
     #[test]
-    fn e10_r1_the_scan_carries_the_system_logs_reach_and_the_reliability_read() {
-        let ev_at = |provider: &str, id: u32, t: &str| ev(provider, id, t, "m", serde_json::json!({}));
-        let rows = vec![
-            ev_at("Display", 4101, "2026-06-20T21:00:00Z"),
-            ev_at("Microsoft-Windows-Kernel-Power", 41, "2026-05-03T08:00:00Z"),
-            ev_at("Application Error", 1000, "2026-04-01T08:00:00Z"),
-        ];
-        // The oldest SYSTEM row, not the older Application one.
-        assert_eq!(system_history_from(&rows), Some(utc("2026-05-03T08:00:00Z")));
-        assert_eq!(system_history_from(&rows[2..]), None);
+    fn e10_r2_a_pc_with_no_earlier_crash_still_compares_with_its_clean_sessions() {
+        let _gate = V2GateForceOn::begin();
+        let rows = vec![ev(
+            "Display",
+            4101,
+            E10_CRASH,
+            "Display driver amdkmdag stopped responding and has successfully recovered.",
+            serde_json::Value::Null,
+        )];
+        let sessions = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
+        let r = report_from(rows, Vec::new(), None, Vec::new(), &sessions, Vec::new(), true);
+        assert_eq!(r.clean_judgeable_from, None, "one row: no read was cut");
+        let a = r.incidents.first().and_then(|i| i.assessment.as_ref()).expect("assessed");
+        assert_eq!(a.statement, Some(AssessmentStatement::GpuTimeoutPeak));
+        assert_eq!(a.temp_vs_usual, Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
+        assert!(!a.evidence.iter().any(|e| e.contains("older than the period")), "{:?}", a.evidence);
+        // The same rows with the Reliability reader failed: can't tell, and it says which read.
+        let rows = vec![ev("Display", 4101, E10_CRASH, "Display driver amdkmdag stopped responding.", serde_json::Value::Null)];
+        let r = report_from_reads(rows, Vec::new(), None, Vec::new(), &sessions, Vec::new(), true, false);
+        let a = r.incidents.first().and_then(|i| i.assessment.as_ref()).expect("assessed");
+        assert_eq!(a.temp_vs_usual, unreadable(PeakUnreadable::ReliabilityUnread));
     }
 }

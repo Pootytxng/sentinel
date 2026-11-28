@@ -5475,6 +5475,30 @@ mod temperature_and_crashes {
         }
         // Not vacuous: some cases pass each rule and some fail it.
         assert!(judged > normal && normal > 0 && judged < cases.len(), "{judged} judged, {normal} normal");
+        // e10 r2 F2: the edges, pinned on BOTH sides, so changing the background subtraction or a >= to a > on
+        // either side fails here (not only a mismatch between the two). All are 600 s sessions.
+        let edge = |bg: u32, samples: u32| {
+            with(&|s| {
+                s.background_secs_excluded = Some(bg);
+                s.samples = samples;
+            })
+        };
+        // (session, judged, normal): 330 of 400 foreground seconds is 0.825 (0.55 if background were not
+        // subtracted); 480 of 600 is exactly 0.80; 479 just under; 300 of 600 exactly 0.50; 299 just under.
+        let edges = [
+            (edge(200, 330), true, true),
+            (edge(0, 480), true, true),
+            (edge(0, 479), true, false),
+            (edge(0, 300), true, false),
+            (edge(0, 299), false, false),
+        ];
+        for (i, (s, judged, normal)) in edges.iter().enumerate() {
+            let f = facts_from(s);
+            assert_eq!(f.judgeable(), *judged, "card, edge {i}");
+            assert_eq!(f.judgeable() && f.coverage() >= BASELINE_COVERAGE, *normal, "card, edge {i}");
+            assert_eq!(crate::blackbox::peak_judgeable(s), *judged, "mirror, edge {i}");
+            assert_eq!(crate::blackbox::peak_reference_eligible(s), *normal, "mirror, edge {i}");
+        }
     }
 
     #[test]

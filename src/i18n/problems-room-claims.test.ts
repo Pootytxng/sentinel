@@ -162,7 +162,7 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
     }
     const variants = [
       "hotter", "higher", "same", "lower", "tooFew", "cardUnknown", "shortSession", "logUnread", "reliabilityUnread",
-      "logTooShort", "unreadable", "notCompared",
+      "beforeScan", "unreadable", "notCompared",
     ] as const;
     expect(Object.keys(enGaming.blackBox.assessStatement.peakVsUsual).sort()).toEqual([...variants].sort());
     expect(Object.keys(zhGaming.blackBox.assessStatement.peakVsUsual).sort()).toEqual([...variants].sort());
@@ -170,6 +170,9 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
       expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("can't tell whether heat played a part");
       expect(zhGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("无法判断发热是否起了作用");
       expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).not.toMatch(/\bcaused\b|\bcausing\b/i);
+      // e10 r2: Compy never read how far back the user's log goes, so no sentence says it doesn't reach back.
+      expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).not.toMatch(/reach(es)? back/i);
+      expect(zhGaming.blackBox.assessStatement.peakVsUsual[v]).not.toMatch(/追溯/);
     }
     // The one outcome that leans toward heat carries the shared caveat in both languages.
     expect(enGaming.blackBox.assessStatement.peakVsUsual.hotter).toContain("not shown to be the cause");

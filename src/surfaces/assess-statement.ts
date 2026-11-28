@@ -34,7 +34,7 @@ const UNREADABLE_KEY: Record<PeakUnreadable, string> = {
   "short-session": "gaming.blackBox.assessStatement.peakVsUsual.shortSession",
   "log-unread": "gaming.blackBox.assessStatement.peakVsUsual.logUnread",
   "reliability-unread": "gaming.blackBox.assessStatement.peakVsUsual.reliabilityUnread",
-  "log-too-short": "gaming.blackBox.assessStatement.peakVsUsual.logTooShort",
+  "before-scan": "gaming.blackBox.assessStatement.peakVsUsual.beforeScan",
 };
 
 /** e10: how the peak sits against this card's usual one. Every variant ends by saying Compy can't tell
