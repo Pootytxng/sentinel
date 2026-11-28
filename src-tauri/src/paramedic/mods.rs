@@ -41,7 +41,7 @@ pub(crate) enum CouldNot {
     /// The folder was missing, unreadable, or the scan ran out of time before it listed anything.
     FolderUnreadable,
     /// A read in the folder did not come back in time (its drive did not answer), or an earlier scan of the
-    /// same folder still has not come back: nothing there was checked.
+    /// same folder has not come back although its caller's wait has ended: Compy couldn't finish looking there.
     DriveDidNotAnswer,
 }
 
@@ -109,6 +109,8 @@ pub(crate) fn dto(scan: &ModScan) -> ModsRead {
             ModUnreadable::FolderMissing | ModUnreadable::FolderUnreadable | ModUnreadable::TimedOutBeforeAnyEntry => CouldNot::FolderUnreadable,
             ModUnreadable::NoProcessName | ModUnreadable::NotInSteam | ModUnreadable::Steam(_) => CouldNot::NoInstallFolder,
             ModUnreadable::DriveDidNotAnswer => CouldNot::DriveDidNotAnswer,
+            // Another scan of this folder is still within its time: the existing "looking took too long" line.
+            ModUnreadable::StillScanning => return ModsRead::Unavailable("took-too-long"),
             // The scan's own worker could not run: the reader failed, like a reader thread that died.
             ModUnreadable::ScanFailed => return ModsRead::Unavailable("reader-failed"),
         }),

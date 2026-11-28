@@ -779,10 +779,10 @@ const LOCK_CENSUS = {
     class: "out",
     why: "an in-memory session-id marker; nothing is persisted under it",
   },
-  "game_mods::IN_FLIGHT: Mutex<Vec<String>>": {
+  "game_mods::IN_FLIGHT: Mutex<Vec<(String, Instant)>>": {
     class: "out",
     why:
-      "e14: the in-memory list of folders (compare_form text) whose read-only mod scan runs on a worker, so a " +
+      "e14: the in-memory list of folders (compare_form text, each with when its caller's wait ends) whose read-only mod scan runs on a worker, so a " +
       "folder on a drive that never answers gets no second worker. Held only to check, add or remove one key, " +
       "never across the scan, a file read or any other lock; game_mods writes nothing to disk at all (its own " +
       "test bans std::fs::write, File::create and OpenOptions in its code) and reaches no store.",

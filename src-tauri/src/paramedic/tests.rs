@@ -5410,6 +5410,8 @@ mod graphics_mods {
         use crate::game_mods::{ModScan, ModUnreadable};
         assert_eq!(mods::dto(&ModScan::could_not_scan(ModUnreadable::DriveDidNotAnswer)), read(ModsVerdict::CouldNotScan(CouldNot::DriveDidNotAnswer)));
         assert_eq!(mods::dto(&ModScan::could_not_scan(ModUnreadable::ScanFailed)), ModsRead::Unavailable("reader-failed"));
+        // e14 r1: another scan of the folder still within its time is "looking took too long", never "didn't answer".
+        assert_eq!(mods::dto(&ModScan::could_not_scan(ModUnreadable::StillScanning)), ModsRead::Unavailable("took-too-long"));
         let _ = std::fs::remove_dir_all(root);
     }
 }

@@ -1341,13 +1341,13 @@ describe("ParamedicCard: graphics mods in the game's folder", () => {
       return document.body.textContent ?? "";
     };
     const en = await show();
-    expect(en).toContain("Whether Game A's folder has a graphics mod (the drive it's on didn't answer in time, so nothing there was checked)");
+    expect(en).toContain("Whether Game A's folder has a graphics mod (the drive it's on didn't answer in time, so Compy couldn't finish looking there)");
     expect(en).not.toMatch(/No known graphics mod|no mods\b|couldn't be read/i);
     cleanup();
     await i18n.changeLanguage("zh-CN");
     try {
       const zh = await show();
-      expect(zh).toContain("Game A 的文件夹里有没有图形 mod(它所在的磁盘没有及时响应，所以那里什么都没有检查)");
+      expect(zh).toContain("Game A 的文件夹里有没有图形 mod（它所在的磁盘没有及时响应，所以 Compy 没能查完那里）");
       expect(zh).not.toContain(i18n.t("paramedic.checked.graphicsMod", { game: "Game A" }));
     } finally {
       await i18n.changeLanguage("en");

@@ -1168,7 +1168,7 @@ describe("first-look review r1", () => {
     openLimits();
     const text = screen.getByTestId("first-look-limits").textContent ?? "";
     expect(text).toContain("Whether ROB RUN's folder has a graphics mod (the reader stopped unexpectedly)");
-    expect(text).toContain("Whether ROB RUN's folder has a graphics mod (the drive it's on didn't answer in time, so nothing there was checked)");
+    expect(text).toContain("Whether ROB RUN's folder has a graphics mod (the drive it's on didn't answer in time, so Compy couldn't finish looking there)");
     expect(text).toContain("Whether ROB RUN has closed unexpectedly before (Compy couldn't match the game to an install folder)");
     expect(text).toContain("Whether ROB RUN has closed unexpectedly before (the reader stopped unexpectedly)");
     expect(text).toContain("Whether ROB RUN's folder has other graphics mods (only part of the folder was scanned)");

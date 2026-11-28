@@ -707,7 +707,7 @@
     "identityUnreadable": "Its record of graphics driver and power plan checks, which couldn't be read",
     "modsNoFolder": "Whether {{game}}'s folder has a graphics mod (Compy couldn't match the game to an install folder)",
     "modsFolderUnreadable": "Whether {{game}}'s folder has a graphics mod (the folder couldn't be read)",
-    "modsDriveNoAnswer": "Whether {{game}}'s folder has a graphics mod (the drive it's on didn't answer in time, so nothing there was checked)",
+    "modsDriveNoAnswer": "Whether {{game}}'s folder has a graphics mod (the drive it's on didn't answer in time, so Compy couldn't finish looking there)",
     "modsPartial": "Whether {{game}}'s folder has a graphics mod (only part of the folder was scanned)",
     "modsUnavailable": "Whether {{game}}'s folder has a graphics mod (looking took too long)",
     "gpuTemp": "How hot your graphics card got (it wasn't recorded in both the rough and the normal sessions)",
