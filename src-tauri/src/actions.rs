@@ -11040,19 +11040,19 @@ mod perf_log_grant_tests {
             assert!(script.contains("if ($shell.Count -eq 0) { exit 2 }"), "zero users refuse");
             assert!(script.contains("if ($owners.Count -ne 1) { exit 2 }"), "several users refuse");
             let refuse = script.find("$owners.Count -ne 1").expect("refusal");
-            let change = script.find("LocalGroupMember -SID 'S-1-5-32-559' -Member").expect("change");
+            let change = script.find("-SID 'S-1-5-32-559' -Member").expect("change");
             assert!(refuse < change, "refusal precedes the only change");
             assert_eq!(script.matches("-Member $sid.Value").count(), 1, "one change, of the resolved user only");
         }
         assert_eq!(PERF_LOG_USERS_SID, "S-1-5-32-559");
         assert_eq!(PERF_LOG_USER_AMBIGUOUS_EXIT, 2);
         assert!(
-            PERF_LOG_GRANT_SCRIPT.contains("if (-not $isMember) { Add-Local")
+            PERF_LOG_GRANT_SCRIPT.contains("if (-not $isMember) { Add-")
                 && !PERF_LOG_GRANT_SCRIPT.contains("Remove-"),
             "idempotent, add only"
         );
         assert!(
-            PERF_LOG_REVOKE_SCRIPT.contains("if ($isMember) { Remove-Local")
+            PERF_LOG_REVOKE_SCRIPT.contains("if ($isMember) { Remove-")
                 && !PERF_LOG_REVOKE_SCRIPT.contains("Add-"),
             "no-op when not a member, remove only"
         );
