@@ -1117,7 +1117,10 @@ export function LabConsole({
                   label={t("lab.labConsole.provenLabel")}
                   value={provenCount}
                   max={Math.max(1, provenCount ?? 1)}
-                  unit={t("lab.labConsole.unitKept")}
+                  /* e5b review r2 N1: no unit word, as on the HUD face. "kept" (en) / 项 (zh) said
+                     two different things, and every counted win is a bench change Compy then
+                     rolls back (benchmark_trial.rs), so "kept" was never true. */
+                  unit=""
                   tone="accent"
                   /* E1 review r1 F4: at 0 the "nothing proved yet" line speaks alone, as on the HUD face. */
                   measured={provenCount != null && provenCount > 0}

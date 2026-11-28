@@ -160,12 +160,12 @@ describe("on the screens, in both languages", () => {
       await i18n.changeLanguage(loc);
       for (const b of BANDS) {
         for (const basis of ["fact", undefined] as const) {
-          const { container } = render(<RowConfidence basis={basis} band={b} />);
+          const { container } = render(<RowConfidence basis={basis} band={b} rowId={undefined} />);
           expect(word(container), `${basis}/${b}`).toBe(TEXT[loc].known);
           expect(container.querySelector(".confidence-note")?.textContent, `${basis}/${b}`).toBe(NOTE[loc]);
           cleanup();
         }
-        const { container } = render(<RowConfidence basis="measured" band={b} />);
+        const { container } = render(<RowConfidence basis="measured" band={b} rowId={undefined} />);
         expect(container.textContent, `measured/${b}`).toBe(SUPPORTED(b) ? TEXT[loc].possible : TEXT[loc].unknown);
         expect(container.querySelector(".confidence-note"), `measured/${b}`).toBeNull();
         cleanup();

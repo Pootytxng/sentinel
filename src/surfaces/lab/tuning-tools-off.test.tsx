@@ -246,8 +246,8 @@ describe("E1 first-run: the Test strip on a brand-new PC", () => {
     await flush();
     const proven = screen.getByTestId("lc-reading-proven");
     expect(proven.querySelector(".ag-v")!.textContent).toBe("0");
-    // e5b review r1 F1: the tile is "Measured wins" (each win was put back after its test, so
-    // nothing here says "kept"), and at 0 it says "no measured wins yet".
+    // e5b review r1 F1: the tile is "Measured wins" (a win is a bench test result, not a change left
+    // on, so nothing here says "kept"), and at 0 it says "no measured wins yet".
     expect(proven.textContent).toContain("Measured wins");
     expect(proven.textContent).toContain("no measured wins yet");
     expect(proven.textContent).not.toMatch(/\bkept\b/i);
@@ -265,4 +265,54 @@ describe("E1 first-run: the Test strip on a brand-new PC", () => {
     expect(proven.textContent).not.toContain("no measured wins yet");
     expect(proven.querySelector(".ag-tag-ny")).not.toBeNull();
   });
+});
+
+// e5b review r2 N1/N2: the CLASSIC face (hud off) draws the same tile in a canvas corner. It had a
+// unit word ("kept" in en, 项 in zh: two meanings) and the note "then put back", which the code can't
+// know for every win (the award is written before the rollback, and a rollback can fail). Now: no
+// unit, as on the HUD face, and a note that says only what always holds. Break check: put
+// unit={t("lab.labConsole.unitKept")} back, or "then put back" in provenNoteSome -> this fails.
+describe("e5b r2: the classic face's win tile says what it counts, and nothing about a change staying on", () => {
+  const renderClassic = () =>
+    render(
+      <ConfirmProvider>
+        <LabConsole
+          fast={fast()}
+          diagnostics={<div data-testid="diag" />}
+          diagnosticsCaptured
+          vendor="amd"
+          hw={hw}
+          hud={false}
+          ledState="ok"
+          classicVerdict="Everything checked out."
+        />
+      </ConfirmProvider>,
+    );
+  const award = (i: number) => ({ rec_id: `r${i}`, rec_title: `Tweak ${i}`, metric: "low1", effect_pct: 4.2, ci_lo_pct: 1.1, ci_hi_pct: 7.3, points: 10, at: "2026-11-20T18:00:00Z" });
+  const WORDS = {
+    en: { label: "Measured wins", some: "measured before and after", none: "no measured wins yet", banned: /\bkept\b|put back|restored/i },
+    "zh-CN": { label: "实测提升", some: "前后都实测过", none: "还没有实测提升", banned: /保留|还原|已恢复|项/ },
+  } as const;
+
+  for (const loc of ["en", "zh-CN"] as const)
+    for (const n of [0, 3])
+      it(`${loc}: ${n} win(s) on the classic face`, async () => {
+        const { default: i18n } = await import("../../i18n");
+        await i18n.changeLanguage(loc);
+        try {
+          localStorage.setItem("compy_tuning_tools", "1");
+          board.value = { total_points: n * 10, awards: Array.from({ length: n }, (_, i) => award(i)), local_percentiles: [] };
+          const { container } = renderClassic();
+          await flush();
+          const tile = container.querySelector(".lc-corner.lc-tl") as HTMLElement;
+          expect(tile, "the classic Proven corner renders").not.toBeNull();
+          const text = tile.textContent ?? "";
+          expect(text).toContain(WORDS[loc].label);
+          expect(text).toContain(n > 0 ? WORDS[loc].some : WORDS[loc].none);
+          expect(text).toContain(String(n));
+          expect(text).not.toMatch(WORDS[loc].banned);
+        } finally {
+          await i18n.changeLanguage("en");
+        }
+      });
 });

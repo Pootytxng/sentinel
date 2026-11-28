@@ -39,7 +39,7 @@ describe("shared confidence words never say a retired strength word", () => {
       const seen = new Set<string>();
       for (const basis of ["fact", "measured", undefined] as const)
         for (const band of ["high", "medium", "low", null] as const) {
-          const { container } = render(<RowConfidence basis={basis} band={band} />);
+          const { container } = render(<RowConfidence basis={basis} band={band} rowId={undefined} />);
           const text = (container.textContent ?? "").trim();
           // An empty render would pass the retired-word check by saying nothing at all.
           expect(text.length, `${basis}/${band} rendered no word`).toBeGreaterThan(0);

@@ -128,7 +128,7 @@
   },
   "labConsole": {
     "provenLabel": "Measured wins",
-    "provenNoteSome": "measured before and after, then put back",
+    "provenNoteSome": "measured before and after",
     "provenNoteNone": "no measured wins yet",
     "noiseFloorLabel": "Noise floor",
     "noiseFloorNote": "a change must beat this to count",
@@ -140,7 +140,6 @@
     "unitPct": "±%",
     "unitReady": "ready",
     "unitOn": "on",
-    "unitKept": "kept",
     "safeStackAllOn_one": "all {{count}} applied",
     "safeStackAllOn_other": "all {{count}} applied",
     "safeStackSomeOff_one": "{{on}} of {{total}} on · {{count}} was turned off outside Compy",

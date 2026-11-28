@@ -145,25 +145,29 @@ describe("retired-word scan (D3 slice 4, strict)", () => {
   // e5b review r1: three rewordings pinned in both locales, so a revert or a stronger word fails here.
   it("the benchmark's interval says it is for the median change, not a spread of results (F2)", () => {
     const g = (loc: string) => JSON.parse(readFileSync(join(LOCALES, loc, "gaming.json"), "utf8")) as Record<string, unknown>;
-    expect(lookup(g("en"), "benchmark.ciLabel")).toBe("95% interval for the median change");
+    // r2 NIT: it is the change in the median (median after vs median before), benchmark_verdict.rs ~198-220.
+    expect(lookup(g("en"), "benchmark.ciLabel")).toBe("95% interval for the change in the median");
     expect(lookup(g("zh-CN"), "benchmark.ciLabel")).toBe("中位数变化的 95% 区间");
-    expect(lookup(g("en"), "benchmark.pointsTraceNote")).toMatch(/95% interval for its median change/);
+    expect(lookup(g("en"), "benchmark.pointsTraceNote")).toMatch(/95% interval for the change in its median/);
     expect(lookup(g("zh-CN"), "benchmark.pointsTraceNote")).toMatch(/中位数变化的 95% 区间/);
     for (const loc of ["en", "zh-CN"]) expect(String(lookup(g(loc), "benchmark.ciLabel")), loc).not.toMatch(/range|范围/i);
   });
 
-  it("the Test room's win tile never says a change was kept: every counted win was put back (F1)", () => {
+  // r2 N1/N2: no unit word (unitKept retired) and no claim about the change's state now: the award is
+  // written before the bench's rollback, which can fail (benchmark_trial.rs ~416-421).
+  it("the Test room's win tile says only what it counts: no 'kept', no 'put back' (F1, r2 N1/N2)", () => {
     const l = (loc: string) => JSON.parse(readFileSync(join(LOCALES, loc, "lab.json"), "utf8")) as Record<string, unknown>;
     expect([lookup(l("en"), "labConsole.provenLabel"), lookup(l("en"), "labConsole.provenNoteSome"), lookup(l("en"), "labConsole.provenNoteNone")]).toEqual([
       "Measured wins",
-      "measured before and after, then put back",
+      "measured before and after",
       "no measured wins yet",
     ]);
     expect([lookup(l("zh-CN"), "labConsole.provenLabel"), lookup(l("zh-CN"), "labConsole.provenNoteSome"), lookup(l("zh-CN"), "labConsole.provenNoteNone")]).toEqual([
       "实测提升",
-      "前后都实测过，随后已还原",
+      "前后都实测过",
       "还没有实测提升",
     ]);
+    for (const loc of ["en", "zh-CN"]) expect(lookup(l(loc), "labConsole.unitKept"), loc).toBeUndefined();
   });
 
   it("the simulator's low-impact verdict says only what it knows: weak support, not a test history (F4)", () => {

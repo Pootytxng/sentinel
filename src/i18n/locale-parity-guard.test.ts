@@ -509,9 +509,12 @@ describe("locale parity: no missing string, no raw {{braces}} in any language", 
     // The specific defect, pinned specifically: 5ee0de97 dropped these from en AND zh-CN at once.
     for (const locale of [BASE_LOCALE, "zh-CN"]) {
       const lab = read(locale, "lab.json");
-      for (const leaf of ["unitKept", "provenNoteSome", "provenNoteNone", "noiseFloorNote"]) {
+      for (const leaf of ["provenNoteSome", "provenNoteNone", "noiseFloorNote"]) {
         expect(lab.get(`lab.labConsole.${leaf}`), `${locale}: lab.labConsole.${leaf}`).toBeTruthy();
       }
+      // e5b review r2 N1: unitKept was retired on purpose (the classic Proven tile has no unit, as the
+      // HUD face; "kept" was never true for a win the bench rolls back). Pinned gone, not just dropped.
+      expect(lab.get("lab.labConsole.unitKept"), `${locale}: lab.labConsole.unitKept is retired`).toBeUndefined();
     }
   });
 

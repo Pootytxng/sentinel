@@ -39,8 +39,9 @@ export function RowConfidence({
 }: {
   basis: PriorityBasis | undefined;
   band: ConfidenceBand | "high" | "medium" | "low" | null | undefined;
-  /** The row's id; a row in confidence-word.ts NO_SOURCE_WORD_ROWS shows no word (e5b review r1 F3). */
-  rowId?: string;
+  /** The row's id; a row in confidence-word.ts NO_SOURCE_WORD_ROWS shows no word (e5b review r1 F3).
+   *  Required (r2 N4), so a new call site cannot leave it out and put the word back on that row. */
+  rowId: string | undefined;
 }) {
   const { t } = useTranslation();
   const word = wordFromRow(basis, band);
