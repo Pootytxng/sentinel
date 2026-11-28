@@ -3531,14 +3531,56 @@ mod tests {
         assert!(!body.contains("let _ = crate::history::lock_ledger"));
         // Review r1 Q3: nor an early release; the guard lives to the closure's end.
         assert!(!body.contains("drop(_ledger"), "the ledger guard is never released early");
+        // Review r2: nor consumed any other way (`_ledger.unwrap()`, `.take()`, a move): the binding is the
+        // identifier's only mention, so the guard can only drop at the closure's end.
+        let bytes = body.as_bytes();
+        let word = |i: usize| bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_';
+        let mentions = body
+            .match_indices("_ledger")
+            .filter(|(at, m)| (*at == 0 || !word(at - 1)) && (at + m.len() >= bytes.len() || !word(at + m.len())))
+            .count();
+        assert_eq!(mentions, 1, "`_ledger` is only bound, never used");
+    }
+
+    /// Review r2 F2: the deterministic proof that the ledger lock is HELD around the Trial store's delete, on the
+    /// clearing thread itself (the recorder is thread-local, so no other test's lock can make this pass). The
+    /// test seam runs after the delete and before the re-read. Break check: remove the lock from delete_rows ->
+    /// the seam sees no History lock and this fails every time, with no timing involved.
+    #[test]
+    fn the_ledger_lock_is_held_on_the_clearing_thread_when_the_trial_store_goes() {
+        struct SeenAfterDelete(RefCell<Vec<Vec<StoreLock>>>);
+        impl ClearGates for SeenAfterDelete {
+            fn with_gate(&self, _gate: Gate, _store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+                delete()
+            }
+            fn live_state(&self) -> LiveState {
+                LiveState::default()
+            }
+            fn after_trial_delete(&self) {
+                self.0.borrow_mut().push(held_now());
+            }
+        }
+        let t = Tmp::new("ledger-held");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(rels(&shown).contains(&"experiments.json"));
+        let gates = SeenAfterDelete(RefCell::new(Vec::new()));
+        let report = done(clear_play_history_at(&t.root, &shown.fingerprint, &later(), &gates));
+        assert!(report.deleted.contains(&"experiments.json".to_string()), "{report:?}");
+        let seen = gates.0.borrow();
+        assert!(!seen.is_empty(), "the seam ran for the Trial-gate delete");
+        for held in seen.iter() {
+            assert_eq!(held, &vec![StoreLock::History], "the ledger lock is held by this thread after the Trial-gate delete");
+        }
+        assert!(held_now().is_empty(), "and released once the clear is done");
     }
 
     /// The behaviour, not only the shape: while an apply holds the ledger lock (Trials off: it takes no Trial
     /// lock), "Clear play history" does not delete the Trial store; once the apply lets go, it does.
     /// Break check: remove the lock from delete_rows -> experiments.json goes while the lock is held.
-    /// Review r1 F2: the worker signals from inside the Trial gate, right before the closure that takes the lock,
-    /// so the 300 ms window starts only once it has reached the lock attempt (without the lock the delete
-    /// follows at once and the assert fails); and every wait is bounded, so a regression fails instead of hanging.
+    /// Review r1 F2: every wait is bounded, so a regression fails instead of hanging. This test can only fail
+    /// for a real defect, but scheduler delay could let a missing lock slip past its 300 ms window (review r2);
+    /// the deterministic proof is `the_ledger_lock_is_held_on_the_clearing_thread_when_the_trial_store_goes`.
     #[test]
     fn clear_play_history_waits_for_an_apply_that_holds_the_ledger_lock() {
         use std::sync::mpsc;

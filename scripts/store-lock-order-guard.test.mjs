@@ -1097,6 +1097,9 @@ describe("D6: the clear takes one store lock at a time, plus the one declared ne
     expect(body).not.toMatch(/let\s+_\s*=\s*crate::history::lock_ledger/);
     // Nor an early release (review r1 Q3): the guard lives to the closure's end.
     expect(body).not.toMatch(/drop\s*\(\s*_ledger/);
+    // Review r2: nor consumed in any other way (`_ledger.unwrap()`, `.take()`, a move): the binding is its
+    // only mention, so it can only drop at the closure's end.
+    expect([...body.matchAll(/(?<!\w)_ledger(?!\w)/g)]).toHaveLength(1);
   });
 
   it("execute_everything_ledger_phase cannot be called without the ledger guard", () => {
