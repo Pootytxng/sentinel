@@ -71,6 +71,8 @@
       "changesUnconfirmedPartial": "{{count}} 项生效中 · {{unknown}} 项无法确认 · 部分记录已缺失",
       "sessionsTitle": "游戏对局",
       "sessionsNone": "还没有记录",
+      "sessionsNotRead": "还没读取",
+      "sessionsUnread": "暂时读不到",
       "sessionsSome": "实测数据,从不猜测",
       "autopsyTitle": "已核查的指南",
       "autopsyNone": "还没有核查过",

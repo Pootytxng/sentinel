@@ -18,7 +18,7 @@ import type { AppliedChange, GameReadiness, PendingCareIncident, Priorities, Ses
 import { deriveReverted } from "../use-scan";
 import type { CardUndoResult } from "../../data/compy-undo";
 import { gameLibrary } from "../../data/game-library";
-import { knownFps } from "../../lib/session-metrics";
+import { knownFps, sessionsReadLine, type SessionsReadState } from "../../lib/session-metrics";
 import { wordFromRow, isMeasuredRow, confidenceWordText, rowHasSourceWord } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
 import { ParamedicCard } from "./ParamedicCard";
@@ -46,6 +46,7 @@ export function HomeGlass({
   readiness,
   priorities,
   sessions,
+  sessionsRead,
   pendingCare,
   onOpenCareIncident,
   onDismissCareIncident,
@@ -69,6 +70,10 @@ export function HomeGlass({
   readiness: GameReadiness | null;
   priorities: Priorities | null;
   sessions: SessionSummary[];
+  /** First-run follow-up (e3 review r1): App's session-list read state. Until it has answered, or
+   *  after a rejected read, Home doesn't say "No games yet" or "No session yet" (sessions recorded
+   *  earlier may exist, unread). Omitted = read and current. */
+  sessionsRead?: SessionsReadState;
   pendingCare: PendingCareIncident | null;
   onOpenCareIncident: (incidentId: string) => void;
   onDismissCareIncident: (incidentId: string) => void;
@@ -86,6 +91,8 @@ export function HomeGlass({
   const dates = useDates();
   const games = useMemo(() => gameLibrary(sessions), [sessions]);
   const noGames = games.length === 0;
+  // The Games room's own line for an unread or unreadable session list (e3), shown in place of "none".
+  const sessionsLine = noGames ? sessionsReadLine(sessionsRead, t) : null;
   // The first look's "Which game?" list: the games Compy has recorded, most recently played first.
   const recorded = useMemo(() => games.map((g) => ({ process: g.sessions[0]?.process_name ?? "", name: g.name })).filter((g) => g.process), [games]);
   // Games can be recorded with no frame rate measured (a session Compy saw but couldn't read).
@@ -257,7 +264,7 @@ export function HomeGlass({
           page said "capture in Live" four times. The words and button are the Games room's own. */}
       {noGames ? (
         <div className="gl-empty">
-          <p>{t("common.games.empty")}</p>
+          <p>{sessionsLine ?? t("common.games.empty")}</p>
           <button type="button" className="gl-ghost" onClick={onOpenLive}>
             {t("common.games.emptyCta")}
           </button>
@@ -345,7 +352,11 @@ export function HomeGlass({
               <span className="gl-kpi-row">
                 <span className="gl-kpi-value" data-size="big">
                   {!newest ? (
-                    noGames ? t("home.glass.live.none") : t("common.games.notMeasured")
+                    noGames ? (
+                      sessionsRead === "failed" ? t("home.glass.live.unread") : sessionsRead === "pending" ? t("home.glass.live.notReadYet") : t("home.glass.live.none")
+                    ) : (
+                      t("common.games.notMeasured")
+                    )
                   ) : newestLow != null ? (
                     <>
                       <span className="gl-num">{Math.round(newestLow)}</span>

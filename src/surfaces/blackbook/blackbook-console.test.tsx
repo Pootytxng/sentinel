@@ -131,7 +131,7 @@ function Logbook({
   const reduced = useReducedMotion();
   return (
     <>
-      <LogbookTape view={view} reduced={reduced} onReviewSession={onReviewSession} onOpenLive={onOpenLive} />
+      <LogbookTape view={view} reduced={reduced} onReviewSession={onReviewSession} onOpenLive={onOpenLive} sessionsRead={over.sessionsRead} />
       <BlackbookConsole
         view={view}
         vendor="amd"
@@ -186,6 +186,33 @@ describe("BlackbookConsole — honest empty (never a fabricated row)", () => {
     unmount();
     render(<Logbook records={[session()]} onOpenLive={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /Open Live/ })).toBeNull();
+  });
+
+  // First-run follow-up (e3 review r1): App's session list is [] before its read answers and after a
+  // rejected read. The empty tape said "No record yet" and the Sessions tile "0 · none watched yet"
+  // off that unread list. Break check: drop the `sessionsLine` branch from LogbookTape, or the
+  // `sessionsRead` rule from the Sessions tile, and these cases fail.
+  it.each([
+    ["pending", "Compy hasn't read its recorded sessions yet.", "not read yet"],
+    ["failed", "Compy couldn't read its recorded sessions just now.", "couldn't read"],
+  ] as const)("an unread session list (%s): the empty tape and Sessions tile say so, not 'none'", (state, line, sub) => {
+    useReduced();
+    const onOpenLive = vi.fn();
+    const { container } = render(<Logbook records={[]} onOpenLive={onOpenLive} sessionsRead={state} />);
+    expect(screen.getByText(line)).toBeTruthy();
+    expect(screen.queryByText("No record yet")).toBeNull();
+    const tile = container.querySelectorAll(".bc-strip .bc-tile")[1];
+    expect(tile.querySelector(".bc-tile-n")!.textContent).toBe("—");
+    expect(tile.querySelector(".bc-tile-d")!.textContent).toBe(sub);
+    fireEvent.click(screen.getByRole("button", { name: /Open Live/ }));
+    expect(onOpenLive).toHaveBeenCalledOnce();
+  });
+
+  it("a session list read earlier keeps its count when a later read fails", () => {
+    useReduced();
+    const { container } = render(<Logbook records={[session()]} sessionsRead="failed" />);
+    const tile = container.querySelectorAll(".bc-strip .bc-tile")[1];
+    expect(tile.querySelector(".bc-tile-n")!.textContent).toBe("1");
   });
 });
 

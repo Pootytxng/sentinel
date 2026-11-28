@@ -51,7 +51,7 @@ import {
   useTuningTools,
   type SlotRead,
 } from "./data/tuning-tools";
-import { ledgerReadState, settleLedgerRead, settleListRead, useLedgerReadRetry } from "./data/applied-changes-retry";
+import { ledgerReadState, settleLedgerRead, settleListRead, useLedgerReadRetry, useListReadRetry } from "./data/applied-changes-retry";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
@@ -626,6 +626,22 @@ function App() {
   const [sessionsRead, setSessionsRead] = useState(false);
   const [sessionsReadFailed, setSessionsReadFailed] = useState(false);
   const sessionsReadState = ledgerReadState({ read: sessionsRead, failed: sessionsReadFailed });
+  // e3 review r1 F3: a failed session-list read is re-read on the ledger's backoff until one lands,
+  // so Games, Live and Sessions don't say "couldn't read" until the next refresh. A refresh that
+  // begins while it reads makes its list stale (null: dropped, the refresh decides).
+  useListReadRetry(
+    sessionsReadFailed,
+    () => {
+      const seq = refreshSeq.current;
+      return invoke<SessionSummary[]>("get_session_summaries").then((s) => (seq === refreshSeq.current ? s : null));
+    },
+    (s) => {
+      setSessions(s);
+      setSessionsRead(true);
+      setSessionsReadFailed(false);
+    },
+    "session list",
+  );
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
   const [sessionsSeenAt, setSessionsSeenAt] = useState<string>(
     () => lsGet("compy_sessions_seen_v1") ?? "",
@@ -1835,6 +1851,7 @@ function App() {
                 readiness={readiness}
                 priorities={priorities}
                 sessions={sessions}
+                sessionsRead={sessionsReadState}
                 pendingCare={pendingCare}
                 onOpenCareIncident={openCareIncident}
                 onDismissCareIncident={dismissCareIncident}
@@ -1998,6 +2015,7 @@ function App() {
                   onClose={() => setActiveTab("Overview")}
                   changes={changes}
                   sessions={sessions}
+                  sessionsRead={sessionsReadState}
                   onOpenLab={() => setActiveTab("Lab")}
                 />
               )}

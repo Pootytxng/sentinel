@@ -90,12 +90,13 @@ const session = (at: string) =>
     compy_changes_active: null,
   }) as SessionSummary;
 
-function homeEl(withDrift: boolean, sessions: SessionSummary[] = []) {
+function homeEl(withDrift: boolean, sessions: SessionSummary[] = [], sessionsRead?: "pending" | "failed") {
   return (
     <HomeGlass
       readiness={readiness(withDrift)}
       priorities={tweakOnly}
       sessions={sessions}
+      sessionsRead={sessionsRead}
       pendingCare={null}
       onOpenCareIncident={vi.fn()}
       onDismissCareIncident={vi.fn()}
@@ -260,5 +261,29 @@ describe("Home's quiet follow-through line (B2)", () => {
         await i18n.changeLanguage("en");
       });
     }
+  });
+});
+
+// First-run follow-up (e3 review r1): App's session list is [] before its read answers and after a
+// rejected read. Home said "No games yet" and "No session yet" in both, while sessions recorded
+// earlier may exist, unread. Break check: drop `sessionsLine` from HomeGlass's empty block, or the
+// read-state branch from the Last session tile, and these cases fail.
+describe("Home's session lines follow App's session read (first-run follow-up)", () => {
+  it.each([
+    ["pending", "Compy hasn't read its recorded sessions yet.", "Not read yet"],
+    ["failed", "Compy couldn't read its recorded sessions just now.", "Couldn't read"],
+  ] as const)("%s: says so, never 'No games yet' or 'No session yet'", async (state, line, tile) => {
+    const c = render(homeEl(false, [], state)).container;
+    await settle();
+    expect(screen.getByText(line)).toBeInTheDocument();
+    expect(screen.getByText(tile)).toBeInTheDocument();
+    expect(c.textContent).not.toMatch(/No games yet|No session yet/);
+  });
+
+  it("read and empty: still 'No games yet' and 'No session yet'", async () => {
+    const c = home(false);
+    await settle();
+    expect(c).toHaveTextContent(/No games yet/);
+    expect(c).toHaveTextContent("No session yet");
   });
 });
