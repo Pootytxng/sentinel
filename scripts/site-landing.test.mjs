@@ -187,7 +187,9 @@ describe("landing (Flight Test contract v3)", () => {
     expect(html).toMatch(/<form[^>]*method="POST"[^>]*action="\/api\/waitlist"/);
     expect(html).toMatch(/name="website"[^>]*aria-hidden="true"|aria-hidden="true"[^>]*name="website"/);
     expect(html).toContain("stored only to send that one launch message");
-    expect(html).toContain("The app itself sends nothing off your PC");
+    // Owner ruling 2026-11-28: one privacy sentence everywhere, and the old wording is gone.
+    expect(html).toContain("Compy sends nothing about your PC. It only checks for a signed update.");
+    expect(html).not.toContain("The app itself sends nothing off your PC");
     expect(html).toMatch(/data-waitlist-status[^>]*role="status"|role="status"[^>]*data-waitlist-status/);
     expect(html).toContain("KO-FI PLACEHOLDER SLOT");
   });

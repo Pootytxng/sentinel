@@ -49,9 +49,9 @@ describe("Guard A — committed site/ copy states the live library count", () =>
   it(`every stated entry count equals the data count (${count})`, () => {
     for (const [name, html] of pages) {
       for (const m of html.matchAll(
-        /(?:all (\d+) entries|Blackbook holds (\d+) graded entries|All (\d+) Compy Blackbook entries|(\d+) entries — the same library)/g,
+        /(?:all (\d+) entries|Blackbook holds (\d+) graded entries|All (\d+) Compy Blackbook entries|(\d+) entries — the same library|graded book holds (\d+) graded entries|All (\d+) graded-book verdicts)/g,
       )) {
-        const stated = Number(m[1] ?? m[2] ?? m[3] ?? m[4]);
+        const stated = Number(m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5] ?? m[6]);
         expect(stated, `${name}: states "${m[0]}" but the library holds ${count}`).toBe(count);
       }
     }
