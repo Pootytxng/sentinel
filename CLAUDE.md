@@ -61,3 +61,17 @@ Complete 2026-11-26 (83 `.rs` files, counted by name; the count lives only here)
 `.claude/rules/rust-safety-boundary.md`, read-only half in `src-tauri/CLAUDE.md`; both load only for
 `src-tauri/` work. **No gate checks the map (its guard was removed in `397cfe72`): run
 `node scripts/verify-module-map.mjs` by hand before trusting it; red means the map is stale.**
+
+## Agent skills
+
+### Issue tracker
+GitHub Issues in `Pootytxng/sentinel` (gh CLI); `docs/QUEUE.md` stays the work list. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+Default seven labels, kept separate from the `lane:*` / `gate:*` labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+Single-context (root `GLOSSARY.md`, `docs/adr/` once they exist; ARCHITECTURE_LOCKS acts as the ADRs until then). See `docs/agents/domain.md`.
+
+### External peers
+`auto`: the hardened Claude or Codex adapter, chosen from host metadata. See `docs/agents/cross-model.json`.
