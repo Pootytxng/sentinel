@@ -26,7 +26,7 @@ import type { SessionSummary } from "../types";
 const { invokeMock, deckProps, stackProps } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
   deckProps: [] as { ftWin: number[]; live: boolean; budget?: number }[],
-  stackProps: [] as { sessions?: SessionSummary[] }[],
+  stackProps: [] as { sessions?: SessionSummary[]; sessionsRead?: string }[],
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
@@ -42,8 +42,8 @@ vi.mock("./monitor/DeckScope", () => ({
   },
 }));
 vi.mock("./monitor/SessionStack", () => ({
-  SessionStack: (props: { sessions?: SessionSummary[] }) => {
-    stackProps.push({ sessions: props.sessions });
+  SessionStack: (props: { sessions?: SessionSummary[]; sessionsRead?: string }) => {
+    stackProps.push({ sessions: props.sessions, sessionsRead: props.sessionsRead });
     return <div data-testid="session-stack" data-count={String(props.sessions?.length ?? 0)} />;
   },
 }));
@@ -803,5 +803,68 @@ describe("MonitorConsole - e2: a sensor not read yet is 'not yet', not 'no readi
       await waitFor(() => expect(reason(container, id), id).toBe("no reading"));
     }
     expect(container.querySelector(".mc-ev-sensors")!.textContent).not.toContain("not yet");
+  });
+});
+
+// e3 first-run remainder (bug -> guard). App's session list is [] before get_session_summaries
+// answers and after a rejected read, and Live's evidence panel said "No session recorded yet" in
+// both: sessions recorded earlier may be on disk, unread. While App says the read is pending or
+// failed, the panel says so instead, and the stack is told the same state.
+// Break check: drop `sessionsReadLine(sessionsRead, t) ??` from the mc-ev-none line in
+// MonitorConsole.tsx and the first two cases fail (the panel says "No session recorded yet"); drop
+// the `sessionsRead={sessionsRead}` prop on <SessionStack> and the stack assertion fails.
+describe("MonitorConsole - e3: an unread session list is not 'no session yet'", () => {
+  it("pending: says the sessions are not read yet, never 'No session recorded yet'", async () => {
+    mockPolls(() => stoppedFps);
+    const { container } = mount({ sessions: [], sessionsRead: "pending" });
+    await waitFor(() => expect(container.querySelector(".mc-ev-none")).not.toBeNull());
+    expect(container.querySelector(".mc-ev-none")!.textContent).toBe("Compy hasn't read its recorded sessions yet.");
+    expect(container.textContent).not.toContain("No session recorded yet");
+    expect(stackProps[stackProps.length - 1]?.sessionsRead).toBe("pending");
+  });
+
+  it("failed: says the sessions couldn't be read", async () => {
+    mockPolls(() => stoppedFps);
+    const { container } = mount({ sessions: [], sessionsRead: "failed" });
+    await waitFor(() => expect(container.querySelector(".mc-ev-none")).not.toBeNull());
+    expect(container.querySelector(".mc-ev-none")!.textContent).toBe(
+      "Compy couldn't read its recorded sessions just now.",
+    );
+    expect(stackProps[stackProps.length - 1]?.sessionsRead).toBe("failed");
+  });
+
+  it("read and empty (no state): the honest 'No session recorded yet' stays", async () => {
+    mockPolls(() => stoppedFps);
+    const { container } = mount({ sessions: [] });
+    await waitFor(() => expect(container.querySelector(".mc-ev-none")).not.toBeNull());
+    expect(container.querySelector(".mc-ev-none")!.textContent).toContain("No session recorded yet");
+  });
+});
+
+// e3 first-run remainder (bug -> guard). The GPU coverage line was an English literal, so a zh-CN
+// reader got English in the middle of Live. It now renders from monitor.monitorConsole.gpuCoverage.
+// Break check: put the English literal back in MonitorConsole.tsx and the zh-CN case fails (the line
+// reads "GPU sensor coverage: ..." under zh-CN).
+describe("MonitorConsole - e3: the GPU coverage line follows the language", () => {
+  it("renders in English under en and in Chinese under zh-CN, always naming all three vendors", async () => {
+    const { default: i18n } = await import("../i18n");
+    mockPolls(() => stoppedFps);
+    const en = mount();
+    await waitFor(() => expect(en.container.querySelector(".coverage-note")).not.toBeNull());
+    expect(en.container.querySelector(".coverage-note")!.textContent!.replace(/\s+/g, " ")).toContain(
+      "GPU sensor coverage: AMD — verified · NVIDIA — implemented, not yet hardware-verified · Intel — planned.",
+    );
+    en.unmount();
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const zh = mount();
+      await waitFor(() => expect(zh.container.querySelector(".coverage-note")).not.toBeNull());
+      const line = zh.container.querySelector(".coverage-note")!.textContent!;
+      expect(line).toContain("GPU 传感器覆盖");
+      expect(line).not.toContain("coverage");
+      for (const v of ["AMD", "NVIDIA", "Intel"]) expect(line).toContain(v);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 });

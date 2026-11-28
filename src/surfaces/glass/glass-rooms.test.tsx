@@ -525,6 +525,20 @@ describe("Games (glass redesign)", () => {
     expect(onOpenLive).toHaveBeenCalled();
   });
 
+  // e3 (bug -> guard): App's session list is [] before its read answers and after a rejected read;
+  // "No games yet" was said in both, while sessions recorded earlier may exist, unread.
+  // Break check: drop `sessionsReadLine(sessionsRead, t)` from GamesRoom's empty card and both
+  // states read "No games yet ..." again, failing these two cases.
+  it("e3: before the session read answers, or after it failed, says that instead of 'No games yet'", () => {
+    render(<GamesRoom sessions={[]} sessionsRead="pending" onOpenLive={vi.fn()} onOpenTest={vi.fn()} />);
+    expect(screen.getByText("Compy hasn't read its recorded sessions yet.")).toBeTruthy();
+    expect(screen.queryByText(/No games yet/)).toBeNull();
+    cleanup();
+    render(<GamesRoom sessions={[]} sessionsRead="failed" onOpenLive={vi.fn()} onOpenTest={vi.fn()} />);
+    expect(screen.getByText("Compy couldn't read its recorded sessions just now.")).toBeTruthy();
+    expect(screen.queryByText(/No games yet/)).toBeNull();
+  });
+
   it("opens a game's page with real readings and says 'Not measured' for what was not", () => {
     render(
       <GamesRoom

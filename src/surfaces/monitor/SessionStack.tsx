@@ -12,7 +12,14 @@ import {
   relativeDay,
   type StackRow,
 } from "./monitor-stack-profile";
-import { knownFps, leftOutSecs, allBackground, leftOutSpan } from "../../lib/session-metrics";
+import {
+  knownFps,
+  leftOutSecs,
+  allBackground,
+  leftOutSpan,
+  sessionsReadLine,
+  type SessionsReadState,
+} from "../../lib/session-metrics";
 import "../../i18n";
 
 // SessionStack — Monitor v5's sessions half (owner pick 2026-07-11: "A's top + B's stack",
@@ -250,10 +257,14 @@ const fmtV = (v: unknown) => {
 
 export function SessionStack({
   sessions = [],
+  sessionsRead,
   reduced,
 }: {
   /** Newest-first session history — the same array the Sessions face lists. */
   sessions?: SessionSummary[];
+  /** e3: App's read of `sessions` ("pending" / "failed"; absent = read): while set, an empty stack
+   *  says not read / couldn't read instead of "no sessions on record yet". */
+  sessionsRead?: SessionsReadState;
   reduced: boolean;
 }) {
   const { t } = useTranslation();
@@ -302,7 +313,7 @@ export function SessionStack({
   }, []);
 
   if (sessions.length === 0) {
-    return <p className="ss-empty">{t("monitor.sessionStack.noSessionsEmpty")}</p>;
+    return <p className="ss-empty">{sessionsReadLine(sessionsRead, t) ?? t("monitor.sessionStack.noSessionsEmpty")}</p>;
   }
 
   const detailLine = (row: StackRow) => {

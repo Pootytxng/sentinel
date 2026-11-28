@@ -119,6 +119,11 @@
       "noSession": "还没有记录任何会话。开始采集并游玩，第一条就会出现在这里。",
       "sensorsAria": "实时传感器读数"
     },
+    "gpuCoverage": {
+      "label": "GPU 传感器覆盖：",
+      "amd": "AMD — 已验证",
+      "rest": "· NVIDIA — 已实现，尚未经过硬件验证 · Intel — 计划中。"
+    },
     "bento": {
       "deck": "帧生成时间",
       "readouts": "本次会话",

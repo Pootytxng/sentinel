@@ -32,11 +32,30 @@ const stripComments = (src: string) =>
 const HOST = join("src", "surfaces", "MonitorConsole.tsx");
 
 describe("GPU vendor-honesty line (LOCKED rule #5)", () => {
+  // e3 (first-run remainder): the sentence moved from an English literal in MonitorConsole into
+  // monitor.monitorConsole.gpuCoverage (en + zh-CN), so a Chinese reader gets it too. The exact
+  // English wording is now pinned where it lives (the en locale), the zh-CN line must name all three
+  // vendors, and the coverage-note span must render those three keys and nothing in their place.
+  const COVERAGE_KEYS = ["label", "amd", "rest"] as const;
+  const coverage = (lang: string) =>
+    (JSON.parse(read("src", "i18n", "locales", lang, "monitor.json")) as {
+      monitorConsole: { gpuCoverage: Record<(typeof COVERAGE_KEYS)[number], string> };
+    }).monitorConsole.gpuCoverage;
+
   it("carries the exact three-vendor wording", () => {
-    const norm = read(HOST).replace(/\s+/g, " ");
+    const en = coverage("en");
+    const norm = COVERAGE_KEYS.map((k) => en[k]).join(" ").replace(/\s+/g, " ");
     expect(norm).toContain("AMD — verified");
     expect(norm).toContain("NVIDIA — implemented, not yet hardware-verified");
     expect(norm).toContain("Intel — planned");
+    const zh = COVERAGE_KEYS.map((k) => coverage("zh-CN")[k]).join(" ");
+    for (const vendor of ["AMD", "NVIDIA", "Intel"]) expect(zh, `zh-CN coverage line names ${vendor}`).toContain(vendor);
+  });
+
+  it("renders the three coverage keys inside the coverage-note span", () => {
+    const span = /className="coverage-note">([\s\S]*?)<\/span>/.exec(stripComments(read(HOST)));
+    expect(span, "the coverage-note span is not on MonitorConsole").not.toBeNull();
+    for (const k of COVERAGE_KEYS) expect(span![1]).toContain(`t("monitor.monitorConsole.gpuCoverage.${k}")`);
   });
 
   it("renders it exactly once, app-wide", () => {

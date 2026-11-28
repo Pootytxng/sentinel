@@ -60,6 +60,19 @@ describe("Play", () => {
     expect(screen.getByText(/Play a session to see this/)).toBeInTheDocument();
   });
 
+  // e3 (bug -> guard): the Sessions face's empty list line spoke as if the list were read while App's
+  // session read was pending or had failed. Break check: drop `sessionsReadLine(sessionsRead, t) ??`
+  // from Play's play-empty line and both cases read the "no sessions" hint again.
+  it("e3: an empty list App has not read, or could not read, says so in the sessions list", () => {
+    const pending = renderPlay({ view: "sessions", sessions: [], sessionsRead: "pending" });
+    expect(pending.container.querySelector(".play-empty")!.textContent).toBe("Compy hasn't read its recorded sessions yet.");
+    pending.unmount();
+    const failed = renderPlay({ view: "sessions", sessions: [], sessionsRead: "failed" });
+    expect(failed.container.querySelector(".play-empty")!.textContent).toBe(
+      "Compy couldn't read its recorded sessions just now.",
+    );
+  });
+
   it("a session row expands the full debrief IN PLACE (no route) — navigation never teleports", () => {
     renderPlay({ sessions: [session("doom.exe", 144)] });
     const row = screen.getByRole("button", { name: /doom/ });

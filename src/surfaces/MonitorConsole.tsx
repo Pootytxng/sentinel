@@ -40,7 +40,7 @@ import { SessionStack } from "./monitor/SessionStack";
 import { deckDeltaFrom, fmtDeltaGlyph } from "./monitor/monitor-stack-profile";
 import { prettyGameName } from "./game-name";
 import { monitorVerdict } from "./monitor-v2-data";
-import { knownFps, mostlyUnread } from "../lib/session-metrics";
+import { knownFps, mostlyUnread, sessionsReadLine, type SessionsReadState } from "../lib/session-metrics";
 import { fmtDurCoarse } from "./Play";
 import "../i18n";
 import "./monitor-console.css";
@@ -130,6 +130,7 @@ const FT_CAP = 240;
 export function MonitorConsole({
   active,
   sessions = [],
+  sessionsRead,
   onFpsActive,
   quiet,
   bar,
@@ -137,6 +138,9 @@ export function MonitorConsole({
   active: boolean;
   /** Session history (newest-first): the stack's rows + the deck's delta row prior. */
   sessions?: SessionSummary[];
+  /** e3: App's read of `sessions` ("pending" / "failed"; absent = read). While set, an empty list
+   *  says not read / couldn't read instead of "No session recorded yet". */
+  sessionsRead?: SessionsReadState;
   /** Mirrors the room's live capture state up to MonitorV2 (the V2-8 forward-door rule). */
   onFpsActive?: (active: boolean) => void;
   /** THE LIVE FACE OWNS ITS OWN SHELL (issue #49 slice 4). The approved comp puts Start capture
@@ -412,7 +416,7 @@ export function MonitorConsole({
   // The room's session answer, from the one helper that also grades the rows below — it moved OFF
   // the h1 (the narrative now answers "can I start?") and INTO the panel that shows the session it
   // is about. Same sentence, same source, printed once.
-  const sessionLine = monitorVerdict(sessions, t);
+  const sessionLine = monitorVerdict(sessions, t, sessionsRead);
   // The evidence Readings beneath that line obey the same question: an unmeasured average or 1% low
   // (knownFps → null) is Reading's own "no reading", never a "0 fps" wearing the MEASURED tag, and
   // a 1% low without its average has no ratio to grade.
@@ -570,7 +574,9 @@ export function MonitorConsole({
               </div>
             </>
           ) : (
-            <p className="mc-ev-none">{t("monitor.monitorConsole.evidence.noSession")}</p>
+            <p className="mc-ev-none">
+              {sessionsReadLine(sessionsRead, t) ?? t("monitor.monitorConsole.evidence.noSession")}
+            </p>
           )}
 
           {/* The real trace. There is no PERSISTED per-frame series behind a session record — the
@@ -759,9 +765,12 @@ export function MonitorConsole({
               Do not move it behind a condition; vendor-honesty-line-guard.test.ts now pins the
               RENDER PATH, not just the nesting. */}
           <p className="mc-ev-coverage">
+            {/* e3: the words live in monitor.monitorConsole.gpuCoverage (en + zh-CN); the guard reads
+                the English wording from the en locale and pins these three keys here. */}
             <span className="coverage-note">
-              GPU sensor coverage: <strong>AMD — verified</strong> · NVIDIA —
-              implemented, not yet hardware-verified · Intel — planned.
+              {t("monitor.monitorConsole.gpuCoverage.label")}{" "}
+              <strong>{t("monitor.monitorConsole.gpuCoverage.amd")}</strong>{" "}
+              {t("monitor.monitorConsole.gpuCoverage.rest")}
             </span>
           </p>
 
@@ -838,7 +847,7 @@ export function MonitorConsole({
           </BentoGrid>
 
           {/* THE SESSION STACK — every recent session a flat row on ONE shared axis. */}
-          <SessionStack sessions={sessions} reduced={reduced} />
+          <SessionStack sessions={sessions} sessionsRead={sessionsRead} reduced={reduced} />
         </div>
       }
     >

@@ -207,6 +207,7 @@ export function LogbookTape({
   view,
   reduced,
   onReviewSession,
+  onOpenLive,
   chronology = null,
 }: {
   view: LogbookView;
@@ -215,6 +216,9 @@ export function LogbookTape({
   /** Opens the latest session where its full readout already lives — Live. Omitted ⇒ the row
    *  carries no chevron, because an affordance that leads nowhere is a drawn lie. */
   onReviewSession?: () => void;
+  /** e3: the empty tape's one next step — Live, where a recorded session (one of the things this tape
+   *  logs) starts. Through the rail's own handler, passed in by BlackbookV2. Omitted ⇒ no button. */
+  onOpenLive?: () => void;
   /** The Machine Model's chronology (#450), for its own caveat and unknown-reason sentences. Null
    *  while the model has not been read — the tape then prints no note rather than inventing one. */
   chronology?: ChangeChronology | null;
@@ -260,6 +264,14 @@ export function LogbookTape({
                 : "blackbook.blackbookConsole.empty.sub",
             )}
         </span>
+        {onOpenLive && (
+          <button type="button" className="bc-manage" onClick={onOpenLive}>
+            <span>{t("common.games.emptyCta")}</span>
+            <span className="bc-chevron" aria-hidden="true">
+              ›
+            </span>
+          </button>
+        )}
       </div>
     );
   }

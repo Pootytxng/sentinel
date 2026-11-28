@@ -2,7 +2,7 @@ import type { TFunction } from "i18next";
 import type { SessionSummary } from "../types";
 import { prettyGameName } from "./game-name";
 import { shortVerdict, fmtDur } from "./Play";
-import { knownFps, mostlyUnread } from "../lib/session-metrics";
+import { knownFps, mostlyUnread, sessionsReadLine, type SessionsReadState } from "../lib/session-metrics";
 
 // Pure verdict/measured derivations for the V2 Monitor room (V2-5, spec
 // 2026-07-02-v2-shell-sourcing-and-plan). Same contract as optimizeVerdict: measured facts
@@ -10,19 +10,28 @@ import { knownFps, mostlyUnread } from "../lib/session-metrics";
 //
 // The headline grades with the SAME shortVerdict the debrief/Basic tiles use (one source), so
 // the room's answer line can never disagree with the session rows below it. Sessions arrive as
-// [] both while loading and when none exist — "nothing measured yet" is the honest line for
-// both (Compy has measured nothing either way; there is no fabricated "loading" claim).
+// [] while loading, after a rejected read, and when none exist. This used to say "nothing
+// measured yet" for all three; e3 found that untrue for the first two (sessions Compy measured
+// earlier are on disk, unread, and a rejected read leaves [] until the next refresh). App now
+// passes its read state, and an empty list says "not read yet" / "couldn't read" until a read
+// answers; absent (read) keeps the "none measured yet" line, which is then established.
 
 export type MonitorVerdictLine = { headline: string; sub?: string };
 
-// i18n note: `t` is threaded through as the LAST param (this is a plain data module, not a
-// component — it can't call useTranslation() itself) — every call site passes its own `t` from
-// useTranslation(). Mirrors ago()/smoothness() elsewhere in this codebase. NOTE: shortVerdict()
+// i18n note: `t` is threaded through as a param, last but for e3's optional read state (this is a
+// plain data module, not a component — it can't call useTranslation() itself) — every call site
+// passes its own `t` from useTranslation(). Mirrors ago()/smoothness() elsewhere in this codebase. NOTE: shortVerdict()
 // itself keeps returning the literal English "Smooth" / "Rough" / "Some dips" strings unchanged
 // (Play.tsx pins that contract) — only the composed sentences below are translated.
-export function monitorVerdict(sessions: SessionSummary[], t: TFunction): MonitorVerdictLine {
+export function monitorVerdict(
+  sessions: SessionSummary[],
+  t: TFunction,
+  sessionsRead?: SessionsReadState,
+): MonitorVerdictLine {
   const latest = sessions[0];
   if (!latest) {
+    const unread = sessionsReadLine(sessionsRead, t);
+    if (unread) return { headline: unread };
     return {
       headline: t("monitor.monitorV2.verdict.noSessionsHeadline"),
       sub: t("monitor.monitorV2.verdict.noSessionsSub"),

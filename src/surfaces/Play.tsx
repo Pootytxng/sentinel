@@ -28,7 +28,7 @@ import {
 } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
-import { knownFps, mostlyUnread } from "../lib/session-metrics";
+import { knownFps, mostlyUnread, sessionsReadLine, type SessionsReadState } from "../lib/session-metrics";
 import "../i18n";
 import "./Play.css";
 
@@ -145,6 +145,7 @@ const fmtReading = (v: unknown, digits = 0) => {
 export default function Play({
   active,
   sessions,
+  sessionsRead,
   sessionsSeenAt,
   priorities,
   recs,
@@ -162,6 +163,9 @@ export default function Play({
 }: {
   active: boolean;
   sessions: SessionSummary[];
+  /** e3: App's read of `sessions` — "pending" before it answers, "failed" after a rejected read;
+   *  absent = read, so an empty list may say "no sessions yet". */
+  sessionsRead?: SessionsReadState;
   sessionsSeenAt: string;
   priorities: Priorities | null;
   recs: Recommendation[];
@@ -497,7 +501,7 @@ export default function Play({
         <div className="play-section-label">{t("monitor.play.recentSessionsLabel")}</div>
         {sessions.length === 0 ? (
           <p className="play-empty">
-            {t("monitor.play.emptySessionsHint")}
+            {sessionsReadLine(sessionsRead, t) ?? t("monitor.play.emptySessionsHint")}
           </p>
         ) : (
           <ul className="play-list">

@@ -118,18 +118,20 @@ function Logbook({
   records,
   health = null,
   onReviewSession,
+  onOpenLive,
   inEffect = COUNTED_ONE,
   ...over
 }: {
   records: LogbookRecord[];
   health?: LedgerHealth | null;
   onReviewSession?: () => void;
+  onOpenLive?: () => void;
 } & Partial<Omit<Parameters<typeof BlackbookConsole>[0], "view">>) {
   const view = useLogbookView(records, health, changesOf(records));
   const reduced = useReducedMotion();
   return (
     <>
-      <LogbookTape view={view} reduced={reduced} onReviewSession={onReviewSession} />
+      <LogbookTape view={view} reduced={reduced} onReviewSession={onReviewSession} onOpenLive={onOpenLive} />
       <BlackbookConsole
         view={view}
         vendor="amd"
@@ -168,6 +170,22 @@ describe("BlackbookConsole — honest empty (never a fabricated row)", () => {
       expect((tile as HTMLButtonElement).disabled).toBe(true);
     }
     expect(container.querySelector(".bc-sect")).toBeNull();
+    // No Live route handed in ⇒ the empty tape draws no button (an affordance needs a real door).
+    expect(screen.queryByRole("button", { name: /Open Live/ })).toBeNull();
+  });
+
+  // e3 (first-run remainder): the empty tape ended at "No record yet" with no next step. Its one step
+  // is Live, where a recorded session — one of the things the tape logs — starts. Break check: drop
+  // the `{onOpenLive && (...)}` button from LogbookTape's empty state and this case finds no button.
+  it("e3: the empty tape offers Live, through the route it is handed, and only while it is empty", () => {
+    useReduced();
+    const onOpenLive = vi.fn();
+    const { unmount } = render(<Logbook records={[]} onOpenLive={onOpenLive} />);
+    fireEvent.click(screen.getByRole("button", { name: /Open Live/ }));
+    expect(onOpenLive).toHaveBeenCalledOnce();
+    unmount();
+    render(<Logbook records={[session()]} onOpenLive={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Open Live/ })).toBeNull();
   });
 });
 

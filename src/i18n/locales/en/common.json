@@ -403,6 +403,10 @@
     },
     "solidNote": "Solid panels hide the backdrop. Pick Glass or Frosted to see it."
   },
+  "sessionsRead": {
+    "pending": "Compy hasn't read its recorded sessions yet.",
+    "failed": "Compy couldn't read its recorded sessions just now."
+  },
   "games": {
     "headline": "How your games run",
     "empty": "No games yet. Turn on capture in Live and play as usual: each game shows up here after its first measured session.",

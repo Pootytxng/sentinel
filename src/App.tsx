@@ -620,6 +620,12 @@ function App() {
   // disambiguated against. One blessed face per room now: Overview · Play · Learn · Lab.
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  // e3: `sessions` is [] both before get_session_summaries answers and after a rejected read, so the
+  // session views (Games, Live, Sessions) are told which: "not read yet" / "couldn't read", never
+  // "no sessions yet" until a read has answered. Same rule as the ledger's (ledgerReadState).
+  const [sessionsRead, setSessionsRead] = useState(false);
+  const [sessionsReadFailed, setSessionsReadFailed] = useState(false);
+  const sessionsReadState = ledgerReadState({ read: sessionsRead, failed: sessionsReadFailed });
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
   const [sessionsSeenAt, setSessionsSeenAt] = useState<string>(
     () => lsGet("compy_sessions_seen_v1") ?? "",
@@ -944,7 +950,16 @@ function App() {
     const recsP = run<Recommendation[]>("get_recommendations", setRecs);
     const startupP = run<StartupEntry[]>("get_startup_entries", setStartup);
     const readinessP = run<GameReadiness>("get_game_readiness", setReadiness);
-    const sessionsP = run<SessionSummary[]>("get_session_summaries", setSessions);
+    const sessionsP = run<SessionSummary[]>("get_session_summaries", (s) => {
+      setSessions(s);
+      setSessionsRead(true);
+      setSessionsReadFailed(false);
+    }).then((s) => {
+      // e3: `run` resolves undefined on a rejection (and has surfaced it); only the current refresh's
+      // failure marks the list unreadable — a superseded one leaves it to the newer refresh.
+      if (s === undefined && current()) setSessionsReadFailed(true);
+      return s;
+    });
     const prioritiesP = Promise.all([readinessP, recsP, startupP, sessionsP])
       .then(([readiness, recommendations, startup, sessions]) => {
         // If ANY of the four probes failed, its own run() catch already surfaced the REAL error.
@@ -1934,6 +1949,7 @@ function App() {
               {activeTab === "Games" && (
                 <GamesRoom
                   sessions={sessions}
+                  sessionsRead={sessionsReadState}
                   focusKey={gamesFocus}
                   onOpenLive={() => navHome("play")}
                   onOpenTest={() => navHome("lab")}
@@ -1954,6 +1970,7 @@ function App() {
                 <MonitorV2
                   active
                   sessions={sessions}
+                  sessionsRead={sessionsReadState}
                   sessionsSeenAt={sessionsSeenAt}
                   priorities={priorities}
                   recs={homeRecs ?? []}

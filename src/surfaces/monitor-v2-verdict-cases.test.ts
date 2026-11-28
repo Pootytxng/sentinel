@@ -38,6 +38,16 @@ describe("monitorVerdict", () => {
     });
   });
 
+  // e3 (bug -> guard): the Sessions face verdict said "No game sessions measured yet." before App's
+  // session read answered and after it was rejected. Break check: drop the `sessionsReadLine` early
+  // return in monitorVerdict and the pending/failed cases get the noSessions headline again.
+  it("e3: empty list while the read is pending / failed → that state, never 'none measured yet'", () => {
+    expect(monitorVerdict([], t, "pending")).toEqual({ headline: "common.sessionsRead.pending" });
+    expect(monitorVerdict([], t, "failed")).toEqual({ headline: "common.sessionsRead.failed" });
+    // A list that holds a session is graded as before, whatever the newest read did.
+    expect(monitorVerdict([session()], t, "failed").headline).not.toBe("common.sessionsRead.failed");
+  });
+
   it("single smooth session → smoothHeadline with prettified game + rounded avg fps", () => {
     const r = monitorVerdict([session({ avg_fps: 239.6 })], t);
     expect(r.headline).toBe(T(`${K}smoothHeadline`, { game: "valorant", fps: 240 }));

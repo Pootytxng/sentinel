@@ -119,6 +119,11 @@
       "noSession": "No session recorded yet. Start capture, play, and the first one lands here.",
       "sensorsAria": "Live sensor readings"
     },
+    "gpuCoverage": {
+      "label": "GPU sensor coverage:",
+      "amd": "AMD — verified",
+      "rest": "· NVIDIA — implemented, not yet hardware-verified · Intel — planned."
+    },
     "bento": {
       "deck": "Frame time",
       "readouts": "This session",

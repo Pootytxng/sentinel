@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SessionSummary } from "../../types";
 import { gameLibrary, playTime, type GameEntry } from "../../data/game-library";
-import { knownFps } from "../../lib/session-metrics";
+import { knownFps, sessionsReadLine, type SessionsReadState } from "../../lib/session-metrics";
 import { Term } from "../../design/Term";
 import { useTuningTools } from "../../data/tuning-tools";
 import { TubeChart, type TubeBar } from "./TubeChart";
@@ -297,11 +297,14 @@ function PlayTime({ games, onOpen }: { games: GameEntry[]; onOpen: (key: string)
 
 export function GamesRoom({
   sessions,
+  sessionsRead,
   focusKey = null,
   onOpenLive,
   onOpenTest,
 }: {
   sessions: SessionSummary[];
+  /** e3: App's read of `sessions` ("pending" / "failed"; absent = read). */
+  sessionsRead?: SessionsReadState;
   /** A game a Health card asked to open (one-time delivery from App). */
   focusKey?: string | null;
   onOpenLive: () => void;
@@ -341,7 +344,9 @@ export function GamesRoom({
       </header>
       {games.length === 0 ? (
         <div className="gl-empty">
-          <p>{t("common.games.empty")}</p>
+          {/* e3: "No games yet" only once App's session read has answered; before that, or after a
+              rejected read, the card says which (sessions recorded earlier may exist, unread). */}
+          <p>{(sessions.length === 0 ? sessionsReadLine(sessionsRead, t) : null) ?? t("common.games.empty")}</p>
           <button type="button" className="gl-ghost" onClick={onOpenLive}>
             {t("common.games.emptyCta")}
           </button>

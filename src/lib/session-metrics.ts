@@ -71,3 +71,16 @@ export function leftOutSpan(secs: number, t: Translate): string {
     ? t("monitor.leftOut.seconds", { seconds: secs })
     : t("monitor.leftOut.minutes", { minutes: Math.floor(secs / 60), seconds: secs % 60 });
 }
+
+/** e3: what an EMPTY session list may say while App's read of it has not answered ("pending") or was
+ *  rejected ("failed"): either way "no sessions yet" is not established, so the views say this
+ *  instead. `undefined` (read) → null: the view's own "none yet" line is true and stays. App derives
+ *  the state with ledgerReadState (data/applied-changes-retry.ts). */
+export type SessionsReadState = "pending" | "failed" | undefined;
+export function sessionsReadLine(read: SessionsReadState, t: Translate): string | null {
+  return read === "failed"
+    ? t("common.sessionsRead.failed")
+    : read === "pending"
+      ? t("common.sessionsRead.pending")
+      : null;
+}

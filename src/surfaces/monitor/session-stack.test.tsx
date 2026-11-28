@@ -95,6 +95,19 @@ describe("honest empties (a)", () => {
     expect(container.querySelector(".ss-axisnote")).toBeNull();
   });
 
+  // e3 (bug -> guard): an empty list App has not read (or could not read) said "no sessions on
+  // record yet". Break check: drop `sessionsReadLine(sessionsRead, t) ??` from the ss-empty line in
+  // SessionStack.tsx and both renders say "no sessions on record yet" again.
+  it("e3: 0 sessions while the read is pending or failed → says so, not 'no sessions on record yet'", () => {
+    const pending = render(<SessionStack sessions={[]} sessionsRead="pending" reduced />);
+    expect(pending.container.querySelector(".ss-empty")!.textContent).toBe("Compy hasn't read its recorded sessions yet.");
+    pending.unmount();
+    const failed = render(<SessionStack sessions={[]} sessionsRead="failed" reduced />);
+    expect(failed.container.querySelector(".ss-empty")!.textContent).toBe(
+      "Compy couldn't read its recorded sessions just now.",
+    );
+  });
+
   it("1 session → one row, NO delta chip", () => {
     const { container } = mount([sess()]);
     expect(container.querySelectorAll(".ss-row")).toHaveLength(1);

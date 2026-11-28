@@ -94,7 +94,7 @@ export function MonitorV2(props: Props) {
     };
   }, [capturing, segment, visible]);
 
-  const verdict = monitorVerdict(props.sessions, t);
+  const verdict = monitorVerdict(props.sessions, t, props.sessionsRead);
 
   // The segment bar and the advisory-presets expander belong to the ROOM, not to either face, so
   // they are built once here and handed to whichever face is composing the shell below.
@@ -145,6 +145,7 @@ export function MonitorV2(props: Props) {
       <MonitorConsole
         active={props.active}
         sessions={props.sessions}
+        sessionsRead={props.sessionsRead}
         onFpsActive={setCapturing}
         quiet={quiet}
         bar={bar}

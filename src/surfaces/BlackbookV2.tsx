@@ -140,6 +140,10 @@ export function BlackbookV2({
   // does not have is a fabricated claim in control form. With no session, the room's one dominant
   // action becomes the door that is always real — the field guide.
   const reviewLatest = view.latestSession ? () => nav.navigate("play") : null;
+  // e3: the EMPTY tape's next step is the same door — Live, where a session (which this tape logs)
+  // is recorded. The tape draws it only while it has no record at all, so with a session on the
+  // tape the one Live door stays "Review latest session".
+  const openLive = () => nav.navigate("play");
 
   return (
     <RoomShell
@@ -202,6 +206,7 @@ export function BlackbookV2({
             view={view}
             reduced={reduced}
             onReviewSession={reviewLatest ?? undefined}
+            onOpenLive={openLive}
             chronology={chronology}
           />
         ) : undefined
@@ -249,6 +254,7 @@ export function BlackbookV2({
                 view={view}
                 reduced={reduced}
                 onReviewSession={reviewLatest ?? undefined}
+                onOpenLive={openLive}
                 chronology={chronology}
               />
               <BlackbookConsole
