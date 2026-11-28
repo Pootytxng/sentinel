@@ -114,6 +114,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
 | **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:3046` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. |
 | **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:335` | REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
 | **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:3402` | Built dark 2026-07-06. Command refuses while dark; FE renders nothing. Arming needs live remove→reinstall QA + owner sign-off. |
+| **Performance Log Users grant (capture slice 2)** | **DARK** (`false`) | `perf_log_grant_gate()` — `actions.rs:6072`; entry `grant_perf_log_access` — `history.rs:2167` | Built dark 2026-11-28 on branch `claude/perf-log-grant` (not on `main`). One-time opt-in grant of the console user into the built-in group S-1-5-32-559, undo = "Remove this permission" (ops `perf-log-grant` / `perf-log-revoke`, no caller fields; snapshot `PerfLogMembership`; an already-member undo changes nothing). The entry refuses while dark; no Tauri command, no UI, no locale. Never executed on any PC. Arming needs the UI screen, a real UAC test on a normal-UAC PC and owner sign-off. |
 | **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs:442` | Built dark 2026-07-09 (reuses audited batch path; multi-change Drop-guard rollback; corrupt-ledger read ABORTS pre-mutation). No FE surface. |
 | **Experiment engine + simulator (Intelligence P3)** | **ARMED** (`true`, 2026-07-17) | `experiment_gate()` — `experiment.rs:60` | Armed after owner sign-off + live apply→rollback round-trip. No new mutation primitive; resolve stays history-only; simulator reads catalog READ-ONLY. |
 | **Leftovers restore** | **ARMED** (`true`, 2026-07-16) | `restore_gate()` — `leftovers.rs:898` | Armed after owner-present live-UAC QA (3 loops PASS); receipts ride the Trust Ledger (`leftover_adopted`). |
@@ -154,7 +155,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
   registration, the declaration, the grants and the overlay's real `invoke()` sites in agreement.
   Owner GO given 2026-08-03. **Open sub-item:** the spec's per-command main-window caller check
   (defense in depth behind the ACL) is deliberately deferred — see the PR for the reasoning.
-- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:7776`).
+- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:7911`).
 - Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:1680`).
 - Elevation (in source since A9; the installed build is per the rows above): every admin step relaunches
   `compy.exe --run-elevated-op <hex JSON>` (windowless) with one request of the closed typed set

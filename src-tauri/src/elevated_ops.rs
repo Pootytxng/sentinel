@@ -398,6 +398,11 @@ pub(crate) enum ElevatedOp {
     TcpAutotuning { disabled: bool },
     NagleDisable { interfaces: Vec<NicKey> },
     NagleRestore { interfaces: Vec<NagleSaved> },
+    // D1-S3 (BUILT DARK, owner-approved 2026-11-28): the one-time Performance Log Users grant and its undo. Both
+    // carry NO field (no SID, no account name, no path): the helper resolves the interactive user itself and
+    // refuses, changing nothing, when there are zero or several. The group is addressed by SID in the script.
+    PerfLogGrant {},
+    PerfLogRevoke {},
 }
 
 /// A helper-side read (new elevated code, plan v4 §1 [v2r M5]): a CONSTANT read-only script and its output.
@@ -415,10 +420,17 @@ pub(crate) trait HelperReads {
 }
 
 impl ElevatedOp {
-    /// Whether this op may ride a batch. The Ultimate apply exits with its own codes ([v2r S4]) and the
-    /// combined memory-compression script writes its own nonce lines, so both run alone.
+    /// Whether this op may ride a batch. The Ultimate apply exits with its own codes ([v2r S4]), the
+    /// combined memory-compression script writes its own nonce lines, and the Performance Log Users grant and
+    /// revoke exit 2 on an ambiguous user, so all of them run alone.
     pub(crate) fn is_batchable(&self) -> bool {
-        !matches!(self, ElevatedOp::UltimatePlanApply {} | ElevatedOp::MemoryCompressionCombined {})
+        !matches!(
+            self,
+            ElevatedOp::UltimatePlanApply {}
+                | ElevatedOp::MemoryCompressionCombined {}
+                | ElevatedOp::PerfLogGrant {}
+                | ElevatedOp::PerfLogRevoke {}
+        )
     }
 
     /// Whether this op's output must reach the app (it reports over the results pipe).
@@ -556,6 +568,8 @@ impl ElevatedOp {
                     .collect();
                 built(actions::nagle_rollback_script(&snaps))?
             }
+            Op::PerfLogGrant {} => actions::PERF_LOG_GRANT_SCRIPT.to_string(),
+            Op::PerfLogRevoke {} => actions::PERF_LOG_REVOKE_SCRIPT.to_string(),
         })
     }
 }

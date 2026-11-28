@@ -3495,9 +3495,25 @@ mod plain_start_tests {
             concat!("remove-local", "groupmember"),
             concat!("add-adgroup", "member"),
         ];
+        // Owner ruling 2026-11-28: the ONE approved exception is the one-time Performance Log Users grant and
+        // its undo, which live in actions.rs only (the mutation boundary), by SID, never by name. Every other
+        // token stays forbidden everywhere, and in actions.rs the two cmdlets may only name that one SID.
+        let exempt = [concat!("add-local", "groupmember"), concat!("remove-local", "groupmember")];
         for f in files {
             let text = std::fs::read_to_string(&f).unwrap_or_default().to_lowercase();
+            let is_actions = f.file_name().is_some_and(|n| n == "actions.rs");
             for token in forbidden {
+                if is_actions && exempt.contains(&token) {
+                    for (at, _) in text.match_indices(token) {
+                        let tail = &text[at + token.len()..];
+                        assert!(
+                            tail.starts_with(" -sid 's-1-5-32-559' -member $sid.value }"),
+                            "{} uses {token} on something other than the one approved group SID",
+                            f.display()
+                        );
+                    }
+                    continue;
+                }
                 assert!(!text.contains(token), "{} changes group membership ({token})", f.display());
             }
         }

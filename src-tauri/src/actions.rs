@@ -229,6 +229,10 @@ pub(crate) enum AppliedAction {
     // Phase-B preload-app removal (BUILT DARK 2026-07-06): per-user Remove-AppxPackage, ONLY the
     // curated KnownPreloadApp set. Undo = ReinstallPreloadApp (two honest tiers — see the spec).
     RemovePreloadApp { app: KnownPreloadApp },
+    // D1-S3 (BUILT DARK 2026-11-28, owner-approved): add the interactive console user to the built-in
+    // "Performance Log Users" group (S-1-5-32-559) so frame capture starts without an admin prompt. No fields:
+    // the helper resolves the user itself. Undo = RevokePerfLogAccessFromSnapshot.
+    GrantPerfLogAccess,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -269,6 +273,9 @@ pub(crate) enum RollbackAction {
     // re-registers the still-staged package (verified by re-read), tier 2 hands off to the app's
     // Store page and honestly returns Err so the ledger entry stays active until confirmed back.
     ReinstallPreloadApp { app: KnownPreloadApp },
+    // D1-S3 (dark): undo of GrantPerfLogAccess. Removes the user only when the snapshot says they were NOT a
+    // member before the grant; an already-member undo changes nothing.
+    RevokePerfLogAccessFromSnapshot,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -393,6 +400,11 @@ pub(crate) enum Snapshot {
         prior_family_name: String,
         prior_version: String,
     },
+    // D1-S3 (dark): whether the interactive user was ALREADY in Performance Log Users before the grant,
+    // read before anything is changed (a failed read refuses the apply). Holds no account name or SID.
+    PerfLogMembership {
+        prior_member: bool,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -498,6 +510,9 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
         Snapshot::FastStartup { prior_hiberboot } => on_off(*prior_hiberboot),
         Snapshot::ReservedStorage { prior_enabled } => {
             Some(if *prior_enabled { "On" } else { "Off" }.to_string())
+        }
+        Snapshot::PerfLogMembership { prior_member } => {
+            Some(if *prior_member { "Already a member" } else { "Not a member" }.to_string())
         }
         // A bare GUID is NOT a name — never dress it up (spec §5). No name captured → generic.
         Snapshot::PowerPlan { .. } => None,
@@ -6044,6 +6059,123 @@ pub(crate) fn fast_startup_restore_script(prior_hiberboot: Option<u32>) -> Strin
     }
 }
 
+// ─── Performance Log Users grant (BUILT DARK, D1-S3, owner-approved 2026-11-28) ────────────────────
+//
+// One-time, opt-in: add the interactive console user to the built-in group S-1-5-32-559 so Compy's frame-time
+// capture can start without an admin prompt, and its undo. The group is always addressed by SID (its name is
+// localized). Both ops carry NO field: no SID, no account name, no path. The helper resolves the user itself
+// (the one owner of the running Explorer shell) and refuses, changing nothing, on zero or several. The ledger
+// row's snapshot holds only `prior_member`, so an already-member undo changes nothing.
+
+/// GATE: DARK (hard false). Arming needs the settings screen, a real UAC test on a normal-UAC PC and the owner's
+/// sign-off, as its own reviewable commit. While dark `history::grant_perf_log_access` refuses before any read.
+pub(crate) fn perf_log_grant_gate() -> bool {
+    false
+}
+
+/// The built-in "Performance Log Users" group, by SID (never by its localized name).
+#[cfg(test)] // pinned against the script bytes; the scripts carry the literal
+pub(crate) const PERF_LOG_USERS_SID: &str = "S-1-5-32-559";
+
+/// The helper's exit code when it finds zero or several interactive users: nothing was changed.
+#[cfg(test)]
+pub(crate) const PERF_LOG_USER_AMBIGUOUS_EXIT: i32 = 2;
+
+/// The shared helper-side step: find the ONE interactive user (the owner of the running Explorer shell, as a SID)
+/// and whether it is already a member. Zero or several users exit 2 before anything is changed; an unreadable
+/// owner or member list throws (`Stop`) and exits 1, also before any change.
+macro_rules! perf_log_resolve_step {
+    () => {
+        concat!(
+            "$ErrorActionPreference = 'Stop'; ",
+            "$shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue); ",
+            "if ($shell.Count -eq 0) { exit 2 }; ",
+            "$owners = @(Get-Process -Id $shell.Id -IncludeUserName | ForEach-Object { ",
+            "if (-not $_.UserName) { throw 'shell owner unreadable' }; ",
+            "(New-Object System.Security.Principal.NTAccount($_.UserName)).Translate([System.Security.Principal.SecurityIdentifier]).Value } | Sort-Object -Unique); ",
+            "if ($owners.Count -ne 1) { exit 2 }; ",
+            "$sid = New-Object System.Security.Principal.SecurityIdentifier($owners[0]); ",
+            "$isMember = @(Get-LocalGroupMember -SID 'S-1-5-32-559' | Where-Object { $_.SID -eq $sid }).Count -gt 0; "
+        )
+    };
+}
+
+/// The grant: add the resolved user unless already a member (idempotent).
+pub(crate) const PERF_LOG_GRANT_SCRIPT: &str = concat!(
+    perf_log_resolve_step!(),
+    "if (-not $isMember) { Add-LocalGroupMember -SID 'S-1-5-32-559' -Member $sid.Value }"
+);
+
+/// The revoke: remove the resolved user only when a member (a no-op when not).
+pub(crate) const PERF_LOG_REVOKE_SCRIPT: &str = concat!(
+    perf_log_resolve_step!(),
+    "if ($isMember) { Remove-LocalGroupMember -SID 'S-1-5-32-559' -Member $sid.Value }"
+);
+
+/// The app-side prior read (non-elevated, read-only). It runs the SAME user resolution as the helper (the one
+/// Explorer owner) and then requires that user to be the account this process runs as, so the recorded prior
+/// state is about the very user the helper will change; any other case exits 2 or throws (a non-elevated read
+/// of another user's Explorer is denied) and the apply refuses. It prints exactly `member` or `not-member`.
+pub(crate) const PERF_LOG_READ_SCRIPT: &str = concat!(
+    perf_log_resolve_step!(),
+    "$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User; ",
+    "if ($sid.Value -ne $me.Value) { exit 2 }; ",
+    "if ($isMember) { 'member' } else { 'not-member' }"
+);
+
+/// The refusal when the prior membership cannot be read: nothing is changed (never a guessed prior).
+const PERF_LOG_PRIOR_UNREADABLE: &str =
+    "Compy couldn't read whether your account is already in the Performance Log Users group, so it changed nothing.";
+
+/// PURE: the prior read's answer. Exactly `member` or `not-member` from a run that finished and exited 0;
+/// anything else (no run, non-zero exit, other text) is an `Err`, never collapsed to "not a member".
+pub(crate) fn perf_log_prior_from_read(read: Option<&std::process::Output>) -> Result<bool, String> {
+    let out = read.ok_or_else(|| PERF_LOG_PRIOR_UNREADABLE.to_string())?;
+    if !out.status.success() {
+        return Err(PERF_LOG_PRIOR_UNREADABLE.to_string());
+    }
+    match String::from_utf8_lossy(&out.stdout).trim() {
+        "member" => Ok(true),
+        "not-member" => Ok(false),
+        _ => Err(PERF_LOG_PRIOR_UNREADABLE.to_string()),
+    }
+}
+
+/// The live prior read (bounded, read-only).
+fn read_perf_log_prior_member() -> Result<bool, String> {
+    let mut cmd = quiet_command(SysTool::PowerShell);
+    cmd.args(["-NoProfile", "-Command", PERF_LOG_READ_SCRIPT]);
+    perf_log_prior_from_read(output_within(cmd, QUERY_READ_LIMIT).as_ref())
+}
+
+/// The grant. The prior membership is read FIRST; a failed read refuses before anything is elevated. The
+/// returned contract (applied + rollback action + snapshot) is stored in the ledger row by the caller.
+pub(crate) fn apply_perf_log_grant() -> Result<ApplyResult, String> {
+    apply_perf_log_grant_with(read_perf_log_prior_member())
+}
+
+/// [`apply_perf_log_grant`] with the prior read handed in, so the refusal is unit-testable without a PC.
+pub(crate) fn apply_perf_log_grant_with(prior: Result<bool, String>) -> Result<ApplyResult, String> {
+    let prior_member = prior.map_err(|e| format!("{e}; refusing to apply rather than record a guessed prior value"))?;
+    run_elevated_op(ElevatedOp::PerfLogGrant {})?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::GrantPerfLogAccess,
+        rollback_action: RollbackAction::RevokePerfLogAccessFromSnapshot,
+        snapshot: Snapshot::PerfLogMembership { prior_member },
+        elevation_used: true,
+    })
+}
+
+/// The undo: restore the prior state exactly. A user who was ALREADY a member is left a member (nothing runs,
+/// no prompt); otherwise the fixed revoke op runs (itself a no-op if the user is no longer a member).
+pub(crate) fn rollback_perf_log_grant_typed(prior_member: bool) -> Result<(), String> {
+    if prior_member {
+        return Ok(());
+    }
+    run_elevated_undo_op(ElevatedOp::PerfLogRevoke {})?;
+    Ok(())
+}
+
 // ─── Game Bar / Game DVR off (HKCU, no admin) ────────────────────────────
 
 const GAMEDVR_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR";
@@ -7753,6 +7885,9 @@ pub(crate) fn dispatch_rollback(
         }
         (R::ReinstallPreloadApp { app }, S::PreloadApp { prior_family_name, .. }) => {
             rollback_reinstall_preload_app_typed(app, prior_family_name)
+        }
+        (R::RevokePerfLogAccessFromSnapshot, S::PerfLogMembership { prior_member }) => {
+            rollback_perf_log_grant_typed(*prior_member)
         }
         _ => Err(format!(
             "rollback action/snapshot mismatch: action={:?}, snapshot kind differs",
@@ -9810,6 +9945,23 @@ mod elevated_goldens {
         "Set-ItemProperty -Path '", nic_path!(), "' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; ",
         "Remove-ItemProperty -Path '", nic_path!(), "' -Name 'TCPNoDelay' -ErrorAction SilentlyContinue; "
     );
+    // D1-S3 (dark): the Performance Log Users grant and revoke, group addressed by SID, no field in either op.
+    pub(super) const G_PERF_LOG_GRANT: &str = concat!(
+        "$ErrorActionPreference = 'Stop'; $shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue); if ($shell.Count -eq 0) { exit 2 }; ",
+        "$owners = @(Get-Process -Id $shell.Id -IncludeUserName | ForEach-Object { if (-not $_.UserName) { throw 'shell owner unreadable' }; ",
+        "(New-Object System.Security.Principal.NTAccount($_.UserName)).Translate([System.Security.Principal.SecurityIdentifier]).Value } | Sort-Object -Unique); ",
+        "if ($owners.Count -ne 1) { exit 2 }; $sid = New-Object System.Security.Principal.SecurityIdentifier($owners[0]); ",
+        "$isMember = @(Get-LocalGroupMember -SID 'S-1-5-32-559' | Where-Object { $_.SID -eq $sid }).Count -gt 0; ",
+        "if (-not $isMember) { Add-LocalGroupMember -SID 'S-1-5-32-559' -Member $sid.Value }"
+    );
+    pub(super) const G_PERF_LOG_REVOKE: &str = concat!(
+        "$ErrorActionPreference = 'Stop'; $shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue); if ($shell.Count -eq 0) { exit 2 }; ",
+        "$owners = @(Get-Process -Id $shell.Id -IncludeUserName | ForEach-Object { if (-not $_.UserName) { throw 'shell owner unreadable' }; ",
+        "(New-Object System.Security.Principal.NTAccount($_.UserName)).Translate([System.Security.Principal.SecurityIdentifier]).Value } | Sort-Object -Unique); ",
+        "if ($owners.Count -ne 1) { exit 2 }; $sid = New-Object System.Security.Principal.SecurityIdentifier($owners[0]); ",
+        "$isMember = @(Get-LocalGroupMember -SID 'S-1-5-32-559' | Where-Object { $_.SID -eq $sid }).Count -gt 0; ",
+        "if ($isMember) { Remove-LocalGroupMember -SID 'S-1-5-32-559' -Member $sid.Value }"
+    );
     // The wrappers: a Single run's prefix, and a two-item batch (a service and the Nagle apply, whose trailing
     // "; " the composer trims).
     pub(super) const G_SINGLE_SERVICE_DISABLE: &str = "$ErrorActionPreference='Stop'; Set-Service -Name SysMain -StartupType Disabled; Stop-Service -Name SysMain -Force -ErrorAction SilentlyContinue";
@@ -10244,6 +10396,8 @@ mod elevated_goldens {
             (r#"{"op":"tcp-autotuning","disabled":true}"#, G_TCP_DISABLED),
             (concat!(r#"{"op":"nagle-disable","interfaces":[""#, nic!(), r#""]}"#), G_NAGLE_APPLY),
             (concat!(r#"{"op":"nagle-restore","interfaces":[{"key":""#, nic!(), r#"","ack":1,"nodelay":null}]}"#), G_NAGLE_RESTORE),
+            (r#"{"op":"perf-log-grant"}"#, G_PERF_LOG_GRANT),
+            (r#"{"op":"perf-log-revoke"}"#, G_PERF_LOG_REVOKE),
         ];
         for (json, golden) in cases {
             assert_eq!(typed(json), *golden, "{json}");
@@ -10781,5 +10935,225 @@ mod a9_caller_tests {
         }
         let src = include_str!("actions.rs").replace("\r\n", "\n");
         assert!(src.contains(concat!("let recommit = power_setting_", "recommit(plan_guid, active.as_deref());")), "the undo uses it");
+    }
+}
+
+/// D1-S3 (dark): the Performance Log Users grant and its undo. NOTHING here ever runs the grant or revoke on
+/// the machine running the tests: every call that could elevate goes through the deferral sink
+/// (`elevated_goldens::sunk_ops`), which captures the typed op instead of dispatching it. Changing a Windows
+/// account's security group is never part of a test.
+#[cfg(test)]
+mod perf_log_grant_tests {
+    use super::elevated_goldens::sunk_ops;
+    use super::*;
+    use crate::elevated_ops::ElevatedOp;
+    use std::os::windows::process::ExitStatusExt;
+
+    fn change(action: RollbackAction, snapshot: serde_json::Value) -> AppliedChange {
+        AppliedChange {
+            id: "perf-log-grant-1".into(),
+            rec_id: "perf-log-grant".into(),
+            rec_title: "t".into(),
+            applied_at: "2026-11-28T00:00:00Z".into(),
+            snapshot,
+            status: "applied".into(),
+            applied_action: Some(AppliedAction::GrantPerfLogAccess),
+            rollback_action: Some(action),
+            app_version_at_apply: None,
+            ruleset_version_at_apply: None,
+            elevation_used: Some(true),
+            provenance: None,
+            hw_fingerprint: None,
+            rolled_back_at: None,
+            justified_by_experiment: None,
+            rollback_justified_by_experiment: None,
+            changed_outside: None,
+            applied_plan: None,
+            nothing_restored: None,
+            result_unconfirmed: false,
+        }
+    }
+
+    fn read(code: u32, stdout: &str) -> std::process::Output {
+        std::process::Output {
+            status: std::process::ExitStatus::from_raw(code),
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: Vec::new(),
+        }
+    }
+
+    /// The gate is hard-false, and the one entry point refuses while dark before any read, lock or elevation.
+    /// Break: return true from `perf_log_grant_gate` and this fails.
+    #[test]
+    fn the_grant_ships_dark() {
+        assert!(!perf_log_grant_gate());
+        let err = crate::history::grant_perf_log_access().err().expect("dark");
+        assert_eq!(err, "The frame-capture permission is not enabled in this build.");
+        let src = include_str!("history.rs").replace("\r\n", "\n");
+        let at = src.find("pub(crate) fn grant_perf_log_access()").expect("entry");
+        let body = &src[at..at + src[at..].find("\n}\n").expect("end")];
+        let gate = body.find("perf_log_grant_gate()").expect("gate checked");
+        for later in ["lock_history(", "begin_mutation(", "apply_perf_log_grant("] {
+            assert!(gate < body.find(later).expect(later), "the gate comes before {later}");
+        }
+        let lib = include_str!("lib.rs");
+        assert!(!lib.contains("grant_perf_log_access"), "no Tauri command or other caller is wired yet");
+    }
+
+    /// The ops carry NO field: any SID, user name, path or argument is a loud parse rejection. Break: remove
+    /// `deny_unknown_fields` from `ElevatedOp` and this fails.
+    #[test]
+    fn the_ops_reject_any_extra_field_or_argument() {
+        for op in ["perf-log-grant", "perf-log-revoke"] {
+            assert!(serde_json::from_str::<ElevatedOp>(&format!(r#"{{"op":"{op}"}}"#)).is_ok(), "{op}");
+            for extra in [
+                r#""sid":"S-1-5-32-559""#,
+                r#""user":"someone""#,
+                r#""path":"C:\\x""#,
+                r#""group":"Administrators""#,
+                r#""args":[]"#,
+                r#""enabled":true"#,
+            ] {
+                let json = format!(r#"{{"op":"{op}",{extra}}}"#);
+                assert!(serde_json::from_str::<ElevatedOp>(&json).is_err(), "{json}");
+            }
+        }
+        assert!(!ElevatedOp::PerfLogGrant {}.is_batchable());
+        assert!(!ElevatedOp::PerfLogRevoke {}.is_batchable());
+    }
+
+    /// The scripts address the group by SID only, resolve the user themselves, refuse on zero or several
+    /// users before any change, and the grant can only add while the revoke can only remove. Break: use the
+    /// localized group name or drop the `$owners.Count -ne 1` refusal and this fails.
+    #[test]
+    fn the_scripts_use_the_sid_and_refuse_zero_or_several_users() {
+        for script in [PERF_LOG_GRANT_SCRIPT, PERF_LOG_REVOKE_SCRIPT] {
+            assert_eq!(script.matches("'S-1-5-32-559'").count(), 2, "the group by SID, in the read and the change");
+            assert!(!script.contains("Performance Log Users"), "never the localized name");
+            assert!(!script.contains("-Group") && !script.contains("-Name 'Perf"), "no name addressing");
+            assert!(script.starts_with("$ErrorActionPreference = 'Stop'; "), "a failed read throws before any change");
+            assert!(script.contains("if ($shell.Count -eq 0) { exit 2 }"), "zero users refuse");
+            assert!(script.contains("if ($owners.Count -ne 1) { exit 2 }"), "several users refuse");
+            let refuse = script.find("$owners.Count -ne 1").expect("refusal");
+            let change = script.find("LocalGroupMember -SID 'S-1-5-32-559' -Member").expect("change");
+            assert!(refuse < change, "refusal precedes the only change");
+            assert_eq!(script.matches("-Member $sid.Value").count(), 1, "one change, of the resolved user only");
+        }
+        assert_eq!(PERF_LOG_USERS_SID, "S-1-5-32-559");
+        assert_eq!(PERF_LOG_USER_AMBIGUOUS_EXIT, 2);
+        assert!(
+            PERF_LOG_GRANT_SCRIPT.contains("if (-not $isMember) { Add-Local")
+                && !PERF_LOG_GRANT_SCRIPT.contains("Remove-"),
+            "idempotent, add only"
+        );
+        assert!(
+            PERF_LOG_REVOKE_SCRIPT.contains("if ($isMember) { Remove-Local")
+                && !PERF_LOG_REVOKE_SCRIPT.contains("Add-"),
+            "no-op when not a member, remove only"
+        );
+        assert!(
+            PERF_LOG_READ_SCRIPT.starts_with("$ErrorActionPreference = 'Stop'; ")
+                && !PERF_LOG_READ_SCRIPT.contains("Add-")
+                && !PERF_LOG_READ_SCRIPT.contains("Remove-"),
+            "the prior read changes nothing"
+        );
+        // The prior read is about the SAME user the helper changes: it uses the helper's resolution verbatim and
+        // refuses unless that user is the process account. Break: drop the comparison and this fails.
+        let resolve = &PERF_LOG_GRANT_SCRIPT[..PERF_LOG_GRANT_SCRIPT.find("if (-not $isMember)").expect("tail")];
+        assert!(PERF_LOG_READ_SCRIPT.starts_with(resolve), "one resolution for the read and the change");
+        assert!(PERF_LOG_READ_SCRIPT.contains("if ($sid.Value -ne $me.Value) { exit 2 }"), "a different user refuses");
+    }
+
+    /// The prior read: exactly `member` / `not-member` from a successful run; every other outcome is an Err,
+    /// never collapsed to "not a member". Break: map a failed read to `Ok(false)` and this fails.
+    #[test]
+    fn a_failed_prior_read_is_an_error_never_not_a_member() {
+        assert_eq!(perf_log_prior_from_read(Some(&read(0, "member\r\n"))), Ok(true));
+        assert_eq!(perf_log_prior_from_read(Some(&read(0, "not-member\r\n"))), Ok(false));
+        let bad = [
+            None,
+            Some(read(1 << 8, "not-member")),
+            Some(read(1 << 8, "")),
+            Some(read(0, "")),
+            Some(read(0, "Member?")),
+            Some(read(0, "member\nnot-member")),
+        ];
+        for b in bad {
+            assert!(perf_log_prior_from_read(b.as_ref()).is_err(), "{b:?}");
+        }
+    }
+
+    /// A failed prior read refuses the apply: nothing is elevated.
+    #[test]
+    fn an_unreadable_prior_refuses_before_any_elevation() {
+        let ops = sunk_ops(|| {
+            let r = apply_perf_log_grant_with(Err(PERF_LOG_PRIOR_UNREADABLE.to_string()));
+            assert!(r.is_err(), "refused");
+            Ok(())
+        });
+        assert!(ops.is_empty(), "no op was issued: {ops:?}");
+    }
+
+    /// Apply to rollback, from the ledger row alone: the apply issues the one fixed op and stores the full
+    /// contract; the stored row resolves to the same contract; the undo issues the one fixed revoke op when
+    /// the user was NOT a member and nothing at all when they already were. Break: have
+    /// `rollback_perf_log_grant_typed` ignore `prior_member` and the already-member case fails.
+    #[test]
+    fn grant_then_undo_round_trips_from_the_stored_row_alone() {
+        for prior_member in [false, true] {
+            let mut applied = None;
+            let ops = sunk_ops(|| {
+                applied = Some(apply_perf_log_grant_with(Ok(prior_member))?);
+                Ok(())
+            });
+            assert_eq!(ops, vec![ElevatedOp::PerfLogGrant {}], "the apply issues only the grant op");
+            let r = applied.expect("applied");
+            assert!(matches!(r.applied_action, AppliedAction::GrantPerfLogAccess));
+            assert!(matches!(r.rollback_action, RollbackAction::RevokePerfLogAccessFromSnapshot));
+            assert!(r.elevation_used);
+            let stored = serde_json::to_value(&r.snapshot).expect("snapshot json");
+            assert_eq!(stored, serde_json::json!({"kind": "perf-log-membership", "prior_member": prior_member}), "no SID, no account name");
+            let row = change(r.rollback_action.clone(), stored);
+            let (action, snapshot) = resolve_rollback(&row).expect("resolves from the row alone");
+            assert!(matches!(action, RollbackAction::RevokePerfLogAccessFromSnapshot));
+            assert!(matches!(snapshot, Snapshot::PerfLogMembership { prior_member: p } if p == prior_member));
+            let root = crate::data_root::test_mutation_root();
+            let undo_ops = sunk_ops(|| dispatch_rollback(&root, &action, &snapshot));
+            if prior_member {
+                assert!(undo_ops.is_empty(), "an already-member undo changes nothing and shows no prompt");
+            } else {
+                assert_eq!(undo_ops, vec![ElevatedOp::PerfLogRevoke {}]);
+            }
+        }
+    }
+
+    /// A garbled stored snapshot is a loud Err, never a skipped undo. Break: add a catch-all arm that returns
+    /// Ok for the revoke action and this fails.
+    #[test]
+    fn a_garbled_snapshot_is_a_loud_error() {
+        for garbled in [
+            serde_json::json!({"not": "a snapshot"}),
+            serde_json::json!({"kind": "perf-log-membership"}),
+            serde_json::json!({"kind": "perf-log-membership", "prior_member": "yes"}),
+            serde_json::json!(null),
+        ] {
+            let row = change(RollbackAction::RevokePerfLogAccessFromSnapshot, garbled.clone());
+            assert!(resolve_rollback(&row).is_err(), "{garbled}");
+        }
+    }
+
+    /// Additive only: the new variants serialize under their own kebab tags.
+    #[test]
+    fn the_new_variants_are_additive_and_tagged() {
+        assert_eq!(
+            serde_json::to_value(AppliedAction::GrantPerfLogAccess).unwrap(),
+            serde_json::json!({"kind": "grant-perf-log-access"})
+        );
+        assert_eq!(
+            serde_json::to_value(RollbackAction::RevokePerfLogAccessFromSnapshot).unwrap(),
+            serde_json::json!({"kind": "revoke-perf-log-access-from-snapshot"})
+        );
+        assert_eq!(label_for_snapshot(&Snapshot::PerfLogMembership { prior_member: true }), Some("Already a member".into()));
+        assert_eq!(label_for_snapshot(&Snapshot::PerfLogMembership { prior_member: false }), Some("Not a member".into()));
     }
 }
