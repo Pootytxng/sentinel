@@ -472,6 +472,79 @@ pub(crate) fn suspected_split_time(s: &SessionSummary, crashes: &[CrashMark]) ->
     Some(t0 + Duration::seconds(i64::from(found.split_at_secs)))
 }
 
+// ---- Sittings: one rule for every reader ---------------------------------------------------------
+// e12: the Paramedic card's sitting rule, moved here unchanged so the noise bands and real play group launches
+// by the same rule without naming the Paramedic (the elevated helper reaches them, and the test
+// `the_elevated_helper_never_reaches_this_module` keeps the Paramedic out of its reach). The card calls these
+// with its own launch facts; `noise_floor` with recorded rows.
+
+/// A launch that follows the end of an earlier one by no more than this, after the earlier one's process
+/// exited, can be the same sitting: the player closed the game (or it closed) and opened it again.
+pub(crate) const SITTING_GAP_MINUTES: i64 = 10;
+
+/// What the sitting rule reads of one launch.
+pub(crate) trait SittingLaunch {
+    fn launch_start(&self) -> Option<DateTime<Utc>>;
+    fn launch_end(&self) -> Option<DateTime<Utc>>;
+    /// Why the launch stopped; `None` = not recorded (an older row).
+    fn launch_ended(&self) -> Option<SessionEnd>;
+    fn launch_secs(&self) -> u64;
+    /// The card can judge this launch's frame rate.
+    fn launch_judgeable(&self) -> bool;
+    /// No stamp recorded on BOTH launches differs (driver, Windows build, power plan, refresh rate, number
+    /// of changes Compy had on, hardware, frame-cap state).
+    fn same_stamps(&self, other: &Self) -> bool;
+}
+
+/// PURE. Groups one game's rows (oldest first) into sittings, as lists of indices. A row joins the one before
+/// it only when ALL hold: that row's recorded end is `ProcessExited` (the game's process went away); this row
+/// began within `SITTING_GAP_MINUTES` of that row's end; no stamp recorded on both differs (`same_stamps`,
+/// against EVERY launch already in the sitting); no row Compy could not attribute to one game (`mixed`, the
+/// starts of rows the capture flag marks) began between the two launches; and the sitting still has at most
+/// ONE launch that can be judged for frame rate (the others are short fragments). Two judgeable launches are
+/// two sessions, whatever the gap. A row with no recorded end (an older row), one that ended because
+/// monitoring was stopped, or one whose process identity changed is never joined: Compy cannot tell those
+/// from a fresh sitting.
+pub(crate) fn group_sittings<L: SittingLaunch>(rows: &[&L], mixed: &[DateTime<Utc>]) -> Vec<Vec<usize>> {
+    let mut out: Vec<Vec<usize>> = Vec::new();
+    for i in 0..rows.len() {
+        let in_group = out.last().map_or(0, |g: &Vec<usize>| g.iter().filter(|&&k| rows[k].launch_judgeable()).count());
+        let joins = i > 0
+            && rows[i - 1].launch_ended() == Some(SessionEnd::ProcessExited)
+            && matches!((rows[i - 1].launch_end(), rows[i].launch_start()), (Some(e), Some(b)) if b - e <= Duration::minutes(SITTING_GAP_MINUTES))
+            // Against EVERY launch already in the sitting, so X / not recorded / Y never chain into one.
+            && out.last().is_none_or(|g| g.iter().all(|&k| rows[k].same_stamps(rows[i])))
+            // A row Compy could not attribute to one game (suspected mixed) between the two launches breaks it.
+            && !matches!((rows[i - 1].launch_start(), rows[i].launch_start()), (Some(a), Some(b)) if mixed.iter().any(|m| *m >= a && *m <= b))
+            && in_group + usize::from(rows[i].launch_judgeable()) <= 1;
+        match out.last_mut() {
+            Some(g) if joins => g.push(i),
+            _ => out.push(vec![i]),
+        }
+    }
+    out
+}
+
+/// A sitting's one row: its longest judgeable launch (the earliest on a tie), else its longest launch. With at
+/// most one judgeable launch per sitting this is that launch.
+pub(crate) fn sitting_value<L: SittingLaunch>(rows: &[&L], group: &[usize]) -> usize {
+    let longest = |it: &mut dyn Iterator<Item = usize>| it.max_by_key(|&i| (rows[i].launch_secs(), std::cmp::Reverse(i)));
+    longest(&mut group.iter().copied().filter(|&i| rows[i].launch_judgeable())).or_else(|| longest(&mut group.iter().copied())).unwrap_or(group[0])
+}
+
+/// e12 r1 F1: a sitting's one row for a reader with its own rule for which launches it can use (the noise
+/// bands, real play): among the launches `usable` accepts, the card's pick ([`sitting_value`]); with none
+/// usable, the card's pick. So a usable launch is never folded behind a longer one the reader can't use, and
+/// the sitting still gives that reader at most one launch. The card itself keeps [`sitting_value`].
+pub(crate) fn sitting_value_for<L: SittingLaunch>(rows: &[&L], group: &[usize], usable: impl Fn(usize) -> bool) -> usize {
+    let mine: Vec<usize> = group.iter().copied().filter(|&i| usable(i)).collect();
+    if mine.is_empty() {
+        sitting_value(rows, group)
+    } else {
+        sitting_value(rows, &mine)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -766,6 +839,47 @@ mod tests {
         }
         println!("suspected: {flagged:?} | clean: {clean} | cant_tell: {cant_tell} | total: {}", sessions.len());
         assert!(flagged.iter().all(|t| !t.starts_with("2026-11-11")), "an ordinary 2026-11-11 session was flagged");
+    }
+
+    /// A launch as the sitting rule reads it: length, and whether the card can judge it.
+    struct Fake(u64, bool);
+
+    impl SittingLaunch for Fake {
+        fn launch_start(&self) -> Option<DateTime<Utc>> {
+            None
+        }
+        fn launch_end(&self) -> Option<DateTime<Utc>> {
+            None
+        }
+        fn launch_ended(&self) -> Option<SessionEnd> {
+            None
+        }
+        fn launch_secs(&self) -> u64 {
+            self.0
+        }
+        fn launch_judgeable(&self) -> bool {
+            self.1
+        }
+        fn same_stamps(&self, _: &Self) -> bool {
+            true
+        }
+    }
+
+    /// e12 r1 F1: a reader keeps the launch IT can use. With no judgeable launch, the card keeps the longest
+    /// (here the unusable 3600 s one); the reader keeps the usable 1800 s one. Among usable launches the card's
+    /// order holds (judgeable first, then longest, then earliest); with none usable it is the card's pick.
+    /// Break check: make `sitting_value_for` return `sitting_value(rows, group)` and the first assert fails.
+    #[test]
+    fn a_reader_keeps_the_launch_it_can_use_and_otherwise_the_cards_pick() {
+        let (a, b, c) = (Fake(1800, false), Fake(3600, false), Fake(600, true));
+        let rows = [&a, &b];
+        assert_eq!(sitting_value(&rows, &[0, 1]), 1, "the card: the longest");
+        assert_eq!(sitting_value_for(&rows, &[0, 1], |i| i == 0), 0, "the reader: the one it can use");
+        assert_eq!(sitting_value_for(&rows, &[0, 1], |_| true), 1, "both usable: the card's order");
+        assert_eq!(sitting_value_for(&rows, &[0, 1], |_| false), 1, "none usable: the card's pick");
+        let rows = [&a, &b, &c];
+        assert_eq!(sitting_value_for(&rows, &[0, 1, 2], |_| true), 2, "a judgeable usable launch wins");
+        assert_eq!(sitting_value_for(&rows, &[0, 1, 2], |i| i != 2), 1, "the longest usable one otherwise");
     }
 }
 

@@ -200,6 +200,7 @@ const REASON_KEY: Record<string, string> = {
   "gaming-mode-differs": "gamingModeDiffers",
   "frame-cap-changed": "frameCapChanged",
   "after-window": "afterWindow",
+  "same-sitting": "sameSitting",
   "no-reading": "noReading",
   other: "other",
 };
