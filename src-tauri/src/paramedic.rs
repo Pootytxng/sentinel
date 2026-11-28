@@ -792,9 +792,28 @@ fn judge_game(sess: &[&SessionFacts]) -> Vec<Judgement> {
     out
 }
 
-/// A launch that follows the end of an earlier one by no more than this, after the earlier one's process
-/// exited, can be the same sitting: the player closed the game (or it closed) and opened it again.
-pub(crate) const SITTING_GAP_MINUTES: i64 = 10;
+/// e12: the sitting rule (`group_sittings`, `sitting_value`, `SITTING_GAP_MINUTES`) lives in `session_boundary`,
+/// shared with the noise bands and real play; the card hands it its own launch facts and stamp rule.
+impl crate::session_boundary::SittingLaunch for SessionFacts {
+    fn launch_start(&self) -> Option<DateTime<Utc>> {
+        self.start()
+    }
+    fn launch_end(&self) -> Option<DateTime<Utc>> {
+        self.end()
+    }
+    fn launch_ended(&self) -> Option<crate::session_boundary::SessionEnd> {
+        self.ended
+    }
+    fn launch_secs(&self) -> u64 {
+        self.duration_secs
+    }
+    fn launch_judgeable(&self) -> bool {
+        self.judgeable()
+    }
+    fn same_stamps(&self, other: &Self) -> bool {
+        same_stamps(self, other)
+    }
+}
 
 /// True unless a stamp recorded on BOTH launches differs: graphics driver, Windows build, power plan, refresh
 /// rate, number of changes Compy had on, hardware, frame-cap state. A missing stamp may still join, but the\n/// caller compares a joining launch with EVERY member of the sitting. A change between two launches is never
@@ -819,38 +838,15 @@ fn same_stamps(a: &SessionFacts, b: &SessionFacts) -> bool {
         && cap
 }
 
-/// PURE. Groups one game's rows (oldest first) into sittings, as lists of indices. A row joins the one before
-/// it only when ALL hold: that row's recorded end is `ProcessExited` (the game's process went away); this row
-/// began within `SITTING_GAP_MINUTES` of that row's end; no stamp recorded on both differs (`same_stamps`);
-/// and the sitting still has at most ONE launch that can be judged for frame rate (the others are short
-/// fragments). Two judgeable launches are two sessions, whatever the gap. A row with no recorded end (an older
-/// row), one that ended because monitoring was stopped, or one whose process identity changed is never joined:
-/// Compy cannot tell those from a fresh sitting.
+/// PURE. One game's rows (oldest first) as sittings: the shared rule (`session_boundary::group_sittings`).
 fn group_sittings(rows: &[&SessionFacts], mixed: &[DateTime<Utc>]) -> Vec<Vec<usize>> {
-    let mut out: Vec<Vec<usize>> = Vec::new();
-    for i in 0..rows.len() {
-        let in_group = out.last().map_or(0, |g: &Vec<usize>| g.iter().filter(|&&k| rows[k].judgeable()).count());
-        let joins = i > 0
-            && rows[i - 1].ended == Some(crate::session_boundary::SessionEnd::ProcessExited)
-            && matches!((rows[i - 1].end(), rows[i].start()), (Some(e), Some(b)) if b - e <= chrono::Duration::minutes(SITTING_GAP_MINUTES))
-            // Against EVERY launch already in the sitting, so X / not recorded / Y never chain into one.
-            && out.last().is_none_or(|g| g.iter().all(|&k| same_stamps(rows[k], rows[i])))
-            // A row Compy could not attribute to one game (suspected mixed) between the two launches breaks it.
-            && !matches!((rows[i - 1].start(), rows[i].start()), (Some(a), Some(b)) if mixed.iter().any(|m| *m >= a && *m <= b))
-            && in_group + usize::from(rows[i].judgeable()) <= 1;
-        match out.last_mut() {
-            Some(g) if joins => g.push(i),
-            _ => out.push(vec![i]),
-        }
-    }
-    out
+    crate::session_boundary::group_sittings(rows, mixed)
 }
 
-/// A sitting's one row: its longest judgeable launch (the earliest on a tie), else its longest launch. With at
-/// most one judgeable launch per sitting this is that launch.
+/// A sitting's one row: the shared rule (`session_boundary::sitting_value`), its longest judgeable launch (the
+/// earliest on a tie), else its longest launch.
 fn sitting_value(rows: &[&SessionFacts], group: &[usize]) -> usize {
-    let longest = |it: &mut dyn Iterator<Item = usize>| it.max_by_key(|&i| (rows[i].duration_secs, std::cmp::Reverse(i)));
-    longest(&mut group.iter().copied().filter(|&i| rows[i].judgeable())).or_else(|| longest(&mut group.iter().copied())).unwrap_or(group[0])
+    crate::session_boundary::sitting_value(rows, group)
 }
 
 /// One game's raw rows, oldest first. A session whose start cannot be read is left out, never guessed at, and

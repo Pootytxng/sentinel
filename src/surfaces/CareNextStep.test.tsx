@@ -645,6 +645,32 @@ describe("a reworded reading keeps its earlier 'Did this help?' answers", () => 
     const all = [rob()];
     expect(anchorFor(pickCareStep(all, null)!, all).basis).toBe("shown");
   });
+  // e7 (p1 r2 F4): the rule key alone let an answer on one driver's timeout anchor another driver's step.
+  // Break check: drop `moduleOf(inc) === step.module` from anchorFor and the nvlddmkm step reads "taken".
+  it("an answer on one driver's timeout never anchors another driver's timeout step", () => {
+    const gpu = (when: string, module: string): CrashIncident => {
+      const rec = inc(when, { tag: "GPU timeout", step: "Clean-reinstall the driver" });
+      rec.receipt = { ...rec.receipt, faulting_module: module };
+      rec.assessment = { ...rec.assessment!, rule: "graphics-driver", consistent_with: `your graphics driver (${module}) repeatedly timing out` };
+      return rec;
+    };
+    const amd = gpu("2026-10-20T10:00:00Z", "amdkmdag");
+    const nv = gpu("2026-10-25T10:00:00Z", "nvlddmkm");
+    localStorage.setItem("compy_bb_feedback", JSON.stringify([
+      { when: amd.when, consistent_with: amd.assessment!.consistent_with, rule: "graphics-driver", vote: "yes", at: "2026-10-22T09:00:00Z" },
+    ]));
+    const all = [amd, nv];
+    const step = pickCareStep(all, null)!;
+    expect(step.source === "incident" && step.module).toBe("nvlddmkm");
+    expect(anchorFor(step, all).basis).toBe("shown");
+    // The same driver, named in another case, still anchors as "taken".
+    const nv2 = gpu("2026-10-26T10:00:00Z", "NVLDDMKM");
+    localStorage.setItem("compy_bb_feedback", JSON.stringify([
+      { when: nv.when, consistent_with: nv.assessment!.consistent_with, rule: "graphics-driver", vote: "yes", at: "2026-10-25T12:00:00Z" },
+    ]));
+    const all2 = [amd, nv, nv2];
+    expect(anchorFor(pickCareStep(all2, null)!, all2)).toEqual({ at: Date.parse("2026-10-25T12:00:00Z"), basis: "taken" });
+  });
   it("the Care receipt shows the translated statement, not the engine's raw English", async () => {
     h.incidents = [rob()];
     const { container } = render(<BlackBox />);
@@ -655,6 +681,29 @@ describe("a reworded reading keeps its earlier 'Did this help?' answers", () => 
     const rows = Object.fromEntries([...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
     expect(rows["Consistent with"]).toBe(
       "Windows recorded ROB RUN crashing. That record alone can't tell where the problem is: in the program, in something it loads (such as a graphics driver), or in your PC.",
+    );
+  });
+  // e10: the Care receipt carries the same peak comparison as the Problems room. Break check: drop
+  // `temp_vs_usual: step.tempVsUsual` from CareNextStep.tsx -> the row says "hasn't compared" and fails.
+  it("the Care receipt for a hot GPU timeout says how its peak sits against this card's usual one", async () => {
+    const hot = inc("2026-10-20T10:00:00Z", { tag: "GPU timeout" });
+    hot.assessment = {
+      ...hot.assessment!,
+      rule: "overheating",
+      statement: "gpu-timeout-peak",
+      temp_c: 88,
+      temp_vs_usual: { outcome: "same", usual_c: 86, sessions: 5 },
+    };
+    expect(pickCareStep([hot], null)).toMatchObject({ tempC: 88, tempVsUsual: { outcome: "same", usual_c: 86, sessions: 5 } });
+    h.incidents = [hot];
+    const { container } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
+    await openDoor(container, "bb-next-depth-receipt");
+    const dl = container.querySelector(".bb-next-receipt")!;
+    const rows = Object.fromEntries([...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
+    expect(rows["Consistent with"]).toBe(
+      "Windows recorded a graphics-driver timeout. In the session running at the time, Compy measured the GPU peaking at 88°C. That is about the same as this card's typical peak of 86°C in 5 earlier sessions of this game for which Compy found no crash record (within 5°C). Compy can't tell whether heat played a part.",
     );
   });
 });

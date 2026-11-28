@@ -2017,6 +2017,20 @@ function isLayer(n: HTMLElement): boolean {
   return !!popup && popup !== "false" && n.getAttribute("aria-expanded") === "true";
 }
 
+/** e8: the toggle of the innermost open disclosure (a row, a fold, "Show more") that holds `from`: `from` itself when
+ *  it is an open toggle, or the open toggle whose `aria-controls` names an element `from` sits in. Null: none. */
+function openDisclosure(from: HTMLElement, root: HTMLElement): HTMLElement | null {
+  const open = Array.from(root.querySelectorAll<HTMLElement>('[aria-expanded="true"]')).filter((b) => !isLayer(b));
+  for (let n: HTMLElement | null = from; n && n !== root; n = n.parentElement) {
+    if (open.includes(n)) return n;
+    const id = n.id;
+    if (!id) continue;
+    const owner = open.find((b) => (b.getAttribute("aria-controls") ?? "").split(/\s+/).includes(id));
+    if (owner) return owner;
+  }
+  return null;
+}
+
 /** The answer region counts as "more below" when more than this many px are still hidden under its bottom edge. */
 const MORE_SLACK_PX = 4;
 
@@ -2071,6 +2085,12 @@ export function ParamedicCard({
   // answer (which "Back" and "Check again" bring back). Nothing here is stored.
   const [questions, setQuestions] = useState(false);
   const [lookAsking, setLookAsking] = useState(false);
+  // e9: in a short window (glass-rooms.css, max-height 899.98px) the open card folds the rest of Home under one
+  // row, "The rest of this page", so the answer gets the room and nothing hides below the fold unannounced. The row
+  // shows it again; closing the card brings Home back and the next open folds it again. The crash banner and the
+  // first-win journey (live apply/undo status) are never folded (review r1 F1).
+  const [homeShown, setHomeShown] = useState(false);
+  const foldNoteId = useId();
   // Bumped when the card is closed or asks anew, so an answer to an earlier ask is dropped.
   const gen = useRef(0);
   const doorRef = useRef<HTMLButtonElement>(null);
@@ -2133,6 +2153,7 @@ export function ParamedicCard({
     gen.current += 1;
     refocus.current = true;
     setQuestions(false);
+    setHomeShown(false);
     setView({ kind: "idle" });
     doorRef.current?.focus();
   };
@@ -2234,17 +2255,23 @@ export function ParamedicCard({
   const dim = busy && !showQuestions;
   // Escape closes the open card from anywhere inside it, exactly when "Close" is offered (an answer, the open
   // questions) and also after a failed or slow check; and not while "Check again" is running over an answer.
-  // An open row, fold or "Show more" is an inline section, not a layer on top: Escape still closes the card from
-  // inside it (focus stays on its toggle, so the old rule made Escape dead once anything was opened). Only a
-  // popover-like layer (a dialog, menu, listbox, tooltip or a toggle that opens one) keeps the key for itself, so it
-  // closes first.
+  // A popover-like layer (a dialog, menu, listbox, tooltip or a toggle that opens one) keeps the key for itself, so it
+  // closes first. e8: an open row, fold or "Show more" that holds the focus (its own toggle, or anything inside what it
+  // opened) closes next, innermost first, and focus goes back to its toggle; one more Escape closes the card. Escape
+  // is never dead: each press closes something (the old "an open disclosure keeps Escape" rule closed nothing).
   const onKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     if (!(view.kind === "done" || view.kind === "failed" || view.kind === "still" || showQuestions)) return;
     for (let n = e.target as HTMLElement | null; n && n !== e.currentTarget; n = n.parentElement) {
       if (isLayer(n)) return;
     }
+    const toggle = openDisclosure(e.target as HTMLElement, e.currentTarget);
     e.preventDefault();
+    if (toggle) {
+      toggle.click();
+      toggle.focus();
+      return;
+    }
     close();
   };
 
@@ -2284,6 +2311,7 @@ export function ParamedicCard({
     const heading = scrollRef.current?.querySelector<HTMLElement>("h2");
     (heading ?? scrollRef.current)?.focus();
   }, [dim]);
+  // The questions can open before any answer (the region mounts then): that region is measured and observed too.
   useEffect(() => {
     measure();
     const el = scrollRef.current;
@@ -2292,10 +2320,10 @@ export function ParamedicCard({
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);
     return () => ro.disconnect();
-  }, [answer, measure]);
+  }, [answer, showQuestions, measure]);
 
   return (
-    <section ref={sectionRef} tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
+    <section ref={sectionRef} tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"} data-home-fold={open ? (homeShown ? "shown" : "folded") : undefined}>
       <div className="gl-card-top">
         <p className="gl-card-sub" data-testid={idleRough ? "paramedic-rough" : undefined}>
           {idleRough || (noGames ? t("paramedic.firstLook.door.sub") : t("paramedic.door.sub"))}
@@ -2379,8 +2407,9 @@ export function ParamedicCard({
             </p>
           )}
           {/* The hint is its own strip under the scroll region, never over its last row. At the end of the region it
-              is hidden, not removed: its space stays reserved so nothing moves when the last row is reached. */}
-          {!showQuestions && scrolls && (
+              is hidden, not removed: its space stays reserved so nothing moves when the last row is reached. The
+              questions ("Which game?", "When did it start?") scroll in the same region and get the same hint. */}
+          {scrolls && (
             <div className="gl-para-more" aria-hidden="true" data-testid="paramedic-more" data-shown={more ? "true" : "false"} style={more ? undefined : { visibility: "hidden" }}>
               <ChevronDown />
               <span>{t("paramedic.card.moreBelow")}</span>
@@ -2412,6 +2441,19 @@ export function ParamedicCard({
           >
             {t("paramedic.card.somethingElse")}
           </button>
+        </div>
+      )}
+      {/* e9: the row that stands for the rest of Home while the open card folds it (CSS shows it, and folds Home,
+          only in a short window). An open disclosure like the card's others: Escape on it folds Home again first,
+          the next Escape closes the card. Folded, Home's content is display:none, so it leaves the tab order and
+          the accessibility tree together and comes back unchanged. */}
+      {open && (
+        <div className="gl-para-homefold" data-testid="paramedic-home-fold">
+          <button type="button" className="gl-para-fold-btn" aria-expanded={homeShown} aria-describedby={homeShown ? undefined : foldNoteId} onClick={() => setHomeShown((s) => !s)}>
+            <Chevron />
+            {t("paramedic.card.restOfPage")}
+          </button>
+          {!homeShown && <span id={foldNoteId} className="gl-para-homefold-note">{t("paramedic.card.restOfPageFolded")}</span>}
         </div>
       )}
     </section>

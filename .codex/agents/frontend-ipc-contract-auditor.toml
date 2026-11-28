@@ -16,7 +16,7 @@ Stack facts:
   local tree is missing one; this lane assumes an already-installed tree and NO network. Do NOT run
   `npm run build` / `vite build` — it writes `dist/` (artifact-mutating, out of this read-only lane);
   defer that and any `npm test`/`vitest` run to the current mutation-lease holder (any executor,
-  Codex included, in a write lane per docs/WORK_CONTROL.md) and name the command in your report.
+  Codex included, in a write lane) and name the command in your report.
   Never `npm install` / fetch dependencies, never start long-lived dev servers or installers, and
   do not assume network access.
 

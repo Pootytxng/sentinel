@@ -12,7 +12,7 @@ are LIVE for ordinary runs started here, not portable scaffolding. (An older hea
 opposite - "NOT LOADED BY DEFAULT ... only when CODEX_HOME points at this directory" - which was
 true of codex-cli 0.146.0 on 2026-08-18 and is not true now.)
 
-Codex is an eligible executor under a mutation lease (docs/WORK_CONTROL.md), not a permanently
+Codex is an eligible executor under a mutation lease, not a permanently
 read-only advisor. This file is the per-run DEFAULT for review runs: it refuses writes and refuses
 to prompt for escalation rather than granting a bypass. A write lane is launched above it with
 explicit `--sandbox` / `-c` overrides (section 3) AND a current mutation lease:
@@ -32,7 +32,7 @@ web-design-director's headless-Chrome capture cannot run here. Those agents degr
 source-only reasoning and MUST say so rather than claim a check they could not execute.
 
 To actually RUN those checks, a VERIFICATION or WRITE lane is launched SEPARATELY under a mutation
-lease (docs/WORK_CONTROL.md) - it is NOT switchable from this file. Codex profiles are
+lease - it is NOT switchable from this file. Codex profiles are
 `[profiles.<name>]` tables in a config.toml, selected at launch with `codex --profile <name>`;
 this tracked file defines none and selects none (the guard pins its exact shape). A verification
 or write lane that needs command execution is therefore started with explicit runtime overrides

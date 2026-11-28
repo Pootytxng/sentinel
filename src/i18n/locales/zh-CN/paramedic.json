@@ -275,8 +275,8 @@
     "title_one": "{{game}} 最近一次运行比平时卡顿得多",
     "title_other": "{{game}} 最近明显比平时卡顿",
     "oneSession": "只有一次运行的数据，参考价值有限。如果下一次运行正常，这次可能只是偶然。",
-    "mixed_one": "有 1 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对它做判断。",
-    "mixed_other": "有 {{count}} 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对它们做判断。"
+    "mixed_one": "有 1 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对其做判断。",
+    "mixed_other": "有 {{count}} 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对其做判断。"
   },
   "finding": {
     "gpuDriver": {
@@ -643,7 +643,9 @@
     "scrollLabel": "Compy 的发现。内容较多时可以滚动查看。",
     "moreBelow": "下面还有",
     "somethingElse": "是别的问题？回答几个问题",
-    "back": "返回上面的结果"
+    "back": "返回上面的结果",
+    "restOfPage": "本页的其余内容",
+    "restOfPageFolded": "卡片打开期间已收起"
   },
   "why": {
     "crossGame": "它恰好在 {{game}} 变卡之前发生，{{games}} 也在紧接着变卡。其他改动没有和每一次卡顿对上。",

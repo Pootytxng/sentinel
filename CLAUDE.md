@@ -14,10 +14,10 @@ Honesty rule: Compy shows its evidence, never invents a problem, says "nothing i
 - `docs/RELEASE_STATE.md` — what is built, installed and released; update it in the commit that changes the state.
 - `docs/QUEUE.md` — the one work list (NOW / NEXT / LATER, waiting on the owner, done, session log).
 - `CLAUDE.md` — this file. `src-tauri/CLAUDE.md` is the Rust module map (read-only half).
-`docs/WORK_CONTROL.md`, `docs/WORK_TRAIN.md` (paused) and `docs/OWNER_DIRECTIVE_2026-10-23.md` are still in the repo but no longer drive work (§38). Older docs are history, not instruction.
+Older docs are history, not instruction.
 
 ## How work runs
-- One writer per scope. Other workers build in `.claude/worktrees/m1-*` on their own branches; do not touch those.
+- One session works the queue: take the top `docs/QUEUE.md` item, branch `claude/<slug>` off `main`, build, test, open a PR, merge it when the gate is green, tick the row. Stop only for the stop rules below.
 - Privilege, rollback and measurement code goes on a branch and gets an independent review before it lands.
 - Gate: `scripts/verify-local.ps1` runs on push (user safety and correctness, about 2 minutes). `npm run test:gate` is its test stage; `npm run test:audit` runs the parked checks weekly and before a release.
 - Never `--no-verify`. Never loosen a guard to get green. Never route around a refused permission; stop and ask.

@@ -45,6 +45,28 @@ const THERMAL_TREND_MIN_C: f64 = 5.0;
 const CPU_THERMAL_TREND_MIN_C: f64 = 5.0;
 /// Total RAM-pressure movement (percentage points) before it is worth reporting.
 const MEMORY_TREND_MIN_PTS: f64 = 5.0;
+/// e7: Compy measures no band for how much a game's peak GPU or CPU temperature moves between
+/// sessions with nothing changed (noise_floor.rs measures 1% lows only). A temperature trend's "normal
+/// variation" is therefore never measured, and its 8 °C line is a fixed number, not a measured band.
+const TEMP_VARIATION_MEASURED: bool = false;
+
+/// e7: a thermal trend may reach Medium only when it is long and large AND the normal variation it
+/// is compared against was measured. Without that measurement it stays Low, however big the move.
+fn thermal_trend_confidence(long_and_large: bool, variation_measured: bool) -> Confidence {
+    if long_and_large && variation_measured {
+        Confidence::Medium
+    } else {
+        Confidence::Low
+    }
+}
+
+/// e7: the reason a long, large thermal trend stays Low: it says what was measured and what wasn't.
+fn thermal_unmeasured_reason(part: &str, game: &str, sessions: usize) -> String {
+    format!(
+        "A move across {sessions} sessions. Compy hasn't measured how much the {part}'s peak temperature in {game} normally varies between sessions, so it can't say how unusual this move is."
+    )
+}
+
 // A session must have ≥ MIN_COMPARE_SAMPLES FPS samples to be comparable — imported from
 // intelligence.rs (one definition, shared) rather than re-declared, so the two can't drift.
 /// Per game, only the most recent N comparable sessions are analyzed (stated in coverage).
@@ -319,7 +341,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             let (first_fit, last_fit) = fitted_span(&temps);
             let change_c = round1(last_fit - first_fit);
             if change_c.abs() >= THERMAL_TREND_MIN_C {
-                let strong = temps.len() >= STRONG_TREND_SESSIONS && change_c.abs() >= 8.0;
+                let long_and_large = temps.len() >= STRONG_TREND_SESSIONS && change_c.abs() >= 8.0;
                 patterns.push(SessionPattern {
                     id: "thermal-trend".into(),
                     game: Some(game.clone()),
@@ -328,9 +350,9 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                         "Peak GPU temperature in {game} moved about {change_c:+.0} °C across {} sessions (fitted ~{:.0} °C → ~{:.0} °C).",
                         temps.len(), first_fit, last_fit
                     ),
-                    confidence: if strong { Confidence::Medium } else { Confidence::Low },
-                    confidence_reason: if strong {
-                        "A sustained multi-session move well past normal variation.".into()
+                    confidence: thermal_trend_confidence(long_and_large, TEMP_VARIATION_MEASURED),
+                    confidence_reason: if long_and_large {
+                        thermal_unmeasured_reason("GPU", game, temps.len())
                     } else {
                         "A small or short-window move — ambient temperature alone can explain a few degrees.".into()
                     },
@@ -362,7 +384,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             let (first_fit, last_fit) = fitted_span(&cpu_temps);
             let change_c = round1(last_fit - first_fit);
             if change_c.abs() >= CPU_THERMAL_TREND_MIN_C {
-                let strong = cpu_temps.len() >= STRONG_TREND_SESSIONS && change_c.abs() >= 8.0;
+                let long_and_large = cpu_temps.len() >= STRONG_TREND_SESSIONS && change_c.abs() >= 8.0;
                 patterns.push(SessionPattern {
                     id: "cpu-thermal-trend".into(),
                     game: Some(game.clone()),
@@ -371,9 +393,9 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                         "Peak CPU temperature in {game} moved about {change_c:+.0} °C across {} sessions (fitted ~{:.0} °C → ~{:.0} °C).",
                         cpu_temps.len(), first_fit, last_fit
                     ),
-                    confidence: if strong { Confidence::Medium } else { Confidence::Low },
-                    confidence_reason: if strong {
-                        "A sustained multi-session move well past normal variation.".into()
+                    confidence: thermal_trend_confidence(long_and_large, TEMP_VARIATION_MEASURED),
+                    confidence_reason: if long_and_large {
+                        thermal_unmeasured_reason("CPU", game, cpu_temps.len())
                     } else {
                         "A small or short-window move — ambient temperature alone can explain a few degrees.".into()
                     },
@@ -925,6 +947,32 @@ mod tests {
         let s: Vec<SessionSummary> = (0..6).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
         let r = detect(&s);
         assert!(r.patterns.iter().all(|p| p.id != "cpu-thermal-trend"));
+    }
+
+    // e7: a long, steep temperature climb used to reach Medium with "well past normal variation", but
+    // Compy never measures how much a game's peak temperature normally varies. Without that it stays
+    // Low and says so. Break check: put back `if strong { Confidence::Medium }` and this fails.
+    #[test]
+    fn a_thermal_trend_never_reaches_medium_against_an_unmeasured_normal_variation() {
+        let s: Vec<SessionSummary> = (0..10)
+            .map(|i| {
+                let mut s = mk_session(&day(i), "cp2077.exe", 100.0);
+                s.peak_gpu_temp_c = Some(60 + (i as u32) * 3); // 60 → 87, 10 sessions
+                s.peak_cpu_temp_c = Some(55 + (i as u32) * 3);
+                s
+            })
+            .collect();
+        let r = detect(&s);
+        for id in ["thermal-trend", "cpu-thermal-trend"] {
+            let p = r.patterns.iter().find(|p| p.id == id).unwrap_or_else(|| panic!("{id} fires"));
+            assert_eq!(p.confidence, Confidence::Low, "{id}");
+            assert!(!p.confidence_reason.contains("normal variation"), "{id}: {}", p.confidence_reason);
+            assert!(p.confidence_reason.contains("hasn't measured"), "{id}: {}", p.confidence_reason);
+        }
+        // The rule itself: Medium needs both a long, large move and a measured variation.
+        assert_eq!(thermal_trend_confidence(true, false), Confidence::Low);
+        assert_eq!(thermal_trend_confidence(false, true), Confidence::Low);
+        assert_eq!(thermal_trend_confidence(true, true), Confidence::Medium);
     }
 
     #[test]

@@ -18,7 +18,7 @@ Judge the actual rendered site whenever you can, never just the source. The stag
 `http://127.0.0.1:4173` when a preview is already running (check first; if down, say so and judge
 from source + note the limitation — do NOT start a preview server yourself, that is the
 mutation-lease holder's job). Capturing real pixels needs a verification lane launched with
-explicit `--sandbox` / `-c` overrides under a lease (docs/WORK_CONTROL.md), NOT this
+explicit `--sandbox` / `-c` overrides under a lease, NOT this
 default one: under read-only + approval_policy="never" a headless-Chrome invocation is DENIED no
 matter what is on PATH (Codex never prompts to run it, it just fails), and `--screenshot=<file>`
 additionally writes a file — a workspace mutation outside read-only. So ONLY when you are RUNNING in

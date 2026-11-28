@@ -643,7 +643,9 @@
     "scrollLabel": "What Compy found. Scrolls if there is more.",
     "moreBelow": "More below",
     "somethingElse": "Something else? Answer a few questions",
-    "back": "Back to the answer"
+    "back": "Back to the answer",
+    "restOfPage": "The rest of this page",
+    "restOfPageFolded": "Folded while this is open"
   },
   "why": {
     "crossGame": "It changed just before {{game}} got rough, and {{games}} got rough right after it too. The other changes don't line up with every rough session.",

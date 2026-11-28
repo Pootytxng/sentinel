@@ -28,7 +28,7 @@ One remains here because a guard pins it to its code and would go red if it move
 
 | Name | Value | Meaning | Source of truth |
 |---|---|---|---|
-| Compaction window | see `.claude/settings.json` | `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, the ONE literal. `tools/entry/context-policy.json`'s `default` must agree or the launcher refuses. | `.claude/settings.json` |
+| Compaction window | see `.claude/settings.json` | `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, the ONE literal. | `.claude/settings.json` |
 
 **Where compaction actually fires is no longer a number in any doc.** It is
 `nativeCompactCeiling(window)` in `scripts/lib/compaction-window.mjs` — window minus a measured
@@ -40,8 +40,6 @@ report for eleven days. **A measured constant is unmeasured the moment you chang
 
 - `.claude/hooks/subagent-model-guard.mjs` — DENIES an opus/fable subagent outside the one
   documented exception (`web-design-director`). Measured compliance: 324/326 runs on sonnet.
-- `.claude/hooks/context-size-advisor.mjs` — Stop-hook persist-to-disk instruction, and it verifies
-  something was actually written rather than only instructing it.
 - `.claude/hooks/subagent-throttle.mjs` and `.claude/hooks/workflow-usage-guard.mjs` — advisory
   reminders. The subagent one was narrowed 2026-09-18 (#479) to fan-out bursts only; it no longer
   nudges against a single delegation, which is the recommended default.

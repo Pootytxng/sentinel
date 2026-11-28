@@ -7,7 +7,7 @@ import { BlackBox } from "./BlackBox";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import i18n from "../i18n";
 import { LEDGER_CHANGED_EVENT } from "../types";
-import type { AppliedChange, BlackBoxReport, CrashIncident, CaseIntelligenceMatch } from "../types";
+import type { AppliedChange, BlackBoxReport, CrashIncident, CaseIntelligenceMatch, PeakVsUsual } from "../types";
 
 // Settable per-test scan response (vi.mock factories are hoisted — this must be too).
 const reportMock = vi.hoisted(() => ({
@@ -54,6 +54,7 @@ function assessedIncident(): CrashIncident {
       detail: "Display driver amdkmdag stopped responding and has recovered.",
     },
     assessment: {
+      rule: "graphics-driver",
       consistent_with: "your graphics driver (amdkmdag) repeatedly timing out",
       strength: "weak", // repeats of one Windows record are one kind of evidence (p1-claims)
       evidence: [
@@ -133,7 +134,10 @@ describe("BlackBox surface (v2 triage UI)", () => {
     reportMock.value = { incidents: [appCrashIncident()], skipped_sources: [] };
     render(<BlackBox />);
     scan();
-    await screen.findByText("What this points to");
+    // e7: a reading that says the record can't tell is headed by what the record shows, never by a
+    // promise of where it points. Break check: put back the single "What this points to" heading.
+    await screen.findByText("What the record shows");
+    expect(screen.queryByText("What this points to")).not.toBeInTheDocument();
     expect(screen.getByTestId("bb-strength").textContent).toBe("Possible");
     expect(screen.queryByText("Most likely")).not.toBeInTheDocument();
     expect(
@@ -163,6 +167,128 @@ describe("BlackBox surface (v2 triage UI)", () => {
       await i18n.changeLanguage("en");
     }
   });
+
+  // e10: a GPU timeout at 88°C, with each way the peak can sit against this card's usual one. The
+  // sentence is the statement, then the comparison, in the room's language; every outcome still says
+  // Compy can't tell whether heat played a part. Break checks: drop `compare:` from assessStatementText
+  // -> every row renders the bare "{{compare}}" and fails; map "higher" to the same key as "hotter" in
+  // PEAK_KEY -> the higher rows fail.
+  const peakIncident = (cmp: PeakVsUsual | undefined): CrashIncident => {
+    const inc = assessedIncident();
+    inc.assessment = {
+      ...inc.assessment!,
+      rule: "overheating",
+      statement: "gpu-timeout-peak",
+      temp_c: 88,
+      temp_vs_usual: cmp,
+      consistent_with: "Windows recorded a graphics-driver timeout (English, never shown for a statement)",
+    };
+    return inc;
+  };
+  const PEAK_CASES: Array<[string, PeakVsUsual | undefined, string, string]> = [
+    [
+      "hotter",
+      { outcome: "hotter", usual_c: 72, sessions: 3 },
+      "That is more than 10°C above this card's typical peak of 72°C in 3 earlier sessions of this game for which Compy found no crash record. A peak hotter than usual is not shown to be the cause: Compy can't tell whether heat played a part.",
+      "这比这张显卡在该游戏中 3 次 Compy 未发现崩溃记录的较早会话里的典型峰值 72°C 高出 10°C 以上。比平时更热未证实是原因：Compy 无法判断发热是否起了作用。",
+    ],
+    [
+      "higher",
+      { outcome: "higher", usual_c: 80, sessions: 4 },
+      "That is 8°C above this card's typical peak of 80°C in 4 earlier sessions of this game for which Compy found no crash record: higher, but not by the more than 10°C Compy counts as hotter than usual. Compy can't tell whether heat played a part.",
+      "这比这张显卡在该游戏中 4 次 Compy 未发现崩溃记录的较早会话里的典型峰值 80°C 高 8°C：偏高，但没有达到 Compy 认定为“比平时更热”的 10°C 以上。Compy 无法判断发热是否起了作用。",
+    ],
+    [
+      "same",
+      { outcome: "same", usual_c: 86, sessions: 5 },
+      "That is about the same as this card's typical peak of 86°C in 5 earlier sessions of this game for which Compy found no crash record (within 5°C). Compy can't tell whether heat played a part.",
+      "这与这张显卡在该游戏中 5 次 Compy 未发现崩溃记录的较早会话里的典型峰值 86°C 大致相同（相差不超过 5°C）。Compy 无法判断发热是否起了作用。",
+    ],
+    [
+      "lower",
+      { outcome: "lower", usual_c: 95, sessions: 3 },
+      "That is below this card's typical peak of 95°C in 3 earlier sessions of this game for which Compy found no crash record. Compy can't tell whether heat played a part.",
+      "这低于这张显卡在该游戏中 3 次 Compy 未发现崩溃记录的较早会话里的典型峰值 95°C。Compy 无法判断发热是否起了作用。",
+    ],
+    [
+      "too few",
+      { outcome: "too-few", sessions: 2 },
+      "To compare it, Compy needs at least 3 earlier sessions of this game on this card, each at least 5 minutes long and mostly measured, with a temperature reading, for which Compy found no crash record, and whose record shows no sign of holding two games, and it has 2. So it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
+      "要做对比，Compy 至少需要这张显卡在该游戏中 3 次较早的会话，每次至少 5 分钟且大部分被测到，有温度读数且 Compy 未发现崩溃记录，记录中也没有包含两款游戏的迹象，目前只有 2 次。所以它无法判断这个峰值对这张显卡来说是否正常，也无法判断发热是否起了作用。",
+    ],
+    // e10 r1 (F2-F4): each thing that kept the comparison from being made is said in plain words.
+    [
+      "unreadable: card not on record",
+      { outcome: "unreadable", why: "card-unknown" },
+      "Compy's record of this session doesn't say which graphics card or game it was, so it can't compare that peak with the card's other sessions, and it can't tell whether heat played a part.",
+      "Compy 对这次会话的记录里没有写明是哪张显卡或哪个游戏，所以无法把这个峰值与这张显卡的其他会话做对比，也无法判断发热是否起了作用。",
+    ],
+    [
+      "unreadable: a short crash session",
+      { outcome: "unreadable", why: "short-session" },
+      "That session was shorter than 5 minutes, or too little of it was measured, so Compy can't compare its peak with this card's full sessions, and it can't tell whether heat played a part.",
+      "那次会话不到 5 分钟，或者测到的部分太少，所以 Compy 无法把它的峰值与这张显卡的完整会话做对比，也无法判断发热是否起了作用。",
+    ],
+    // e11: the crash session itself may hold two games, so its peak may be the other game's. Break check: drop
+    // "maybe-two-games" from UNREADABLE_KEY -> both rows render the general "couldn't read enough" sentence and fail.
+    [
+      "unreadable: the crash session may hold two games",
+      { outcome: "unreadable", why: "maybe-two-games" },
+      "Compy's record of the session this crash fell in may hold two games, so it can't tell which game the peak came from. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "这次崩溃所在的会话记录可能包含两款游戏，所以 Compy 无法判断这个峰值来自哪款游戏。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+    ],
+    [
+      "unreadable: System log not read",
+      { outcome: "unreadable", why: "log-unread" },
+      "Compy couldn't read the Windows System log this time, so it can't tell which of this card's earlier sessions had no crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "Compy 这次没能读取 Windows 系统日志，所以无法判断这张显卡之前的哪些会话没有崩溃记录。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+    ],
+    [
+      "unreadable: Reliability history not read",
+      { outcome: "unreadable", why: "reliability-unread" },
+      "Compy couldn't read Windows' Reliability history this time, so it can't tell which of this card's earlier sessions had no crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "Compy 这次没能读取 Windows 可靠性历史记录，所以无法判断这张显卡之前的哪些会话没有崩溃记录。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+    ],
+    [
+      "unreadable: older than the period the crash scan covers",
+      { outcome: "unreadable", why: "before-scan" },
+      "Some or all of this card's earlier sessions of this game are older than the period Compy's crash scan covers, so Compy can't tell whether they had a crash record, and without them it has fewer than 3 to compare with. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "这张显卡在该游戏中之前的部分或全部会话早于 Compy 这次崩溃扫描覆盖的时段，所以无法判断那些会话是否有崩溃记录；去掉它们后，可对比的会话不足 3 次。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+    ],
+    [
+      "unreadable with no reason given",
+      { outcome: "unreadable" },
+      "Compy couldn't read enough to compare that peak with this card's other sessions, so it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
+      "Compy 读取到的信息不足以把这个峰值与这张显卡的其他会话做对比，所以无法判断这个峰值对这张显卡来说是否正常，也无法判断发热是否起了作用。",
+    ],
+    [
+      "not compared (a record from before e10)",
+      undefined,
+      "Compy hasn't compared that with this card's other sessions, so it can't tell whether heat played a part.",
+      "Compy 还没有把它与这张显卡其他会话的温度做对比，所以无法判断发热是否起了作用。",
+    ],
+  ];
+  for (const loc of ["en", "zh-CN"] as const)
+    for (const [name, cmp, en, zh] of PEAK_CASES)
+      it(`${loc}: a GPU timeout at 88°C whose peak is ${name} renders the statement and that comparison`, async () => {
+        await i18n.changeLanguage(loc);
+        try {
+          reportMock.value = { incidents: [peakIncident(cmp)], skipped_sources: [] };
+          render(<BlackBox />);
+          fireEvent.click(screen.getByRole("button", { name: i18n.t("gaming.blackBox.scanButton") }));
+          await screen.findByTestId("bb-assess");
+          const line = document.querySelector(".bb-assess-line")?.textContent;
+          expect(line).toBe(
+            loc === "en"
+              ? `Windows recorded a graphics-driver timeout. In the session running at the time, Compy measured the GPU peaking at 88°C. ${en}`
+              : `Windows 记录到一次显卡驱动超时。在当时进行的那次会话中，Compy 测得 GPU 峰值温度为 88°C。${zh}`,
+          );
+          expect(line).not.toContain("{{");
+          expect(line).not.toMatch(/\bcaused\b|overheating/i);
+        } finally {
+          await i18n.changeLanguage("en");
+        }
+      });
 
   // e5a (D3 vocabulary): every Black Box band, the reserved strong/partial included, renders the shared
   // "Possible" in both languages and never "Most likely" or a "signal" word. Break checks: map `strong`

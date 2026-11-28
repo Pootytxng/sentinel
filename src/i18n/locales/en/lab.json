@@ -602,6 +602,7 @@
           "gamingModeDiffers": "Gaming Mode wasn't the same as in the sessions before the change",
           "frameCapChanged": "a frame cap held it differently from the sessions before the change, or Compy couldn't tell from its frame rate whether one did",
           "afterWindow": "played after the test's time ran out",
+          "sameSitting": "the game closed and was opened again within 10 minutes, and Compy counts this launch and another as one session",
           "noReading": "no frame-rate reading",
           "other": "a reason this version of Compy doesn't know"
         },

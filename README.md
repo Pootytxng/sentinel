@@ -24,7 +24,7 @@ Built with **Tauri 2** (Rust core in `src-tauri/`) + **React/TypeScript** fronte
 | Product identity, UX, strategy, priorities | [`docs/PRODUCT_CONSTITUTION.md`](docs/PRODUCT_CONSTITUTION.md) |
 | Safety, rollback, privilege, immutable architecture | [`docs/ARCHITECTURE_LOCKS.md`](docs/ARCHITECTURE_LOCKS.md) |
 | Current build/release truth | [`docs/RELEASE_STATE.md`](docs/RELEASE_STATE.md) |
-| Active writer/claim truth | [`docs/WORK_CONTROL.md`](docs/WORK_CONTROL.md) |
+| The one work list | [`docs/QUEUE.md`](docs/QUEUE.md) |
 | Derived product sequence | [`docs/product/ROADMAP.md`](docs/product/ROADMAP.md) |
 | Living execution status | [`docs/BACKLOG.md`](docs/BACKLOG.md) |
 

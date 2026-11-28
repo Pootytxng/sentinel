@@ -38,8 +38,10 @@ function writtenNames(source) {
 }
 
 for (const hook of Object.keys(MARKERS)) {
-  describe(`${hook}: sweeps its own stale markers and nothing else`, () => {
-    const source = readFileSync(join(HOOKS_DIR, `${hook}.mjs`), "utf8");
+  describe.skipIf(!existsSync(join(HOOKS_DIR, `${hook}.mjs`)))(`${hook}: sweeps its own stale markers and nothing else`, () => {
+    // A hook retired by docs/agent-diet-2026-11-28.patch has no source left: its block skips.
+    const hookPath = join(HOOKS_DIR, `${hook}.mjs`);
+    const source = existsSync(hookPath) ? readFileSync(hookPath, "utf8") : "";
 
     it("calls the sweep for itself, in the temp folder", () => {
       expect(source).toContain(`sweepOwnMarkers("${hook}", tmpdir())`);
@@ -62,7 +64,7 @@ for (const hook of Object.keys(MARKERS)) {
       const own = writtenNames(source)[0];
       const oldOwn = plant(scratch, own, now, MAX_AGE_MS + DAY);
       const freshOwn = plant(scratch, own.replace("ab-12-cd", "fresh-1"), now, MAX_AGE_MS - DAY);
-      const otherHook = Object.keys(MARKERS).find((h) => h !== hook);
+      const otherHook = Object.keys(MARKERS).find((h) => h !== hook && existsSync(join(HOOKS_DIR, `${h}.mjs`)));
       const otherName = writtenNames(readFileSync(join(HOOKS_DIR, `${otherHook}.mjs`), "utf8"))[0];
       const oldOther = plant(scratch, otherName, now, MAX_AGE_MS + DAY);
       const unrelated = plant(scratch, "compy-cmp-race-1234-5", now, MAX_AGE_MS + DAY);

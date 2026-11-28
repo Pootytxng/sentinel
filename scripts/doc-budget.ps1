@@ -15,36 +15,8 @@ $budgets = @{
   "docs/BACKLOG.md" = 300
   "docs/OWNER_ACTION_CHECKLIST.md" = 385
   "docs/BETA_DISTRIBUTION_RECORD.md" = 250
-  # 119 -> 107 on 2026-08-31. It said "two rows of room, then it pays again"; both rows went to
-  # #271 and #274, the file hit the cap exactly, and it paid: the 2026-08-21 sweep narrative (three
-  # refs pruned that day, nothing live left in it bar two facts kept behind) moved to
-  # archive/BRANCH_DISPOSITION_SWEEPS.md, taking 119 -> 105 with the new row already in. Same
-  # append-by-design reasoning as before, so the ratchet again leaves exactly two rows of headroom
-  # rather than banking all 14 - a zero-headroom budget fails the next lane for existing.
-  # Prior step: 120 -> 119 on 2026-08-26, when the retired detached checkout's disposition took it
-  # to 123 and two FINISHED narratives (#160 landed and pruned, #193 landed) were archived for it.
-  # 2026-09-01: the cap did NOT move for #309's row, and the payment did not come from a row. The
-  # audit had just proven every one of the 30 refs live, so nothing was retirable -- it came from
-  # the pinned counts in the prose above the table, which had gone stale twice that day by the
-  # hand of the lane adding the row. `refSplit` in branch-disposition-audit.mjs prints the live
-  # split on OK instead. That is the §6 move: the rule that keeps getting broken gets a mechanism,
-  # not another paragraph -- and it freed 3 lines, which at that tip left 105/107 and the two rows
-  # of headroom the ratchet below was set to preserve.
-  # 2026-09-02, corrected in place rather than left to read as current: that headroom is GONE. This
-  # lane merged `main`, which had independently added two rows of its own, so the file lands at
-  # exactly 107/107 -- passing, with nothing spare. The next row here does NOT have a free line to
-  # take and must be paid from `archive/BRANCH_DISPOSITION_SWEEPS.md` before it is written. The cap
-  # does not move for it; that is the whole point of the ratchet.
-  # 82 -> 79 on 2026-09-15, pre-emptive at 82/82 and with the row table long gone (#291): the #65 origin
-  # and the four incident narratives behind the live rules moved verbatim to
-  # archive/BRANCH_DISPOSITION_SWEEPS.md (82 -> 77); two lines of headroom kept.
-  "docs/BRANCH_DISPOSITIONS.md" = 79
   "docs/RELEASE_AUTONOMY.md" = 120
   "docs/RELEASE_TRANSACTION.md" = 120
-  # 120 -> 116 on 2026-09-15, pre-emptive at 119/120: the Shipped / Self-review / Harvest rows, the DIR-1a
-  # walk record and the three reachability cases moved verbatim to archive/SESSION_HANDOFF_HISTORY.md
-  # (119 -> 114); two lines of headroom kept, per the ratchet rule above.
-  "docs/SESSION_HANDOFF.md" = 116
   # Tightened 400 -> 380 on 2026-08-04, when the module map's read-only half moved to
   # src-tauri/CLAUDE.md. Without the tightening the root just refills to 400 and the split bought
   # nothing; the banked headroom is what keeps the always-loaded doc smaller.

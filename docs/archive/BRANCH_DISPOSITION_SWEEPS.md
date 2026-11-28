@@ -3,11 +3,11 @@
 > Moved out of `docs/BRANCH_DISPOSITIONS.md` on 2026-08-21 under TOKEN LAW §1 (current state only —
 > history moves, never gets deleted) to pay for the #126 sweep record. These are point-in-time
 > narratives of sweeps whose refs are all long gone; the live file keeps only the CURRENT sweep and
-> the CURRENT rows. Back to the live file: [`../BRANCH_DISPOSITIONS.md`](../BRANCH_DISPOSITIONS.md).
+> the CURRENT rows. Back to the live file: `../BRANCH_DISPOSITIONS.md` (retired 2026-11-28).
 
 ## Incident record behind the live rules, moved verbatim 2026-09-15 (line budget)
 
-Moved from [`../BRANCH_DISPOSITIONS.md`](../BRANCH_DISPOSITIONS.md) when it stood at 82/82 lines; the cap ratcheted 82 -> 79 in the same commit. The rules stay live; the incidents that produced them live here, as they stood.
+Moved from `../BRANCH_DISPOSITIONS.md` (retired 2026-11-28) when it stood at 82/82 lines; the cap ratcheted 82 -> 79 in the same commit. The rules stay live; the incidents that produced them live here, as they stood.
 
 **Why the file exists (#65):**
 

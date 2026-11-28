@@ -340,19 +340,144 @@ pub(crate) fn between_session_pacing_noise(
     unchanged_spread(sessions, now, ledger, |s| s.frame_pacing.as_ref().and_then(|p| p.p99_over_p50()))
 }
 
+// ─── Sittings (e12) ───────────────────────────────────────────────────────
+
+/// One recorded row as the shared sitting rule (`session_boundary::group_sittings`) reads it, read the way
+/// the Paramedic card reads the same row (`paramedic::facts_from`): its stamps as the card takes them, and
+/// the card's own "can be judged" rule (`blackbox::peak_judgeable`, which a paramedic test pins against the
+/// card). A paramedic test pins this grouping against the card's own sittings.
+struct RecordedLaunch<'s> {
+    s: &'s crate::sessions::SessionSummary,
+    start: Option<chrono::DateTime<chrono::Utc>>,
+    driver: Option<String>,
+    rig: Option<String>,
+    cap: CapRead,
+}
+
+impl<'s> RecordedLaunch<'s> {
+    fn of(s: &'s crate::sessions::SessionSummary) -> Self {
+        let gs = s.game_state.as_ref();
+        let fp = s.hw_fingerprint.as_ref();
+        let driver = gs
+            .and_then(|g| g.gpu_driver.clone())
+            .or_else(|| fp.map(|f| f.gpu_driver.clone()))
+            .filter(|d| !d.trim().is_empty());
+        RecordedLaunch {
+            s,
+            start: parse(&s.started_at).map(|t| t.with_timezone(&chrono::Utc)),
+            driver,
+            rig: fp.map(|f| format!("{}|{}", f.gpu, f.ram_gb)),
+            cap: cap_read(s),
+        }
+    }
+}
+
+impl crate::session_boundary::SittingLaunch for RecordedLaunch<'_> {
+    fn launch_start(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.start
+    }
+    fn launch_end(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        let length = chrono::Duration::try_seconds(i64::try_from(self.s.duration_secs).ok()?)?;
+        self.start?.checked_add_signed(length)
+    }
+    fn launch_ended(&self) -> Option<crate::session_boundary::SessionEnd> {
+        self.s.ended
+    }
+    fn launch_secs(&self) -> u64 {
+        self.s.duration_secs
+    }
+    fn launch_judgeable(&self) -> bool {
+        crate::blackbox::peak_judgeable(self.s)
+    }
+    /// The card's stamp rule (`paramedic::same_stamps`): a stamp unread on either side never differs.
+    fn same_stamps(&self, other: &Self) -> bool {
+        fn same<T: PartialEq>(x: Option<&T>, y: Option<&T>) -> bool {
+            match (x, y) {
+                (Some(p), Some(q)) => p == q,
+                _ => true,
+            }
+        }
+        let (a, b) = (self.s.game_state.as_ref(), other.s.game_state.as_ref());
+        let cap = match (self.cap, other.cap) {
+            (CapRead::Unknown, _) | (_, CapRead::Unknown) => true,
+            (p, q) => cap_pair(p, q) == CapPair::Same,
+        };
+        same(self.driver.as_ref(), other.driver.as_ref())
+            && same(a.and_then(|g| g.windows_build.as_ref()), b.and_then(|g| g.windows_build.as_ref()))
+            && same(a.and_then(|g| g.power_plan_guid.as_ref()), b.and_then(|g| g.power_plan_guid.as_ref()))
+            && same(a.and_then(|g| g.display_refresh_hz.as_ref()), b.and_then(|g| g.display_refresh_hz.as_ref()))
+            && same(self.s.compy_changes_active.as_ref(), other.s.compy_changes_active.as_ref())
+            && same(self.rig.as_ref(), other.rig.as_ref())
+            && cap
+    }
+}
+
+/// Pure (e12): for each row of `sessions`, whether it is a launch the sitting rule folds into another launch
+/// of its game: a game that closed and was opened again within `session_boundary::SITTING_GAP_MINUTES` is one
+/// sitting, and the caller reads at most one launch of it: the one `session_boundary::sitting_value_for`
+/// keeps (e12 r1 F1: of the launches the caller can use, `usable`, the card's pick, its longest launch the
+/// card can judge, else its longest; with none usable, the card's pick). Grouped as the card groups: per game
+/// (its process name, case and spaces aside), oldest first, rows with a readable start that the capture flag
+/// does not mark as possibly two games (`session_boundary::suspected_splice`, read with no crash marks); a
+/// marked row between two launches keeps them apart. Only rows folded into another are `true`; every other
+/// row is as it was. Two launches the card can judge are never one sitting, so they stay two.
+pub(crate) fn folded_into_sitting(
+    sessions: &[&crate::sessions::SessionSummary],
+    usable: impl Fn(&crate::sessions::SessionSummary) -> bool,
+) -> Vec<bool> {
+    use crate::session_boundary::{group_sittings, sitting_value_for, suspected_splice, Splice};
+    let mut folded = vec![false; sessions.len()];
+    let launches: Vec<RecordedLaunch<'_>> = sessions.iter().map(|s| RecordedLaunch::of(s)).collect();
+    let marked: Vec<bool> = sessions.iter().map(|s| matches!(suspected_splice(s, &[]), Splice::Suspected(_))).collect();
+    let mixed: Vec<chrono::DateTime<chrono::Utc>> = (0..sessions.len()).filter(|&i| marked[i]).filter_map(|i| launches[i].start).collect();
+    let key = |i: usize| sessions[i].process_name.trim().to_ascii_lowercase();
+    let rows: Vec<usize> = (0..sessions.len()).filter(|&i| !marked[i] && launches[i].start.is_some()).collect();
+    let mut games: Vec<String> = rows.iter().map(|&i| key(i)).collect();
+    games.sort();
+    games.dedup();
+    for game in games {
+        let mut mine: Vec<usize> = rows.iter().copied().filter(|&i| key(i) == game).collect();
+        mine.sort_by_key(|&i| launches[i].start);
+        let game_rows: Vec<&RecordedLaunch<'_>> = mine.iter().map(|&i| &launches[i]).collect();
+        for g in group_sittings(&game_rows, &mixed).iter().filter(|g| g.len() > 1) {
+            let rep = sitting_value_for(&game_rows, g, |k| usable(sessions[mine[k]]));
+            for &k in g.iter().filter(|&&k| k != rep) {
+                folded[mine[k]] = true;
+            }
+        }
+    }
+    folded
+}
+
 /// The sessions a measurement under `now` may read, oldest first: long enough to be a baseline, of
 /// `now`'s game on its rig under its driver and Windows build ([`still_current`]), with a start that
-/// can be read.
+/// can be read. e12: at most one launch per sitting ([`folded_into_sitting`], keeping a launch this
+/// reader can use), so a game that closed and was opened again within ten minutes gives one sample
+/// of the noise; two launches the card can judge stay two sittings, and two samples. e12 r1 F2: the
+/// sittings are worked out with `session` among the rows even when the caller left it out of
+/// `sessions` (the session-end notice judges the session that just ended against the store without
+/// it), so a launch of `session`'s own sitting is folded as it is on the whole store.
 fn sessions_like<'s>(
     sessions: &'s [crate::sessions::SessionSummary],
+    session: &crate::sessions::SessionSummary,
     now: &NoiseConditions,
 ) -> Vec<(chrono::DateTime<chrono::FixedOffset>, &'s crate::sessions::SessionSummary)> {
+    let usable = |s: &crate::sessions::SessionSummary| {
+        s.samples >= crate::experiment::MIN_BASELINE_SAMPLES
+            && !s.mostly_unread() // M6-unread: an untrusted session must not move the noise band
+            && NoiseConditions::of_session(s).is_some_and(|c| still_current(&c, now))
+            && parse(&s.started_at).is_some()
+    };
+    let mut rows: Vec<&crate::sessions::SessionSummary> = sessions.iter().collect();
+    if !sessions.iter().any(|s| s.started_at == session.started_at) {
+        rows.push(session);
+    }
+    let folded = folded_into_sitting(&rows, usable);
     let mut like: Vec<_> = sessions
         .iter()
-        .filter(|s| s.samples >= crate::experiment::MIN_BASELINE_SAMPLES)
-        .filter(|s| !s.mostly_unread()) // M6-unread: an untrusted session must not move the noise band
-        .filter(|s| NoiseConditions::of_session(s).is_some_and(|c| still_current(&c, now)))
-        .filter_map(|s| Some((parse(&s.started_at)?, s)))
+        .zip(&folded)
+        .filter(|(s, folded)| !**folded && usable(s))
+        .filter_map(|(s, _)| Some((parse(&s.started_at)?, s)))
         .collect();
     like.sort_by_key(|(at, _)| *at);
     like
@@ -377,7 +502,7 @@ pub(crate) fn current_unchanged_run<'s>(
     let from = began - chrono::Duration::days(window_days);
     let mut run: Vec<&crate::sessions::SessionSummary> = Vec::new();
     let mut next = now;
-    for &(at, s) in sessions_like(sessions, &conditions).iter().rev() {
+    for &(at, s) in sessions_like(sessions, now, &conditions).iter().rev() {
         if at > began {
             continue;
         }
@@ -731,7 +856,7 @@ pub(crate) fn as_is_run_skipping<'s>(
     let mut run: Vec<&crate::sessions::SessionSummary> = Vec::new();
     let mut cap_unread = 0usize;
     let mut next = now;
-    for &(at, s) in sessions_like(sessions, &conditions).iter().rev() {
+    for &(at, s) in sessions_like(sessions, now, &conditions).iter().rev() {
         if at > began {
             continue;
         }
@@ -1277,6 +1402,89 @@ pub(crate) mod tests {
         assert_eq!(got.sessions, 4);
         assert!((got.spread_pct - spread(147.0, 156.0)).abs() < 1e-9, "{got:?}");
         assert!((noise_band_pct(Some(&got)) - spread(147.0, 156.0)).abs() < 1e-9, "a wider spread is the band");
+    }
+
+    /// e12: a game that closed and was opened again within ten minutes is one sitting, and the noise is
+    /// measured on one launch of it, never on two (the card's rule, `session_boundary::group_sittings`). Here
+    /// the 17:00 launch ended with its process gone and the game was opened again at 17:25 for a 40-minute
+    /// launch measured for under half of its time (long enough for the noise, not one the card judges): one
+    /// sitting, measured by the 17:00 launch. The 1% low of the relaunch (156) would widen the spread.
+    /// Break check: drop the `folded_into_sitting` filter in `sessions_like` and four sessions are read.
+    #[test]
+    fn a_crash_and_relaunch_is_one_sitting_for_the_noise_band_and_the_as_is_run() {
+        let mut s = vec![
+            played("2026-10-25T17:00:00+00:00", 150.0, 14),
+            played("2026-10-25T17:25:00+00:00", 156.0, 14),
+            played("2026-10-25T19:00:00+00:00", 147.0, 14),
+            played("2026-10-25T19:30:00+00:00", 153.0, 14),
+        ];
+        s[0].ended = Some(crate::session_boundary::SessionEnd::ProcessExited);
+        (s[1].duration_secs, s[1].background_secs_excluded) = (2400, Some(0));
+        assert!(s[1].samples >= crate::experiment::MIN_BASELINE_SAMPLES && !crate::blackbox::peak_judgeable(&s[1]));
+        let fold = |s: &[SessionSummary]| folded_into_sitting(&s.iter().collect::<Vec<_>>(), |_| true);
+        assert_eq!(fold(&s), [false, true, false, false]);
+        let got = between_session_noise(&s, &s[3], &settled()).expect("three sittings measure it");
+        assert_eq!(got.sessions, 3);
+        assert!((got.spread_pct - spread(147.0, 153.0)).abs() < 1e-9, "{got:?}");
+        let run = current_unchanged_run(&s, &s[3], &settled(), crate::comparison::ARM_MAX_AGE_DAYS);
+        assert_eq!(run.iter().map(|r| r.started_at.as_str()).collect::<Vec<_>>(), [&s[0], &s[2], &s[3]].map(|r| r.started_at.as_str()));
+        // Opened again more than ten minutes later, the same launch is a sitting of its own, as before.
+        s[1].started_at = "2026-10-25T17:31:00+00:00".into();
+        assert_eq!(fold(&s), [false; 4]);
+        assert_eq!(between_session_noise(&s, &s[3], &settled()).map(|n| n.sessions), Some(4));
+    }
+
+    /// e12 r1 F1: a sitting with no launch the card can judge gives the noise the launch it can USE. The 18:00
+    /// launch (700 readings over 30 minutes) closed and the game was opened again at 18:35 for an hour that
+    /// recorded 100 readings. The card's pick is the longer one, which the noise can't read; the noise keeps
+    /// the 18:00 one, so the sitting still gives one sample. Break check: make
+    /// `session_boundary::sitting_value_for` return the card's `sitting_value` and this reads two sessions
+    /// (unmeasured).
+    #[test]
+    fn a_sitting_gives_the_noise_the_launch_it_can_use_not_a_longer_unusable_one() {
+        let mut s = vec![
+            played("2026-10-25T18:00:00+00:00", 150.0, 14),
+            played("2026-10-25T18:35:00+00:00", 156.0, 14),
+            played("2026-10-25T20:00:00+00:00", 147.0, 14),
+            played("2026-10-25T20:30:00+00:00", 153.0, 14),
+        ];
+        (s[0].duration_secs, s[0].samples, s[0].background_secs_excluded) = (1800, 700, Some(0));
+        s[0].ended = Some(crate::session_boundary::SessionEnd::ProcessExited);
+        (s[1].duration_secs, s[1].samples, s[1].background_secs_excluded) = (3600, 100, Some(0));
+        assert!(!crate::blackbox::peak_judgeable(&s[0]) && !crate::blackbox::peak_judgeable(&s[1]));
+        assert_eq!(folded_into_sitting(&s.iter().collect::<Vec<_>>(), |_| true), [true, false, false, false], "the card's pick");
+        let got = between_session_noise(&s, &s[3], &settled()).expect("one sample from the sitting");
+        assert_eq!(got.sessions, 3);
+        assert!((got.spread_pct - spread(147.0, 153.0)).abs() < 1e-9, "{got:?}");
+    }
+
+    /// e12 r1 F2: the session-end notice (`experiment::session_end_notice_now`) measures the band for the
+    /// session that just ended against the store WITHOUT it. Its sitting is still worked out with it: the
+    /// 18:00 launch (enough readings for the noise, under half of its time measured) closed and the game was
+    /// opened again at 18:45, the session being judged. On the whole store the 18:00 launch is folded into
+    /// it, so it is not a sample of the band that judges it either. Break check: drop the `rows.push(session)`
+    /// in `sessions_like` and four sessions are measured.
+    #[test]
+    fn the_band_for_a_session_that_just_ended_leaves_out_its_own_sittings_other_launch() {
+        let mut store = vec![
+            played("2026-10-25T16:00:00+00:00", 150.0, 14),
+            played("2026-10-25T16:30:00+00:00", 152.0, 14),
+            played("2026-10-25T17:00:00+00:00", 151.0, 14),
+            played("2026-10-25T18:00:00+00:00", 140.0, 14),
+            played("2026-10-25T18:45:00+00:00", 150.0, 14),
+        ];
+        for x in store.iter_mut() {
+            x.fps_series = free_series(240.0);
+        }
+        (store[3].duration_secs, store[3].background_secs_excluded) = (2400, Some(0));
+        store[3].ended = Some(crate::session_boundary::SessionEnd::ProcessExited);
+        let just_ended = store[4].clone();
+        // What session_end_notice_now passes: the store minus the session that just ended.
+        let others: Vec<SessionSummary> = store.iter().filter(|s| s.started_at != just_ended.started_at).cloned().collect();
+        let n = measure_game_noise(&others, &just_ended, &settled()).expect("measured");
+        assert_eq!(n.sessions, 3, "{n:?}");
+        // The same as on the whole store, where the just-ended session is itself measured too.
+        assert_eq!(measure_game_noise(&store, &just_ended, &settled()).map(|n| n.sessions), Ok(4));
     }
 
     #[test]
@@ -1941,9 +2149,9 @@ pub(crate) mod tests {
     fn a_mostly_unread_session_does_not_move_the_noise_band() {
         let conditions = NoiseConditions::of_session(&played("2026-09-01T10:00:00+00:00", 100.0, 0)).unwrap();
         let mut all: Vec<SessionSummary> = (1..=3).map(|d| played(&format!("2026-09-0{d}T10:00:00+00:00"), 100.0, 0)).collect();
-        assert_eq!(sessions_like(&all, &conditions).len(), 3);
+        assert_eq!(sessions_like(&all, &all[0], &conditions).len(), 3);
         all[1].unreadable_seconds = 600; // of 1200 s
-        let like = sessions_like(&all, &conditions);
+        let like = sessions_like(&all, &all[0], &conditions);
         assert_eq!(like.len(), 2, "the untrusted session is left out of the band");
         assert!(like.iter().all(|(_, s)| !s.mostly_unread()));
     }

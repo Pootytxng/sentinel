@@ -12,11 +12,8 @@
       "Bash(npx vitest run *)",
       "Bash(node scripts/run-vitest.mjs *)",
       "Bash(pwsh -NoProfile -File scripts/doc-budget.ps1)",
-      "Bash(node scripts/branch-disposition-audit.mjs *)",
       "Bash(node scripts/verify-release-state.mjs *)",
-      "Bash(npx tsc --noEmit *)",
-      "Bash(node scripts/work-control-gate.mjs *)",
-      "Bash(gh project item-list *)"
+      "Bash(npx tsc --noEmit *)"
     ],
     "deny": [
       "Bash(npm publish*)",
@@ -30,53 +27,7 @@
     ]
   },
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-root-assert.mjs\"",
-            "timeout": 10,
-            "statusMessage": "compy-entry:session-assert"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/context-size-advisor.mjs\"",
-            "timeout": 10,
-            "statusMessage": "context-size advisor"
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
-      {
-        "matcher": "Write|Edit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/project-write-assert.mjs\"",
-            "timeout": 10,
-            "statusMessage": "compy-entry:write-assert"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/shell-ownership-assert.mjs\"",
-            "timeout": 10,
-            "statusMessage": "compy-entry:shell-ownership"
-          }
-        ]
-      },
       {
         "matcher": "Workflow",
         "hooks": [
@@ -143,17 +94,6 @@
             "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"",
             "timeout": 5,
             "statusMessage": "Checking UI changes"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/scope-drift-check.mjs\"",
-            "timeout": 10,
-            "statusMessage": "compy-entry:scope-drift"
           }
         ]
       },

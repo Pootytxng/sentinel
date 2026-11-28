@@ -2421,6 +2421,33 @@ mod recovery_f3 {
         assert_eq!(run(v).state, unclear(false, true, false));
     }
 
+    // e11: a session that may hold two games is never the baseline and never counts towards the sessions a
+    // comparison needs; the note names it.
+    #[test]
+    fn a_session_that_may_contain_two_games_is_never_the_baseline_nor_counted_towards_one() {
+        // `n` usual sessions (days 1 to n, the last one flagged or not), then a rough one on day 9.
+        let series = |n: u32, mixed: bool| {
+            let mut v: Vec<SessionFacts> = (1..=n).map(|d| on(d, 50.0, Some("1.0"))).collect();
+            v.last_mut().expect("a session").mixed = mixed;
+            v.push(on(9, 30.0, Some("2.0")));
+            v
+        };
+        let clean = run(series(3, false));
+        assert_eq!(clean.state, DiagnosisState::Found, "{:?}", clean.state);
+        assert_eq!(clean.baseline.as_ref().expect("baseline").started_at, at_day(3, 10));
+        assert!(clean.mixed_sessions.is_empty());
+        // Day 3 flagged: two usual sessions are left, fewer than a comparison needs, and nothing is found.
+        let d = run(series(3, true));
+        assert_eq!(d.mixed_sessions, [at_day(3, 10)]);
+        assert_ne!(d.state, DiagnosisState::Found, "{:?}", d.state);
+        assert!(d.baseline.as_ref().is_none_or(|b| b.started_at != at_day(3, 10)), "{:?}", d.baseline);
+        // With a fourth session flagged, three usual ones are left: the comparison stands, never on the flagged one.
+        let four = run(series(4, true));
+        assert_eq!(four.state, DiagnosisState::Found, "{:?}", four.state);
+        assert_eq!(four.baseline.as_ref().expect("baseline").started_at, at_day(3, 10));
+        assert_eq!(four.mixed_sessions, [at_day(4, 10)]);
+    }
+
     // N2: one rough session is enough, and the engine says so as one.
     #[test]
     fn one_rough_session_is_a_finding_and_counts_as_one() {
@@ -5424,6 +5451,88 @@ mod temperature_and_crashes {
     }
 
     // ---- temperature ----
+    /// e10: the Black Box compares a crash session's peak with this card's usual one by the card's own rule.
+    /// The two lines are one definition (blackbox.rs, re-exported by extras.rs); the session minimum and
+    /// window are the card's baseline ones, pinned here because the Black Box may not depend on this module.
+    #[test]
+    fn the_crash_peak_comparison_uses_the_cards_lines_and_baseline_size() {
+        assert_eq!((TEMP_SAME_C, TEMP_HOTTER_C), (crate::blackbox::TEMP_SAME_C, crate::blackbox::TEMP_HOTTER_C));
+        assert_eq!(crate::blackbox::PEAK_BASELINE_MIN, BASELINE_MIN);
+        assert_eq!(crate::blackbox::PEAK_BASELINE_MAX, BASELINE_MAX);
+        // e10 r1 F1: which sessions count is the card's own rule, mirrored in blackbox.rs. The numbers...
+        assert_eq!(crate::blackbox::PEAK_MIN_SECS, MIN_JUDGE_SECS);
+        assert_eq!(crate::blackbox::PEAK_MIN_SAMPLES, MIN_JUDGE_SAMPLES);
+        assert_eq!(crate::blackbox::PEAK_MIN_COVERAGE, MIN_JUDGE_COVERAGE);
+        assert_eq!(crate::blackbox::PEAK_BASELINE_COVERAGE, BASELINE_COVERAGE);
+        // ...and the predicate: on each case, the mirror answers what the card's `judgeable` (and its
+        // baseline coverage) answers for the same recorded session.
+        let with = |f: &dyn Fn(&mut crate::sessions::SessionSummary)| {
+            let mut s = summary();
+            f(&mut s);
+            s
+        };
+        let cases = [
+            summary(),
+            with(&|s| s.duration_secs = 299),
+            with(&|s| {
+                s.duration_secs = 300;
+                s.samples = 250;
+                s.background_secs_excluded = Some(0);
+            }),
+            with(&|s| s.samples = 249),
+            with(&|s| s.samples = 360),
+            with(&|s| s.samples = 470),
+            with(&|s| {
+                s.samples = 0;
+                s.background_secs_excluded = Some(600);
+            }),
+            with(&|s| s.unreadable_seconds = 300),
+            with(&|s| s.low1_fps_est = 0.0),
+            with(&|s| s.avg_fps = f64::NAN),
+            // e11: readings stop for 200 s and come back at half the level on an older row (no recorded end): the
+            // card's flag says it may hold two games, so neither the card nor the mirror takes it as a usual session.
+            with(&|s| s.fps_series = (0..300).step_by(10).map(|t| (t, 200.0)).chain((500..800).step_by(10).map(|t| (t, 100.0))).collect()),
+        ];
+        let mut judged = 0;
+        let mut normal = 0;
+        assert!(facts_from(&cases[cases.len() - 1]).mixed, "the last case is one the card leaves out as possibly two games");
+        for (i, s) in cases.iter().enumerate() {
+            let f = facts_from(s);
+            assert_eq!(crate::blackbox::peak_judgeable(s), f.judgeable(), "case {i}");
+            // e11: the card never takes a session flagged as possibly two games into a baseline (`game_rows`).
+            let card_normal = f.judgeable() && f.coverage() >= BASELINE_COVERAGE && !f.mixed;
+            assert_eq!(crate::blackbox::peak_reference_eligible(s), card_normal, "case {i}");
+            judged += usize::from(f.judgeable());
+            normal += usize::from(card_normal);
+        }
+        // Not vacuous: some cases pass each rule and some fail it.
+        assert!(judged > normal && normal > 0 && judged < cases.len(), "{judged} judged, {normal} normal");
+        // e10 r2 F2: the edges, pinned on BOTH sides, so changing the background subtraction or a >= to a > on
+        // either side fails here (not only a mismatch between the two). All are 600 s sessions.
+        let edge = |bg: u32, samples: u32| {
+            with(&|s| {
+                s.background_secs_excluded = Some(bg);
+                s.samples = samples;
+            })
+        };
+        // (session, judged, normal): 330 of 400 foreground seconds is 0.825 (0.55 if background were not
+        // subtracted); 480 of 600 is exactly 0.80; 479 just under; 300 of 600 exactly 0.50; 299 just under.
+        let edges = [
+            (edge(200, 330), true, true),
+            (edge(0, 480), true, true),
+            (edge(0, 479), true, false),
+            (edge(0, 300), true, false),
+            (edge(0, 299), false, false),
+        ];
+        for (i, (s, judged, normal)) in edges.iter().enumerate() {
+            let f = facts_from(s);
+            assert_eq!(f.judgeable(), *judged, "card, edge {i}");
+            assert_eq!(f.judgeable() && f.coverage() >= BASELINE_COVERAGE, *normal, "card, edge {i}");
+            assert_eq!(crate::blackbox::peak_judgeable(s), *judged, "mirror, edge {i}");
+            assert_eq!(crate::blackbox::peak_reference_eligible(s), *normal, "mirror, edge {i}");
+        }
+    }
+
     #[test]
     fn five_degrees_above_the_normal_peak_is_unchanged_and_six_is_neither_unchanged_nor_a_candidate() {
         assert_eq!(TEMP_SAME_C, 5);
@@ -7036,6 +7145,67 @@ fn a_sittings_value_is_its_longest_judgeable_launch_else_its_longest() {
     assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 600, 600), row("2026-10-03T10:20:00Z", 600, 600)]), 0);
     assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 600, 600), row("2026-10-03T10:20:00Z", 5000, 10)]), 0);
     assert_eq!(pick(&[short.clone(), row("2026-10-03T10:05:00Z", 40, 40)]), 1);
+}
+
+/// e12: the noise bands and real play group a store's recorded rows into sittings with the card's own rule
+/// (`session_boundary::group_sittings`), reading each row as the card reads it (`noise_floor::folded_into_sitting`,
+/// which may not depend on this module). On the same store, a row is folded into another launch there exactly
+/// when the card has it in a sitting it stands for by another launch. Break check: drop the driver comparison
+/// from `RecordedLaunch::same_stamps` in noise_floor.rs and the 11:15 fragment (another driver) is folded there
+/// but not on the card.
+#[test]
+fn the_noise_bands_and_real_play_fold_launches_into_the_cards_own_sittings() {
+    use crate::session_boundary::SessionEnd::{CaptureStopped, ProcessExited};
+    let launch = |at: &str, secs: u64, samples: u32, end: Option<SessionEnd>| {
+        let mut s = summary();
+        s.started_at = at.into();
+        s.duration_secs = secs;
+        s.samples = samples;
+        s.background_secs_excluded = Some(0);
+        s.ended = end;
+        s
+    };
+    let exited = Some(ProcessExited);
+    let mut store = vec![
+        launch("2026-10-03T10:00:00+00:00", 120, 120, exited), // 0: a fragment, opened again 3 minutes later
+        launch("2026-10-03T10:05:00+00:00", 600, 600, exited), // 1: judgeable: stands for {0, 1}
+        launch("2026-10-03T10:16:00+00:00", 600, 600, exited), // 2: judgeable too: a sitting of its own
+        launch("2026-10-03T10:30:00+00:00", 2400, 1170, exited), // 3: long, but under half of it measured: folded into 2
+        launch("2026-10-03T11:15:00+00:00", 120, 120, Some(CaptureStopped)), // 4: another driver: never joins 3
+        launch("2026-10-03T11:20:00+00:00", 120, 120, exited), // 5: after a stopped capture: never joins 4
+        launch("2026-10-03T11:30:00+00:00", 600, 600, exited), // 6: the same game in other letters: stands for {5, 6}
+        launch("2026-10-03T11:31:00+00:00", 120, 120, exited), // 7: another game
+        launch("2026-10-03T12:00:00+00:00", 120, 120, exited), // 8: a fragment...
+        launch("2026-10-03T12:03:00+00:00", 600, 600, None), // 9: ...a row that may hold two games...
+        launch("2026-10-03T12:05:00+00:00", 600, 600, exited), // 10: ...keeps 8 and 10 apart
+        launch("2026-10-03T13:00:00+00:00", 600, 600, None), // 11: no recorded end: never joined to 12
+        launch("2026-10-03T13:12:00+00:00", 120, 120, exited), // 12
+        launch("2026-10-03T13:32:00+00:00", 600, 600, exited), // 13: 18 minutes after 12 ended: its own sitting
+        launch("2026-10-03T13:43:00+00:00", 120, 120, exited), // 14: another refresh rate: never joins 13
+    ];
+    store[4].game_state = Some(crate::game_state::GameStateFingerprint { gpu_driver: Some("9.9.9".into()), ..Default::default() });
+    store[6].process_name = " game-win64-shipping.EXE ".into();
+    store[7].process_name = "Other.exe".into();
+    store[9].fps_series = (0..300).step_by(10).map(|t| (t, 200.0)).chain((500..800).step_by(10).map(|t| (t, 100.0))).collect();
+    store[13].game_state = Some(crate::game_state::GameStateFingerprint { display_refresh_hz: Some(144), ..Default::default() });
+    store[14].game_state = Some(crate::game_state::GameStateFingerprint { display_refresh_hz: Some(60), ..Default::default() });
+    assert!(facts_from(&store[9]).mixed, "row 9 is one the card leaves out as possibly two games");
+    assert!(!facts_from(&store[3]).judgeable() && store[3].samples >= crate::experiment::MIN_BASELINE_SAMPLES);
+
+    let inp = inputs_from_parts(&store, &[], &[]);
+    let card_reps: Vec<String> = ["Game-Win64-Shipping.exe", "Other.exe"]
+        .iter()
+        .flat_map(|g| game_sessions(&inp, g).into_iter().map(|s| s.started_at.clone()).collect::<Vec<_>>())
+        .collect();
+    // Every launch usable, so the kept one is the card's own pick (`session_boundary::sitting_value_for`).
+    let folded = crate::noise_floor::folded_into_sitting(&store.iter().collect::<Vec<_>>(), |_| true);
+    for (i, s) in store.iter().enumerate() {
+        let card_row = !facts_from(s).mixed;
+        assert_eq!(folded[i], card_row && !card_reps.contains(&s.started_at), "row {i} ({})", s.started_at);
+    }
+    // Not vacuous, and pinned on both sides: these three, and only these, are folded.
+    let got: Vec<usize> = (0..store.len()).filter(|&i| folded[i]).collect();
+    assert_eq!(got, [0, 3, 5]);
 }
 
 fn sittings_episode(first: SessionFacts, relaunch: SessionFacts) -> Vec<SessionFacts> {

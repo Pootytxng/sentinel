@@ -804,6 +804,7 @@ export function ParamedicFirstLook({
   const listTimer = useRef<number | undefined>(undefined);
   const alive = useRef(true);
   const headingId = useId();
+  const gamesId = useId();
 
   useEffect(() => {
     alive.current = true;
@@ -909,8 +910,14 @@ export function ParamedicFirstLook({
           <h2 id={headingId} ref={headingRef} tabIndex={-1} className="gl-card-title">
             {t("paramedic.firstLook.game.title")}
           </h2>
-          {section("seen", t("paramedic.firstLook.game.seen"), seenShown)}
-          {section("steam", t("paramedic.firstLook.game.steam"), steamShown)}
+          {/* e8 r1: the list "Show more" grows and shrinks, named by its aria-controls, so Escape from a game in it
+              (the card's rule for an open disclosure) closes the list first and puts focus back on the toggle. */}
+          {shownCount > 0 && (
+            <div id={gamesId} className="gl-para-lead" data-testid="first-look-games">
+              {section("seen", t("paramedic.firstLook.game.seen"), seenShown)}
+              {section("steam", t("paramedic.firstLook.game.steam"), steamShown)}
+            </div>
+          )}
           {steam === "loading" && (
             <p className="gl-card-sub" role="status">
               {t("paramedic.firstLook.game.loadingSteam")}
@@ -928,7 +935,7 @@ export function ParamedicFirstLook({
           )}
           {total > shownCount || (showAll && total > GAMES_OPEN) ? (
             <div>
-              <button type="button" className="gl-ghost" aria-expanded={showAll} onClick={() => setShowAll((s) => !s)}>
+              <button type="button" className="gl-ghost" aria-expanded={showAll} aria-controls={gamesId} onClick={() => setShowAll((s) => !s)}>
                 {showAll ? t("paramedic.firstLook.game.fewer") : t("paramedic.firstLook.game.more", { n: total - shownCount })}
               </button>
             </div>

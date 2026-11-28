@@ -773,6 +773,14 @@ export type AssessmentStatement =
   | "shutdown-peak"
   | "hardware-error"
   | "hardware-error-peak";
+/** e10 (blackbox.rs `PeakVsUsual`): a crash session's GPU peak against this card's usual one, the
+ *  Paramedic card's lines (more than 10°C above: hotter; within 5°C: about the same), minimum (3) and
+ *  which sessions count (the card's judgeable ones). `why` (r1) says what kept the comparison from being made. */
+export type PeakUnreadable = "card-unknown" | "short-session" | "maybe-two-games" | "log-unread" | "reliability-unread" | "before-scan";
+export type PeakVsUsual =
+  | { outcome: "hotter" | "higher" | "same" | "lower"; usual_c: number; sessions: number }
+  | { outcome: "too-few"; sessions: number }
+  | { outcome: "unreadable"; why?: PeakUnreadable };
 export type CrashAssessment = {
   /** P7-rig-care. Absent on records from a build before the key existed: read as "no rule known". */
   rule?: AssessmentRule;
@@ -782,6 +790,9 @@ export type CrashAssessment = {
   subject?: string;
   /** The session's peak GPU temperature (°C) a `*-peak` statement quotes. */
   temp_c?: number;
+  /** e10: how `temp_c` sits against this card's earlier sessions of the same game for which Compy found no crash record
+   *  (blackbox.rs `PeakVsUsual`). Absent on records from a build before it: worded as "not compared". */
+  temp_vs_usual?: PeakVsUsual;
   consistent_with: string; // "consistent with…" — never "the cause is…"
   strength: AssessmentStrength;
   evidence: string[];
