@@ -59,7 +59,7 @@ describe("the BOM rule itself", () => {
 describe("tracked PowerShell scripts", () => {
   it("are found", () => {
     expect(scripts.length).toBeGreaterThan(30);
-    expect(scripts).toContain("compy-entry.ps1");
+    expect(scripts).toContain("scripts/verify-local.ps1");
     expect(scripts).toContain("scripts/lib/foreground-probe.ps1");
   });
 

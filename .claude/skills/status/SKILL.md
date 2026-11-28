@@ -25,7 +25,6 @@ believe you did — the point of this skill is that the answer is reconstructed.
 | `docs/BACKLOG.md` | next non-gated `[ ]` item, P0 first |
 | `docs/OWNER_ACTION_CHECKLIST.md` | what is on **his** hands, eyes, input, money |
 | `docs/UI_VISION_BACKLOG.md` 🔴 OPEN | historical UI evidence to reconcile, never product priority or a work queue |
-| `docs/WORK_CONTROL.md` | live claims; an overlapping claim means another lane owns it |
 
 Token law applies: **search these by section, never whole-file.** Dispatch the doc reads to a sonnet
 worker and take back only the extracted lines — a status question must not cost a full doc sweep in

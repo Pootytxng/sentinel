@@ -11,7 +11,7 @@ Read instead:
 - [`docs/product/ROADMAP.md`](docs/product/ROADMAP.md) — derived product sequence
 - [`docs/RELEASE_STATE.md`](docs/RELEASE_STATE.md) — current implementation/release truth
 - [`docs/ARCHITECTURE_LOCKS.md`](docs/ARCHITECTURE_LOCKS.md) — safety/architecture authority
-- [`docs/WORK_CONTROL.md`](docs/WORK_CONTROL.md) — active execution ownership
+- [`docs/QUEUE.md`](docs/QUEUE.md) — the one work list
 
 The complete pre-rebirth overview remains preserved in Git history for historical comparison only.
 
