@@ -9,7 +9,7 @@
 >
 > **Status:** owner-requested program blueprint, 2026-07-29. This document defines sequencing,
 > dependencies, acceptance, and stop boundaries. It does not authorize implementation by itself.
-> Live execution ownership remains in [Kuya Work Control](../../WORK_CONTROL.md); product priority and
+> Live execution ownership remains in Kuya Work Control (retired 2026-11-28); product priority and
 > completion remain in [BACKLOG.md](../../BACKLOG.md); release and gate truth remain in
 > [RELEASE_STATE.md](../../RELEASE_STATE.md).
 >
