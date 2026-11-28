@@ -99,6 +99,8 @@ export type CareStep =
       statement: CrashAssessment["statement"] | null;
       subject: string | null;
       tempC: number | null;
+      /** e10: how `tempC` sits against this card's usual peak (blackbox.rs `PeakVsUsual`); null when absent. */
+      tempVsUsual: CrashAssessment["temp_vs_usual"] | null;
       incidentId: string;
       incidentWhen: string;
     }
@@ -192,6 +194,7 @@ export function pickCareStep(
       statement: a.statement ?? null,
       subject: a.subject ?? null,
       tempC: a.temp_c ?? null,
+      tempVsUsual: a.temp_vs_usual ?? null,
       incidentId: inc.incident_id,
       incidentWhen: inc.when,
     };

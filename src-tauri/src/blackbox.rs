@@ -266,7 +266,7 @@ fn assemble_incidents(
     // The log coverage is not known here (the real scan re-assesses in `report_from`, once it knows
     // what the reader proved), so nothing is proven: no rule says "found nothing around it".
     if blackbox_v2_gate() {
-        apply_assessments(&mut incidents, SystemLogCoverage::UNPROVEN);
+        apply_assessments(&mut incidents, SystemLogCoverage::UNPROVEN, sessions);
     }
     // Compy Care Tier 1: attach a signed known-issue write-up where one matches. Hard-false in every
     // shipped build, so this is skipped entirely and every `case_intelligence` stays `None`.
@@ -298,9 +298,9 @@ fn apply_case_intelligence(incidents: &mut [Incident]) {
 /// Populate each incident's `assessment` from the pure rule engine. Two-phase (compute all, then
 /// assign) so each `assess` call can read the full incident list as `recent_context` (recurrence)
 /// while the assignment borrows mutably.
-fn apply_assessments(incidents: &mut [Incident], coverage: SystemLogCoverage) {
+fn apply_assessments(incidents: &mut [Incident], coverage: SystemLogCoverage, sessions: &[SessionSummary]) {
     let assessments: Vec<Option<Assessment>> =
-        incidents.iter().map(|inc| assess_with(inc, incidents, coverage)).collect();
+        incidents.iter().map(|inc| assess_with(inc, incidents, coverage, sessions)).collect();
     for (inc, a) in incidents.iter_mut().zip(assessments) {
         inc.assessment = a;
     }
@@ -443,6 +443,165 @@ pub(crate) struct Assessment {
     /// The session's peak GPU temperature (°C) a `*Peak` statement quotes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) temp_c: Option<u32>,
+    /// e10: how `temp_c` sits against this card's earlier sessions of the same game with no crash
+    /// record ([`peak_vs_usual`]). Set exactly when `temp_c` is; the surface words it after the statement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) temp_vs_usual: Option<PeakVsUsual>,
+}
+
+/// A peak this many degrees from the usual one (or less) is "about the same". The Paramedic card's own line
+/// for its "ran hotter than usual" comparison: `paramedic/extras.rs` re-exports this definition (this module
+/// is on the elevated helper's path and may not depend on `paramedic`, so the definition lives here).
+pub(crate) const TEMP_SAME_C: i64 = 5;
+/// A peak MORE than this many degrees above the usual one is "hotter than usual" (the card's candidate line).
+pub(crate) const TEMP_HOTTER_C: i64 = 10;
+/// e10: how many earlier sessions with a reading the comparison needs, and how many of the newest it uses:
+/// the Paramedic card's `BASELINE_MIN` / `BASELINE_MAX` (a paramedic test pins them equal).
+pub(crate) const PEAK_BASELINE_MIN: usize = 3;
+pub(crate) const PEAK_BASELINE_MAX: usize = 10;
+
+/// e10: the crash session's GPU peak against this card's USUAL peak: the median of the peaks of its
+/// earlier sessions of the same game that have no crash record, with the Paramedic card's own lines
+/// (`TEMP_SAME_C` / `TEMP_HOTTER_C`, its "ran hotter than usual" comparison) and its own minimum
+/// (`PEAK_BASELINE_MIN` sessions, the newest `PEAK_BASELINE_MAX`). A measured outcome never says heat
+/// caused anything; too few sessions, or anything Compy couldn't read, is "can't tell".
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(tag = "outcome", rename_all = "kebab-case")]
+pub(crate) enum PeakVsUsual {
+    /// More than `TEMP_HOTTER_C` above the usual peak.
+    Hotter { usual_c: u32, sessions: u32 },
+    /// More than `TEMP_SAME_C` above it, up to `TEMP_HOTTER_C`: higher, not "hotter than usual".
+    Higher { usual_c: u32, sessions: u32 },
+    /// Within `TEMP_SAME_C` of it either way.
+    Same { usual_c: u32, sessions: u32 },
+    /// More than `TEMP_SAME_C` below it.
+    Lower { usual_c: u32, sessions: u32 },
+    /// Fewer than `BASELINE_MIN` sessions to compare with (`sessions` is how many there are).
+    TooFew { sessions: u32 },
+    /// Compy couldn't tell which sessions to compare with: the crash session, its card or its game is
+    /// not on record, or the System log was not read, so a session's "no crash record" means nothing.
+    Unreadable,
+}
+
+/// e10: the comparison for one record. `None` when the record carries no peak (nothing to compare).
+/// "No crash record" is said of a session only where the scan could have seen one: the System log was
+/// read (`coverage.read_ok`) and the session started inside what the scan kept (`judgeable_from`), and
+/// no record in `ctx` falls inside it (its start up to `VITALS_GRACE_SECS` after its end, the same
+/// window `correlate_vitals` matches a crash to).
+pub(crate) fn peak_vs_usual(
+    inc: &Incident,
+    ctx: &[Incident],
+    sessions: &[SessionSummary],
+    coverage: SystemLogCoverage,
+) -> Option<PeakVsUsual> {
+    let peak = peak_temp(inc)?;
+    let started = inc.vitals.as_ref().map(|v| v.session_started_at.as_str())?;
+    let blank = |s: &str| s.trim().is_empty();
+    let Some(crash_session) = sessions.iter().find(|s| s.started_at == started) else {
+        return Some(PeakVsUsual::Unreadable);
+    };
+    let card = crash_session.hw_fingerprint.as_ref().map(|f| f.gpu.as_str()).filter(|g| !blank(g));
+    let game = Some(crash_session.process_name.as_str()).filter(|g| !blank(g));
+    let (Some(card), Some(game), Some(crash_start), true) =
+        (card, game, session_window(crash_session).map(|w| w.0), coverage.read_ok)
+    else {
+        return Some(PeakVsUsual::Unreadable);
+    };
+    let crash_times: Vec<DateTime<Utc>> =
+        ctx.iter().filter_map(|i| parse_ts(&i.when)).map(|t| t.with_timezone(&Utc)).collect();
+    let mut earlier: Vec<(DateTime<Utc>, u32)> = sessions
+        .iter()
+        .filter(|s| s.started_at != started)
+        .filter(|s| s.process_name.trim().eq_ignore_ascii_case(game.trim()))
+        .filter(|s| s.hw_fingerprint.as_ref().is_some_and(|f| f.gpu.trim().eq_ignore_ascii_case(card.trim())))
+        .filter_map(|s| {
+            let (start, end) = session_window(s)?;
+            let earlier_and_clear = start < crash_start
+                && coverage.judgeable_from.is_none_or(|from| start >= from)
+                && !crash_times.iter().any(|t| *t >= start && *t <= end);
+            if !earlier_and_clear {
+                return None;
+            }
+            s.peak_gpu_temp_c.map(|p| (start, p))
+        })
+        .collect();
+    earlier.sort_by_key(|(start, _)| *start);
+    let newest = &earlier[earlier.len().saturating_sub(PEAK_BASELINE_MAX)..];
+    let sessions_n = newest.len() as u32;
+    if newest.len() < PEAK_BASELINE_MIN {
+        return Some(PeakVsUsual::TooFew { sessions: sessions_n });
+    }
+    // The usual peak is the median, rounded, as the card takes its normal sessions' typical peak.
+    let mut peaks: Vec<f64> = newest.iter().map(|(_, p)| f64::from(*p)).collect();
+    peaks.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let mid = peaks.len() / 2;
+    let median = if peaks.len() % 2 == 1 { peaks[mid] } else { (peaks[mid - 1] + peaks[mid]) / 2.0 };
+    let usual = median.round() as i64;
+    let over = i64::from(peak) - usual;
+    let usual_c = usual.max(0) as u32;
+    Some(if over > TEMP_HOTTER_C {
+        PeakVsUsual::Hotter { usual_c, sessions: sessions_n }
+    } else if over > TEMP_SAME_C {
+        PeakVsUsual::Higher { usual_c, sessions: sessions_n }
+    } else if over < -TEMP_SAME_C {
+        PeakVsUsual::Lower { usual_c, sessions: sessions_n }
+    } else {
+        PeakVsUsual::Same { usual_c, sessions: sessions_n }
+    })
+}
+
+/// A session's window for matching a record to it: its start up to `VITALS_GRACE_SECS` after its end.
+fn session_window(s: &SessionSummary) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    let start = DateTime::parse_from_rfc3339(&s.started_at).ok()?.with_timezone(&Utc);
+    let end = start + chrono::Duration::seconds(s.duration_secs as i64) + chrono::Duration::seconds(VITALS_GRACE_SECS);
+    Some((start, end))
+}
+
+/// e10: the evidence line that says how the peak sits against the usual one (English, like every
+/// evidence line; the translated sentence is the surface's `peakVsUsual` key).
+fn usual_evidence(cmp: PeakVsUsual) -> String {
+    let of = |u: u32, n: u32| format!("this card's typical peak of {u}°C in {n} earlier sessions of this game with no crash record");
+    match cmp {
+        PeakVsUsual::Hotter { usual_c, sessions } => format!("that is more than 10°C above {}", of(usual_c, sessions)),
+        PeakVsUsual::Higher { usual_c, sessions } => {
+            format!("that is above {}, but not by the more than 10°C Compy counts as hotter than usual", of(usual_c, sessions))
+        }
+        PeakVsUsual::Same { usual_c, sessions } => format!("that is within 5°C of {}", of(usual_c, sessions)),
+        PeakVsUsual::Lower { usual_c, sessions } => format!("that is below {}", of(usual_c, sessions)),
+        PeakVsUsual::TooFew { sessions } => format!(
+            "Compy needs at least 3 earlier sessions of this game on this card with a temperature reading and no crash record to compare that peak with, and has {sessions}"
+        ),
+        PeakVsUsual::Unreadable => "Compy couldn't read enough to compare that peak with this card's other sessions".into(),
+    }
+}
+
+/// e10: the Overheating rule's next step. Cooling is offered only when the peak was hotter than usual,
+/// and then as a thing to try, not a fix. Otherwise the step says what Compy can and can't tell. The
+/// detail carries no number: the Care step is keyed on its text, and a count that grows each session
+/// must not restart it.
+fn peak_next_step(cmp: Option<PeakVsUsual>) -> NextStep {
+    match cmp {
+        Some(PeakVsUsual::Hotter { .. }) => NextStep::safe(
+            "Check your temperatures under load",
+            "This session's GPU peak was more than 10°C above this card's typical peak in this game. Something to \
+             try, not a known fix: run the game with a temperature overlay and watch the GPU. If it peaks that far \
+             above its typical peak again, improving case airflow or clearing dust is a reversible place to start. \
+             Re-pasting or undervolting are bigger jobs to research first, not do blind.",
+        ),
+        Some(PeakVsUsual::Higher { .. } | PeakVsUsual::Same { .. } | PeakVsUsual::Lower { .. }) => NextStep::safe(
+            "Keep Compy recording while you play",
+            "This session's GPU peak was not more than 10°C above this card's typical peak in this game, so this \
+             comparison gives no reason to start with cooling. Compy can't tell from this record what was behind it. \
+             If it happens again while Compy is recording, that record is compared the same way.",
+        ),
+        Some(PeakVsUsual::TooFew { .. } | PeakVsUsual::Unreadable) | None => NextStep::safe(
+            "Keep Compy recording while you play",
+            "Compy can't tell yet whether this peak is usual for this card: it compares a crash session's peak with \
+             at least 3 earlier sessions of the same game on the same card that have a temperature reading and no \
+             crash record. Playing with Compy recording adds them. A temperature overlay during the game shows the \
+             same reading live.",
+        ),
+    }
 }
 
 /// The fixed sentences a surface renders for an app-side record. Each says what Windows recorded and
@@ -502,16 +661,19 @@ pub(crate) fn blackbox_v2_gate() -> bool {
 /// (The shipped scan always goes through `assess_with`; this is the test seam.)
 #[cfg(test)]
 pub(crate) fn assess(incident: &Incident, recent_context: &[Incident]) -> Option<Assessment> {
-    assess_with(incident, recent_context, SystemLogCoverage::UNPROVEN)
+    assess_with(incident, recent_context, SystemLogCoverage::UNPROVEN, &[])
 }
 
-/// `assess` with what the scan actually read of the System log.
+/// `assess` with what the scan actually read of the System log, and the recorded sessions a crash
+/// session's peak is compared with (e10, [`peak_vs_usual`]).
 pub(crate) fn assess_with(
     incident: &Incident,
     recent_context: &[Incident],
     coverage: SystemLogCoverage,
+    sessions: &[SessionSummary],
 ) -> Option<Assessment> {
-    rule_overheating(incident, recent_context)
+    let cmp = peak_vs_usual(incident, recent_context, sessions, coverage);
+    rule_overheating(incident, recent_context, cmp)
         .or_else(|| rule_graphics_driver(incident, recent_context))
         .or_else(|| rule_app_specific(incident, recent_context, coverage))
         .or_else(|| rule_power_hardlock(incident, recent_context, coverage))
@@ -557,10 +719,12 @@ fn incident_within(inc: &Incident, ctx: &[Incident], mins: i64, kind_pred: impl 
 
 /// Rule 1 — a record Windows made (GPU timeout, unexpected shutdown, WHEA fault) plus, where Compy was
 /// watching, the session's PEAK GPU temperature. Weak in every case: the peak is not the reading at the
-/// crash, 85 °C is an absolute line that many cards reach in normal use, and Compy has not compared it
-/// with this card's other sessions. So the line reports the measured number and says it can't tell
-/// whether heat played a part; it never says "overheating" and never excludes anything.
-fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
+/// crash, 85 °C is an absolute line that many cards reach in normal use, and a peak above this card's
+/// usual one (e10, `cmp`) is one kind of evidence next to the record, not a second support. So the line
+/// reports the measured number and how it sits against the usual peak, and says it can't tell whether
+/// heat played a part; it never says "overheating" and never excludes anything. 85 °C only decides
+/// which rule words the record; the next step follows the comparison, not that line.
+fn rule_overheating(inc: &Incident, ctx: &[Incident], cmp: Option<PeakVsUsual>) -> Option<Assessment> {
     let high = is_high_temp(inc);
     if high && matches!(inc.kind, IncidentKind::GpuTimeout | IncidentKind::UnexpectedShutdown) {
         let t = peak_temp(inc).unwrap_or(0);
@@ -569,27 +733,24 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         } else {
             (AssessmentStatement::ShutdownPeak, "an unexpected shutdown")
         };
+        let compared = cmp.map_or_else(|| "Compy hasn't compared that peak with this card's other sessions".to_string(), usual_evidence);
         return Some(Assessment {
             rule: AssessmentRule::Overheating,
             consistent_with: format!(
-                "Windows recorded {what}; in the session running at the time Compy measured the GPU peaking at {t}°C and hasn't compared that with this card's other sessions, so it can't tell whether heat played a part"
+                "Windows recorded {what}; in the session running at the time Compy measured the GPU peaking at {t}°C ({compared}), so it can't tell whether heat played a part"
             ),
             strength: Strength::Weak,
             evidence: vec![
                 format!("Compy measured the GPU peaking at {t}°C in the session running at the time"),
                 format!("what Windows logged: {}", inc.tag.to_lowercase()),
-                "Compy hasn't compared that peak with this card's other sessions".into(),
+                compared,
             ],
-            next_step: NextStep::safe(
-                "Check your temperatures under load",
-                "Run the game (or a stress test) with a temperature overlay and watch the GPU. If it \
-                 climbs back toward this range, improving case airflow or clearing dust is the place \
-                 to start. Re-pasting or undervolting are bigger jobs to research first, not do blind.",
-            ),
+            next_step: peak_next_step(cmp),
             beyond_us: false,
             statement: Some(statement),
             subject: None,
             temp_c: Some(t),
+            temp_vs_usual: cmp,
         });
     }
     if inc.kind == IncidentKind::HardwareError {
@@ -604,6 +765,9 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         let temp = peak_temp(inc);
         if let Some(t) = temp {
             evidence.push(format!("Compy measured the GPU peaking at {t}°C in the session at the time"));
+            if let Some(c) = cmp {
+                evidence.push(usual_evidence(c));
+            }
         }
         return Some(Assessment {
             rule: AssessmentRule::HardwareError,
@@ -625,6 +789,7 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
             }),
             subject: None,
             temp_c: temp,
+            temp_vs_usual: temp.and(cmp),
         });
     }
     None
@@ -674,6 +839,7 @@ fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> 
         statement: None,
         subject: None,
         temp_c: None,
+        temp_vs_usual: None,
     })
 }
 
@@ -712,6 +878,7 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident], coverage: SystemLogCovera
             statement: Some(AssessmentStatement::HostProcess),
             subject: app.clone(),
             temp_c: None,
+            temp_vs_usual: None,
             evidence,
             next_step: NextStep::safe(
                 "Update Windows, then the program that was starting",
@@ -734,6 +901,7 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident], coverage: SystemLogCovera
         statement: Some(if hang { AssessmentStatement::AppHang } else { AssessmentStatement::AppCrash }),
         subject: app.clone(),
         temp_c: None,
+        temp_vs_usual: None,
         evidence,
         next_step: NextStep::safe(
             "Verify the game's files, then update it",
@@ -806,6 +974,7 @@ fn rule_power_hardlock(inc: &Incident, ctx: &[Incident], coverage: SystemLogCove
         statement: None,
         subject: None,
         temp_c: None,
+        temp_vs_usual: None,
     })
 }
 
@@ -836,6 +1005,7 @@ fn rule_beyond_us(inc: &Incident) -> Option<Assessment> {
         statement: None,
         subject: None,
         temp_c: None,
+        temp_vs_usual: None,
     })
 }
 
@@ -2072,7 +2242,7 @@ fn report_from(
     // Now that what was read is known, re-assess with it: an absence line ("found nothing around it")
     // is allowed only for a window the System log was read for and the scan did not cut.
     if blackbox_v2_gate() {
-        apply_assessments(&mut incidents, SystemLogCoverage::new(event_log_read, clean_judgeable_from));
+        apply_assessments(&mut incidents, SystemLogCoverage::new(event_log_read, clean_judgeable_from), sessions);
     }
     BlackBoxReport {
         incidents,
@@ -3520,7 +3690,7 @@ mod blackbox_tests {
         cases.push(vec![mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, Some(92))]);
         for cov in [SystemLogCoverage::UNPROVEN, SystemLogCoverage::new(true, None)] {
             for ctx in &cases {
-                let a = assess_with(&ctx[0], ctx, cov).expect("fires");
+                let a = assess_with(&ctx[0], ctx, cov, &[]).expect("fires");
                 // the rule KEY ("overheating") is a stable machine key the rig reads, not prose
                 let mut wire = serde_json::to_value(&a).unwrap();
                 wire.as_object_mut().unwrap().remove("rule");
@@ -3543,7 +3713,7 @@ mod blackbox_tests {
         let found_none = "Compy found no graphics-driver timeout, blue screen, hardware error or unexpected shutdown";
         let couldnt = "Compy couldn't read the Windows System log for that time";
         let line = |cov: SystemLogCoverage| {
-            let a = assess_with(&lone, ctx, cov).expect("fires");
+            let a = assess_with(&lone, ctx, cov, &[]).expect("fires");
             assert_eq!(a.strength, Strength::Weak);
             assert_eq!(a.statement, Some(AssessmentStatement::AppCrash), "same neutral sentence either way");
             a.evidence.join(" | ")
@@ -3571,7 +3741,7 @@ mod blackbox_tests {
         assert!(rule_app_specific(&near[0], &near, SystemLogCoverage::new(false, None)).is_none());
         // the hard-lock rule: no blue-screen line unless covered
         let sd = mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, None);
-        let blob = |cov| assess_with(&sd, std::slice::from_ref(&sd), cov).unwrap().evidence.join(" | ");
+        let blob = |cov| assess_with(&sd, std::slice::from_ref(&sd), cov, &[]).unwrap().evidence.join(" | ");
         assert!(blob(SystemLogCoverage::UNPROVEN).contains(couldnt));
         assert!(blob(SystemLogCoverage::new(true, None)).contains("found no blue-screen record"));
     }
@@ -3855,5 +4025,144 @@ mod blackbox_tests {
         let many = (0..=WER_MAX_LISTED).map(|_| Ok::<_, std::io::Error>("x"));
         assert!(!list_wer_entries(&mut dirs, &mut cut_short, many, |n| (n.into(), None)), "bound stops it");
         assert!(cut_short && dirs.len() == WER_MAX_LISTED);
+    }
+
+    // ── e10: the crash session's GPU peak against this card's usual peak ──────────────────────────
+    const E10_CRASH: &str = "2026-06-20T21:00:00Z";
+
+    /// One recorded session of `game.exe` on the test card, an hour long, starting `start`.
+    fn card_session(start: &str, peak: Option<u32>) -> SessionSummary {
+        let mut s = session(start, 3600, "game.exe");
+        s.peak_gpu_temp_c = peak;
+        s.hw_fingerprint = Some(crate::hardware::HwFingerprint { gpu: "Radeon RX 7800 XT".into(), ..Default::default() });
+        s
+    }
+
+    /// Earlier sessions with these peaks (one a day from June 1), then the crash session itself.
+    fn e10_sessions(earlier: &[Option<u32>], crash_peak: u32) -> Vec<SessionSummary> {
+        let mut v: Vec<SessionSummary> =
+            earlier.iter().enumerate().map(|(i, p)| card_session(&format!("2026-06-{:02}T18:00:00Z", i + 1), *p)).collect();
+        v.push(card_session(E10_CRASH, Some(crash_peak)));
+        v
+    }
+
+    fn e10_timeout(peak: Option<u32>) -> Incident {
+        mk(IncidentKind::GpuTimeout, E10_CRASH, Some("amdkmdag"), None, None, peak)
+    }
+
+    const LOG_READ: SystemLogCoverage = SystemLogCoverage { read_ok: true, judgeable_from: None };
+
+    fn e10_cmp(earlier: &[Option<u32>], crash_peak: u32) -> Option<PeakVsUsual> {
+        let inc = e10_timeout(Some(crash_peak));
+        peak_vs_usual(&inc, std::slice::from_ref(&inc), &e10_sessions(earlier, crash_peak), LOG_READ)
+    }
+
+    #[test]
+    fn e10_a_peak_more_than_10_above_the_usual_one_is_hotter_and_only_then_offers_airflow() {
+        // Usual = median of 70, 72, 74 = 72; 88 is 16 above.
+        let inc = e10_timeout(Some(88));
+        let sessions = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
+        let a = assess_with(&inc, std::slice::from_ref(&inc), LOG_READ, &sessions).expect("fires");
+        assert_eq!(a.temp_vs_usual, Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
+        assert_eq!(a.strength, Strength::Weak, "hotter than usual is still one kind of evidence next to the record");
+        assert!(a.consistent_with.contains("can't tell whether heat played a part"), "{}", a.consistent_with);
+        assert!(!a.consistent_with.to_lowercase().contains("caused"));
+        assert!(a.evidence.iter().any(|e| e.contains("more than 10°C above this card's typical peak of 72°C in 3 earlier")), "{:?}", a.evidence);
+        assert!(a.next_step.detail.contains("airflow") && a.next_step.detail.contains("not a known fix"), "{}", a.next_step.detail);
+        assert!(a.next_step.reversible && !a.next_step.research_only);
+        let wire = serde_json::to_value(a.temp_vs_usual).unwrap();
+        assert_eq!(wire, serde_json::json!({ "outcome": "hotter", "usual_c": 72, "sessions": 3 }));
+        // The lines are the Paramedic card's: 11 above is hotter, 10 is not.
+        assert_eq!(e10_cmp(&[Some(80), Some(80), Some(80)], 91), Some(PeakVsUsual::Hotter { usual_c: 80, sessions: 3 }));
+        assert_eq!(e10_cmp(&[Some(80), Some(80), Some(80)], 90), Some(PeakVsUsual::Higher { usual_c: 80, sessions: 3 }));
+    }
+
+    #[test]
+    fn e10_a_peak_near_or_below_the_usual_one_says_so_and_never_offers_airflow() {
+        // Within 5°C either way is about the same; 6 to 10 above is higher, not hotter; more than 5 below is lower.
+        let cases = [
+            (86, PeakVsUsual::Same { usual_c: 86, sessions: 3 }),
+            (91, PeakVsUsual::Same { usual_c: 86, sessions: 3 }),
+            (81, PeakVsUsual::Same { usual_c: 86, sessions: 3 }),
+            (92, PeakVsUsual::Higher { usual_c: 86, sessions: 3 }),
+            (96, PeakVsUsual::Higher { usual_c: 86, sessions: 3 }),
+            (80, PeakVsUsual::Lower { usual_c: 86, sessions: 3 }),
+        ];
+        for (peak, want) in cases {
+            assert_eq!(e10_cmp(&[Some(84), Some(86), Some(88)], peak), Some(want), "peak {peak}");
+        }
+        let inc = e10_timeout(Some(88));
+        let sessions = e10_sessions(&[Some(84), Some(86), Some(88)], 88);
+        let a = assess_with(&inc, std::slice::from_ref(&inc), LOG_READ, &sessions).expect("fires");
+        assert_eq!(a.temp_vs_usual, Some(PeakVsUsual::Same { usual_c: 86, sessions: 3 }));
+        assert!(a.evidence.iter().any(|e| e.contains("within 5°C of this card's typical peak of 86°C")), "{:?}", a.evidence);
+        assert!(a.consistent_with.contains("can't tell whether heat played a part"));
+        for step in [a.next_step.clone(), peak_next_step(Some(PeakVsUsual::Higher { usual_c: 86, sessions: 3 })), peak_next_step(Some(PeakVsUsual::Lower { usual_c: 86, sessions: 3 }))] {
+            assert!(!step.detail.contains("airflow") && !step.detail.contains("dust"), "{}", step.detail);
+            assert!(step.detail.contains("can't tell"), "{}", step.detail);
+        }
+    }
+
+    #[test]
+    fn e10_fewer_than_3_clear_sessions_with_a_reading_is_cant_tell() {
+        assert_eq!(PEAK_BASELINE_MIN, 3, "the wording says 3");
+        assert_eq!((TEMP_SAME_C, TEMP_HOTTER_C), (5, 10), "the wording says 5 and 10");
+        // Two clear earlier sessions with a reading; the others do not count: no reading, a crash record
+        // inside it, another card, another game, and one AFTER the crash.
+        let mut sessions = e10_sessions(&[Some(70), Some(72), None, Some(60)], 88);
+        let mut other_card = card_session("2026-06-05T18:00:00Z", Some(60));
+        other_card.hw_fingerprint.as_mut().unwrap().gpu = "GeForce RTX 4070".into();
+        let mut other_game = card_session("2026-06-06T18:00:00Z", Some(60));
+        other_game.process_name = "other.exe".into();
+        sessions.extend([other_card, other_game, card_session("2026-06-21T18:00:00Z", Some(60))]);
+        let inc = e10_timeout(Some(88));
+        // Session 4 (June 4) holds an app crash record: it is not a session that did not crash.
+        let crash_in_4 = mk(IncidentKind::AppCrash, "2026-06-04T18:30:00Z", None, None, Some("game.exe"), None);
+        let ctx = vec![inc.clone(), crash_in_4];
+        let a = assess_with(&inc, &ctx, LOG_READ, &sessions).expect("fires");
+        assert_eq!(a.temp_vs_usual, Some(PeakVsUsual::TooFew { sessions: 2 }));
+        assert!(a.evidence.iter().any(|e| e.contains("needs at least 3") && e.ends_with("and has 2")), "{:?}", a.evidence);
+        assert!(!a.next_step.detail.contains("airflow"), "{}", a.next_step.detail);
+        assert!(a.next_step.detail.contains("can't tell"), "{}", a.next_step.detail);
+        assert_eq!(serde_json::to_value(a.temp_vs_usual).unwrap(), serde_json::json!({ "outcome": "too-few", "sessions": 2 }));
+        // Sessions before what the scan kept can't be called clear either.
+        let cut = SystemLogCoverage::new(true, parse_ts("2026-06-10T00:00:00Z").map(|t| t.with_timezone(&Utc)));
+        let plenty = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
+        assert_eq!(peak_vs_usual(&inc, std::slice::from_ref(&inc), &plenty, cut), Some(PeakVsUsual::TooFew { sessions: 0 }));
+        // Only the newest 10 count (PEAK_BASELINE_MAX, the card's BASELINE_MAX): two old 100°C sessions fall out.
+        let mut twelve = vec![Some(100), Some(100)];
+        twelve.extend([Some(70); 10]);
+        assert_eq!(e10_cmp(&twelve, 88), Some(PeakVsUsual::Hotter { usual_c: 70, sessions: 10 }));
+    }
+
+    #[test]
+    fn e10_no_peak_means_no_comparison_and_an_unreadable_side_is_cant_tell() {
+        // In a recorded session, but the session read no GPU temperature.
+        let mut cool = e10_timeout(Some(88));
+        cool.vitals.as_mut().unwrap().peak_gpu_temp_c = None;
+        let sessions = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
+        assert_eq!(peak_vs_usual(&cool, std::slice::from_ref(&cool), &sessions, LOG_READ), None, "no peak, nothing to compare");
+        let a = assess_with(&cool, std::slice::from_ref(&cool), LOG_READ, &sessions);
+        assert!(a.is_none_or(|a| a.temp_vs_usual.is_none()), "no peak: no comparison is shown");
+        let one_whea = mk(IncidentKind::HardwareError, E10_CRASH, None, None, None, None);
+        let a = assess_with(&one_whea, std::slice::from_ref(&one_whea), LOG_READ, &sessions).expect("fires");
+        assert_eq!((a.temp_c, a.temp_vs_usual), (None, None));
+        assert!(!serde_json::to_string(&a).unwrap().contains("temp_vs_usual"), "absent on the wire");
+        // A peak, but the System log was not read: "no crash record" in the other sessions means nothing.
+        let hot = e10_timeout(Some(88));
+        assert_eq!(peak_vs_usual(&hot, std::slice::from_ref(&hot), &sessions, SystemLogCoverage::UNPROVEN), Some(PeakVsUsual::Unreadable));
+        // A peak, but the crash session's card is not on record.
+        let mut no_card = sessions.clone();
+        no_card.last_mut().unwrap().hw_fingerprint = None;
+        assert_eq!(peak_vs_usual(&hot, std::slice::from_ref(&hot), &no_card, LOG_READ), Some(PeakVsUsual::Unreadable));
+        let a = assess(&hot, std::slice::from_ref(&hot)).expect("fires");
+        assert_eq!(a.temp_vs_usual, Some(PeakVsUsual::Unreadable));
+        assert!(a.consistent_with.contains("can't tell whether heat played a part"));
+        assert!(!a.next_step.detail.contains("airflow"));
+        assert_eq!(serde_json::to_value(a.temp_vs_usual).unwrap(), serde_json::json!({ "outcome": "unreadable" }));
+        // A WHEA record with a peak carries the comparison too.
+        let whea_hot = mk(IncidentKind::HardwareError, E10_CRASH, None, None, None, Some(88));
+        let w = assess_with(&whea_hot, std::slice::from_ref(&whea_hot), LOG_READ, &sessions).expect("fires");
+        assert_eq!(w.temp_vs_usual, Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
     }
 }

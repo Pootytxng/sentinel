@@ -141,9 +141,12 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
         expect(en).toContain("{{subject}}");
         expect(zh).toContain("{{subject}}");
       }
-      // every statement says what the record alone can't tell, and none names a cause
-      expect(en).toMatch(/can't tell|doesn't say which/);
-      expect(zh).toMatch(/无法判断/);
+      // every statement says what the record alone can't tell, and none names a cause. e10: the GPU
+      // timeout and shutdown statements say it in the {{compare}} sentence they end with (checked below).
+      if (!["gpuTimeoutPeak", "shutdownPeak"].includes(key)) {
+        expect(en).toMatch(/can't tell|doesn't say which/);
+        expect(zh).toMatch(/无法判断/);
+      }
     }
     for (const key of ["appCrash", "appHang"] as const) {
       expect(enGaming.blackBox.assessStatement[key]).toContain("in your PC");
@@ -152,8 +155,22 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
     for (const key of ["gpuTimeoutPeak", "shutdownPeak", "hardwareErrorPeak"] as const) {
       expect(enGaming.blackBox.assessStatement[key]).toContain("{{temp}}");
       expect(zhGaming.blackBox.assessStatement[key]).toContain("{{temp}}");
-      expect(enGaming.blackBox.assessStatement[key]).toContain("can't tell whether heat played a part");
+      // e10: each peak statement ends with the comparison sentence, and EVERY comparison sentence (hotter
+      // than usual included) still says Compy can't tell whether heat played a part, and none says "caused".
+      expect(enGaming.blackBox.assessStatement[key]).toMatch(/\{\{compare\}\}$/);
+      expect(zhGaming.blackBox.assessStatement[key]).toMatch(/\{\{compare\}\}$/);
     }
+    const variants = ["hotter", "higher", "same", "lower", "tooFew", "unreadable", "notCompared"] as const;
+    expect(Object.keys(enGaming.blackBox.assessStatement.peakVsUsual).sort()).toEqual([...variants].sort());
+    expect(Object.keys(zhGaming.blackBox.assessStatement.peakVsUsual).sort()).toEqual([...variants].sort());
+    for (const v of variants) {
+      expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("can't tell whether heat played a part");
+      expect(zhGaming.blackBox.assessStatement.peakVsUsual[v]).toContain("无法判断发热是否起了作用");
+      expect(enGaming.blackBox.assessStatement.peakVsUsual[v]).not.toMatch(/\bcaused\b|\bcausing\b/i);
+    }
+    // The one outcome that leans toward heat carries the shared caveat in both languages.
+    expect(enGaming.blackBox.assessStatement.peakVsUsual.hotter).toContain("not shown to be the cause");
+    expect(zhGaming.blackBox.assessStatement.peakVsUsual.hotter).toContain("未证实是原因");
     expect(enLab.labConsole.rigFocus.away).toContain("can't say whether a part was involved");
     expect(zhLab.labConsole.rigFocus.away).toContain("无法判断是否与某个部件有关");
   });

@@ -5424,6 +5424,16 @@ mod temperature_and_crashes {
     }
 
     // ---- temperature ----
+    /// e10: the Black Box compares a crash session's peak with this card's usual one by the card's own rule.
+    /// The two lines are one definition (blackbox.rs, re-exported by extras.rs); the session minimum and
+    /// window are the card's baseline ones, pinned here because the Black Box may not depend on this module.
+    #[test]
+    fn the_crash_peak_comparison_uses_the_cards_lines_and_baseline_size() {
+        assert_eq!((TEMP_SAME_C, TEMP_HOTTER_C), (crate::blackbox::TEMP_SAME_C, crate::blackbox::TEMP_HOTTER_C));
+        assert_eq!(crate::blackbox::PEAK_BASELINE_MIN, BASELINE_MIN);
+        assert_eq!(crate::blackbox::PEAK_BASELINE_MAX, BASELINE_MAX);
+    }
+
     #[test]
     fn five_degrees_above_the_normal_peak_is_unchanged_and_six_is_neither_unchanged_nor_a_candidate() {
         assert_eq!(TEMP_SAME_C, 5);

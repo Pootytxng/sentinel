@@ -683,4 +683,27 @@ describe("a reworded reading keeps its earlier 'Did this help?' answers", () => 
       "Windows recorded ROB RUN crashing. That record alone can't tell where the problem is: in the program, in something it loads (such as a graphics driver), or in your PC.",
     );
   });
+  // e10: the Care receipt carries the same peak comparison as the Problems room. Break check: drop
+  // `temp_vs_usual: step.tempVsUsual` from CareNextStep.tsx -> the row says "hasn't compared" and fails.
+  it("the Care receipt for a hot GPU timeout says how its peak sits against this card's usual one", async () => {
+    const hot = inc("2026-10-20T10:00:00Z", { tag: "GPU timeout" });
+    hot.assessment = {
+      ...hot.assessment!,
+      rule: "overheating",
+      statement: "gpu-timeout-peak",
+      temp_c: 88,
+      temp_vs_usual: { outcome: "same", usual_c: 86, sessions: 5 },
+    };
+    expect(pickCareStep([hot], null)).toMatchObject({ tempC: 88, tempVsUsual: { outcome: "same", usual_c: 86, sessions: 5 } });
+    h.incidents = [hot];
+    const { container } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
+    await openDoor(container, "bb-next-depth-receipt");
+    const dl = container.querySelector(".bb-next-receipt")!;
+    const rows = Object.fromEntries([...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
+    expect(rows["Consistent with"]).toBe(
+      "Windows recorded a graphics-driver timeout. In the session running at the time, Compy measured the GPU peaking at 88°C. That is about the same as this card's typical peak of 86°C in 5 earlier sessions of this game with no crash record (within 5°C). Compy can't tell whether heat played a part.",
+    );
+  });
 });

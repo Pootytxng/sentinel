@@ -557,10 +557,19 @@
       "appCrash": "Windows recorded {{subject}} crashing. That record alone can't tell where the problem is: in the program, in something it loads (such as a graphics driver), or in your PC.",
       "appHang": "Windows recorded {{subject}} not responding. That record alone can't tell where the problem is: in the program, in something it loads (such as a graphics driver), or in your PC.",
       "hostProcess": "Windows recorded {{subject}} crashing. It is a Windows file that runs code for other programs, so the record alone can't tell which program, driver or part of your PC was involved.",
-      "gpuTimeoutPeak": "Windows recorded a graphics-driver timeout. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C. Compy hasn't compared that with this card's other sessions, so it can't tell whether heat played a part.",
-      "shutdownPeak": "Windows recorded an unexpected shutdown. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C. Compy hasn't compared that with this card's other sessions, so it can't tell whether heat played a part.",
+      "gpuTimeoutPeak": "Windows recorded a graphics-driver timeout. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C. {{compare}}",
+      "shutdownPeak": "Windows recorded an unexpected shutdown. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C. {{compare}}",
       "hardwareError": "Windows logged a hardware-level error (WHEA). The hardware reports these itself; they can come from heat, power, memory, or an unstable overclock or undervolt. The record alone doesn't say which.",
-      "hardwareErrorPeak": "Windows logged a hardware-level error (WHEA). The hardware reports these itself; they can come from heat, power, memory, or an unstable overclock or undervolt. The record alone doesn't say which. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C and hasn't compared that with this card's other sessions, so it can't tell whether heat played a part.",
+      "hardwareErrorPeak": "Windows logged a hardware-level error (WHEA). The hardware reports these itself; they can come from heat, power, memory, or an unstable overclock or undervolt. The record alone doesn't say which. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C. {{compare}}",
+      "peakVsUsual": {
+        "hotter": "That is more than 10°C above this card's typical peak of {{usual}}°C in {{sessions}} earlier sessions of this game with no crash record. A peak hotter than usual is not shown to be the cause: Compy can't tell whether heat played a part.",
+        "higher": "That is {{over}}°C above this card's typical peak of {{usual}}°C in {{sessions}} earlier sessions of this game with no crash record: higher, but not by the more than 10°C Compy counts as hotter than usual. Compy can't tell whether heat played a part.",
+        "same": "That is about the same as this card's typical peak of {{usual}}°C in {{sessions}} earlier sessions of this game with no crash record (within 5°C). Compy can't tell whether heat played a part.",
+        "lower": "That is below this card's typical peak of {{usual}}°C in {{sessions}} earlier sessions of this game with no crash record. Compy can't tell whether heat played a part.",
+        "tooFew": "To compare it, Compy needs at least 3 earlier sessions of this game on this card with a temperature reading and no crash record, and it has {{have}}. So it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
+        "unreadable": "Compy couldn't read enough to compare that peak with this card's other sessions, so it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
+        "notCompared": "Compy hasn't compared that with this card's other sessions, so it can't tell whether heat played a part."
+      },
       "unnamedApp": "an app"
     },
     "assessLinePostBeyond": "— beyond what Compy can narrow down.",
