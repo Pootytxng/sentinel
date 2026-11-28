@@ -216,6 +216,26 @@ describe("BlackbookConsole — honest empty (never a fabricated row)", () => {
   });
 });
 
+describe("LogbookTape — records on the tape while the session list is unread", () => {
+  // The tape had other records (a change) but App's session list was unread: the sessions were left out
+  // with nothing saying so. Break check: drop `unreadSessionsLine` from LogbookTape and these fail.
+  it.each([
+    ["pending", "Compy hasn't read its recorded sessions yet."],
+    ["failed", "Compy couldn't read its recorded sessions just now."],
+  ] as const)("a change on the tape + an unread session list (%s): the tape says the sessions aren't in it", (state, line) => {
+    useReduced();
+    const { container } = render(<Logbook records={[change()]} sessionsRead={state} />);
+    expect(container.querySelector('[data-testid="bc-sessions-unread"]')!.textContent).toBe(line);
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(1);
+  });
+
+  it("a read session list: no such line", () => {
+    useReduced();
+    const { container } = render(<Logbook records={[change()]} />);
+    expect(container.querySelector('[data-testid="bc-sessions-unread"]')).toBeNull();
+  });
+});
+
 describe("BlackbookConsole — the tape renders each real record kind", () => {
   it("change / session / autopsy rows all render with real content", () => {
     useReduced();

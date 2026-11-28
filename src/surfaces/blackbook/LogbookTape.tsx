@@ -302,6 +302,8 @@ export function LogbookTape({
     );
   }
 
+  const unreadSessionsLine = !filter || filter === "session" ? sessionsReadLine(sessionsRead, t) : null;
+
   return (
     <>
       {/* The record's scent line — WHEN IT HAS SOMETHING TO SAY. It was the hero tile's badge
@@ -313,6 +315,14 @@ export function LogbookTape({
           slice and must say so), or the ledger is KNOWN incomplete (the record cannot speak for
           the whole machine). Either of those printing is the honest state; both silent is the
           comp. */}
+      {/* Records are on the tape but the session list is unread (before App's read answers, or after it
+          failed): sessions would be missing from it with nothing saying so. Shown wherever sessions
+          belong on the tape: no filter, or the sessions filter. */}
+      {unreadSessionsLine && (
+        <div className="bc-sect" data-testid="bc-sessions-unread">
+          <span className="bc-sect-s">{unreadSessionsLine}</span>
+        </div>
+      )}
       {(filter || incomplete) && (
         <div className="bc-sect">
           {filter && (
