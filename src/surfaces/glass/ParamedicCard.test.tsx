@@ -2015,6 +2015,105 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
   });
 
+  // e8 r1 F2: the same rule for a fold, "Show the numbers" and a row inside a fold (innermost first).
+  const cardOpen = () => screen.getByTestId("paramedic").getAttribute("data-open");
+  const bodyOf = (toggle: HTMLElement) => document.getElementById(toggle.getAttribute("aria-controls") ?? "") as HTMLElement;
+  const escapeFromBody = (toggle: HTMLElement) => {
+    const body = bodyOf(toggle);
+    expect(body, "the toggle names its body").toBeTruthy();
+    fireEvent.keyDown((body.firstElementChild as HTMLElement | null) ?? body, { key: "Escape" });
+  };
+  const doorFocused = () => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+
+  it("Escape inside an open fold or 'Show the numbers' closes that first (focus on its toggle), then the card", async () => {
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    const fold = screen.getByRole("button", { name: /What Compy checked/ });
+    fireEvent.click(fold);
+    expect(fold.getAttribute("aria-expanded")).toBe("true");
+    escapeFromBody(fold);
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    expect(cardOpen()).toBe("true");
+    expect(document.activeElement).toBe(fold);
+    fireEvent.keyDown(fold, { key: "Escape" });
+    expect(cardOpen()).toBe("false");
+    doorFocused();
+    cleanup();
+    const p = base.problem!;
+    await ask({ ...base, problem: { ...p, spikes: true, avg_lower: true, before: { ...p.before, p99_ms: 20 }, now: { ...p.now, p99_ms: 80 } } });
+    await waitFor(() => expect(rows().length).toBe(1));
+    const numbers = screen.getByRole("button", { name: "Show the numbers" });
+    fireEvent.click(numbers);
+    expect(screen.getByText(/The slowest 1 in 100 frames took about 80 ms/)).toBeTruthy();
+    escapeFromBody(numbers);
+    expect(numbers.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText(/The slowest 1 in 100 frames took about 80 ms/)).toBeNull();
+    expect(cardOpen()).toBe("true");
+    expect(document.activeElement).toBe(numbers);
+    fireEvent.keyDown(numbers, { key: "Escape" });
+    expect(cardOpen()).toBe("false");
+    doorFocused();
+  });
+
+  it("Escape in a row inside the open 'Also possible' fold closes the row, then the fold, then the card", async () => {
+    const five = [
+      find("gpu-driver-change", { fix: steps("gpu-driver-change", { from: "1.0" }) }),
+      find("background-load", { fix: steps("background-load") }),
+      find("windows-update", { fix: steps("windows-update", { kb: "", quality: "false" }) }),
+      find("game-files-change", { since_when: { kind: "exact", at: "2026-11-18T18:00:00Z" }, fix: steps("game-files-change") }),
+      find("program-installed", {
+        evidence: [{ kind: "known", code: "installed-and-started", args: { name: "Discord", day: "2026-11-19T08:00:00Z" }, against: false, source: "uninstall-keys" }],
+        fix: steps("program-installed", { names: "Discord" }),
+      }),
+    ];
+    await ask({ ...base, why_first: "not-separable", findings: five });
+    await waitFor(() => expect(rows().length).toBe(3));
+    const fold = screen.getByRole("button", { name: /Also possible/ });
+    fireEvent.click(fold);
+    const inner = within(screen.getByTestId("paramedic-also")).getAllByTestId("paramedic-candidate")[0];
+    const row = within(inner).getByRole("button");
+    fireEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    escapeFromBody(row);
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    expect(fold.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(row);
+    // Focus on the (now closed) row's toggle sits inside the open fold: the fold closes next.
+    fireEvent.keyDown(row, { key: "Escape" });
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    expect(cardOpen()).toBe("true");
+    expect(document.activeElement).toBe(fold);
+    fireEvent.keyDown(fold, { key: "Escape" });
+    expect(cardOpen()).toBe("false");
+    doorFocused();
+  });
+
+  // e8 r1 F1: the game list's "Show more" names the list it grows, so a revealed game closes the list first.
+  it("Escape from a game revealed by 'Show more' closes the list (focus on its toggle), then the card", async () => {
+    answer.value = base;
+    answer.byCmd = {
+      paramedic_list_games: { read: true, complete: true, games: Array.from({ length: 12 }, (_, i) => ({ app_id: 1000 + i, name: `Game ${String(i + 1).padStart(2, "0")}`, last_updated: null })) },
+    };
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    fireEvent.click(link() as HTMLElement);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Game 01" })).toBeTruthy());
+    const more = screen.getByRole("button", { name: "Show 4 more" });
+    expect(bodyOf(more)).toBe(screen.getByTestId("first-look-games"));
+    fireEvent.click(more);
+    const revealed = screen.getByRole("button", { name: "Game 12" });
+    revealed.focus();
+    fireEvent.keyDown(revealed, { key: "Escape" });
+    expect(screen.queryByRole("button", { name: "Game 12" })).toBeNull();
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    expect(cardOpen()).toBe("true");
+    expect(document.activeElement).toBe(more);
+    fireEvent.keyDown(more, { key: "Escape" });
+    expect(cardOpen()).toBe("false");
+    doorFocused();
+  });
+
   it("Escape inside a popover-like layer (a dialog, or a toggle that opened a popup) closes that layer first and leaves the card open", async () => {
     await ask(base);
     await waitFor(() => expect(rows().length).toBe(1));
