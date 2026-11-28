@@ -46,14 +46,14 @@ const modules = [
     datum: "PRIOR STATE · RECORDED AT APPLY",
   },
   {
-    tag: "LAB",
-    title: "The Lab",
+    tag: "TEST",
+    title: "Test",
     desc: "A benchmark proving ground: apply a tweak, measure it on live game frames, and keep it only if the numbers earn it. Auto-rollback when they don't.",
     datum: "BASELINE VS TREATMENT · LIVE FRAMES",
   },
   {
-    tag: "MONITOR",
-    title: "Monitor",
+    tag: "LIVE",
+    title: "Live",
     desc: "Live fps, frametimes and GPU telemetry, read on-device. No overlay injection, no kernel driver — anti-cheat safe by design.",
     datum: "ETW · NO INJECTION",
   },
@@ -64,9 +64,9 @@ const modules = [
     datum: "APPLIES AT START · REVERTS AT STOP",
   },
   {
-    tag: "BLACKBOOK",
-    title: "The Blackbook",
-    desc: "Every popular “FPS tweak,” graded: real, placebo, or risky. Every verdict is public — the full write-ups live in the app, next to your own measurements.",
+    tag: "GRADED BOOK",
+    title: "The graded book",
+    desc: "Every popular “FPS tweak,” graded: real, placebo, or risky. Every verdict is public — the full write-ups live in the app's History room, next to your own measurements.",
     datum: "EVERY VERDICT PUBLIC · THE BOOK SHIPS IN THE APP",
     href: "/library/",
   },
@@ -127,7 +127,7 @@ const modules = [
       <span class="mono topbar-status"><span class="status-dot" aria-hidden="true"></span>private beta</span>
       <nav class="topnav mono" aria-label="Site">
         <a href="#receipts">Receipts</a>
-        <a href="/library/">Blackbook</a>
+        <a href="/library/">Graded book</a>
         <a href="/compare">Compare</a>
         <a href="#faq">FAQ</a>
         <a class="btn btn--primary topnav-cta" href="#waitlist" data-magnetic>Join the waitlist</a>
@@ -159,9 +159,9 @@ const modules = [
         <div class="flight-cta-col">
           <div class="flight-ctas">
             <a class="btn btn--primary" href="#waitlist" data-magnetic>Join the waitlist</a>
-            <a class="btn btn--ghost" href="/library/" data-magnetic>Sample the Blackbook →</a>
+            <a class="btn btn--ghost" href="/library/" data-magnetic>Sample the graded book →</a>
           </div>
-          <p class="flight-note mono">Compy's core is free forever. No account, no ads, no telemetry. Signed updates only.</p>
+          <p class="flight-note mono">Compy's core is free forever. No account, no ads. Compy sends nothing about your PC. It only checks for a signed update.</p>
         </div>
       </div>
     </div>
@@ -197,7 +197,7 @@ const modules = [
           <div class="deck brackets reveal">
         <span class="bkt" aria-hidden="true"></span>
         <div class="deck-rail mono" aria-hidden="true">
-          <span class="deck-tag">MONITOR <i>//</i> SESSION REPLAY</span>
+          <span class="deck-tag">LIVE <i>//</i> SESSION REPLAY</span>
           <span>SESSION {sessionDate} · {replay.game.toUpperCase()} · READ ON-DEVICE · READ-ONLY</span>
         </div>
         <div class="deck-grid">
@@ -277,7 +277,7 @@ const modules = [
 
       <article class="exhibit reveal" aria-label="A measured null result">
         <header class="exhibit-head mono">
-          <span class="exhibit-id">EXHIBIT A — LAB TRIAL</span>
+          <span class="exhibit-id">EXHIBIT A — TEST TRIAL</span>
           <span class="exhibit-stamps">
             <span class="stamp stamp--accent">measured ✓</span>
             <span class="stamp">rolled back ✓</span>
@@ -287,19 +287,19 @@ const modules = [
           <h3>Windows Game Mode — did it help?</h3>
           <dl class="trial-rows readout">
             <div><dt>trial</dt><dd>5 baseline vs 5 treatment windows, live game frames</dd></div>
-            <div><dt>result</dt><dd>no gain beyond the ±0.7% session noise floor</dd></div>
+            <div><dt>result</dt><dd>no measured gain (inside the ±0.7% session noise floor)</dd></div>
             <div><dt>rollback</dt><dd>restored to the exact prior value ✓</dd></div>
           </dl>
         </div>
         <footer class="exhibit-cap mono">
-          A real Lab trial, published as-is. When a tweak does nothing, Compy says so —
+          A real trial from the Test room, published as-is. When a tweak does nothing, Compy says so —
           that's the honesty test.
         </footer>
       </article>
 
       <article class="exhibit exhibit--session reveal" aria-label="A real recorded session">
         <header class="exhibit-head mono">
-          <span class="exhibit-id">EXHIBIT B — MONITOR SESSION</span>
+          <span class="exhibit-id">EXHIBIT B — LIVE SESSION</span>
           <span class="exhibit-stamps">
             <span class="stamp stamp--accent">measured ✓</span>
             <span class="stamp">{sessionDate}</span>
@@ -324,7 +324,7 @@ const modules = [
         </div>
         <footer class="exhibit-cap mono">
           The same recorded session as the replay deck above — {rigParts[0]} · every number
-          read on-device and graphed in Monitor. A measurement showcase —
+          read on-device and graphed in Live. A measurement showcase —
           Compy claims none of it as its own doing.
         </footer>
       </article>
@@ -345,7 +345,7 @@ const modules = [
           <ul class="manifest-list" role="list">
             <li><span class="mled-tag mono">TUNE</span><span class="mled-desc">Per-rig recommendations, all of them</span><span class="mled-mark mono">✓ INCLUDED</span></li>
             <li><span class="mled-tag mono">UNDO</span><span class="mled-desc">Trust Ledger rollback, unlimited</span><span class="mled-mark mono">✓ INCLUDED</span></li>
-            <li><span class="mled-tag mono">MODULES</span><span class="mled-desc">Monitor, the Lab, Gaming Mode</span><span class="mled-mark mono">✓ INCLUDED</span></li>
+            <li><span class="mled-tag mono">MODULES</span><span class="mled-desc">Live, Test, Gaming Mode</span><span class="mled-mark mono">✓ INCLUDED</span></li>
             <li><span class="mled-tag mono">TERMS</span><span class="mled-desc">No account · no ads · no upsell nags</span><span class="mled-mark mono">✓ INCLUDED</span></li>
           </ul>
           <a class="btn btn--primary" href="#waitlist" data-magnetic>Join the waitlist</a>
@@ -404,9 +404,8 @@ const modules = [
           <summary>Does Compy send my data anywhere?</summary>
           <p>
             Your hardware info, sessions, settings and history stay on your PC. Compy has no
-            telemetry and no account. Its only automatic connection checks GitHub for signed
-            updates — that request carries nothing about you or your PC, nothing downloads
-            until you approve it, and you can switch it off in Settings. This website
+            account. Compy sends nothing about your PC. It only checks for a signed update. Nothing
+            downloads until you approve it, and you can switch the check off in Settings. This website
             separately stores only the waitlist email you choose to give it.
           </p>
         </details>
@@ -460,7 +459,7 @@ const modules = [
           <p class="waitlist-pending mono" data-waitlist-status role="status"></p>
           <p class="waitlist-privacy mono">
             Your email is stored only to send that one launch message — no list-selling, no
-            follow-up drip. The app itself sends nothing off your PC.
+            follow-up drip. Compy sends nothing about your PC. It only checks for a signed update.
           </p>
           <!-- KO-FI PLACEHOLDER SLOT: support link appears here once the owner sets a profile URL. -->
         </div>

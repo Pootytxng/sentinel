@@ -171,14 +171,14 @@ export default function ReplayHUD() {
     <div
       className="rhud panel"
       ref={rootRef}
-      aria-label="Replay of a real recorded Monitor session"
+      aria-label="Replay of a real recorded Live session"
     >
       <header className="rhud-top">
         <span className="chip chip--accent">
           <span className="dot" aria-hidden="true" />
           replay · real recorded session
         </span>
-        <span className="chip">monitor · read-only telemetry</span>
+        <span className="chip">live · read-only telemetry</span>
       </header>
 
       <div className="rhud-meta readout">

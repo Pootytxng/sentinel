@@ -7,7 +7,7 @@ Compy is a Windows desktop app with a free tier (AMD verified; NVIDIA detection 
 ## Start here
 - [Home](https://compy.gg/): what Compy is, real-session replay, and the launch waitlist.
 - [Compare](https://compy.gg/compare): how Compy's approach differs from generic "best tweaks" lists, across five practice axes.
-- [The Blackbook](https://compy.gg/library/): all 191 verdicts on the record — 30 full write-ups published as the public sample; the complete graded book ships in the app.
+- [The graded book](https://compy.gg/library/): all 191 verdicts on the record — 30 full write-ups published as the public sample; the complete graded book ships in the app.
 
 ## Full sample entries (public picks)
 - [Force HPET / useplatformclock](https://compy.gg/useplatformclock): Forces Windows to use the High Precision Event Timer via a boot flag. The honest verdict — risky.
@@ -18,7 +18,7 @@ Compy is a Windows desktop app with a free tier (AMD verified; NVIDIA detection 
 - [All-in-one debloat scripts / stripped ISOs](https://compy.gg/debloat-scripts): Scripts or custom Windows images that strip dozens of components at once. The honest verdict — risky.
 - [Disable CPU security mitigations (Spectre/Meltdown)](https://compy.gg/cpu-mitigations): Turns off side-channel attack protections for a small CPU uplift. The honest verdict — risky.
 - [Disable Fullscreen Optimizations](https://compy.gg/fullscreen-optimizations): Turns off Windows' hybrid fullscreen compositor for a specific game's .exe. The honest verdict — real.
-- [Windows Game Mode](https://compy.gg/game-mode): Prioritizes the foreground game for CPU/GPU scheduling and holds back background interruptions. The honest verdict — real.
+- [Windows Game Mode](https://compy.gg/game-mode): Prioritizes the foreground game for CPU/GPU scheduling and holds back background interruptions. The honest verdict — no measured gain.
 - [Disabling SMT / Hyper-Threading for gaming](https://compy.gg/disable-smt-gaming): Turning off your CPU's second thread per core (Hyper-Threading on Intel, SMT on AMD) in BIOS, on the theory that fewer, 'cleaner' threads game better. The honest verdict — placebo.
 - [Network 'mega-pack' tweaks (Nagle, RSS/RSC, netsh stacks)](https://compy.gg/tcp-mega-packs): Bundles of TCP/NIC registry and netsh changes promising lower ping. The honest verdict — placebo.
 - [Game booster apps (Razer Cortex etc.)](https://compy.gg/game-boosters): All-in-one 'booster' apps that promise FPS by closing background apps and 'optimizing' RAM or CPU when a game launches. The honest verdict — placebo.

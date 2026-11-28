@@ -120,7 +120,34 @@ function mdToHtml(md) {
 // footer now states the boundary it can actually keep. If the opt-in Receipts telemetry phase
 // ever ships (owner-gated), this line gets revised WITH it — src/outbound-claim-guard.test.ts
 // fails the build if an absolute offline claim ships while any outbound surface is live.
-const FOOTER_PROMISE = "Local-first · no telemetry · no account · signed updates only";
+// Owner ruling 2026-11-28: one sentence about what leaves the PC, the same everywhere on the site.
+const FOOTER_PROMISE = "Compy sends nothing about your PC. It only checks for a signed update.";
+
+// Owner ruling 2026-11-28: on the site, Windows Game Mode says "no measured gain" everywhere, matching the
+// landing's Exhibit A (a real Test trial inside the ±0.7% session noise floor). Site-only: the shared
+// Library entry (src/data/tweaks.json) is not changed here. Every swap must find its text, or the build
+// stops, so a reworded Library entry cannot silently bring "Real" back.
+const NO_GAIN_ID = "game-mode";
+const NO_GAIN_CHIP =
+  '<span class="chip" title="Compy\'s own Test trial measured no gain beyond the ±0.7% session noise floor.">No measured gain</span>';
+const NO_GAIN_TRIAL = "Compy's own Test trial on a real PC measured no gain beyond the ±0.7% session noise floor.";
+function swapAll(html, from, to, what) {
+  const re = from instanceof RegExp ? new RegExp(from.source, "g") : null;
+  const hits = re ? (html.match(re) ?? []).length : html.split(from).length - 1;
+  if (hits < 1) throw new Error(`site Game Mode override: ${what} not found`);
+  return re ? html.replace(re, to) : html.split(from).join(to);
+}
+const noGainSummary = (text) => swapAll(text, "The honest verdict — real.", "The honest verdict — no measured gain.", "the summary");
+function noGainArticle(html) {
+  html = swapAll(html, /<span class="chip chip-real"[^>]*>Real<\/span>/, NO_GAIN_CHIP, "the Real chip");
+  html = noGainSummary(html);
+  return swapAll(
+    html,
+    "Modest, low-risk benefit on most rigs; larger on busy/background-heavy systems.",
+    NO_GAIN_TRIAL,
+    "the verdict sentence",
+  );
+}
 
 // ---------- Real-wins strip (library index) — doctrine §5, web-design-director 2026-07-15 ----------
 // The flat alphabetical manifest has no way to FOREGROUND the measured wins — a "Sample" badge in a
@@ -128,7 +155,7 @@ const FOOTER_PROMISE = "Local-first · no telemetry · no account · signed upda
 // the book reads as "here's what actually works" first, refusals second. Data-driven: no hand-picked
 // subset — a pick appears here iff its verdict is "real", so it can never drift from the catalog.
 function realWinsStrip(picks) {
-  const wins = picks.filter((e) => e.type === "tweak" && e.verdict === "real");
+  const wins = picks.filter((e) => e.type === "tweak" && e.verdict === "real" && e.id !== NO_GAIN_ID);
   if (wins.length === 0) return "";
   const cards = wins
     .map(
@@ -184,11 +211,16 @@ copyFileSync(join(here, "src", "library.css"), join(here, "library.css"));
 
 const debunkTemplate = readFileSync(join(here, "src", "debunk.template.html"), "utf8");
 
-function articlePage(entry, { cssHref, homeHref, ctaHref, canonical }) {
+function articlePage(entry, opts) {
+  const html = articlePageAsIs(entry, opts);
+  return entry.id === NO_GAIN_ID ? noGainArticle(html) : html;
+}
+
+function articlePageAsIs(entry, { cssHref, homeHref, ctaHref, canonical }) {
   const title =
     entry.type === "tweak"
-      ? `${entry.name} — real, placebo, or risky? | Compy Blackbook`
-      : `${entry.name} | Compy Blackbook`;
+      ? `${entry.name} — real, placebo, or risky? | Compy's graded book`
+      : `${entry.name} | Compy's graded book`;
   return fill(debunkTemplate, {
     TITLE: escapeHtml(title),
     META_DESCRIPTION: escapeHtml(entrySummary(entry)),
@@ -227,7 +259,7 @@ function teaserSections(entry) {
   const inTheApp = (heading, note) =>
     `<section class="in-the-app"><h2>${escapeHtml(heading)}</h2><p class="in-the-app-note">${escapeHtml(
       note,
-    )} The Blackbook publishes its verdicts here — the full write-ups stay in the book, on your rig, next to your own measurements.</p></section>`;
+    )} Compy publishes its verdicts here — the full write-ups stay in the book, on your rig, next to your own measurements.</p></section>`;
   switch (entry.type) {
     case "tweak": {
       // The in-app note only claims withheld text when text WAS withheld (honesty law) —
@@ -251,10 +283,10 @@ function teaserSections(entry) {
         `<section><h2>What it means</h2>${p(entry.what)}</section>`,
         `<section><h2>More detail</h2>${p(ex.text)}</section>`,
         inTheApp(
-          "In the Blackbook",
+          "In the graded book",
           ex.truncated
             ? "The deeper explanation continues inside the app."
-            : "The full Blackbook — every related term and verdict, cross-linked — ships inside the app.",
+            : "The full graded book — every related term and verdict, cross-linked — ships inside the app.",
         ),
       ].join("\n");
     }
@@ -284,8 +316,8 @@ function teaserSections(entry) {
 function teaserPage(entry, { cssHref, homeHref, ctaHref, canonical }) {
   const title =
     entry.type === "tweak"
-      ? `${entry.name} — real, placebo, or risky? | Compy Blackbook`
-      : `${entry.name} | Compy Blackbook`;
+      ? `${entry.name} — real, placebo, or risky? | Compy's graded book`
+      : `${entry.name} | Compy's graded book`;
   return fill(debunkTemplate, {
     TITLE: escapeHtml(title),
     META_DESCRIPTION: escapeHtml(entrySummary(entry)),
@@ -338,16 +370,21 @@ writeFileSync(
   // The index is a browsing surface, not prose — the .article--index modifier lifts the 720px
   // article measure so the 191-card grid gets the full .wrap width (Director re-review, 2026-07-16).
   fill(pageTemplate, {
-    TITLE: "The Compy Blackbook — every verdict on the record",
+    TITLE: "Compy's graded book — every verdict on the record",
     META_DESCRIPTION: escapeHtml(
-      `All ${entries.length} Compy Blackbook verdicts on the record — ${picks.length} full entries published as the public sample; the complete graded book ships inside the app.`,
+      `All ${entries.length} graded-book verdicts on the record — ${picks.length} full entries published as the public sample; the complete graded book ships inside the app.`,
     ),
     MAIN: [
-      `<h1>The Compy Blackbook</h1>`,
+      `<h1>Compy's graded book</h1>`,
       `<p>${entries.length} entries, every verdict on the record — none invented. ${picks.length} full write-ups are published below as the public sample; the complete graded book ships inside the app, next to your own rig's measurements.</p>`,
       realWinsStrip(picks),
       glossaryBlock(lib),
-      indexSections(entries, lib, "", pickIds),
+      swapAll(
+        indexSections(entries, lib, "", pickIds),
+        /(<a href="game-mode\.html">Windows Game Mode<\/a><span class="toc-card-meta">)<span class="chip chip-real">Real<\/span>/,
+        "$1" + NO_GAIN_CHIP,
+        "the index chip",
+      ),
     ].join("\n"),
     CSS_HREF: "../library.css",
     HOME_HREF: "../",
@@ -443,10 +480,10 @@ const llmsTxt = [
   `## Start here`,
   `- [Home](${SITE_ORIGIN}/): what Compy is, real-session replay, and the launch waitlist.`,
   `- [Compare](${SITE_ORIGIN}/compare): how Compy's approach differs from generic "best tweaks" lists, across five practice axes.`,
-  `- [The Blackbook](${SITE_ORIGIN}/library/): all ${entries.length} verdicts on the record — ${picks.length} full write-ups published as the public sample; the complete graded book ships in the app.`,
+  `- [The graded book](${SITE_ORIGIN}/library/): all ${entries.length} verdicts on the record — ${picks.length} full write-ups published as the public sample; the complete graded book ships in the app.`,
   ``,
   `## Full sample entries (public picks)`,
-  ...picks.map((entry) => `- [${entry.name}](${SITE_ORIGIN}/${entry.id}): ${entrySummary(entry)}`),
+  ...picks.map((entry) => `- [${entry.name}](${SITE_ORIGIN}/${entry.id}): ${entry.id === NO_GAIN_ID ? noGainSummary(entrySummary(entry)) : entrySummary(entry)}`),
   ``,
   `## Legal`,
   `- [Privacy](${SITE_ORIGIN}/privacy): local-only app; the waitlist stores only an email + one-way hashed IP, zero third-party trackers.`,

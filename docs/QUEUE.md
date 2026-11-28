@@ -75,13 +75,13 @@ Rest of NEXT (order unchanged):
 - [ ] Remaining diet step: docs archive (agent machinery removal done 2026-11-28; its hook half waits on the owner's one command)
 
 ## Waiting on the owner
-- Site copy: the site says both "sends nothing" and "checks GitHub"; the app says "signed update check only" (true in the current build). One site sentence that matches the app.
+- Site copy: done on branch `claude/site-one-sentence` (owner ruling 2026-11-28): one sentence everywhere, "Compy sends nothing about your PC. It only checks for a signed update." The PR is left unmerged because merging site/ deploys once the Cloudflare token exists; merging it is his.
 - Privacy questions and the lawyer list (`_train\t2-privacy-for-owner-and-lawyer.md`).
 - Site copy differences (`_train\t2-site-privacy-diff.md`, `_train\c3-site-claims.md`).
 - Website lines that make the same game and anti-cheat claims, with suggested wording in `_train\c3-site-claims.md` (the EULA line needs a lawyer).
 - ROB RUN driver-rollback test: four rough sessions in a row since the Nov 19 driver update; cause not settled.
 - Code-signing identity check: not started. Signing is undecided and unscheduled (owner ruling 2026-11-26). Memo `_train\r1-signing-memo.md`: lead time up to 30 business days; individuals in the US or Canada.
-- The website (his to publish): no download link; Game Mode is "no gain" in one place and "Real" in another; module names the app no longer uses; legal pages marked DRAFT; two different statements of what leaves the PC.
+- The website (his to publish): copy fixed on branch `claude/site-one-sentence` (unmerged): Game Mode reads "No measured gain" in both places, retired names (Blackbook, Monitor) replaced, legal pages still DRAFT, one privacy sentence. Still open: no download link; publishing is his.
 - Legal drafts for a lawyer (in progress): `_train\legal-drafts\`.
 - One ordinary ROB RUN session with nothing else running (Compy now records background load).
 - US/Canada eligibility and identity for code signing.
