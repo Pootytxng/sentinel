@@ -285,6 +285,11 @@ describe("debrief comparison card words (e5a)", () => {
             : "这是这里实测到的真实差异，但不一定对每款游戏、每次会话都成立。",
         );
         expect(card).not.toMatch(/signal|guarantee|信号|保证/i);
+        // e5a r2 (M1): one before/after pair, not a repeat. Break check: put 连续两次会话都测得 back -> fails.
+        if (lang === "zh-CN") {
+          expect(card).toContain("在这两次会话之间测得");
+          expect(card).not.toMatch(/连续两次/);
+        }
       } finally {
         await i18n.changeLanguage("en");
       }
