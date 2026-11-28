@@ -5748,15 +5748,16 @@ mod temperature_and_crashes {
             history(vec![
                 at("g", "2026-10-02T08:00:00Z", Some(true), Some(mine)),
                 at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Old\G")),
-                at("G", "2026-10-05T08:00:00Z", Some(false), Some(r"\\?\d:\old\g")),
+                at("G", "2026-10-05T08:00:00Z", Some(false), Some(r"d:\OLD\g")),
                 at("g", "2026-10-04T08:00:00Z", Some(true), Some(mine)),
             ]),
             false,
         );
         assert_eq!(crash_line(&d).expect("said").args["n"], "2");
         let e = elsewhere(&d).expect("the other folder is said");
-        assert_eq!((e["n"].as_str(), e["exe"].as_str(), e["folder"].as_str()), ("2", "G", r"\\?\d:\old\g"));
+        assert_eq!((e["n"].as_str(), e["exe"].as_str(), e["folder"].as_str()), ("2", "G", r"d:\OLD\g"));
         assert!(!e.contains_key("folders"), "one folder, spelled two ways, is one folder");
+        assert!(!e.contains_key("partial"), "a complete read gives the count as it is");
         // Two different other folders: how many is sent, with ONE example folder (the newest report's).
         let d = with_crashes(
             history(vec![at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Old\G")), at("g", "2026-10-06T08:00:00Z", Some(false), Some(r"E:\Copy"))]),
@@ -5766,6 +5767,9 @@ mod temperature_and_crashes {
         assert_eq!((e["n"].as_str(), e["folder"].as_str(), e.get("folders").map(String::as_str)), ("2", r"E:\Copy", Some("2")));
         // Only from another folder: no count line, and the other-folder line is still said.
         assert!(crash_line(&d).is_none());
+        // A partial read: the count is a lower bound, and the args say so (the card words it "at least").
+        let part = CrashRead::Read(CrashHistory { crashes: vec![at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Old\G"))], listed: true, partial: true });
+        assert_eq!(elsewhere(&with_crashes(part, false)).expect("said").get("partial").map(String::as_str), Some("true"));
         // Equal times: the shorter folder is the example.
         let d = with_crashes(history(vec![at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Long\Folder")), at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"E:\G"))]), false);
         assert_eq!(elsewhere(&d).expect("said")["folder"], r"E:\G");
@@ -5799,6 +5803,18 @@ mod temperature_and_crashes {
             ),
             other => panic!("{other:?}"),
         }
+        // A bare program name (no folder) with the install folder known: on main it was dropped as "another folder";
+        // now it is counted, and the line says it went by program name only.
+        let bare = AppCrashes {
+            crashes: vec![AppCrash { app: "g".into(), when: utc("2026-10-02T08:00:00Z"), module: None, code: None, version: None, path: Some("g".into()) }],
+            listed_any: true,
+            needs_admin: false,
+            complete_from: None,
+        };
+        let d = with_crashes(super::super::extras::crash_dto(bare, Some(Path::new(r"C:\Steam\steamapps\common\G"))), false);
+        let l = crash_line(&d).expect("counted");
+        assert_eq!((l.args["n"].as_str(), l.args.get("byName").map(String::as_str)), ("1", Some("true")));
+        assert!(!d.seen.iter().any(|s| s.id == "game-crashes-elsewhere"), "no folder, so not 'another folder'");
     }
 
     #[test]

@@ -195,7 +195,7 @@ pub(super) fn detect_crashes(c: &Ctx, out: &mut Out) {
 }
 
 /// e13: the reports whose program name matches but whose exe ran from a folder that is not under the game's install
-/// folder, even after `game_mods::compare_form` (case, slashes, `\\?\`-style prefixes; it asks no disk). The crash
+/// folder, even after `game_mods::compare_form` (ASCII case, slashes, `\\?\`-style prefixes; it asks no disk). The crash
 /// line does not count them; this says how many there were and shows ONE folder (the newest report's; on a tie the
 /// shortest), never a list. An 8.3 short name or a junction can make the game's own folder look like another one,
 /// and another program can share the name, so the sentence says neither "the same game" nor "another game".
@@ -207,14 +207,19 @@ pub(crate) struct CrashesElsewhere {
     pub folder: String,
     /// How many different folders (by the comparison form) the reports came from.
     pub folders: usize,
+    /// Some reports were not read: `n` is a lower bound, said as "at least" (as the count line says it).
+    pub partial: bool,
 }
 
 impl CrashesElsewhere {
-    /// `n`, `exe`, `folder`, and `folders` when there is more than one (the card's own args).
+    /// `n`, `exe`, `folder`, `folders` when there is more than one, and `partial` on a partial read (the card's own args).
     pub(crate) fn args(&self) -> Vec<(&'static str, String)> {
         let mut args = vec![("n", self.n.to_string()), ("exe", self.exe.clone()), ("folder", self.folder.clone())];
         if self.folders > 1 {
             args.push(("folders", self.folders.to_string()));
+        }
+        if self.partial {
+            args.push(("partial", "true".to_string()));
         }
         args
     }
@@ -227,7 +232,7 @@ pub(crate) fn crashes_elsewhere(h: &CrashHistory, how: CrashMatch<'_>) -> Option
         h.crashes.iter().filter(|k| same_game(&k.app, game) && k.path_ok == Some(false)).filter_map(|k| Some((k, k.folder.as_deref()?))).collect();
     let (newest, folder) = other.iter().copied().max_by(|(a, fa), (b, fb)| a.when.cmp(&b.when).then_with(|| fb.len().cmp(&fa.len())))?;
     let folders: BTreeSet<String> = other.iter().map(|(_, f)| crate::game_mods::compare_form(Path::new(f))).collect();
-    Some(CrashesElsewhere { n: other.len(), exe: newest.app.trim().to_string(), folder: folder.to_string(), folders: folders.len() })
+    Some(CrashesElsewhere { n: other.len(), exe: newest.app.trim().to_string(), folder: folder.to_string(), folders: folders.len(), partial: h.partial })
 }
 
 /// How a crash report is tied to the game asked about.

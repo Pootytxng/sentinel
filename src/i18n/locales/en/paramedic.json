@@ -799,6 +799,8 @@
     "crashesVersions": " These crashes are across {{n}} versions of the game.",
     "crashesElsewhere_one": "Windows has 1 crash record of a program named {{exe}} that ran from {{where}}, so Compy didn't count it here.",
     "crashesElsewhere_other": "Windows has {{count}} crash records of a program named {{exe}} that ran from {{where}}, so Compy didn't count them here.",
+    "crashesElsewherePartial_one": "Windows' crash records that Compy could read include at least 1 record of a program named {{exe}} that ran from {{where}}, so Compy didn't count it here.",
+    "crashesElsewherePartial_other": "Windows' crash records that Compy could read include at least {{count}} records of a program named {{exe}} that ran from {{where}}, so Compy didn't count them here.",
     "crashesElsewhereFolder": "another folder ({{folder}})",
     "crashesElsewhereFolders": "{{n}} other folders (one is {{folder}})",
     "startsDropped": "Compy stopped listing program starts partway through ({{n}} more were not listed).",

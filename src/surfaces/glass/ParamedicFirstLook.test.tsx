@@ -705,10 +705,11 @@ describe("the first look for a picked game", () => {
     expect(screen.getByTestId("first-look-limits").textContent).toContain("Compy could only read some of Windows' crash records, and found none for ROB RUN in those.");
   });
 
-  // e13. Break check: drop the first-look-crashes-elsewhere paragraph -> both lookups fail.
-  it("records of the program name from another folder are said beside 'none', with one folder, in the measured flow's words", async () => {
+  // e13. Break check: drop the first-look-crashes-elsewhere paragraph -> both lookups fail. Review r1 F2: "no crash
+  // record for the game" is never said beside it (break check: drop `!a.crashes_elsewhere` from the none line -> fails).
+  it("records of the program name from another folder are said with one folder, in the measured flow's words, and never beside 'none'", async () => {
     await look(gameAnswer({ crashes_none: true, crashes_elsewhere: { n: "2", exe: "robrun.exe", folder: String.raw`D:\Old\RobRun` } }));
-    expect(screen.getByTestId("first-look-crashes-none")).toBeTruthy();
+    expect(screen.queryByTestId("first-look-crashes-none")).toBeNull();
     expect(screen.getByTestId("first-look-crashes-elsewhere").textContent).toBe(
       String.raw`Windows has 2 crash records of a program named robrun.exe that ran from another folder (D:\Old\RobRun), so Compy didn't count them here.`,
     );

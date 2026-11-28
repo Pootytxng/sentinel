@@ -1653,7 +1653,46 @@ describe("ParamedicCard: temperature and crash history", () => {
       fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
-      expect(checked()).toContain(String.raw`Windows 有 3 条名为 game.exe 的程序的崩溃记录，该程序是从多个其他文件夹（共 2 个，其中一个是 E:\Copy）运行的，所以 Compy 没有把它们算在这里。`);
+      expect(checked()).toContain(String.raw`Windows 有 3 条名为 game.exe 的程序的崩溃记录，该程序是从多个其他文件夹（共 2 个，其中一个是 E:\Copy）运行的，所以 Compy 没有将其计入此处。`);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  // e13 review r1 F1: zh-CN has one plural form, so ONE record must not be called "them" (它们).
+  // Break check: put "所以 Compy 没有把它们算在这里。" back in zh-CN crashesElsewhere_other -> this fails.
+  it("one record from another folder in Chinese is not called 'them'", async () => {
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      answer.value = answerOf([background()], { seen: [{ id: "game-crashes-elsewhere", args: { n: "1", exe: "game.exe", folder: String.raw`D:\Old` } }] });
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      expect(checked()).toContain(String.raw`Windows 有 1 条名为 game.exe 的程序的崩溃记录，该程序是从另一个文件夹（D:\Old）运行的，所以 Compy 没有将其计入此处。`);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  // e13 review r1 F3. Break check: drop the partial key choice in seenLine -> both sentences lose "at least" and fail.
+  it("a partial read gives the other-folder count as 'at least', in English and Chinese", async () => {
+    const seen: ParamedicDiagnosis["seen"] = [{ id: "game-crashes-elsewhere", args: { n: "2", exe: "game.exe", folder: String.raw`D:\Old`, partial: "true" } }];
+    await ask(answerOf([background()], { seen }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(String.raw`Windows' crash records that Compy could read include at least 2 records of a program named game.exe that ran from another folder (D:\Old), so Compy didn't count them here.`);
+    cleanup();
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      answer.value = answerOf([background()], { seen });
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      expect(checked()).toContain(String.raw`Compy 能读到的 Windows 崩溃记录中，至少有 2 条名为 game.exe 的程序的记录，该程序是从另一个文件夹（D:\Old）运行的，所以 Compy 没有将其计入此处。`);
     } finally {
       await i18n.changeLanguage("en");
     }

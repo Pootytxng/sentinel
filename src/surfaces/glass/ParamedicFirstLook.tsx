@@ -716,7 +716,11 @@ function elsewhereSentence(a: Record<string, string>, t: T): string {
   const where = a.folders
     ? t("paramedic.seen.crashesElsewhereFolders", { n: Number(a.folders), folder: a.folder })
     : t("paramedic.seen.crashesElsewhereFolder", { folder: a.folder });
-  return t("paramedic.seen.crashesElsewhere", { count: Number(a.n), exe: a.exe, where });
+  const count = Number(a.n);
+  // A partial read says "at least", as the count line does.
+  return a.partial === "true"
+    ? t("paramedic.seen.crashesElsewherePartial", { count, exe: a.exe, where })
+    : t("paramedic.seen.crashesElsewhere", { count, exe: a.exe, where });
 }
 
 /** What kind of change the earliest change is: one Compy applied, or one Windows recorded. The engine sends it with
@@ -1125,7 +1129,8 @@ export function ParamedicFirstLook({
                   )}
                 </div>
               )}
-              {gameName && a.crashes_none && (
+              {/* e13: never "no crash record for the game" beside records of its program name from another folder. */}
+              {gameName && a.crashes_none && !a.crashes_elsewhere && (
                 <p className="gl-para-note" data-testid="first-look-crashes-none">
                   {t("paramedic.firstLook.crash.none", { game: gameName })}
                 </p>

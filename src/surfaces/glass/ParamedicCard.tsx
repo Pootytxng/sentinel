@@ -969,7 +969,11 @@ function seenLine(s: ParamedicRuledOut, ctx: Ctx): string | null {
       const where = a.folders
         ? t("paramedic.seen.crashesElsewhereFolders", { n: Number(a.folders), folder: a.folder })
         : t("paramedic.seen.crashesElsewhereFolder", { folder: a.folder });
-      return t("paramedic.seen.crashesElsewhere", { count: Number(a.n), exe: a.exe, where });
+      // A partial read says "at least", as the count line does.
+      const count = Number(a.n);
+      return a.partial === "true"
+        ? t("paramedic.seen.crashesElsewherePartial", { count, exe: a.exe, where })
+        : t("paramedic.seen.crashesElsewhere", { count, exe: a.exe, where });
     }
     case "starts-dropped":
       return t("paramedic.seen.startsDropped", { n: Number(a.n) });
