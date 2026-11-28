@@ -738,7 +738,7 @@ describe("the first look for a picked game", () => {
       engine.steam = steamList([]);
       engine.diagnose = noSessions();
       render(<ParamedicCard games={recorded} />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: i18n.t("paramedic.door.button") }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "是从什么时候开始的？" })).toBeTruthy());

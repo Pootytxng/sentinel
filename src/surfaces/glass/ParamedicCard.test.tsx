@@ -1650,7 +1650,7 @@ describe("ParamedicCard: temperature and crash history", () => {
     try {
       answer.value = answerOf([background()], { seen });
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: i18n.t("paramedic.door.button") }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       expect(checked()).toContain(String.raw`Windows 有 3 条名为 game.exe 的程序的崩溃记录，该程序是从多个其他文件夹（共 2 个，其中一个是 E:\Copy）运行的，所以 Compy 没有将其计入此处。`);
@@ -1667,7 +1667,7 @@ describe("ParamedicCard: temperature and crash history", () => {
     try {
       answer.value = answerOf([background()], { seen: [{ id: "game-crashes-elsewhere", args: { n: "1", exe: "game.exe", folder: String.raw`D:\Old` } }] });
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: i18n.t("paramedic.door.button") }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       expect(checked()).toContain(String.raw`Windows 有 1 条名为 game.exe 的程序的崩溃记录，该程序是从另一个文件夹（D:\Old）运行的，所以 Compy 没有将其计入此处。`);
@@ -1694,7 +1694,7 @@ describe("ParamedicCard: temperature and crash history", () => {
     try {
       answer.value = d();
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: i18n.t("paramedic.door.button") }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       expect(checked()).toContain("Compy 只读到了 Windows 崩溃记录的一部分。");
@@ -1717,7 +1717,7 @@ describe("ParamedicCard: temperature and crash history", () => {
     try {
       answer.value = answerOf([background()], { seen });
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: i18n.t("paramedic.door.button") }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       expect(checked()).toContain(String.raw`Compy 能读到的 Windows 崩溃记录中，至少有 2 条名为 game.exe 的程序的记录，该程序是从另一个文件夹（D:\Old）运行的，所以 Compy 没有将其计入此处。`);
