@@ -1095,6 +1095,8 @@ describe("D6: the clear takes one store lock at a time, plus the one declared ne
     expect(closure < cond && cond < read && read < del && del < gated).toBe(true);
     // A bare "let _ =" would drop the guard at once and hold nothing.
     expect(body).not.toMatch(/let\s+_\s*=\s*crate::history::lock_ledger/);
+    // Nor an early release (review r1 Q3): the guard lives to the closure's end.
+    expect(body).not.toMatch(/drop\s*\(\s*_ledger/);
   });
 
   it("execute_everything_ledger_phase cannot be called without the ledger guard", () => {
