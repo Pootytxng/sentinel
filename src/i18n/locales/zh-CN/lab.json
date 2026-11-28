@@ -127,9 +127,9 @@
     }
   },
   "labConsole": {
-    "provenLabel": "测试后保留",
-    "provenNoteSome": "前后都实测过",
-    "provenNoteNone": "还没有保留的改动",
+    "provenLabel": "实测提升",
+    "provenNoteSome": "前后都实测过，随后已还原",
+    "provenNoteNone": "还没有实测提升",
     "noiseFloorLabel": "噪声基线",
     "noiseFloorNote": "改动必须超过此幅度才算数",
     "noiseFloorNoteGame": "{{game}} · 改动必须超过此幅度才算数",
@@ -665,7 +665,7 @@
     },
     "simVerdict": {
       "worthTesting": "值得一试",
-      "plausibleUnproven": "可能有帮助——尚未测试",
+      "plausibleUnproven": "可能有帮助——依据较弱",
       "insufficientEvidence": "未知——实测一下便知",
       "unlikelyToMatter": "影响可能不大",
       "alreadyConfigured": "已配置",

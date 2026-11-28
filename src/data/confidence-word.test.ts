@@ -96,9 +96,9 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "common.oscilloscope.noSignal": "the oscilloscope's literal 'no input' display, not a strength tag",
   "gaming.hardwareGrid.identityUnknown": "a hardware fact Compy has no value for (unavailable stays unknown), shown with its reason; not a certainty tag",
   "monitor.latency.jitterUnknown": "the value cell for a jitter figure that is not a number (zh 未知, en 'unknown'); not a certainty tag",
-  "home.compyHero.tagline": "owner question 3 (design §6)",
-  "home.compyHero.pills.measured": "owner question 3 (design §6)",
 };
+// e5b review r1 F5: the Welcome tagline and its "Measured" pill (home.compyHero.*) are the owner's
+// (design §6 question 3) but hold no retired word, so they get no exception: the scan covers them.
 
 const LOCALES = join("src", "i18n", "locales");
 function localeValues(): { loc: string; key: string; value: string }[] {
@@ -131,12 +131,47 @@ describe("retired-word scan (D3 slice 4, strict)", () => {
     expect(hits, hits.join("\n")).toEqual([]);
   });
 
-  it("every allowed key exists, so the list cannot hold a stale exception", () => {
-    const keys = new Set(localeValues().map((v) => v.key));
+  it("every allowed key exists and would fail without its exception, so the list cannot hold a stale one", () => {
+    const values = localeValues();
     for (const [key, reason] of Object.entries(ALLOWED)) {
-      expect(keys.has(key), `${key} is allowed but no locale has it`).toBe(true);
+      const mine = values.filter((v) => v.key === key);
+      expect(mine.length, `${key} is allowed but no locale has it`).toBeGreaterThan(0);
+      // e5b review r1 F5: an exception for a value with no retired word only hides a later edit.
+      expect(mine.some((v) => RETIRED.some((r) => r.test(v.value))), `${key} is allowed but holds no retired word`).toBe(true);
       expect(reason.length, key).toBeGreaterThan(0);
     }
+  });
+
+  // e5b review r1: three rewordings pinned in both locales, so a revert or a stronger word fails here.
+  it("the benchmark's interval says it is for the median change, not a spread of results (F2)", () => {
+    const g = (loc: string) => JSON.parse(readFileSync(join(LOCALES, loc, "gaming.json"), "utf8")) as Record<string, unknown>;
+    expect(lookup(g("en"), "benchmark.ciLabel")).toBe("95% interval for the median change");
+    expect(lookup(g("zh-CN"), "benchmark.ciLabel")).toBe("中位数变化的 95% 区间");
+    expect(lookup(g("en"), "benchmark.pointsTraceNote")).toMatch(/95% interval for its median change/);
+    expect(lookup(g("zh-CN"), "benchmark.pointsTraceNote")).toMatch(/中位数变化的 95% 区间/);
+    for (const loc of ["en", "zh-CN"]) expect(String(lookup(g(loc), "benchmark.ciLabel")), loc).not.toMatch(/range|范围/i);
+  });
+
+  it("the Test room's win tile never says a change was kept: every counted win was put back (F1)", () => {
+    const l = (loc: string) => JSON.parse(readFileSync(join(LOCALES, loc, "lab.json"), "utf8")) as Record<string, unknown>;
+    expect([lookup(l("en"), "labConsole.provenLabel"), lookup(l("en"), "labConsole.provenNoteSome"), lookup(l("en"), "labConsole.provenNoteNone")]).toEqual([
+      "Measured wins",
+      "measured before and after, then put back",
+      "no measured wins yet",
+    ]);
+    expect([lookup(l("zh-CN"), "labConsole.provenLabel"), lookup(l("zh-CN"), "labConsole.provenNoteSome"), lookup(l("zh-CN"), "labConsole.provenNoteNone")]).toEqual([
+      "实测提升",
+      "前后都实测过，随后已还原",
+      "还没有实测提升",
+    ]);
+  });
+
+  it("the simulator's low-impact verdict says only what it knows: weak support, not a test history (F4)", () => {
+    const l = (loc: string) => JSON.parse(readFileSync(join(LOCALES, loc, "lab.json"), "utf8")) as Record<string, unknown>;
+    expect(lookup(l("en"), "experimentBench.simVerdict.plausibleUnproven")).toBe("Might help — weak support");
+    expect(lookup(l("zh-CN"), "experimentBench.simVerdict.plausibleUnproven")).toBe("可能有帮助——依据较弱");
+    for (const loc of ["en", "zh-CN"])
+      expect(String(lookup(l(loc), "experimentBench.simVerdict.plausibleUnproven")), loc).not.toMatch(/tested|测试/);
   });
 
   it("the scan itself fails on a retired word (e.g. a put-back 'Prime suspect')", () => {

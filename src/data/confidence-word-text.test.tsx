@@ -15,7 +15,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import i18n from "../i18n";
 import { ConfidenceWord, PatternConfidence, RowConfidence } from "../design/ConfidenceWord";
-import { confidenceWordKey, confidenceWordText, wordFromBand, wordFromBench, wordFromFinding, wordFromPattern, wordFromRow, type ConfidenceWord as Word } from "./confidence-word";
+import { confidenceWordKey, confidenceWordText, rowHasSourceWord, wordFromBand, wordFromBench, wordFromFinding, wordFromPattern, wordFromRow, type ConfidenceWord as Word } from "./confidence-word";
 import { INTERVIEW_FINDINGS, interviewFinding, type InterviewFacts } from "../surfaces/home-interview-data";
 
 afterEach(async () => {
@@ -168,6 +168,24 @@ describe("on the screens, in both languages", () => {
         const { container } = render(<RowConfidence basis="measured" band={b} />);
         expect(container.textContent, `measured/${b}`).toBe(SUPPORTED(b) ? TEXT[loc].possible : TEXT[loc].unknown);
         expect(container.querySelector(".confidence-note"), `measured/${b}`).toBeNull();
+        cleanup();
+      }
+    });
+
+    // e5b review r1 F3: "N tweaks not applied" counts tweaks Compy could not read as not applied
+    // (priorities.rs ~697), so no source word is true for the whole row: it shows none, only the note.
+    it(`${loc}: the pending-tweaks row carries no source word; any other fact row still does`, async () => {
+      await i18n.changeLanguage(loc);
+      expect(rowHasSourceWord("pending-safe-recs")).toBe(false);
+      expect(rowHasSourceWord("power-profile")).toBe(true);
+      expect(rowHasSourceWord(undefined)).toBe(true);
+      for (const basis of ["fact", undefined] as const) {
+        const { container } = render(<RowConfidence basis={basis} band="high" rowId="pending-safe-recs" />);
+        expect(container.textContent, `${basis}`).not.toContain(TEXT[loc].known);
+        expect(container.textContent?.trim(), `${basis}`).toBe(NOTE[loc]);
+        cleanup();
+        const other = render(<RowConfidence basis={basis} band="high" rowId="power-profile" />);
+        expect(word(other.container), `${basis}`).toBe(TEXT[loc].known);
         cleanup();
       }
     });

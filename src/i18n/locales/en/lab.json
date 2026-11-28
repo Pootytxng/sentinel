@@ -127,9 +127,9 @@
     }
   },
   "labConsole": {
-    "provenLabel": "Kept after a test",
-    "provenNoteSome": "measured before and after",
-    "provenNoteNone": "nothing kept yet",
+    "provenLabel": "Measured wins",
+    "provenNoteSome": "measured before and after, then put back",
+    "provenNoteNone": "no measured wins yet",
     "noiseFloorLabel": "Noise floor",
     "noiseFloorNote": "a change must beat this to count",
     "noiseFloorNoteGame": "{{game}} · a change must beat this to count",
@@ -677,7 +677,7 @@
     },
     "simVerdict": {
       "worthTesting": "Worth testing",
-      "plausibleUnproven": "Might help — not tested yet",
+      "plausibleUnproven": "Might help — weak support",
       "insufficientEvidence": "Unknown — measure it to find out",
       "unlikelyToMatter": "Unlikely to matter",
       "alreadyConfigured": "Already configured",

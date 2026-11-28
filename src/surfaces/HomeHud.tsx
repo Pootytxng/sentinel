@@ -777,7 +777,7 @@ export function HomeHud({
                   >
                     {i === 0 && isMeasuredRow(l.basis)
                       ? t("home.homeHud.docket.biggestLimiter")
-                      : <RowConfidence basis={l.basis} band={l.confidence} />}
+                      : <RowConfidence basis={l.basis} band={l.confidence} rowId={l.id} />}
                   </span>
                   <button type="button" className="hud-btn hud-btn-ghost" onClick={onSeeInFix}>
                     {t("home.homeHud.docket.seeIn", { room: fixRoomLabel })}

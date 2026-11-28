@@ -255,7 +255,7 @@ export default function FirstCheck({
                         <span className="fc-rest-title">{lim.title}</span>
                         <span className="fc-rest-right">
                           <span className="fc-rest-conf">
-                            <RowConfidence basis={lim.basis} band={lim.confidence} />
+                            <RowConfidence basis={lim.basis} band={lim.confidence} rowId={lim.id} />
                           </span>
                           <span className="fc-rest-caret">{open ? "▾" : "▸"}</span>
                         </span>

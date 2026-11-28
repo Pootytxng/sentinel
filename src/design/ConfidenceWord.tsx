@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Term } from "./Term";
-import { confidenceHintKey, confidenceWordText, isMeasuredRow, wordFromBand, wordFromPattern, wordFromRow } from "../data/confidence-word";
+import { confidenceHintKey, confidenceWordText, isMeasuredRow, rowHasSourceWord, wordFromBand, wordFromPattern, wordFromRow } from "../data/confidence-word";
 import type { ConfidenceBand, PriorityBasis } from "../types";
 
 /** P7-confidence, review 2026-10-28: a band's word ("Possible", "Not enough to say yet") with its one-line hint in the
@@ -32,16 +32,26 @@ export function PatternConfidence({ band }: { band: ConfidenceBand | "high" | "m
  *  age) is "Read from your PC" (was "Known" until e5b) with the note "Effect on FPS not measured",
  *  never a strength: nothing measured what it does to this PC's frame rate. Only a row whose basis is
  *  "measured" takes the band's word. */
-export function RowConfidence({ basis, band }: { basis: PriorityBasis | undefined; band: ConfidenceBand | "high" | "medium" | "low" | null | undefined }) {
+export function RowConfidence({
+  basis,
+  band,
+  rowId,
+}: {
+  basis: PriorityBasis | undefined;
+  band: ConfidenceBand | "high" | "medium" | "low" | null | undefined;
+  /** The row's id; a row in confidence-word.ts NO_SOURCE_WORD_ROWS shows no word (e5b review r1 F3). */
+  rowId?: string;
+}) {
   const { t } = useTranslation();
   const word = wordFromRow(basis, band);
   const measured = isMeasuredRow(basis);
+  const tagged = rowHasSourceWord(rowId);
   return (
     <span data-confidence={band ?? undefined} data-basis={measured ? "measured" : "fact"}>
-      <Term tip={t(confidenceHintKey(word))}>{confidenceWordText(word, t)}</Term>
+      {tagged && <Term tip={t(confidenceHintKey(word))}>{confidenceWordText(word, t)}</Term>}
       {measured ? null : (
         <>
-          {" "}
+          {tagged ? " " : null}
           <span className="confidence-note">{t("common.confidenceNote.effectNotMeasured")}</span>
         </>
       )}

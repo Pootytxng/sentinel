@@ -1417,7 +1417,7 @@ export function HomeConsole({
                 </span>
                 <span className="hc-limiter-title">{withTerms(topLimiter.title)}</span>
                 <span className="hc-limiter-tag hc-mono">
-                  <RowConfidence basis={topLimiter.basis} band={topLimiter.confidence} />
+                  <RowConfidence basis={topLimiter.basis} band={topLimiter.confidence} rowId={topLimiter.id} />
                 </span>
                 {tuningTools && (
                   <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>

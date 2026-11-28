@@ -671,7 +671,7 @@ export function HomeV2({
                   >
                     {i === 0 && isMeasuredRow(l.basis)
                       ? t("home.homeV2.priorities.biggestLimiter")
-                      : <RowConfidence basis={l.basis} band={l.confidence} />}
+                      : <RowConfidence basis={l.basis} band={l.confidence} rowId={l.id} />}
                   </span>
                   <button type="button" className="hv2-btn hv2-btn-ghost" onClick={onSeeInFix}>
                     {t("home.homeV2.priorities.seeIn", { room: fixRoomLabel })}

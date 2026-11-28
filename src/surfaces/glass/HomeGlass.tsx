@@ -19,7 +19,7 @@ import { deriveReverted } from "../use-scan";
 import type { CardUndoResult } from "../../data/compy-undo";
 import { gameLibrary } from "../../data/game-library";
 import { knownFps } from "../../lib/session-metrics";
-import { wordFromRow, isMeasuredRow, confidenceWordText } from "../../data/confidence-word";
+import { wordFromRow, isMeasuredRow, confidenceWordText, rowHasSourceWord } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
 import { ParamedicCard } from "./ParamedicCard";
 import { useDates } from "./GamesRoom";
@@ -420,9 +420,12 @@ export function HomeGlass({
                       <span className="gl-row-sub">{t("common.confidenceNote.effectNotMeasured")}</span>
                     )}
                   </span>
-                  <span className="gl-chip" data-tone="accent">
-                    {confidenceWordText(wordFromRow(topLimiter.basis, topLimiter.confidence), t)}
-                  </span>
+                  {/* e5b review r1 F3: no chip on a row no source word is true for (rowHasSourceWord). */}
+                  {rowHasSourceWord(topLimiter.id) && (
+                    <span className="gl-chip" data-tone="accent">
+                      {confidenceWordText(wordFromRow(topLimiter.basis, topLimiter.confidence), t)}
+                    </span>
+                  )}
                 </div>
               </div>
             ) : (

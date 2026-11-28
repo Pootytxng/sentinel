@@ -65,6 +65,14 @@ export function wordFromPattern(band: ConfidenceBand | "high" | "medium" | "low"
  *  a fact: never claim a measurement the row doesn't carry. */
 export const isMeasuredRow = (basis: "fact" | "measured" | undefined): boolean => basis === "measured";
 
+/** e5b review r1 F3: priority rows that carry no source word, because no word is true for the whole row.
+ *  "N tweaks not applied" (priorities.rs `pending-safe-recs`) counts a tweak whose state Compy could not
+ *  read as not applied (`currently_applied ... unwrap_or(false)`, priorities.rs ~697, with no look at
+ *  `state_unread` / `live_read_unread`), so "Read from your PC" would claim a read that may have failed.
+ *  The count itself is a backend item (QUEUE); this only stops the word from claiming it. */
+const NO_SOURCE_WORD_ROWS: ReadonlySet<string> = new Set(["pending-safe-recs"]);
+export const rowHasSourceWord = (id: string | undefined): boolean => id === undefined || !NO_SOURCE_WORD_ROWS.has(id);
+
 /** A priority row's word: a fact Compy read is "Known" (its effect on FPS is not measured, so never
  *  "Likely"); a measured row keeps the band's word ("Possible" or "Unknown"). */
 export function wordFromRow(basis: "fact" | "measured" | undefined, band: ConfidenceBand | "high" | "medium" | "low" | null | undefined): ConfidenceWord {

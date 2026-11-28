@@ -827,7 +827,7 @@ export default function Check({
                         <div className="check-row-head">
                           <span className="check-row-title">{lim.title}</span>
                           <span className="check-conf">
-                            <RowConfidence basis={lim.basis} band={lim.confidence} />
+                            <RowConfidence basis={lim.basis} band={lim.confidence} rowId={lim.id} />
                           </span>
                         </div>
                         <p className="check-row-reason">{t("optimize.check.startupLimiterReason")}</p>
@@ -862,7 +862,7 @@ export default function Check({
                       <div className="check-row-head">
                         <span className="check-row-title">{lim.title}</span>
                         <span className="check-conf">
-                          <RowConfidence basis={lim.basis} band={lim.confidence} />
+                          <RowConfidence basis={lim.basis} band={lim.confidence} rowId={lim.id} />
                         </span>
                       </div>
                       <p className="check-row-reason">{lim.reason}</p>
