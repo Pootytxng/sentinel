@@ -1118,6 +1118,29 @@ describe("ParamedicCard: review round 2", () => {
     expect(screen.queryByTestId("paramedic-mixed")).toBeNull();
   });
 
+  // e11: the same note in Chinese. zh-CN has one plural form, so one sentence serves one session and several: it must
+  // not say "them" (它们) of one session. Break check: put 它们 back in zh-CN mixed_other -> the one-session line fails.
+  it("e11: the two-games note says the same in Chinese, for one session and for several", async () => {
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const askZh = async (d: ParamedicDiagnosis) => {
+        answer.value = d;
+        render(<ParamedicCard />);
+        fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+        await waitFor(() => expect(screen.getByTestId("paramedic-mixed")).toBeTruthy());
+        return screen.getByTestId("paramedic-mixed").textContent ?? "";
+      };
+      expect(await askZh({ ...base, mixed_sessions: ["2026-11-20T01:01:24Z"] })).toMatch(/^有 1 次运行（.+）可能包含两款游戏，所以 Compy 没有对其做判断。$/);
+      cleanup();
+      expect(await askZh({ ...base, mixed_sessions: ["2026-11-20T01:01:24Z", "2026-11-19T22:00:00Z"] })).toMatch(
+        /^有 2 次运行（.+）可能包含两款游戏，所以 Compy 没有对其做判断。$/,
+      );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("N2: one rough session reads as one, with the one-session caveat; two do not get it", async () => {
     await ask(base);
     await waitFor(() => expect(rows().length).toBe(1));

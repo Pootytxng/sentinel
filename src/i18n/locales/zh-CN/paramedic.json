@@ -275,8 +275,8 @@
     "title_one": "{{game}} 最近一次运行比平时卡顿得多",
     "title_other": "{{game}} 最近明显比平时卡顿",
     "oneSession": "只有一次运行的数据，参考价值有限。如果下一次运行正常，这次可能只是偶然。",
-    "mixed_one": "有 1 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对它做判断。",
-    "mixed_other": "有 {{count}} 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对它们做判断。"
+    "mixed_one": "有 1 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对其做判断。",
+    "mixed_other": "有 {{count}} 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对其做判断。"
   },
   "finding": {
     "gpuDriver": {

@@ -499,8 +499,13 @@ pub(crate) fn peak_judgeable(s: &SessionSummary) -> bool {
 
 /// e10 r1 (F1): a session the card would judge, measured to the card's baseline coverage
 /// (`PEAK_BASELINE_COVERAGE`). The card's frame-rule flag is not applied, so a session it calls rough can pass.
+/// e11: a session the recorder's read-only flag marks as possibly two games (`session_boundary::suspected_splice`,
+/// read with no crash marks, as the card reads it) is never a reference: its peak may belong to the other game.
+/// A `CantTell` row (an older row that kept nothing to look at) is judged, as the card judges it.
 pub(crate) fn peak_reference_eligible(s: &SessionSummary) -> bool {
-    peak_judgeable(s) && peak_coverage(s) >= PEAK_BASELINE_COVERAGE
+    peak_judgeable(s)
+        && peak_coverage(s) >= PEAK_BASELINE_COVERAGE
+        && !matches!(crate::session_boundary::suspected_splice(s, &[]), crate::session_boundary::Splice::Suspected(_))
 }
 
 /// e10: the crash session's GPU peak against this card's USUAL peak: the rounded median of the peaks of its
@@ -4307,6 +4312,28 @@ mod blackbox_tests {
         assert!(peak_judgeable(&thin[0]) && !peak_reference_eligible(&thin[0]));
         let inc = e10_timeout(Some(80));
         assert_eq!(peak_vs_usual(&inc, std::slice::from_ref(&inc), &thin, log_read()), Some(PeakVsUsual::TooFew { sessions: 2 }));
+    }
+
+    #[test]
+    fn e11_a_session_that_may_hold_two_games_never_sets_the_usual_peak() {
+        // Two ordinary earlier sessions and a third that is an older row (no recorded end) whose readings stop for
+        // 200 s and come back at half the level: the recorder's flag says it may hold two games.
+        let pts = |from: u32, to: u32, fps: f64| -> Vec<(u32, f64)> { (from..to).step_by(10).map(|t| (t, fps)).collect() };
+        let mut sessions = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
+        sessions[2].fps_series = [pts(0, 1500, 200.0), pts(1700, 3600, 100.0)].concat();
+        assert!(matches!(crate::session_boundary::suspected_splice(&sessions[2], &[]), crate::session_boundary::Splice::Suspected(_)));
+        assert!(peak_judgeable(&sessions[2]) && !peak_reference_eligible(&sessions[2]));
+        let inc = e10_timeout(Some(88));
+        assert_eq!(peak_vs_usual(&inc, std::slice::from_ref(&inc), &sessions, log_read()), Some(PeakVsUsual::TooFew { sessions: 2 }));
+        // The same series on a row that records why it ended is one game by construction: it counts again.
+        sessions[2].ended = Some(crate::session_boundary::SessionEnd::CaptureStopped);
+        assert!(peak_reference_eligible(&sessions[2]));
+        assert_eq!(peak_vs_usual(&inc, std::slice::from_ref(&inc), &sessions, log_read()), Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
+        // An older row that kept nothing to look at (CantTell) is judged, as the card judges it.
+        sessions[2].ended = None;
+        sessions[2].fps_series.clear();
+        assert_eq!(crate::session_boundary::suspected_splice(&sessions[2], &[]), crate::session_boundary::Splice::CantTell);
+        assert!(peak_reference_eligible(&sessions[2]));
     }
 
     #[test]

@@ -2421,6 +2421,33 @@ mod recovery_f3 {
         assert_eq!(run(v).state, unclear(false, true, false));
     }
 
+    // e11: a session that may hold two games is never the baseline and never counts towards the sessions a
+    // comparison needs; the note names it.
+    #[test]
+    fn a_session_that_may_contain_two_games_is_never_the_baseline_nor_counted_towards_one() {
+        // `n` usual sessions (days 1 to n, the last one flagged or not), then a rough one on day 9.
+        let series = |n: u32, mixed: bool| {
+            let mut v: Vec<SessionFacts> = (1..=n).map(|d| on(d, 50.0, Some("1.0"))).collect();
+            v.last_mut().expect("a session").mixed = mixed;
+            v.push(on(9, 30.0, Some("2.0")));
+            v
+        };
+        let clean = run(series(3, false));
+        assert_eq!(clean.state, DiagnosisState::Found, "{:?}", clean.state);
+        assert_eq!(clean.baseline.as_ref().expect("baseline").started_at, at_day(3, 10));
+        assert!(clean.mixed_sessions.is_empty());
+        // Day 3 flagged: two usual sessions are left, fewer than a comparison needs, and nothing is found.
+        let d = run(series(3, true));
+        assert_eq!(d.mixed_sessions, [at_day(3, 10)]);
+        assert_ne!(d.state, DiagnosisState::Found, "{:?}", d.state);
+        assert!(d.baseline.as_ref().is_none_or(|b| b.started_at != at_day(3, 10)), "{:?}", d.baseline);
+        // With a fourth session flagged, three usual ones are left: the comparison stands, never on the flagged one.
+        let four = run(series(4, true));
+        assert_eq!(four.state, DiagnosisState::Found, "{:?}", four.state);
+        assert_eq!(four.baseline.as_ref().expect("baseline").started_at, at_day(3, 10));
+        assert_eq!(four.mixed_sessions, [at_day(4, 10)]);
+    }
+
     // N2: one rough session is enough, and the engine says so as one.
     #[test]
     fn one_rough_session_is_a_finding_and_counts_as_one() {
@@ -5462,13 +5489,18 @@ mod temperature_and_crashes {
             with(&|s| s.unreadable_seconds = 300),
             with(&|s| s.low1_fps_est = 0.0),
             with(&|s| s.avg_fps = f64::NAN),
+            // e11: readings stop for 200 s and come back at half the level on an older row (no recorded end): the
+            // card's flag says it may hold two games, so neither the card nor the mirror takes it as a usual session.
+            with(&|s| s.fps_series = (0..300).step_by(10).map(|t| (t, 200.0)).chain((500..800).step_by(10).map(|t| (t, 100.0))).collect()),
         ];
         let mut judged = 0;
         let mut normal = 0;
+        assert!(facts_from(&cases[cases.len() - 1]).mixed, "the last case is one the card leaves out as possibly two games");
         for (i, s) in cases.iter().enumerate() {
             let f = facts_from(s);
             assert_eq!(crate::blackbox::peak_judgeable(s), f.judgeable(), "case {i}");
-            let card_normal = f.judgeable() && f.coverage() >= BASELINE_COVERAGE;
+            // e11: the card never takes a session flagged as possibly two games into a baseline (`game_rows`).
+            let card_normal = f.judgeable() && f.coverage() >= BASELINE_COVERAGE && !f.mixed;
             assert_eq!(crate::blackbox::peak_reference_eligible(s), card_normal, "case {i}");
             judged += usize::from(f.judgeable());
             normal += usize::from(card_normal);
