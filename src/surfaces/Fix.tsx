@@ -225,6 +225,14 @@ type Props = {
   // drifted group with its state on it (one-mention law), never a second time under ready.
   v2Ia?: boolean;
   reverted?: { rec_id: string; title: string }[];
+  // e2 loading states: true while App's recommendations have not answered yet (App's `recs` is still
+  // null and the caller passes [] in its place). The fixes view then says the list is not read yet,
+  // never "Nothing waiting": an unread list is not an empty one. Absent = the recs were read.
+  recsUnread?: boolean;
+  // e2 loading states: App's ledger read. "pending" = get_applied_changes has not answered yet,
+  // "failed" = the newest read was rejected (App retries it). Either way the ledger views say so and
+  // never "Nothing active on this PC". Absent = the list was read (callers that hold no read state).
+  ledgerRead?: "pending" | "failed";
 };
 
 // Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds. Buckets by local
@@ -1152,6 +1160,8 @@ export default function Fix({
   view = "all",
   v2Ia = false,
   reverted = [],
+  recsUnread = false,
+  ledgerRead,
 }: Props) {
   const { t } = useTranslation();
   // Which section(s) of the surface to render — the merged Optimize shell drives this via segments;
@@ -1420,9 +1430,15 @@ export default function Fix({
         // already said what's up, so the empty line renders only when there's truly nothing.
         // One phrase, one owner: the living subtitle already says "dialed in" — this line
         // states the fact without restating it.
-        drifted.length === 0 && (
+        drifted.length === 0 &&
+        (recsUnread ? (
+          // e2: the list has not been read yet, so nothing is claimed about it either way.
+          <p className="fix-empty" data-testid="fix-recs-unread">
+            {t("optimize.fix.recsNotReadYet")}
+          </p>
+        ) : (
           <p className="fix-empty">{t("optimize.fix.nothingWaiting")}</p>
-        )
+        ))
       ) : (
         <ul className="fix-list">
           {readyRows.map((rec) =>
@@ -1547,6 +1563,21 @@ export default function Fix({
           was. */}
       {showActive && <LedgerHealthNotice health={health} />}
 
+      {/* e2 loading states: App has not read the ledger yet, or its newest read failed (App retries).
+          Said above any rows, in the rail footer's own words for the same two states, and the
+          "Nothing active" line below is withheld for both. A failed read with the amber notice
+          already up says nothing more: the notice has said the list is not the whole story. */}
+      {showActive && ledgerRead === "pending" && (
+        <p className="fix-empty" data-testid="fix-ledger-unread">
+          {t("common.shellV2.footerNotRead")}
+        </p>
+      )}
+      {showActive && ledgerRead === "failed" && !ledgerIncomplete && (
+        <p className="fix-empty" data-testid="fix-ledger-read-failed">
+          {t("common.shellV2.footerReadFailed")}
+        </p>
+      )}
+
       {/* Active on this PC (ledger Layer 1) — what Compy is currently doing, deduped, ghost rollback.
           Answers Sarah's only question: "what is Compy doing to my machine right now?" */}
       {showActive && active.length > 0 && (
@@ -1615,11 +1646,13 @@ export default function Fix({
           empty room; say plainly that nothing is active and where applies will land. Scoped to the
           ledger/applied views so standalone Tune (view="all") renders exactly as before.
           Withheld when the ledger is known-incomplete: "nothing active" would then be an
-          affirmative claim about the machine sourced from a list Compy could not read. */}
+          affirmative claim about the machine sourced from a list Compy could not read. Withheld
+          too while App's own read of the list is pending or failed (e2, `ledgerRead`). */}
       {(view === "applied" || view === "ledger") &&
         active.length === 0 &&
         unconfirmedActive.length === 0 &&
-        !ledgerIncomplete && (
+        !ledgerIncomplete &&
+        ledgerRead == null && (
         <p className="fix-empty">
           {t("optimize.fix.nothingActiveOnThisPc")}
         </p>

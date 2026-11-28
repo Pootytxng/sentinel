@@ -163,6 +163,10 @@ export function MonitorConsole({
   // or one WMI probe per 15s on a machine with no monitor app.
   const [cpuTemp, setCpuTemp] = useState<{ temp_c: number } | null>(null);
   const [gpu, setGpu] = useState<GpuSnap | null>(null);
+  // e2 loading states: which sensor reads have ANSWERED at least once (a value, nothing, or an
+  // error). Until one has, its readings say "not yet", never "no reading": no answer has come back
+  // yet. Once answered, a missing value keeps saying "no reading" exactly as before.
+  const [answered, setAnswered] = useState({ cpu: false, gpu: false, cpuTemp: false });
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [fpsBusy, setFpsBusy] = useState(false);
   // In-game overlay — the SAME audited commands Play's live face runs, ported verbatim (owner
@@ -227,12 +231,33 @@ export function MonitorConsole({
   useEffect(() => {
     if (!active || !visible) return;
     let cancelled = false;
+    // e2: an answer of any kind (value, nothing, error) ends that sensor's "not yet"; the same
+    // object comes back once it is set, so later ticks cause no extra render.
+    const answer = (k: "cpu" | "gpu" | "cpuTemp") => {
+      if (!cancelled) setAnswered((a) => (a[k] ? a : { ...a, [k]: true }));
+    };
     const tick = () => {
-      invoke<CpuSnap>("get_cpu_sensors").then((c) => !cancelled && c && setCpu(c)).catch(() => {});
-      invoke<GpuSnap[]>("get_gpu_sensors").then((g) => !cancelled && setGpu(pickGpu(g))).catch(() => {});
+      invoke<CpuSnap>("get_cpu_sensors")
+        .then((c) => {
+          if (!cancelled && c) setCpu(c);
+          answer("cpu");
+        })
+        .catch(() => answer("cpu"));
+      invoke<GpuSnap[]>("get_gpu_sensors")
+        .then((g) => {
+          if (!cancelled) setGpu(pickGpu(g));
+          answer("gpu");
+        })
+        .catch(() => answer("gpu"));
       invoke<{ temp_c: number } | null>("get_cpu_temp")
-        .then((c) => !cancelled && setCpuTemp(c ?? null))
-        .catch(() => !cancelled && setCpuTemp(null));
+        .then((c) => {
+          if (!cancelled) setCpuTemp(c ?? null);
+          answer("cpuTemp");
+        })
+        .catch(() => {
+          if (!cancelled) setCpuTemp(null);
+          answer("cpuTemp");
+        });
       invoke<FpsLite>("get_fps_status")
         .then((f) => {
           if (cancelled || !f) return;
@@ -335,6 +360,8 @@ export function MonitorConsole({
   const ramPct = cpu?.ram_total_bytes
     ? Math.round((cpu.ram_used_bytes / cpu.ram_total_bytes) * 100)
     : null;
+  // e2: the sensor strip's line for a sensor whose first read has not answered yet (see `answered`).
+  const notYet = t("common.arcGauge.notYet");
   // The deck's delta row is SESSION-scoped, not live-scoped: it debriefs the last COMPLETED
   // session against its comparable prior, so it holds steady while capture starts/stops.
   const deck = deckDeltaFrom(sessions);
@@ -674,24 +701,29 @@ export function MonitorConsole({
             className="mc-ev-sensors"
             aria-label={t("monitor.monitorConsole.evidence.sensorsAria")}
           >
+            {/* e2: `notYet` until that sensor's first answer is back; undefined after, so an
+                answered-but-empty cell keeps the kit's own "no reading". */}
             <Reading
               id="gpuTemp"
               label={t("monitor.monitorConsole.gpuTempLabel")}
               value={gpu?.temperature_c ?? null}
               unit="°C"
               tone={arcTone(gpuGrade)}
+              note={answered.gpu ? undefined : notYet}
             />
             <Reading
               id="gpuLoad"
               label={t("monitor.monitorConsole.gpuLoadLabel")}
               value={gpu?.utilization_gpu_pct ?? null}
               unit="%"
+              note={answered.gpu ? undefined : notYet}
             />
             <Reading
               id="cpuLoad"
               label={t("monitor.monitorConsole.cpuLabel")}
               value={cpu ? cpu.usage_overall_pct : null}
               unit="%"
+              note={answered.cpu ? undefined : notYet}
             />
             <Reading
               id="ram"
@@ -699,6 +731,7 @@ export function MonitorConsole({
               value={ramPct}
               unit="%"
               tone={arcTone(gradeRamPct(ramPct))}
+              note={answered.cpu ? undefined : notYet}
             />
             {/* Beside the GPU's temperature, because "is it running hot" is ONE question with two
                 answers. Null renders the kit's honest no-reading line; the ladder that turns that
@@ -710,6 +743,7 @@ export function MonitorConsole({
               value={cpuTemp ? cpuTemp.temp_c : null}
               unit="°C"
               tone={arcTone(gradeCpuTempC(cpuTemp?.temp_c ?? null))}
+              note={answered.cpuTemp ? undefined : notYet}
             />
           </div>
 

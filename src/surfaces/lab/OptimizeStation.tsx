@@ -40,6 +40,11 @@ export type LabFastPathProps = {
   recs: Recommendation[] | null;
   startup: StartupEntry[];
   changes: AppliedChange[];
+  /** e2 loading states: App's read of `changes`. "pending" = get_applied_changes has not answered
+   *  yet (App's `changes` is still its initial []), "failed" = the newest read was rejected (App
+   *  retries). The ledger then says so instead of "Nothing active on this PC". Optional so non-App
+   *  callers (tests) pass nothing, which means "read". */
+  ledgerRead?: "pending" | "failed";
   busyId: string | null;
   isAppliable: (recId: string) => boolean;
   activeChangeFor: (recId: string) => AppliedChange | undefined;
@@ -229,6 +234,9 @@ export function OptimizeStation(props: LabFastPathProps) {
         view="fixes"
         v2Ia
         reverted={reverted}
+        // e2: App's recs still null = not read yet; Fix gets [] for its lists but must not call that
+        // "Nothing waiting".
+        recsUnread={props.recs == null}
       />
 
       {/* The record half of the room (owner decision 2026-07-10: with the standalone Optimize tab
@@ -261,6 +269,7 @@ export function OptimizeStation(props: LabFastPathProps) {
             vendor={props.vendor}
             onChanged={props.onChanged}
             view="ledger"
+            ledgerRead={props.ledgerRead}
           />
         </div>
       </details>

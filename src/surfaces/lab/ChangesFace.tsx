@@ -140,6 +140,7 @@ export function ChangesFace(props: LabFastPathProps) {
           vendor={props.vendor}
           onChanged={props.onChanged}
           view="ledger"
+          ledgerRead={props.ledgerRead}
         />
       </section>
     </div>

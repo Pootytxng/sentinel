@@ -353,6 +353,7 @@
     "resultUnconfirmedItem": "{{title}}: {{note}}",
     "eachReversibleBelow": ". Each is individually reversible below.",
     "nothingWaiting": "Nothing waiting — no changes to make on this rig right now.",
+    "recsNotReadYet": "Compy hasn't read which changes fit this rig yet.",
     "applyTheseChangesTitle": "Apply these {{count}} changes to your rig?",
     "applyAllNote": "Each is reversible — Compy snapshots the prior state and writes a separate undo for every one. These tidy up your setup — not a performance boost.",
     "applyAllNoteSlimSuffix": " Recommended arrive ticked — untick anything you don't want; only what's ticked changes.",

@@ -1998,6 +1998,9 @@ function App() {
                   recs={recs}
                   startup={startup}
                   changes={changes}
+                  // e2: the ledger says "not read yet" / "couldn't read" instead of "Nothing active"
+                  // until get_applied_changes has answered (the same two states the rail footer shows).
+                  ledgerRead={changesReadFailed ? "failed" : changesRead ? undefined : "pending"}
                   busyId={busyId}
                   activeChangeFor={findActiveChangeForRec}
                   onToggleRec={(recId) => {

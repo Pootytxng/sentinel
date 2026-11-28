@@ -327,6 +327,7 @@
     "resultUnconfirmedItem": "{{title}}:{{note}}",
     "eachReversibleBelow": "。以下每一项均可单独回滚。",
     "nothingWaiting": "没有待处理项——这台主机目前没有需要更改的地方。",
+    "recsNotReadYet": "Compy 尚未读取哪些更改适合这台主机。",
     "applyTheseChangesTitle": "将这 {{count}} 项更改应用到你的主机?",
     "applyAllNote": "Compy 会先保存每一项的原始状态,并为每一项单独生成撤销记录,方便你撤销。这些只是让配置更整洁——不是性能提升。",
     "applyAllNoteSlimSuffix": " 推荐项默认勾选——取消勾选你不想要的;只有勾选的项目才会更改。",

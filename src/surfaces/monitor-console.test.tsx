@@ -767,3 +767,41 @@ describe("MonitorConsole - the READING_ROWS parent contract on both strips", () 
     }
   });
 });
+
+// e2 loading states (bug -> guard). The sensor strip said "no reading" for all five cells in the
+// moments before the first 1 Hz poll answered: a read not answered yet was stated as a read that
+// came back empty. Until a sensor's first answer, its cells say "not yet"; after an answer with
+// nothing in it (null, an empty list, or a rejected read) they say "no reading", exactly as before.
+// Break check: drop the `note={answered.x ? undefined : notYet}` props in MonitorConsole.tsx and the
+// first test fails (every cell reads "no reading" while nothing has answered). Make `answer()` a
+// no-op and the second test fails (cells stay "not yet" after their reads answered empty).
+describe("MonitorConsole - e2: a sensor not read yet is 'not yet', not 'no reading'", () => {
+  const SENSOR_IDS = ["gpuTemp", "gpuLoad", "cpuLoad", "ram", "cpuTemp"];
+  const reason = (c: HTMLElement, id: string) =>
+    c.querySelector(`[data-read="${id}"] .rd-none`)?.textContent ?? null;
+
+  it("before the first poll answers, every sensor cell says 'not yet'", async () => {
+    invokeMock.mockImplementation(() => new Promise(() => {}));
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll(".mc-ev-sensors > .reading").length).toBe(5));
+    for (const id of SENSOR_IDS) {
+      expect(reason(container, id), id).toBe("not yet");
+    }
+    expect(container.querySelector(".mc-ev-sensors")!.textContent).not.toContain("no reading");
+  });
+
+  it("once the reads answer with nothing, the cells say 'no reading' as before", async () => {
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "get_cpu_sensors") return Promise.resolve(null);
+      if (cmd === "get_gpu_sensors") return Promise.resolve([]);
+      if (cmd === "get_cpu_temp") return Promise.reject(new Error("no monitor app"));
+      if (cmd === "get_fps_status") return Promise.resolve(stoppedFps);
+      return Promise.resolve(null);
+    });
+    const { container } = mount();
+    for (const id of SENSOR_IDS) {
+      await waitFor(() => expect(reason(container, id), id).toBe("no reading"));
+    }
+    expect(container.querySelector(".mc-ev-sensors")!.textContent).not.toContain("not yet");
+  });
+});
