@@ -614,12 +614,6 @@ export function LabConsole({
     noiseFloorPct == null && gameTooVaried != null
       ? t("lab.labConsole.noiseTooVaried", { game: prettyGameName(gameTooVaried) || gameTooVaried })
       : undefined;
-  // E1 first-run: the trial state was read and no source gives a figure (a new PC, no measured game
-  // sessions). Say where the figure comes from instead of a bare NOT YET. Only once read: while
-  // get_trial_state is in flight the tile keeps the plain NOT YET, so an existing user's figure is
-  // never preceded by "play with capture on".
-  const noiseEmptyNote =
-    noiseTooVariedNote ?? (trial != null && noiseFloorPct == null ? t("lab.labConsole.noiseFloorEmpty") : undefined);
 
   // BR — Instruments read: how far through the bench this rig has gone. Same `stationHasReading`
   // the dock already uses to mark nodes measured, so the gauge and the dock can never disagree.
@@ -873,7 +867,7 @@ export function LabConsole({
                      stamp and the note share that row, so the stamp stands down for it). */
                   measured={noiseFloorPct != null && !noiseFromGame}
                   note={noiseFromGame ? t("lab.labConsole.noiseFloorNoteGame", { game: prettyGameName(noiseFromGame.game) || noiseFromGame.game }) : undefined}
-                  emptyNote={noiseEmptyNote}
+                  emptyNote={noiseTooVariedNote}
                 />
               </div>
               )}
@@ -1125,7 +1119,8 @@ export function LabConsole({
                   max={Math.max(1, provenCount ?? 1)}
                   unit={t("lab.labConsole.unitKept")}
                   tone="accent"
-                  measured={provenCount != null}
+                  /* E1 review r1 F4: at 0 the "nothing proved yet" line speaks alone, as on the HUD face. */
+                  measured={provenCount != null && provenCount > 0}
                   note={
                     provenCount != null
                       ? t(provenCount > 0 ? "lab.labConsole.provenNoteSome" : "lab.labConsole.provenNoteNone")
@@ -1143,7 +1138,7 @@ export function LabConsole({
                   max={10}
                   unit={t("lab.labConsole.unitPct")}
                   measured={noiseFloorPct != null}
-                  emptyNote={noiseEmptyNote}
+                  emptyNote={noiseTooVariedNote}
                   note={
                     noiseFloorPct == null
                       ? undefined

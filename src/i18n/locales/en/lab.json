@@ -132,7 +132,6 @@
     "provenNoteNone": "nothing proved yet",
     "noiseFloorLabel": "Noise floor",
     "noiseFloorNote": "a change must beat this to count",
-    "noiseFloorEmpty": "comes from your measured game sessions: play with capture on",
     "noiseFloorNoteGame": "{{game}} · a change must beat this to count",
     "noiseTooVaried": "{{game}}: its sessions vary too much from each other for Compy to give a noise figure yet",
     "safeStackLabel": "Starter stack",

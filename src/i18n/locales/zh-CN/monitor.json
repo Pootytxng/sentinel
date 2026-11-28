@@ -122,7 +122,7 @@
     "bento": {
       "deck": "帧生成时间",
       "readouts": "本次会话",
-      "readoutsIdle": "尚未测量。开启采集并运行游戏时，这几项会实时填入。"
+      "readoutsIdle": "开启采集并运行游戏时，这几项会实时填入。"
     }
   },
   "monitorPanels": {

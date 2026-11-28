@@ -237,9 +237,9 @@ describe("Test with the tuning tools ON is unchanged", () => {
 describe("E1 first-run: the Test strip on a brand-new PC", () => {
   // A new PC: the awards ledger is read and empty, the trial state is read with no noise figure, and
   // there is no comparison and no game noise. Break check: put back `measured={provenCount != null}`
-  // with no note and the Proven tile says "0 · measured" again; drop `noiseEmptyNote` and the Noise
-  // floor tile is a bare "— — · no reading · not yet".
-  it("Proven 0 says nothing is proved yet, not 'measured'; Noise floor says where its figure comes from", async () => {
+  // with no note and the Proven tile says "0 · measured" again. Noise floor keeps the plain NOT YET
+  // (review r1 F2: which reads give a figure, and what the user must do, is not yet traced).
+  it("Proven 0 says nothing is proved yet, not 'measured'; Noise floor stays a plain NOT YET", async () => {
     localStorage.setItem("compy_tuning_tools", "1");
     board.value = { total_points: 0, awards: [], local_percentiles: [] };
     renderConsole();
@@ -249,10 +249,10 @@ describe("E1 first-run: the Test strip on a brand-new PC", () => {
     expect(proven.textContent).toContain("nothing proved yet");
     expect(proven.querySelector(".ag-tag")).toBeNull();
     const noise = screen.getByTestId("lc-reading-noise");
-    expect(noise.textContent).toContain("comes from your measured game sessions: play with capture on");
-    expect(noise.querySelector(".ag-tag-ny")).toBeNull();
+    expect(noise.querySelector(".ag-tag-ny")).not.toBeNull();
   });
 
+  // A pin, not a break check (review r1 F6): before e1 the unread tile already said NOT YET.
   it("while the ledger is unread, Proven stays the plain NOT YET (no 'nothing proved yet' guess)", async () => {
     localStorage.setItem("compy_tuning_tools", "1");
     renderConsole();

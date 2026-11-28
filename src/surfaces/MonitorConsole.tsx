@@ -793,8 +793,11 @@ export function MonitorConsole({
                 </div>
               </div>
               {/* E1 first-run: four bare dashes under "This session" read as a broken tile on a new
-                  PC. The dashes stay (no fabricated zeros); one line says why they are empty. */}
-              {!live && (
+                  PC. The dashes stay (no fabricated zeros); one line says what fills them. Capture
+                  OFF only (review r1 F1): once capture runs, an empty second already has its own
+                  line ("couldn't measure this second" / waiting for a game), and this one would
+                  contradict it. The line claims nothing about past sessions. */}
+              {!fpsActive && (
                 <p className="mc-readouts-idle">{t("monitor.monitorConsole.bento.readoutsIdle")}</p>
               )}
             </BentoTile>

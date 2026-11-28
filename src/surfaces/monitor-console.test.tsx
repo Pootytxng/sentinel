@@ -249,10 +249,22 @@ describe("MonitorConsole — helper stopped ⇒ honest stillness (b)", () => {
     // v3 readouts show honest em-dashes, never fabricated zeros.
     const values = [...container.querySelectorAll(".mc-readout-v")].map((n) => n.textContent);
     expect(values).toEqual(["—", "—", "—", "—"]);
-    // E1 first-run: the dashes never stand alone under "This session" — one line says why.
+    // E1 first-run: the dashes never stand alone under "This session" — one line says what fills them.
     expect(container.querySelector(".mc-readouts-idle")!.textContent).toBe(
-      "Nothing measured yet. These fill in while a game runs with capture on.",
+      "These fill in while a game runs with capture on.",
     );
+  });
+
+  it("E1 review r1 F1: capture ON with no sample this second ⇒ no 'fill in with capture on' line", async () => {
+    // The helper is capturing but has no sample (no game yet, or an unreadable second): the
+    // readouts are dashes, and the capture-off line must not contradict the capturing state.
+    mockPolls(() => ({ active: true, status: "capturing", sample: null }));
+    const { container } = mount();
+    // Break check: with the old `!live` condition the line stays and this wait times out.
+    await waitFor(() => expect(container.querySelector(".mc-readouts-idle")).toBeNull());
+    expect(container.querySelectorAll(".osc-nosignal").length).toBe(1);
+    const values = [...container.querySelectorAll(".mc-readout-v")].map((n) => n.textContent);
+    expect(values).toEqual(["—", "—", "—", "—"]);
   });
 
   it("a live trace CLEARS when the helper stops — never frozen-as-live (and the door signal follows)", async () => {
