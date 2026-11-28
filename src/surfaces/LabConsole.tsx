@@ -614,6 +614,12 @@ export function LabConsole({
     noiseFloorPct == null && gameTooVaried != null
       ? t("lab.labConsole.noiseTooVaried", { game: prettyGameName(gameTooVaried) || gameTooVaried })
       : undefined;
+  // E1 first-run: the trial state was read and no source gives a figure (a new PC, no measured game
+  // sessions). Say where the figure comes from instead of a bare NOT YET. Only once read: while
+  // get_trial_state is in flight the tile keeps the plain NOT YET, so an existing user's figure is
+  // never preceded by "play with capture on".
+  const noiseEmptyNote =
+    noiseTooVariedNote ?? (trial != null && noiseFloorPct == null ? t("lab.labConsole.noiseFloorEmpty") : undefined);
 
   // BR — Instruments read: how far through the bench this rig has gone. Same `stationHasReading`
   // the dock already uses to mark nodes measured, so the gauge and the dock can never disagree.
@@ -839,13 +845,16 @@ export function LabConsole({
                     before/after (awards ledger, Keep verdicts only). Full ring once N > 0. No unit
                     word: the label already says what the number counts, and the comp's arcs carry
                     a bare number. */}
+                {/* E1 first-run: an empty awards ledger is a real 0, but "0 · MEASURED" read as a
+                    measurement of the PC. At 0 the stamp stands down for the classic face's line. */}
                 <ArcGauge
                   label={t("lab.labConsole.provenLabel")}
                   value={provenCount}
                   max={Math.max(1, provenCount ?? 1)}
                   unit=""
                   tone="accent"
-                  measured={provenCount != null}
+                  measured={provenCount != null && provenCount > 0}
+                  note={provenCount === 0 ? t("lab.labConsole.provenNoteNone") : undefined}
                 />
               </div>
               )}
@@ -864,7 +873,7 @@ export function LabConsole({
                      stamp and the note share that row, so the stamp stands down for it). */
                   measured={noiseFloorPct != null && !noiseFromGame}
                   note={noiseFromGame ? t("lab.labConsole.noiseFloorNoteGame", { game: prettyGameName(noiseFromGame.game) || noiseFromGame.game }) : undefined}
-                  emptyNote={noiseTooVariedNote}
+                  emptyNote={noiseEmptyNote}
                 />
               </div>
               )}
@@ -1134,7 +1143,7 @@ export function LabConsole({
                   max={10}
                   unit={t("lab.labConsole.unitPct")}
                   measured={noiseFloorPct != null}
-                  emptyNote={noiseTooVariedNote}
+                  emptyNote={noiseEmptyNote}
                   note={
                     noiseFloorPct == null
                       ? undefined

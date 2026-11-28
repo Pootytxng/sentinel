@@ -16,6 +16,7 @@ export function ProblemsRoom({
   onLedgerBusy,
   focusIncidentId,
   pendingIncidentId = null,
+  onOpenLive,
 }: {
   changes: AppliedChange[];
   onChanged: () => Promise<unknown> | void;
@@ -30,6 +31,8 @@ export function ProblemsRoom({
    *  group" and has its own button that opens the group and scrolls to the record. Read-only:
    *  arriving here does not mark it opened; only "Find out why" or "Not now" on Health clears it. */
   pendingIncidentId?: string | null;
+  /** E1 first-run: the "no session yet" lines get a door to Live. */
+  onOpenLive?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -53,6 +56,7 @@ export function ProblemsRoom({
           onChanged={onChanged}
           ledgerBusy={ledgerBusy}
           onLedgerBusy={onLedgerBusy}
+          onOpenLive={onOpenLive}
         />
       </div>
     </section>

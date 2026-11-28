@@ -223,6 +223,18 @@ describe("the Care view compares on a stutter arrival", () => {
     render(<BlackBox />);
     expect(await screen.findByText(/no recorded game session yet/)).toBeInTheDocument();
     expect(screen.getByText(/record a session in Live while you play/)).toBeInTheDocument();
+    // No door was passed (the Lab station): no button beside the line.
+    expect(screen.queryByRole("button", { name: "Open Live" })).toBeNull();
+  });
+
+  it("E1 first-run: with no measured session, the line that names Live has a door to it", async () => {
+    h.sessions = [];
+    const onOpenLive = vi.fn();
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    render(<BlackBox onOpenLive={onOpenLive} />);
+    expect(await screen.findByText(/no recorded game session yet/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open Live" }));
+    expect(onOpenLive).toHaveBeenCalledTimes(1);
   });
 
   it("without the arrival flag it reads nothing on mount, and the button runs it", async () => {

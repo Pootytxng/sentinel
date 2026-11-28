@@ -9,8 +9,11 @@ import type { AppliedChange } from "../../types";
 // Benchmark, Latency, Tuning and the bench's summary tiles. Each block names its break check.
 
 const slot: { value: unknown; reject: boolean } = { value: null, reject: false };
+// E1 first-run: what get_scoreboard answers (null = unread, the harness default).
+const board: { value: unknown } = { value: null };
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
+    if (cmd === "get_scoreboard") return Promise.resolve(board.value);
     if (cmd === "get_gaming_session_state") {
       return slot.reject ? Promise.reject(new Error("unreadable")) : Promise.resolve(slot.value);
     }
@@ -123,6 +126,7 @@ beforeEach(() => {
   localStorage.clear();
   slot.value = null;
   slot.reject = false;
+  board.value = null;
   onRollback.mockClear();
 });
 afterEach(() => {
@@ -227,5 +231,34 @@ describe("Test with the tuning tools ON is unchanged", () => {
     }
     expect(screen.getByTestId("lc-reading-proven")).toBeInTheDocument();
     expect(screen.getByTestId("lc-reading-safe-stack")).toBeInTheDocument();
+  });
+});
+
+describe("E1 first-run: the Test strip on a brand-new PC", () => {
+  // A new PC: the awards ledger is read and empty, the trial state is read with no noise figure, and
+  // there is no comparison and no game noise. Break check: put back `measured={provenCount != null}`
+  // with no note and the Proven tile says "0 · measured" again; drop `noiseEmptyNote` and the Noise
+  // floor tile is a bare "— — · no reading · not yet".
+  it("Proven 0 says nothing is proved yet, not 'measured'; Noise floor says where its figure comes from", async () => {
+    localStorage.setItem("compy_tuning_tools", "1");
+    board.value = { total_points: 0, awards: [], local_percentiles: [] };
+    renderConsole();
+    await flush();
+    const proven = screen.getByTestId("lc-reading-proven");
+    expect(proven.querySelector(".ag-v")!.textContent).toBe("0");
+    expect(proven.textContent).toContain("nothing proved yet");
+    expect(proven.querySelector(".ag-tag")).toBeNull();
+    const noise = screen.getByTestId("lc-reading-noise");
+    expect(noise.textContent).toContain("comes from your measured game sessions: play with capture on");
+    expect(noise.querySelector(".ag-tag-ny")).toBeNull();
+  });
+
+  it("while the ledger is unread, Proven stays the plain NOT YET (no 'nothing proved yet' guess)", async () => {
+    localStorage.setItem("compy_tuning_tools", "1");
+    renderConsole();
+    await flush();
+    const proven = screen.getByTestId("lc-reading-proven");
+    expect(proven.textContent).not.toContain("nothing proved yet");
+    expect(proven.querySelector(".ag-tag-ny")).not.toBeNull();
   });
 });

@@ -152,6 +152,45 @@ describe("Since it last worked (P6-timeline)", () => {
     expect(list2).toHaveTextContent("Still drifted now, from before that session:");
   });
 
+  it("E1 first-run: with no finished session it offers Live; never for none-clean, never without the door", async () => {
+    const onOpenLive = vi.fn();
+    const noSession: BlackBoxReport = {
+      incidents: [],
+      skipped_sources: [],
+      since_last_worked: { anchor: null, none_reason: "no-session", events: [], unplaced: [], open_drift: [] },
+    };
+    reportMock.value = noSession;
+    render(
+      <ConfirmProvider>
+        <BlackBox onOpenLive={onOpenLive} />
+      </ConfirmProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("gaming.blackBox.scanButton") }));
+    const list = await screen.findByRole("region", { name: i18n.t("gaming.blackBox.sinceWorked.title") });
+    fireEvent.click(within(list).getByRole("button", { name: i18n.t("gaming.blackBox.openLive") }));
+    expect(onOpenLive).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    // Sessions exist but none was clean: recording "one" is not the answer, so no door.
+    reportMock.value = {
+      ...noSession,
+      since_last_worked: { ...noSession.since_last_worked!, none_reason: "none-clean" },
+    };
+    render(
+      <ConfirmProvider>
+        <BlackBox onOpenLive={onOpenLive} />
+      </ConfirmProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("gaming.blackBox.scanButton") }));
+    const list2 = await screen.findByRole("region", { name: i18n.t("gaming.blackBox.sinceWorked.title") });
+    expect(within(list2).queryAllByRole("button")).toHaveLength(0);
+    cleanup();
+
+    // The Lab station passes no door: the line stands alone, as before.
+    const list3 = await scan(noSession);
+    expect(within(list3).queryAllByRole("button")).toHaveLength(0);
+  });
+
   it("is read-only: the list has no buttons", async () => {
     const list = await scan(REPORT);
     expect(within(list).queryAllByRole("button")).toHaveLength(0);

@@ -156,6 +156,8 @@ describe("MonitorConsole — live stream feeds real instruments (a)", () => {
     expect(values[1]).toBe("142");
     expect(values[2]).toBe("6.9 ms");
     expect(values[3]).toBe("0");
+    // E1: the "nothing measured yet" line is for the idle tile only, never beside live numbers.
+    expect(container.querySelector(".mc-readouts-idle")).toBeNull();
   });
 
   it("the deck hero gets the REAL backend frametime window + budget; stopped ⇒ live=false + a CLEARED window, never frozen-as-live", async () => {
@@ -247,6 +249,10 @@ describe("MonitorConsole — helper stopped ⇒ honest stillness (b)", () => {
     // v3 readouts show honest em-dashes, never fabricated zeros.
     const values = [...container.querySelectorAll(".mc-readout-v")].map((n) => n.textContent);
     expect(values).toEqual(["—", "—", "—", "—"]);
+    // E1 first-run: the dashes never stand alone under "This session" — one line says why.
+    expect(container.querySelector(".mc-readouts-idle")!.textContent).toBe(
+      "Nothing measured yet. These fill in while a game runs with capture on.",
+    );
   });
 
   it("a live trace CLEARS when the helper stops — never frozen-as-live (and the door signal follows)", async () => {

@@ -63,6 +63,7 @@ export function BlackBox({
   onChanged,
   ledgerBusy = false,
   onLedgerBusy,
+  onOpenLive,
 }: {
   // Feeds the scan result up (V2 Lab's latest-readings strip) — same read, no second IPC.
   onReport?: (r: BlackBoxReport) => void;
@@ -87,6 +88,9 @@ export function BlackBox({
   ledgerBusy?: boolean;
   /** Tells App a "Put back" is running, so its own busy flag holds every other ledger control. */
   onLedgerBusy?: (busy: boolean) => void;
+  /** E1 first-run: the door to Live from the "no session yet" lines (Problems room passes it; the
+   *  Lab station does not, so it shows no button there). */
+  onOpenLive?: () => void;
 } = {}) {
   const { t } = useTranslation();
   const [report, setReport] = useState<BlackBoxReport | null>(null);
@@ -225,7 +229,13 @@ export function BlackBox({
 
   // P6-stutter: a stutter or slowdown rarely leaves a crash record, so the same view also compares
   // the latest session with its last good one (StutterCompare.tsx). First on a stutter arrival.
-  const stutterCompare = <StutterCompare onResult={setStutter} hideNextAction={careStep?.source === "stutter"} />;
+  const stutterCompare = (
+    <StutterCompare
+      onResult={setStutter}
+      hideNextAction={careStep?.source === "stutter"}
+      onOpenLive={onOpenLive}
+    />
+  );
 
   return (
     <div className="bb">
@@ -332,7 +342,7 @@ export function BlackBox({
         </div>
       )}
 
-      <SinceLastWorked report={scanning ? null : report} />
+      <SinceLastWorked report={scanning ? null : report} onOpenLive={onOpenLive} />
 
       {!stutterFirst && stutterCompare}
     </div>

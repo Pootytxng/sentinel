@@ -132,6 +132,7 @@
     "provenNoteNone": "目前还没有验证结果",
     "noiseFloorLabel": "噪声基线",
     "noiseFloorNote": "改动必须超过此幅度才算数",
+    "noiseFloorEmpty": "来自你已测量的游戏会话：开启采集后游玩",
     "noiseFloorNoteGame": "{{game}} · 改动必须超过此幅度才算数",
     "noiseTooVaried": "{{game}}：各次游戏之间差别太大，Compy 暂时给不出噪声数值",
     "safeStackLabel": "基础优化组合",

@@ -412,6 +412,7 @@
     "emptyWithSkipped": "No crashes or freezes in what Compy could read. Some records below need administrator — run Compy as admin to check those too.",
     "emptyWithSkippedRetry": "No crashes or freezes in what Compy could read. Some sources couldn't be read this time; scan again to try them.",
     "emptyClean": "No crashes or freezes recorded. Either nothing went wrong, or whatever happened left no trace Windows recorded.",
+    "openLive": "Open Live",
     "stutter": {
       "title": "Stutters or runs slow?",
       "runButton": "Compare my latest session with my last steady one",

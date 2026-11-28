@@ -121,7 +121,8 @@
     },
     "bento": {
       "deck": "Frame time",
-      "readouts": "This session"
+      "readouts": "This session",
+      "readoutsIdle": "Nothing measured yet. These fill in while a game runs with capture on."
     }
   },
   "monitorPanels": {

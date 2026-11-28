@@ -149,11 +149,14 @@ function fmtWhen(iso: string, lang: string): string {
 export function StutterCompare({
   onResult,
   hideNextAction = false,
+  onOpenLive,
 }: {
   /** P6-next: hands the report up so the Care view can pick its one next step. null = no report. */
   onResult?: (r: StutterResult | null) => void;
   /** P6-next: the report's next test is the step shown at the top of the view; don't repeat it. */
   hideNextAction?: boolean;
+  /** E1 first-run: the "no session yet" line names Live; this is the door to it. Absent = no button. */
+  onOpenLive?: () => void;
 } = {}) {
   const { t, i18n } = useTranslation();
   const on = useIntelligenceFlag();
@@ -226,7 +229,14 @@ export function StutterCompare({
       {state.kind === "busy" && <p className="bb-stutter-line">{t("gaming.blackBox.stutter.comparing")}</p>}
       {state.kind === "error" && <p className="bb-stutter-line">{t("gaming.blackBox.stutter.readError")}</p>}
       {state.kind === "no-session" && (
-        <p className="bb-stutter-line">{t("gaming.blackBox.stutter.noSession")}</p>
+        <>
+          <p className="bb-stutter-line">{t("gaming.blackBox.stutter.noSession")}</p>
+          {onOpenLive && (
+            <button type="button" className="gl-ghost bb-open-live" onClick={onOpenLive}>
+              {t("gaming.blackBox.openLive")}
+            </button>
+          )}
+        </>
       )}
       {state.kind === "no-good" && (
         <p className="bb-stutter-line">{t("gaming.blackBox.stutter.noGood", { game: state.game })}</p>

@@ -78,7 +78,15 @@ function fmtWhen(iso: string, lang: string): string {
   return d.toLocaleString(lang, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
+export function SinceLastWorked({
+  report,
+  onOpenLive,
+}: {
+  report: BlackBoxReport | null;
+  /** E1 first-run: with no finished session there is no anchor; this is the door to recording one.
+   *  Absent = no button. Never shown for "none-clean" (sessions exist, none was clean). */
+  onOpenLive?: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const slw = report?.since_last_worked;
   // P7-route: "Did it help?" with nothing measured lands here once. Taken on mount (one-shot, like
@@ -114,13 +122,20 @@ export function SinceLastWorked({ report }: { report: BlackBoxReport | null }) {
         <span className="bb-since-tag">{t("gaming.blackBox.sinceWorked.notProven")}</span>
       </div>
       {!slw.anchor ? (
-        <p className="bb-since-line" data-since-none={slw.none_reason ?? "no-session"}>
-          {t(
-            slw.none_reason === "none-clean"
-              ? "gaming.blackBox.sinceWorked.noneClean"
-              : "gaming.blackBox.sinceWorked.noSession",
+        <>
+          <p className="bb-since-line" data-since-none={slw.none_reason ?? "no-session"}>
+            {t(
+              slw.none_reason === "none-clean"
+                ? "gaming.blackBox.sinceWorked.noneClean"
+                : "gaming.blackBox.sinceWorked.noSession",
+            )}
+          </p>
+          {onOpenLive && slw.none_reason !== "none-clean" && (
+            <button type="button" className="gl-ghost bb-open-live" onClick={onOpenLive}>
+              {t("gaming.blackBox.openLive")}
+            </button>
           )}
-        </p>
+        </>
       ) : (
         <>
           <p className="bb-since-line">

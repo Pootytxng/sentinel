@@ -399,6 +399,7 @@
     "emptyWithSkipped": "在 Compy 能读取的范围内没有发现崩溃或卡死记录。下方有些记录需要管理员权限——以管理员身份运行 Compy 即可一并检查。",
     "emptyWithSkippedRetry": "在 Compy 能读取的范围内没有发现崩溃或卡死记录。有些来源这次没能读取，再扫描一次即可重试。",
     "emptyClean": "没有记录到任何崩溃或卡死。要么一切正常,要么发生的问题没有被 Windows 记录下痕迹。",
+    "openLive": "打开实时",
     "stutter": {
       "title": "卡顿或变慢？",
       "runButton": "把最近一次会话和上一局平稳的会话比一比",

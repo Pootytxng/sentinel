@@ -178,6 +178,8 @@
   color: var(--ix-text-1); font-variant-numeric: tabular-nums; line-height: 1; }
 :root[data-v2="on"] .mc-readout-k { font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .14em;
   text-transform: uppercase; color: var(--ix-text-3); }
+:root[data-v2="on"] .mc-readouts-idle { margin: 12px 0 0; font-size: var(--type-label); line-height: 1.4;
+  color: var(--v2-faint); }
 
 :root[data-v2="on"] .mc-scopes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 

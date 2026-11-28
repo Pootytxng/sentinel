@@ -792,6 +792,11 @@ export function MonitorConsole({
                   <span className="mc-readout-k">{t("monitor.monitorConsole.spikesLabel")}</span>
                 </div>
               </div>
+              {/* E1 first-run: four bare dashes under "This session" read as a broken tile on a new
+                  PC. The dashes stay (no fabricated zeros); one line says why they are empty. */}
+              {!live && (
+                <p className="mc-readouts-idle">{t("monitor.monitorConsole.bento.readoutsIdle")}</p>
+              )}
             </BentoTile>
           </BentoGrid>
 

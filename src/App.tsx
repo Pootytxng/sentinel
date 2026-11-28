@@ -1947,6 +1947,7 @@ function App() {
                   onLedgerBusy={(b) => setBusyId(b ? "care-restore" : null)}
                   focusIncidentId={problemsFocus}
                   pendingIncidentId={pendingCare?.incident_id ?? null}
+                  onOpenLive={() => navHome("play")}
                 />
               )}
               {activeTab === "Play" && hw && (
