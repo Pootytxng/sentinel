@@ -67,6 +67,7 @@ import {
 import { INTERVIEW_ARRIVAL_EVENT, takeInterviewArrival } from "./home-arrival";
 import { careHeadline, incidentKindLabel, incidentWhen } from "../data/backend-words";
 import "./home-console.css";
+import { sessionsReadLine, type SessionsReadState } from "../lib/session-metrics";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
 // Phase 2 of the Console HUD; design source 2026-07-09-compy-console-hud-direction, owner-
@@ -91,6 +92,8 @@ type Props = {
   readiness: GameReadiness | null;
   priorities: Priorities | null;
   sessions: SessionSummary[];
+  /** App's session read: "pending"/"failed" while `sessions` is [] only because it is unread. Omitted = read. */
+  sessionsRead?: SessionsReadState;
   changes: AppliedChange[];
   onRunCheck: () => void;
   onSeeInFix: () => void;
@@ -384,6 +387,7 @@ export function HomeConsole({
   readiness,
   priorities: allPriorities,
   sessions,
+  sessionsRead,
   changes,
   onRunCheck,
   onSeeInFix,
@@ -1479,7 +1483,8 @@ export function HomeConsole({
                       liveRoom
                       ? t("home.homeConsole.limiter.lastSessionNoVerdict", { game: lastSession.game, date: lastSession.date, room: liveRoom })
                       : t("home.homeConsole.limiter.lastSessionNoVerdictNoRoom", { game: lastSession.game, date: lastSession.date })
-                    : t("home.homeConsole.limiter.lastSessionNone")}
+                    : // An unread list is not "no session": say the read hasn't happened or failed.
+                      sessionsReadLine(sessionsRead, t) ?? t("home.homeConsole.limiter.lastSessionNone")}
               </p>
             )}
           </div>

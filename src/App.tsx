@@ -1929,6 +1929,7 @@ function App() {
                   readiness={readiness}
                   priorities={priorities}
                   sessions={sessions}
+                  sessionsRead={sessionsReadState}
                   changes={changes}
                   onRunCheck={() => setShowFirstCheck(true)}
                   onSeeInFix={openFixesInLab}

@@ -13,6 +13,7 @@ import { useHudFlag, useHomeConsoleFlag } from "../design/use-hud";
 import { HomeV2 } from "./HomeV2";
 import { HomeHud } from "./HomeHud";
 import { HomeConsole } from "./HomeConsole";
+import type { SessionsReadState } from "../lib/session-metrics";
 
 // HomeRoom — the presentation switch for the Home room. Highest priority: the Home console
 // cold-open (plan 2026-07-10-console-hud-phase2-home, compy_home_console DEFAULT ON — its
@@ -27,6 +28,8 @@ type Props = {
   readiness: GameReadiness | null;
   priorities: Priorities | null;
   sessions: SessionSummary[];
+  /** Passed to HomeConsole: App's session read state (omitted = read). */
+  sessionsRead?: SessionsReadState;
   changes: AppliedChange[];
   onRunCheck: () => void;
   onSeeInFix: () => void;
