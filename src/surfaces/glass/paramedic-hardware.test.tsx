@@ -102,7 +102,7 @@ const driver = (confidence: F["confidence"]): F => ({
   now_evidence: [],
 });
 
-const DOOR = { en: "Something's wrong", "zh-CN": "出问题了" } as const;
+const DOOR = { en: "Check my PC", "zh-CN": "检查我的电脑" } as const;
 
 const ask = async (d: ParamedicDiagnosis, lang: keyof typeof DOOR = "en") => {
   await i18n.changeLanguage(lang);
@@ -134,8 +134,8 @@ const openRow = (i = 0) => fireEvent.click(within(rows()[i]).getAllByRole("butto
 
 const EN = {
   verdict: "Windows recorded at least one hardware error in the same period, but Compy can't prove it is behind this.",
-  next: "Open the first one to see what you can check. If you change anything, play Game A once, then press Something's wrong again.",
-  step1: "If you changed an overclock or an undervolt in your BIOS, set it back to its default, play Game A once, then press Something's wrong again.",
+  next: "Open the first one to see what you can check. If you change anything, play Game A once, then press Check my PC again.",
+  step1: "If you changed an overclock or an undervolt in your BIOS, set it back to its default, play Game A once, then press Check my PC again.",
   step2: "Press Windows + X and open Event Viewer. Under Windows Logs, open System and filter by the source WHEA-Logger. Open each record to read what Windows wrote about it.",
   step3: "If Windows keeps recording these after that, give these lines to the PC's maker or a repair shop:",
   intro: "Windows keeps a record when a part of the PC reports an error about itself. Compy has no setting to change for that. What you can do:",
@@ -314,7 +314,7 @@ describe("a hardware lead on the Something's-wrong card (en)", () => {
 
 const ZH = {
   verdict: "Windows 在同一时期记录了至少一次硬件错误，但 Compy 无法证明问题出在这里。",
-  step1: "如果你在 BIOS 里改过超频或降压，先把它改回默认值，再玩一次 Game A，然后再点“出问题了”。",
+  step1: "如果你在 BIOS 里改过超频或降压，先把它改回默认值，再玩一次 Game A，然后再点“检查我的电脑”。",
   step2: "按 Windows + X，打开“事件查看器”。在“Windows 日志”下打开“系统”，按来源 WHEA-Logger 筛选。逐条打开，看 Windows 对它的描述。",
   step3: "如果这样之后 Windows 仍在记录这类错误，把下面这几行告诉电脑厂商或维修店：",
   intro: "当电脑的某个部件报告自身出错时，Windows 会留下一条记录。对此 Compy 没有可以更改的设置。你可以这样做：",
@@ -334,7 +334,7 @@ describe("a hardware lead on the Something's-wrong card (zh-CN)", () => {
     expect(steps.slice(0, 3)).toEqual([ZH.step1, ZH.step2, ZH.step3]);
     expect(card()).not.toMatch(/如何解决|如何验证这一点/);
     expect(card()).not.toMatch(/有一项变化|先试试第一项里的步骤|先检查一下/);
-    expect(screen.getByText("点开第一项，看看你可以检查什么。如果你改了什么，再玩一次 Game A，然后再点“出问题了”。")).toBeTruthy();
+    expect(screen.getByText("点开第一项，看看你可以检查什么。如果你改了什么，再玩一次 Game A，然后再点“检查我的电脑”。")).toBeTruthy();
     expect(card()).not.toMatch(/在你试过解决办法/);
     const said = `${verdict()} ${rows()[0].textContent}`;
     expect(said).not.toMatch(/看起来/);

@@ -151,10 +151,11 @@
   border: 1px solid var(--v2-line-strong);
   color: var(--v2-muted);
 }
-/* Hue is INFORMATION here, and the chip always prints its word beside it (COLOR-1). "measured" is
-   the only level that earns the confident ink; "likely" is the advisory blue; "unknown" stays
+/* Hue is INFORMATION here, and the chip always prints its word beside it (COLOR-1). "measured" and
+   "read" (a fact Compy read on this PC) earn the confident ink; "likely" is the advisory blue; "unknown" stays
    deliberately colourless, because a colour would dress up an absence of evidence. */
-:root[data-v2="on"] .hi-level[data-level="measured"] {
+:root[data-v2="on"] .hi-level[data-level="measured"],
+:root[data-v2="on"] .hi-level[data-level="read"] {
   color: var(--v2-ok);
   border-color: var(--v2-ok);
   background: var(--v2-ok-dim);

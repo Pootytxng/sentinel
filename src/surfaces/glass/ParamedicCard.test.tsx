@@ -117,7 +117,7 @@ const steps = (code: string, args: Record<string, string> = {}): F["fix"] => ({ 
 const ask = async (d: ParamedicDiagnosis | null) => {
   answer.value = d;
   render(<ParamedicCard />);
-  fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+  fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
 };
 
 /** Opens every closed disclosure (rows, folds, "Show the numbers"), including ones that appear inside others. */
@@ -136,7 +136,7 @@ describe("ParamedicCard", () => {
   it("asks nothing until the button is pressed", () => {
     render(<ParamedicCard />);
     expect(answer.calls.length).toBe(0);
-    expect(screen.getByRole("button", { name: "Something's wrong" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Check my PC" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
@@ -199,7 +199,7 @@ describe("ParamedicCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("region", { name: /Scrolls if there is more/ })).toBeNull();
     expect(screen.queryByTestId("paramedic-verdict")).toBeNull();
-    const door = screen.getByRole("button", { name: "Something's wrong" });
+    const door = screen.getByRole("button", { name: "Check my PC" });
     expect(document.activeElement).toBe(door);
   });
 
@@ -251,7 +251,7 @@ describe("ParamedicCard", () => {
       // The button carries its zh name here, so `ask` (which clicks the en one) is not used.
       answer.value = { ...base, state: { kind: "needs-more-play", sessions_needed: 2, have: 1, not_counted: 3 }, problem: null, findings: [] };
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByTestId("paramedic-needs-more-not-counted")).toBeTruthy());
       expect(screen.getByText(
         "要判断你最近一次时长和测量都足够的 Game A 游戏，Compy 要把它与之前 3 次测量充分的 Game A 游戏记录比较，才知道平时是什么样。现在有 1 次。",
@@ -279,7 +279,7 @@ describe("ParamedicCard", () => {
     await waitFor(() => expect(verdict()).toBe("Compy can't tell which of these it is yet"));
     expect(screen.queryByText("Most likely")).toBeNull();
     expect(rows().length).toBe(2);
-    expect(screen.getByText("To find out: play one session of Game A with nothing else running, then press Something's wrong again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet.")).toBeTruthy();
+    expect(screen.getByText("To find out: play one session of Game A with nothing else running, then press Check my PC again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet.")).toBeTruthy();
   });
 
   it("not separable without background load: does not promise that a quiet PC will tell them apart", async () => {
@@ -569,7 +569,7 @@ describe("ParamedicCard", () => {
   it("a failed read says nothing was changed", async () => {
     answer.reject = "boom";
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(screen.getByRole("alert").textContent).toMatch(/Nothing on your PC was changed/);
   });
@@ -663,7 +663,7 @@ describe("ParamedicCard: while the episode is still going", () => {
       screen.getByText(/Its dips stayed at about 64% of its average before, fell to about 47% while it was rough, and were at about 63% on /),
     ).toBeTruthy();
     expect(screen.getByTestId("paramedic-unclear")).toHaveTextContent(
-      "One session can't show why it ran better, and it doesn't make any change below more likely. Play Game A once more and press Something's wrong again.",
+      "One session can't show why it ran better, and it doesn't make any change below more likely. Play Game A once more and press Check my PC again.",
     );
     const verdict = screen.getByTestId("paramedic-verdict");
     expect(verdict.textContent).toMatch(/^Still between: .+, .+, .+\.$/);
@@ -796,7 +796,7 @@ describe("ParamedicCard: recovered", () => {
     expect(rows()[1].textContent).toMatch(/Your graphics driver was updated.*Doesn't match the timing/);
     // A single observation is never green: the "doesn't match" chip is neutral too.
     expect(within(rows()[1]).getByText("Doesn't match the timing").getAttribute("data-tone")).toBeNull();
-    expect(screen.getByText(/If it runs rough again, press Something's wrong again/)).toBeTruthy();
+    expect(screen.getByText(/If it runs rough again, press Check my PC again/)).toBeTruthy();
     openAll();
     expect(screen.queryByText("How to fix it")).toBeNull();
   });
@@ -955,7 +955,7 @@ describe("ParamedicCard: still checking", () => {
     answer.busyFirst = 1;
     answer.value = base;
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(answer.calls.length).toBe(1));
     expect(screen.getByRole("status").textContent).toMatch(/Looking at your recent sessions/);
     expect(screen.queryByRole("alert")).toBeNull();
@@ -968,7 +968,7 @@ describe("ParamedicCard: still checking", () => {
     try {
       answer.busyFirst = 100;
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+      fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
       for (let i = 0; i < 12; i++) await act(async () => void (await vi.advanceTimersByTimeAsync(1300)));
       expect(answer.calls.length).toBe(9);
       expect(screen.getByRole("status").textContent).toBe("Compy is still checking. Try again in a moment.");
@@ -985,7 +985,7 @@ describe("ParamedicCard: still checking", () => {
     try {
       answer.busyFirst = 100;
       const { unmount } = render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+      fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
       await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
       expect(answer.calls.length).toBe(1);
       unmount();
@@ -1000,7 +1000,7 @@ describe("ParamedicCard: still checking", () => {
     answer.busyFirst = 1;
     answer.value = base;
     render(<ParamedicCard />);
-    const button = screen.getByRole("button", { name: "Something's wrong" }) as HTMLButtonElement;
+    const button = screen.getByRole("button", { name: "Check my PC" }) as HTMLButtonElement;
     fireEvent.click(button);
     await waitFor(() => expect(answer.calls.length).toBe(1));
     expect(button.getAttribute("aria-disabled")).toBe("true");
@@ -1127,7 +1127,7 @@ describe("ParamedicCard: review round 2", () => {
       const askZh = async (d: ParamedicDiagnosis) => {
         answer.value = d;
         render(<ParamedicCard />);
-        fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+        fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
         await waitFor(() => expect(screen.getByTestId("paramedic-mixed")).toBeTruthy());
         return screen.getByTestId("paramedic-mixed").textContent ?? "";
       };
@@ -1277,7 +1277,7 @@ describe("ParamedicCard: graphics mods in the game's folder", () => {
     expect(text).toContain("That is before the rough session.");
     expect(text).toContain("Check OptiScaler's own page for a newer version.");
     expect(text).toContain(
-      "To test without it, move its files out of the game folder (or use its own uninstall), play once, and press Something's wrong again.",
+      "To test without it, move its files out of the game folder (or use its own uninstall), play once, and press Check my PC again.",
     );
     // A file date says nothing about whether the mod was running: no line concludes that, and none weakens the mod.
     expect(text).not.toMatch(/may not have been running|probably/);
@@ -1543,7 +1543,7 @@ describe("ParamedicCard: temperature and crash history", () => {
     try {
       answer.value = answerOf([background()], { not_it: [{ id: "memory-pressure", args: { percent: "90", count: "3" } }] });
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       expect(screen.getByTestId("paramedic-not-a-lead").textContent).toBe("测到了，但按 Compy 的规则不算线索：内存：在出问题的这几次游戏中从未达到 90% 满。");
@@ -1552,7 +1552,7 @@ describe("ParamedicCard: temperature and crash history", () => {
       // Break check: drop the count === 1 branch (zh says 这几次 for one session again).
       answer.value = answerOf([background()], { not_it: [{ id: "memory-pressure", args: { percent: "90", count: "1" } }] });
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       expect(screen.getByTestId("paramedic-not-a-lead").textContent).toBe("测到了，但按 Compy 的规则不算线索：内存：在出问题的那次游戏中从未达到 90% 满。");
@@ -1598,7 +1598,7 @@ describe("ParamedicCard: temperature and crash history", () => {
       const args = { peakGb: "30.4", totalGb: "31.4", basePercent: "94", baseLine: "80", full: "2", count: "3" };
       answer.value = answerOf([background()], { not_it: [{ id: "memory-as-full", args }] });
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       const group = screen.getByTestId("paramedic-not-a-lead").textContent ?? "";
@@ -1822,7 +1822,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
   it("more below: questions opened before any answer (first check still running) are measured when they appear, with no scroll", async () => {
     answer.gate = new Promise<void>(() => {});
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(link()).toBeTruthy());
     const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
     const tall = (v: number) => ({ configurable: true, get(this: HTMLElement) { return this.classList.contains("gl-para-scroll") ? v : 0; } });
@@ -1890,7 +1890,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     answer.value = base;
     render(<ParamedicCard />);
     expect(link(), "closed bar").toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     fireEvent.click(link() as HTMLElement);
     // The game question is in the same card, and the measured answer is out of the way (not stacked under it).
@@ -1915,7 +1915,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
   it("'Back to the answer' returns to the measured answer without asking again; the questions offer no 'Check again'", async () => {
     answer.value = base;
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     fireEvent.click(link() as HTMLElement);
     await waitFor(() => expect(picker()).toBeTruthy());
@@ -1937,7 +1937,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     answer.gate = new Promise<void>(() => {});
     const first = render(<ParamedicCard />);
     expect(link(), "idle").toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/Looking at your recent sessions/));
     expect(link(), "first check running").toBeTruthy();
     fireEvent.click(link() as HTMLElement);
@@ -1947,7 +1947,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     answer.gate = null;
     answer.reject = "boom";
     const failed = render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(link(), "after a failed check").toBeTruthy();
     failed.unmount();
@@ -1957,7 +1957,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
       answer.reject = "";
       answer.busyFirst = 100;
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+      fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
       for (let i = 0; i < 12; i++) await act(async () => void (await vi.advanceTimersByTimeAsync(1300)));
       expect(screen.getByRole("status").textContent).toBe("Compy is still checking. Try again in a moment.");
       expect(link(), "still checking").toBeTruthy();
@@ -1975,13 +1975,13 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     fireEvent.keyDown(region, { key: "Escape" });
     expect(screen.queryByTestId("paramedic-verdict")).toBeNull();
     expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Check my PC" }));
   });
 
   it("Escape also closes the card while its questions are open, and does nothing on the closed bar", async () => {
     answer.value = base;
     render(<ParamedicCard />);
-    const door = screen.getByRole("button", { name: "Something's wrong" });
+    const door = screen.getByRole("button", { name: "Check my PC" });
     fireEvent.keyDown(door, { key: "Escape" });
     expect(answer.calls.length).toBe(0);
     fireEvent.click(door);
@@ -1991,7 +1991,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     fireEvent.keyDown(screen.getByRole("button", { name: "Another game, or the whole PC" }), { key: "Escape" });
     expect(picker()).toBeNull();
     expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Check my PC" }));
   });
 
   // p4: focus stays on the toggle that opened a row, so the old "an open disclosure keeps Escape" rule left Escape dead
@@ -2012,7 +2012,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(document.activeElement).toBe(btn);
     fireEvent.keyDown(btn, { key: "Escape" });
     expect(card().getAttribute("data-open")).toBe("false");
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Check my PC" }));
     cleanup();
     await ask(base);
     await waitFor(() => expect(rows().length).toBe(1));
@@ -2024,7 +2024,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(document.activeElement).toBe(toggle);
     fireEvent.keyDown(toggle, { key: "Escape" });
     expect(card().getAttribute("data-open")).toBe("false");
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Check my PC" }));
   });
 
   it("Escape with a row open but the focus outside it (on the answer region) closes the card, not the row", async () => {
@@ -2035,7 +2035,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     region.focus();
     fireEvent.keyDown(region, { key: "Escape" });
     expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Check my PC" }));
   });
 
   // e8 r1 F2: the same rule for a fold, "Show the numbers" and a row inside a fold (innermost first).
@@ -2046,7 +2046,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(body, "the toggle names its body").toBeTruthy();
     fireEvent.keyDown((body.firstElementChild as HTMLElement | null) ?? body, { key: "Escape" });
   };
-  const doorFocused = () => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+  const doorFocused = () => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Check my PC" }));
 
   it("Escape inside an open fold or 'Show the numbers' closes that first (focus on its toggle), then the card", async () => {
     await ask(base);
@@ -2118,7 +2118,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
       paramedic_list_games: { read: true, complete: true, games: Array.from({ length: 12 }, (_, i) => ({ app_id: 1000 + i, name: `Game ${String(i + 1).padStart(2, "0")}`, last_updated: null })) },
     };
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     fireEvent.click(link() as HTMLElement);
     await waitFor(() => expect(screen.getByRole("button", { name: "Game 01" })).toBeTruthy());
@@ -2179,7 +2179,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
   it("'Something else?' while the first check is still running opens usable questions: nothing dimmed or inert, no status over them", async () => {
     answer.gate = new Promise<void>(() => {});
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(link()).toBeTruthy());
     fireEvent.click(link() as HTMLElement);
     await waitFor(() => expect(picker()).toBeTruthy());
@@ -2198,7 +2198,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
   it("with the questions open over a running check, Close is offered and Escape does the same thing", async () => {
     answer.gate = new Promise<void>(() => {});
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(link()).toBeTruthy());
     fireEvent.click(link() as HTMLElement);
     await waitFor(() => expect(picker()).toBeTruthy());
@@ -2206,13 +2206,13 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     fireEvent.keyDown(screen.getByRole("button", { name: "Another game, or the whole PC" }), { key: "Escape" });
     expect(picker()).toBeNull();
     expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Check my PC" }));
   });
 
   it("'Back to the answer' puts focus on the answer, so Escape still closes the card", async () => {
     answer.value = base;
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     fireEvent.click(link() as HTMLElement);
     await waitFor(() => expect(picker()).toBeTruthy());
@@ -2248,7 +2248,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
       },
     };
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     fireEvent.click(link() as HTMLElement);
     await waitFor(() => expect(picker()).toBeTruthy());
@@ -2366,7 +2366,7 @@ describe("ParamedicCard: programs already open at the start", () => {
     openAll();
     expect(screen.getByText(/OBS Studio was already running when .* started\./)).toBeTruthy();
     expect(screen.getByText("It was open in 3 of 3 rough sessions and 0 of 4 normal ones.")).toBeTruthy();
-    expect(screen.getByText("Close OBS Studio before you play, then play once and press Something's wrong again.")).toBeTruthy();
+    expect(screen.getByText("Close OBS Studio before you play, then play once and press Check my PC again.")).toBeTruthy();
   });
 
   it("one rough session reads in the singular, and a resident program is a counted line with no already-running sentence", async () => {
@@ -2493,13 +2493,13 @@ describe("ParamedicCard: the verdict line and the order when load leads", () => 
     });
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
-    expect(screen.getByText("Close OBS Studio before you play, then play once and press Something's wrong again.")).toBeTruthy();
+    expect(screen.getByText("Close OBS Studio before you play, then play once and press Check my PC again.")).toBeTruthy();
     expect(screen.queryByText(/^Check it, play/)).toBeNull();
     cleanup();
     await ask({ ...base, why_first: null, findings: [find("background-load", { evidence: [high], fix: steps("background-load", { names: "rustc" }) })] });
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
-    expect(screen.getByText(/^Play .* once with them closed, then press Something's wrong again\./)).toBeTruthy();
+    expect(screen.getByText(/^Play .* once with them closed, then press Check my PC again\./)).toBeTruthy();
     expect(screen.queryByText(/^Check it, play/)).toBeNull();
     cleanup();
     // Other findings keep their closing sentence.
@@ -2597,7 +2597,7 @@ describe("ParamedicCard: honest headings, test-not-fix steps and a button that w
     answer.value = { ...base, state: { kind: "cant-tell", why: { kind: "no-sessions" } }, findings: [] };
     answer.byCmd = { paramedic_list_games: { read: true, complete: true, games: [] }, paramedic_first_look: firstLook };
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
     expect(checkAgain()).toBeNull();
     expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
@@ -2614,7 +2614,7 @@ describe("ParamedicCard: honest headings, test-not-fix steps and a button that w
   it("a measured answer still has 'Check again'; 'Something else?' hides it while asking and Back brings it back", async () => {
     answer.value = base;
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     expect(checkAgain()).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Something else? Answer a few questions" }));
@@ -2652,7 +2652,7 @@ describe("ParamedicCard: 'Check again' pressed from a first-look answer or after
     answer.value = { ...base, state: { kind: "cant-tell", why: { kind: "no-sessions" } }, findings: [] };
     answer.byCmd = { paramedic_list_games: { read: true, complete: true, games: [] }, paramedic_first_look: firstLookAnswer };
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Another game, or the whole PC" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
@@ -2682,7 +2682,7 @@ describe("ParamedicCard: 'Check again' pressed from a first-look answer or after
     answer.value = base;
     answer.reject = "boom";
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     const button = checkAgain() as HTMLElement;
     expect(button).toBeTruthy();
@@ -2729,7 +2729,7 @@ describe("ParamedicCard: the drift suspect names the setting the way Home does",
   async function open(drifts: unknown[] | null | undefined, args: Record<string, string> = FOUND) {
     answer.value = { ...base, why_first: null, findings: [suspect(args)] };
     render(<ParamedicCard drifts={drifts as never} />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     return screen.getByTestId("paramedic").textContent ?? "";
@@ -2763,7 +2763,7 @@ describe("ParamedicCard: the drift suspect names the setting the way Home does",
     try {
       answer.value = { ...base, why_first: null, findings: [suspect(FOUND)] };
       render(<ParamedicCard drifts={[drift({ titles: [TITLE, "Enable Windows Game Mode"], applied_at: ["", ""] })] as never} />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       const text = screen.getByTestId("paramedic").textContent ?? "";
@@ -2842,7 +2842,7 @@ describe("ParamedicCard: the drift suspect names the setting the way Home does",
     try {
       answer.value = { ...base, why_first: null, findings: [suspect(FOUND)] };
       render(<ParamedicCard drifts={[drift()] as never} />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       const text = screen.getByTestId("paramedic").textContent ?? "";
@@ -2852,7 +2852,7 @@ describe("ParamedicCard: the drift suspect names the setting the way Home does",
       cleanup();
       answer.value = { ...base, why_first: null, findings: [suspect(FOUND)] };
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       expect(screen.getByTestId("paramedic").textContent ?? "").toContain(zh.whichNotLoaded);
@@ -2875,7 +2875,7 @@ describe("ParamedicCard: 'already running' and 'not recorded' are scoped to thei
   async function open(d: Partial<ParamedicDiagnosis>) {
     answer.value = { ...base, why_first: null, ...d };
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     return screen.getByTestId("paramedic").textContent ?? "";
@@ -2944,7 +2944,7 @@ describe("ParamedicCard: 'already running' and 'not recorded' are scoped to thei
     try {
       answer.value = { ...base, why_first: null, findings: [running("3", "4")], unknowns: ["running-at-start", "running-at-start-normal"], start_record: rec() as never };
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       const text = screen.getByTestId("paramedic").textContent ?? "";
@@ -2968,7 +2968,7 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
     });
     answer.value = { ...base, why_first: null, findings: [mem] };
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     expect(screen.getByTestId("paramedic").textContent ?? "").toContain(`it peaked at 29.1 of 31.4 GB usable on ${day(when)}.`);
@@ -2993,7 +2993,7 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
     });
     answer.value = { ...base, why_first: null, findings: [mem] };
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     const text = screen.getByTestId("paramedic").textContent ?? "";
@@ -3033,7 +3033,7 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
     });
     answer.value = { ...base, why_first: null, findings: [mem] };
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     const text = screen.getByTestId("paramedic").textContent ?? "";
@@ -3122,11 +3122,11 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
         cleanup();
       }
     };
-    await check("en", en, "Something's wrong", /Compy has no memory reading for your Game A session on (.+?)\./);
+    await check("en", en, "Check my PC", /Compy has no memory reading for your Game A session on (.+?)\./);
     const i18n = (await import("../../i18n")).default;
     await i18n.changeLanguage("zh-CN");
     try {
-      await check("zh", zh, "出问题了", /Compy 没有 (\S+) 那次 Game A 游戏的内存读数。/);
+      await check("zh", zh, "检查我的电脑", /Compy 没有 (\S+) 那次 Game A 游戏的内存读数。/);
     } finally {
       await i18n.changeLanguage("en");
     }
@@ -3146,7 +3146,7 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
     try {
       answer.value = { ...base, why_first: null, findings: [mem] };
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       const text = screen.getByTestId("paramedic").textContent ?? "";
@@ -3194,7 +3194,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
   async function open(d: Partial<ParamedicDiagnosis>, props: { onOpenCheck?: () => void } = {}) {
     answer.value = { ...base, why_first: null, ...d };
     render(<ParamedicCard {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
     openAll();
     return screen.getByTestId("paramedic").textContent ?? "";
@@ -3208,7 +3208,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
     expect(text).toContain("No Game A session has been recorded since it was back on.");
     expect(text).not.toMatch(/fixed|caused|probably|guarantee|you turned it on/i);
     // Nothing left to turn on: the test is a session, and no button appears even when one could open the Test room.
-    expect(text).toContain("Play Game A once, then press Something's wrong again.");
+    expect(text).toContain("Play Game A once, then press Check my PC again.");
     expect(screen.queryByTestId("paramedic-open-check")).toBeNull();
   });
 
@@ -3294,7 +3294,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       /After it was back on, Game A ran in its usual range in 2 sessions, the latest on [A-Z][a-z]{2} \d{1,2}\. The session after that was too short, or Compy couldn't measure enough of it, so Compy can't say Game A is back in its usual range yet\./,
     );
     expect(text).not.toContain("One session so far");
-    expect(text).toMatch(/Compy read it back on by [^.]*\d[^.]*\. Play Game A once, then press Something's wrong again\./);
+    expect(text).toMatch(/Compy read it back on by [^.]*\d[^.]*\. Play Game A once, then press Check my PC again\./);
     expect(text).not.toMatch(/the reason|fixed|caused|probably/i);
     expect(screen.queryAllByText("Weakens this").length).toBe(0);
     cleanup();
@@ -3446,7 +3446,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       const none = ev("drift-restored-none", { restored: BACK }, { kind: "unknown", source: "sessions" });
       answer.value = { ...base, why_first: null, findings: [find("setting-drift", { evidence: [named("Trim Windows visual effects"), none, unknownOf], fix: steps("setting-drift") })] };
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
       openAll();
       const text = screen.getByTestId("paramedic").textContent ?? "";
@@ -3461,7 +3461,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
         findings: [find("setting-drift", { evidence: [named("A one\u001fB two", `${NOTICED}\u001f2026-11-20T09:30:00Z`), none, unknownOf], fix: steps("setting-drift") })],
       };
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
       openAll();
       const two = screen.getByTestId("paramedic").textContent ?? "";
@@ -3471,7 +3471,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       // The two-clear-sessions sentences: the setting is not named as the reason; a second change says Compy can't tell.
       answer.value = { ...base, state: { kind: "recovered" }, findings: [suspect([], { in_play: true, now: "points-to", now_evidence: [backLine] })], recovery: recovery({ kind: "points-to", id: "setting-drift" }) };
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByTestId("paramedic-verdict")).toBeTruthy());
       expect(screen.getByTestId("paramedic-verdict").textContent).toBe(
         "Compy 读到相关设置在这两次游戏之前已重新开启。在 Compy 会留意的更改（驱动程序、Windows 更新、游戏文件、已安装的程序）中，那段时间里没有发现其他更改。这与相关设置确实起了作用的说法相符，但并不能证明。",
@@ -3485,7 +3485,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
         recovery: recovery({ kind: "between", ids: ["setting-drift", "windows-build-change"] }, [gap]),
       };
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByTestId("paramedic-between-cant-tell")).toBeTruthy());
       expect(screen.getByTestId("paramedic-between-cant-tell").textContent).toBe("这段时间里记录到不止一项变化，所以 Compy 无法判断是哪一项起了作用。");
     } finally {
@@ -3569,7 +3569,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       try {
         answer.value = { ...base, why_first: null, findings: [find("setting-drift", { evidence: [off("applied-changes"), unknownOf], fix: steps("setting-drift") })] };
         render(<ParamedicCard onOpenCheck={vi.fn()} />);
-        fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+        fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
         await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
         openAll();
         const text = screen.getByTestId("paramedic").textContent ?? "";
@@ -3668,7 +3668,7 @@ describe("ParamedicCard: a setting that went off and was read back on", () => {
       const rough = ev("drift-restored-rough", { restored: BACK, at: "2026-11-22T12:00:00Z", count: "1" }, { kind: "measured", against: true, source: "sessions" });
       answer.value = { ...base, why_first: null, findings: [suspect([rough], { in_play: false })], seen: [{ id: "setting-drift-moved", args: { check: "x", noticed: NOTICED } }] };
       render(<ParamedicCard />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       const text = screen.getByTestId("paramedic").textContent ?? "";
@@ -3699,7 +3699,7 @@ describe("ParamedicCard: Turn it back on (B3)", () => {
     answer.byCmd = { paramedic_diagnose: diag, apply_recommendation: applied };
     const card = <ParamedicCard drifts={drift([TITLE]) as never} {...props} />;
     render(withProvider ? <ConfirmProvider>{card}</ConfirmProvider> : card);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
     openAll();
   }
@@ -3779,7 +3779,7 @@ describe("ParamedicCard: Turn it back on (B3)", () => {
     expect(seen).toEqual(["ledger-changed"]);
     expect(onChanged).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("paramedic-turned-on").textContent).toMatch(
-      new RegExp(`^You turned “${TITLE}” back on with Compy at .+\\. Play Game A once, for at least 10 minutes, then press Something's wrong again\\.$`),
+      new RegExp(`^You turned “${TITLE}” back on with Compy at .+\\. Play Game A once, for at least 10 minutes, then press Check my PC again\\.$`),
     );
     expect(screen.queryByTestId("paramedic-turn-on")).toBeNull();
   });
@@ -3831,7 +3831,7 @@ describe("ParamedicCard: Turn it back on (B3)", () => {
     );
     answer.byCmd = { paramedic_diagnose: diag, apply_recommendation: applied };
     render(card);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
     openAll();
     fireEvent.click(screen.getAllByTestId("paramedic-turn-on")[0]);
@@ -3887,7 +3887,7 @@ describe("ParamedicCard: the driver read as the earlier version again (B4)", () 
     const text = await open(driverRow([changed, back, none]));
     expect(text).toMatch(/Compy read your graphics driver as 1\.0 again by .+, the version Game A ran on before it got rough\./);
     expect(text).toContain("No Game A session has been recorded since.");
-    expect(text).toMatch(/Compy read 1\.0 again by .+\. Play Game A once, then press Something's wrong again\./);
+    expect(text).toMatch(/Compy read 1\.0 again by .+\. Play Game A once, then press Check my PC again\./);
     expect(text).not.toMatch(/Device Manager|Roll Back Driver/);
     // Never who changed it, never "rolled back" as a claim, never a fix.
     expect(text).not.toMatch(/you rolled|rolled back|fixed|caused/i);
@@ -4077,7 +4077,7 @@ describe("ParamedicCard: what changed since the last check (B4)", () => {
     await opened();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     answer.value = { ...first };
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(rows().length).toBeGreaterThan(0));
     expect(screen.queryByTestId("paramedic-since")).toBeNull();
   });
@@ -4123,7 +4123,7 @@ describe("ParamedicCard: a program open at the start of the rough sessions, and 
       /OBS Studio was open when 4 of 5 rough Game A sessions started; Compy didn't see it open when the one on .+ started, and that session still ran rough\. That weakens OBS Studio as the reason\./,
     );
     expect(text).toMatch(/Compy didn't record what was open when your Game A session on .+ started\./);
-    expect(text).toContain("Compy didn't see OBS Studio open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
+    expect(text).toContain("Compy didn't see OBS Studio open when your last Game A session started. Play Game A once more the same way, then press Check my PC again.");
     expect(text).not.toContain("Close OBS Studio before you play");
     expect(text).not.toMatch(/you closed|closed it|helped|fixed/i);
     expect(screen.queryAllByRole("button").some((b) => /close/i.test(b.textContent ?? "") && !/^Close$/.test(b.textContent ?? ""))).toBe(false);
@@ -4172,15 +4172,15 @@ describe("ParamedicCard: a program open at the start of the rough sessions, and 
       why_first: null,
       findings: [row([line("program-not-open-clear", {})], { names: "", programs: "Lossless Scaling", notOpen: "OBS Studio", count: "1" })],
     });
-    expect(text).toContain("Close Lossless Scaling before you play, then play once and press Something's wrong again.");
-    expect(text).toContain("Compy didn't see OBS Studio open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
+    expect(text).toContain("Close Lossless Scaling before you play, then play once and press Check my PC again.");
+    expect(text).toContain("Compy didn't see OBS Studio open when your last Game A session started. Play Game A once more the same way, then press Check my PC again.");
     cleanup();
     text = await open({
       ...base,
       why_first: null,
       findings: [row([line("program-not-open-clear", {})], { names: "", programs: "", notOpen: "OBS Studio, Lossless Scaling", count: "2" })],
     });
-    expect(text).toContain("Compy didn't see OBS Studio, Lossless Scaling open when your last Game A session started. Play Game A once more the same way, then press Something's wrong again.");
+    expect(text).toContain("Compy didn't see OBS Studio, Lossless Scaling open when your last Game A session started. Play Game A once more the same way, then press Check my PC again.");
     expect(text).not.toContain("Close OBS Studio");
     // No notOpen (an unnamed build tool, or an unread last start): the usual steps, the generic one included.
     cleanup();

@@ -805,7 +805,7 @@ describe("Home: one entry point for 'something's wrong'", () => {
 
   it("with the crash banner showing, Home still has exactly one primary action; the banner's 'Find out why' is not primary and still opens the incident", () => {
     const p = home({ pendingCare: care });
-    const door = within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" });
+    const door = within(screen.getByTestId("paramedic")).getByRole("button", { name: "Check my PC" });
     expect([...document.body.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
     const band = screen.getByRole("group", { name: "Needs a look" });
     expect(within(band).getByRole("button", { name: "Find out why" }).className).toBe("gl-ghost");
@@ -822,14 +822,14 @@ describe("Home: one entry point for 'something's wrong'", () => {
     expect(screen.getByTestId("paramedic")).toBeTruthy();
     expect(screen.getByText("A game running badly or crashing? Compy can look at what changed on this PC.")).toBeTruthy();
     expect(invoked).not.toContain("paramedic_diagnose");
-    fireEvent.click(within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(within(screen.getByTestId("paramedic")).getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(invoked).toContain("paramedic_diagnose"));
   });
 
   it("once the card has been asked, 'Something else?' opens the game question inside the card and leaves Home where it is", async () => {
     scan.diagnose = measured();
     const p = home({ pendingCare: null });
-    fireEvent.click(within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(within(screen.getByTestId("paramedic")).getByRole("button", { name: "Check my PC" }));
     fireEvent.click(await screen.findByRole("button", { name: "Something else? Answer a few questions" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
     expect(within(screen.getByTestId("paramedic")).getByRole("heading", { name: "Which game?" })).toBeTruthy();
@@ -880,7 +880,7 @@ describe("Home: one entry point for 'something's wrong'", () => {
   it("the card's turn-it-back-on button calls onSeeChecks (the Test room's check) and never Home's details", async () => {
     scan.diagnose = driftCard();
     const p = home();
-    fireEvent.click(within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(within(screen.getByTestId("paramedic")).getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
     for (let i = 0; i < 4; i++) {
       screen.queryAllByRole("button").filter((b) => b.getAttribute("aria-expanded") === "false").forEach((b) => fireEvent.click(b));

@@ -37,13 +37,14 @@ Then, in this order (owner ruling 2026-11-26):
 - [ ] A week of ordinary play on each tester PC (ROADMAP Phase 5)
 - [ ] 2026-12-22 review against the pass rule in the owner ruling
 Rest of NEXT (order unchanged):
-- [ ] Per-machine install: the per-user install folder itself is user-writable
+- [ ] Stronger "Clear play history" apply-gap fix: the lock-order guard edit (scripts/store-lock-order-guard.test.mjs, stronger or differently shaped, never looser) plus design 3.3, approved (owner ruling 2026-11-28); its own branch and an independent review before it lands
+- [ ] Per-machine install into Program Files (owner ruling 2026-11-28): the per-user install folder itself is user-writable
 - [ ] Owner capture checks (`_train\g3-owner-capture-checks.md`)
 - [ ] Capture slice 2
 - [ ] Consumer panel follow-up
 - [x] Handles audit S5: the direct query-only opens of the game — already on main: fps.rs and monitoring.rs read the handle-free snapshot, and `open_process_appears_only_at_allowlisted_sites` (other_load.rs) holds an empty allowlist (checked 2026-11-28)
 - [x] Remove or rewrite the #[ignore] test in running_at_start.rs that opens every process — already rewritten in df8d5d7d: it reads `other_load::read_process_rows`, which opens no process (checked 2026-11-28)
-- [ ] Capture slice 2 (design `_train\d1-capture-design.md`): ask "Measure this session?" when a game starts. The one-time group grant itself waits for the owner (it changes a security group on the account)
+- [ ] Capture slice 2 (design `_train\d1-capture-design.md`): ask "Measure this session?" when a game starts. The one-time, clearly explained grant that adds the account to "Performance Log Users" is approved (owner ruling 2026-11-28): its own branch, the change through actions.rs with snapshot and rollback, and a non-Claude review before it lands
 - [ ] PRIVACY.md additions (`_train\d4i-privacy-additions.md`, `_train\d1s1-privacy-line.txt`)
 - [x] Crash-record headlines in the user's language (d10, `claude/d10-incident-headlines`): Rust sends a closed code plus values beside the English; Black Box rows, group lines, kind chips, "Since it last worked" and the Home Care card word it through i18n. A Care card stored before d10 shows its stored English in English and is worded from its kind tag in zh-CN (no game tail)
 - [ ] The OS notification popup for a crash record is still English (incident_observer.rs `notify` → lib.rs `notify_care_incident`: English title, the card's English summary, English tail); Rust has no UI language today
@@ -72,36 +73,25 @@ Rest of NEXT (order unchanged):
 - [ ] Layer 3: the Tuning Bay — per-setting Trials on a repeatable workload; BIOS and overclock walkthroughs by hardware
 - [ ] Unprompted "this session ran rough" notice — stays off until the rule is validated on other PCs
 - [ ] Remaining diet step: docs archive (agent machinery removal done 2026-11-28; its hook half waits on the owner's one command)
-- [ ] Clear play history: a plain apply (Optimize, ledger lock only) can land just after the Trial-gate read, so Trial results may be deleted while that change is on; undo is unaffected. A report-only fix is in progress (branch claude/c4-apply-gap); the stronger fix needs the lock-order guard file and design 3.3 amended by the owner.
 
 ## Waiting on the owner
 - Site copy: the site says both "sends nothing" and "checks GitHub"; the app says "signed update check only" (true in the current build). One site sentence that matches the app.
-- Decide: the tier name "starter" (the app now says "N starter tweaks ready", "Starter stack", "Apply all starter fixes").
-- Decide: the Test bench rule for "Likely better" (two agreeing comparisons).
-- Decide: should Home count an unapplied optional tweak as "worth a look"?
-- Decide: what the Home interview chip says for three findings (the health check, "I want more FPS", "always slow") whose chip reads "Measured" but rests on a setting check or a loaded list, not on play Compy measured: "Read from your PC", or no chip (`_train\d12-review-r1-unrun.md` F3).
 - Privacy questions and the lawyer list (`_train\t2-privacy-for-owner-and-lawyer.md`).
 - Site copy differences (`_train\t2-site-privacy-diff.md`, `_train\c3-site-claims.md`).
 - Website lines that make the same game and anti-cheat claims, with suggested wording in `_train\c3-site-claims.md` (the EULA line needs a lawyer).
 - ROB RUN driver-rollback test: four rough sessions in a row since the Nov 19 driver update; cause not settled.
 - Code-signing identity check: not started. Signing is undecided and unscheduled (owner ruling 2026-11-26). Memo `_train\r1-signing-memo.md`: lead time up to 30 business days; individuals in the US or Canada.
-- Decide: may Compy offer a one-time grant that adds the account to "Performance Log Users" so games are measured with no prompt (design `_train\d1-capture-design.md`)? To prove slice 1 he adds his own account by hand and plays one session.
 - The website (his to publish): no download link; Game Mode is "no gain" in one place and "Real" in another; module names the app no longer uses; legal pages marked DRAFT; two different statements of what leaves the PC.
-- Keep or restore the score ring; keep or reword the Home heading "N things are worth a look"; keep or reword "Something's wrong" as the main button (three of five panel personas: "I didn't say anything was wrong").
 - Legal drafts for a lawyer (in progress): `_train\legal-drafts\`.
 - One ordinary ROB RUN session with nothing else running (Compy now records background load).
 - US/Canada eligibility and identity for code signing.
 - Name 5-10 outside testers by 2026-12-01, including one NVIDIA, one Intel or laptop PC and two non-enthusiasts (owner ruling 2026-11-26).
 - A VM (or 15 minutes) for the deletion tests ("Clear play history", "Clear everything"), the installer tests and a real UAC-prompt test.
-- Run one command to retire the multi-session hooks (answered yes 2026-11-28; the patch only removes): `powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\Kuya\code\sentinel\scripts\apply-agent-diet.ps1`
 - Publish the privacy page wording with the release: site/privacy.html lags docs/PRIVACY.md (the history backup, and now what "Clear play history" and "Clear everything" delete, keep and refuse).
-- Decide: the lock-order guard edit (scripts/store-lock-order-guard.test.mjs) and design 3.3, needed for the stronger "Clear play history" apply-gap fix.
-- Decide: per-user or per-machine install (brief `_train\a3-owner-brief.md`).
-- Decide: the installer description's word "reversible" (state the mechanism instead).
-- ARCHITECTURE_LOCKS line for the ledger backup (proposed text in _train\b1-review-r1.md).
 - Coordinator defaults the owner may overturn: ship date: none set (owner ruling 2026-11-26: 2026-12-11 is not a v1.0 or paid launch; `docs/product/ROADMAP.md` still shows the old target); v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee"; a strength above the lowest needs two independent supports and no contradicting evidence (in the Paramedic's code and now the Problems room's; not yet written in the constitution); the full health check shows no score ring (removed 2026-11-20, one revert restores it).
 
 ## Done (newest first)
+- 2026-11-28 - Owner rulings on the waiting list: the main button says "Check my PC" (and every "press ... again" line with it, en + zh-CN); the heading "N things are worth a look" stays; the Home interview's sweep, "I want more FPS" and "always slow" say "Read from your PC", not "Measured"; the installer description says every change is snapshotted and can be rolled back, not "reversible"; ARCHITECTURE_LOCKS has the ledger-backup line. Home never counts an unapplied optional tweak (already true: home-truth.test.tsx, command-center-data.test.ts). Recorded, no change: the tier name "starter" stays; the score ring stays removed; Test bench "Likely better" keeps two agreeing comparisons; install per-machine into Program Files. The hook-retire script ran (3becfd7b on main).
 - 2026-11-28 - desk build 978fb586 installed and stamped (installed over ec5bae0e)
 - 2026-11-28 - Agent-machinery diet: removed the multi-session coordination layer (claims, leases, folder ownership, carriers, disposition records, the work-train and work-control docs, 351 receipt files). Product locks, the mutation boundary, the game rule and the push check are unchanged. The hook half is `docs/agent-diet-2026-11-28.patch`, applied by the owner's one command.
 - 2026-11-26 - Owner ruling recorded at the top of this file. Closed two owner questions: "is 2026-12-11 a free invite-only beta rather than a paid launch" (decided: not a v1.0 or paid launch; the next release is the free invite-only tester build) and "pricing" (deferred: undecided and unscheduled; `_train\m2-business-memo.md` and project doc `claude/CONSUMER_PANEL_2026-11-20.md` stay as references)

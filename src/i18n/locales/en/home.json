@@ -4,7 +4,7 @@
       "eyebrow": "Rig diagnostic"
     },
     "care": {
-      "label": "Something's wrong",
+      "label": "Check my PC",
       "open": "Open",
       "notice": {
         "aria": "Something Compy noticed",
@@ -315,7 +315,7 @@
       "sub": "One question at a time, in plain words.",
       "back": "Back",
       "startOver": "Start over",
-      "evidenceTitle": "What Compy measured",
+      "evidenceTitle": "What Compy found",
       "noEvidence": "Compy has not measured this yet. That is what the button below is for.",
       "applying": "Applying…",
       "stepAria": "Interview progress",

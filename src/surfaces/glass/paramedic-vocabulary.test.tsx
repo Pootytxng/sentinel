@@ -346,7 +346,7 @@ const hardware: F = {
   now_evidence: [],
 };
 
-const DOOR = { en: "Something's wrong", "zh-CN": "出问题了" } as const;
+const DOOR = { en: "Check my PC", "zh-CN": "检查我的电脑" } as const;
 const ask = async (findings: F[], lang: Lang = "en", over: Partial<ParamedicDiagnosis> = {}) => {
   await i18n.changeLanguage(lang);
   answer.value = { ...base, findings, ...over };

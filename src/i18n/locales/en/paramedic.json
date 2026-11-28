@@ -251,7 +251,7 @@
     }
   },
   "door": {
-    "button": "Something's wrong",
+    "button": "Check my PC",
     "sub": "Compy looks at what changed and tells you what it finds.",
     "looking": "Looking at your recent sessions…",
     "failed": "Compy couldn't read its records just now. Nothing on your PC was changed.",
@@ -516,13 +516,13 @@
     "driverBackBetween_other": "Of the {{game}} sessions since, at least one wasn't clearly in its usual range, so Compy can't tell yet.",
     "compyUndoneRough_one": "“{{title}}” was undone on {{undone}}, and {{game}} still ran rough on {{date}}.",
     "compyUndoneRough_other": "“{{title}}” was undone on {{undone}}, and {{game}} still ran rough in {{count}} sessions since, the first on {{date}}.",
-    "compyUndoneClearOnce": "“{{title}}” was undone on {{undone}}, and {{game}}'s session on {{date}} ran in its usual range. One session so far; Compy says a game is back in its usual range after two. Play {{game}} once the way you usually do, then press Something's wrong again.",
-    "compyUndoneClearUnjudged_one": "“{{title}}” was undone on {{undone}}, and {{game}} ran in its usual range in {{n}} sessions since, the latest on {{date}}. The session after that was too short, or Compy couldn't measure enough of it, so Compy can't say it is back in its usual range yet. Play {{game}} once the way you usually do, then press Something's wrong again.",
-    "compyUndoneClearUnjudged_other": "“{{title}}” was undone on {{undone}}, and {{game}} ran in its usual range in {{n}} sessions since, the latest on {{date}}. Each session after that was too short, or Compy couldn't measure enough of it, so Compy can't say it is back in its usual range yet. Play {{game}} once the way you usually do, then press Something's wrong again.",
-    "compyUndoneUnread_one": "“{{title}}” was undone on {{undone}}. {{count}} {{game}} session has been recorded since, but it was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge. Play {{game}} once the way you usually do, then press Something's wrong again.",
-    "compyUndoneUnread_other": "“{{title}}” was undone on {{undone}}. {{count}} {{game}} sessions have been recorded since, but each was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge. Play {{game}} once the way you usually do, then press Something's wrong again.",
-    "compyUndoneBetween_one": "“{{title}}” was undone on {{undone}}. One {{game}} session since was measured well enough to read, and it wasn't clearly in its usual range, so Compy can't tell yet. Play {{game}} once the way you usually do, then press Something's wrong again.",
-    "compyUndoneBetween_other": "“{{title}}” was undone on {{undone}}. Of the {{game}} sessions since, at least one wasn't clearly in its usual range, so Compy can't tell yet. Play {{game}} once the way you usually do, then press Something's wrong again.",
+    "compyUndoneClearOnce": "“{{title}}” was undone on {{undone}}, and {{game}}'s session on {{date}} ran in its usual range. One session so far; Compy says a game is back in its usual range after two. Play {{game}} once the way you usually do, then press Check my PC again.",
+    "compyUndoneClearUnjudged_one": "“{{title}}” was undone on {{undone}}, and {{game}} ran in its usual range in {{n}} sessions since, the latest on {{date}}. The session after that was too short, or Compy couldn't measure enough of it, so Compy can't say it is back in its usual range yet. Play {{game}} once the way you usually do, then press Check my PC again.",
+    "compyUndoneClearUnjudged_other": "“{{title}}” was undone on {{undone}}, and {{game}} ran in its usual range in {{n}} sessions since, the latest on {{date}}. Each session after that was too short, or Compy couldn't measure enough of it, so Compy can't say it is back in its usual range yet. Play {{game}} once the way you usually do, then press Check my PC again.",
+    "compyUndoneUnread_one": "“{{title}}” was undone on {{undone}}. {{count}} {{game}} session has been recorded since, but it was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge. Play {{game}} once the way you usually do, then press Check my PC again.",
+    "compyUndoneUnread_other": "“{{title}}” was undone on {{undone}}. {{count}} {{game}} sessions have been recorded since, but each was too short, or Compy couldn't measure enough of it, so Compy has no reading it can judge. Play {{game}} once the way you usually do, then press Check my PC again.",
+    "compyUndoneBetween_one": "“{{title}}” was undone on {{undone}}. One {{game}} session since was measured well enough to read, and it wasn't clearly in its usual range, so Compy can't tell yet. Play {{game}} once the way you usually do, then press Check my PC again.",
+    "compyUndoneBetween_other": "“{{title}}” was undone on {{undone}}. Of the {{game}} sessions since, at least one wasn't clearly in its usual range, so Compy can't tell yet. Play {{game}} once the way you usually do, then press Check my PC again.",
     "compyUndoneReapplied": "“{{title}}” was undone on {{undone}}, then applied again on {{reapplied}}. Compy doesn't read the sessions from then on as following the undo.",
     "recoveredAfterDriverBack": "It recovered after the driver went back to {{version}}, the version from before ({{when}}).",
     "recoveredAfterDriverBackSeen": "It recovered after the driver went back to {{version}}, the version from before (Compy first saw it on {{when}}).",
@@ -568,20 +568,20 @@
       "step2": "Open Display adapters, double-click your graphics card, then open the Driver tab.",
       "step3": "If \"Roll Back Driver\" can be clicked, click it and restart. Your previous version was {{from}}.",
       "step4": "If it's greyed out, download {{from}} from the graphics maker's previous-drivers page, run it, and choose the clean install option.",
-      "step5": "Then play {{game}} for one session and press Something's wrong again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet. It needs two sessions in the usual range before it says {{game}} is back to normal.",
-      "stepBack": "Compy read {{from}} again by {{back}}. Play {{game}} once, then press Something's wrong again."
+      "step5": "Then play {{game}} for one session and press Check my PC again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet. It needs two sessions in the usual range before it says {{game}} is back to normal.",
+      "stepBack": "Compy read {{from}} again by {{back}}. Play {{game}} once, then press Check my PC again."
     },
     "backgroundLoad": {
       "step1": "Close {{names}} while you play.",
       "step1NoNames": "Close other programs, especially anything building, recording or downloading, while you play.",
-      "step2": "Play {{game}} once with them closed, then press Something's wrong again.",
-      "stepProgram": "Close {{name}} before you play, then play once and press Something's wrong again.",
-      "stepNotOpen_one": "Compy didn't see {{name}} open when your last {{game}} session started. Play {{game}} once more the same way, then press Something's wrong again.",
-      "stepNotOpen_other": "Compy didn't see {{name}} open when your last {{game}} session started. Play {{game}} once more the same way, then press Something's wrong again."
+      "step2": "Play {{game}} once with them closed, then press Check my PC again.",
+      "stepProgram": "Close {{name}} before you play, then play once and press Check my PC again.",
+      "stepNotOpen_one": "Compy didn't see {{name}} open when your last {{game}} session started. Play {{game}} once more the same way, then press Check my PC again.",
+      "stepNotOpen_other": "Compy didn't see {{name}} open when your last {{game}} session started. Play {{game}} once more the same way, then press Check my PC again."
     },
     "memoryPressure": {
       "step1": "Close browser tabs and launchers before you play. Memory peaked at {{peakGb}} of {{totalGb}} GB usable.",
-      "step2": "Play {{game}} once, then press Something's wrong again."
+      "step2": "Play {{game}} once, then press Check my PC again."
     },
     "settingDrift": {
       "step1": "Check the setting in Windows, and any Windows setting you changed yourself.",
@@ -589,24 +589,24 @@
       "stepTurnOnHere": "Turn it back on here or in {{room}}. Compy asks you to confirm first and saves how it was, so you can undo it in {{room}}.",
       "turnOn": "Turn “{{title}}” back on",
       "turningOn": "Turning it back on…",
-      "turnedOn": "You turned “{{title}}” back on with Compy at {{when}}. Play {{game}} once, for at least 10 minutes, then press Something's wrong again.",
-      "turnedOnNoTime": "You turned “{{title}}” back on with Compy. Play {{game}} once, for at least 10 minutes, then press Something's wrong again.",
+      "turnedOn": "You turned “{{title}}” back on with Compy at {{when}}. Play {{game}} once, for at least 10 minutes, then press Check my PC again.",
+      "turnedOnNoTime": "You turned “{{title}}” back on with Compy. Play {{game}} once, for at least 10 minutes, then press Check my PC again.",
       "secondChange": "You turned on “{{other}}” earlier from this card. If you change two things before you play, Compy can't tell which one made the difference.",
-      "step2": "Play {{game}} once, then press Something's wrong again.",
-      "stepBackOn": "Compy read it back on by {{restored}}. Play {{game}} once, then press Something's wrong again.",
+      "step2": "Play {{game}} once, then press Check my PC again.",
+      "stepBackOn": "Compy read it back on by {{restored}}. Play {{game}} once, then press Check my PC again.",
       "openCheck": "Open {{room}}"
     },
     "compyChange": {
       "step1": "Open {{room}} and look at the changes Compy has on. Undo the newest one.",
-      "step2": "Play {{game}} once, then press Something's wrong again.",
+      "step2": "Play {{game}} once, then press Check my PC again.",
       "undoButton": "Undo “{{title}}”",
       "undoExtra": "Compy recorded this change between your last normal {{game}} session and the first rough one. Undoing it puts back what Compy saved before it; it doesn't tell Compy whether this change was the reason.",
-      "undone": "Undone on {{date}}: “{{title}}”. Play {{game}} once the way you usually do, then press Something's wrong again.",
+      "undone": "Undone on {{date}}: “{{title}}”. Play {{game}} once the way you usually do, then press Check my PC again.",
       "several_other": "Compy recorded changes to {{count}} settings in that time: {{titles}}. To check them one at a time, undo one in Test → Applied & history, then play once before undoing the next.",
       "noUndoHere": "Compy doesn't offer to undo “{{title}}” from this card. You can see it, and undo it if you choose, in Test → Applied & history.",
-      "changedSinceDrawn": "This changed since the card was drawn, so Compy didn't undo anything. Press Something's wrong again.",
-      "trialRunning": "A Trial is running, or Compy can't tell whether one is, so it didn't undo anything. Check Test, then press Something's wrong again.",
-      "listUnread": "Compy couldn't read its change list just now, so it didn't undo anything. Press Something's wrong again."
+      "changedSinceDrawn": "This changed since the card was drawn, so Compy didn't undo anything. Press Check my PC again.",
+      "trialRunning": "A Trial is running, or Compy can't tell whether one is, so it didn't undo anything. Check Test, then press Check my PC again.",
+      "listUnread": "Compy couldn't read its change list just now, so it didn't undo anything. Press Check my PC again."
     },
     "none": "Compy has no change to offer for this. Check it in Windows, then play once more.",
     "frameCapChange": {
@@ -616,25 +616,25 @@
     "windowsUpdate": {
       "step1": "Open Settings, then Windows Update, then Update history to see what was installed and when.",
       "stepUninstall": "If you want to test it, Update history has \"Uninstall updates\". You can remove {{kb}} there and restart. That's your choice; Compy won't do it for you.",
-      "step2": "Play {{game}} once, then press Something's wrong again."
+      "step2": "Play {{game}} once, then press Check my PC again."
     },
     "gameFiles": {
       "step1": "Check {{game}}'s patch notes for what changed around that date.",
       "step2": "In Steam, right-click {{game}}, open Properties, then Installed Files, and choose Verify integrity of game files.",
-      "step3": "Play {{game}} once, then press Something's wrong again."
+      "step3": "Play {{game}} once, then press Check my PC again."
     },
     "programInstalled": {
       "step1": "Close {{names}} while you play, or uninstall it if you don't need it.",
-      "step2": "Play {{game}} once, then press Something's wrong again."
+      "step2": "Play {{game}} once, then press Check my PC again."
     },
     "graphicsMod": {
       "step1": "Check {{name}}'s own page for a newer version.",
-      "step2": "To test without it, move its files out of the game folder (or use its own uninstall), play once, and press Something's wrong again."
+      "step2": "To test without it, move its files out of the game folder (or use its own uninstall), play once, and press Check my PC again."
     },
     "gpuHotter": {
       "step1": "Check that the card's fans spin up when you play, and look at the fans and heatsink for dust.",
       "step2": "Check that the case has clear airflow in and out, and look at the card's fan curve in its own tool (it may be set too low).",
-      "step3": "Play {{game}} once, then press Something's wrong again."
+      "step3": "Play {{game}} once, then press Check my PC again."
     }
   },
   "card": {
@@ -742,17 +742,17 @@
   "measuredOnce": {
     "title": "{{game}}'s last session ran in its usual range",
     "numbers": "Its dips stayed at about {{beforePct}}% of its average before, fell to about {{roughPct}}% while it was rough, and were at about {{nowPct}}% on {{date}}.",
-    "notYet": "One session can't show why it ran better, and it doesn't make any change below more likely. Play {{game}} once more and press Something's wrong again.",
+    "notYet": "One session can't show why it ran better, and it doesn't make any change below more likely. Play {{game}} once more and press Check my PC again.",
     "cantAttribute": "More than one change was recorded between the rough sessions and this one, so Compy can't tell which one mattered."
   },
   "nothingChanged": {
     "title": "Compy measured the problem, but nothing it records changed before it",
-    "next": "Play one more session, then press Something's wrong again. Compy will say whether it was rough or in the usual range, or that it can't tell yet."
+    "next": "Play one more session, then press Check my PC again. Compy will say whether it was rough or in the usual range, or that it can't tell yet."
   },
   "footer": "Compy lists what changed before the problem. It doesn't claim to know the cause.",
   "notSeparable": {
     "title": "Compy can't tell which of these it is yet",
-    "next": "To find out: play one session of {{game}} with nothing else running, then press Something's wrong again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet.",
+    "next": "To find out: play one session of {{game}} with nothing else running, then press Check my PC again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet.",
     "nextOther": "Play {{game}} once more. Compy may still not be able to tell these apart."
   },
   "cap": {
@@ -850,7 +850,7 @@
   "hardware": {
     "titlePossible": "This may be hardware",
     "verdictPossible": "Windows recorded at least one hardware error in the same period, but Compy can't prove it is behind this.",
-    "next": "Open the first one to see what you can check. If you change anything, play {{game}} once, then press Something's wrong again.",
+    "next": "Open the first one to see what you can check. If you change anything, play {{game}} once, then press Check my PC again.",
     "countOne": "Windows recorded a hardware error on {{at}} (source: WHEA-Logger).",
     "countMany": "Windows recorded hardware errors at {{n}} separate times between {{from}} and {{to}} (source: WHEA-Logger; records under a minute apart count once).",
     "inRough": "{{n}} of these fell while a {{game}} session Compy measured as rough was running, or just after it ended.",
@@ -863,7 +863,7 @@
     "normalUnread": "Compy's read of Windows' log only reaches back to {{from}}, so it can't tell whether such errors were also recorded during the normal sessions before that.",
     "checkedNone": "Hardware error records (source: WHEA-Logger): Compy asked Windows' System log for them from {{from}} to {{to}} and it returned none.",
     "intro": "Windows keeps a record when a part of the PC reports an error about itself. Compy has no setting to change for that. What you can do:",
-    "step1": "If you changed an overclock or an undervolt in your BIOS, set it back to its default, play {{game}} once, then press Something's wrong again.",
+    "step1": "If you changed an overclock or an undervolt in your BIOS, set it back to its default, play {{game}} once, then press Check my PC again.",
     "step2": "Press Windows + X and open Event Viewer. Under Windows Logs, open System and filter by the source WHEA-Logger. Open each record to read what Windows wrote about it.",
     "step3": "If Windows keeps recording these after that, give these lines to the PC's maker or a repair shop:",
     "tellPart": "Compy has not read which part of the PC reported this."
@@ -875,8 +875,8 @@
     "testOne": "Try one thing at a time; if you change two things before the next session, Compy can't tell which one mattered."
   },
   "next": {
-    "likely": "Try the steps under the first one, play {{game}} once, then press Something's wrong again.",
-    "possible": "Check it, play {{game}} once, then press Something's wrong again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet. It needs two sessions in the usual range before it says {{game}} is back to normal."
+    "likely": "Try the steps under the first one, play {{game}} once, then press Check my PC again.",
+    "possible": "Check it, play {{game}} once, then press Check my PC again. Compy will say whether that session was rough or in the usual range, or that it can't tell yet. It needs two sessions in the usual range before it says {{game}} is back to normal."
   },
   "row": {
     "nowTitle": "Since it ran normally again:"
@@ -895,7 +895,7 @@
     "settingBack_other": "Compy read those settings back on before those two sessions. Among the changes Compy keeps track of (drivers, Windows updates, game files, installed programs), it found no other one in that stretch. That's consistent with those settings being what mattered, but it doesn't prove it.",
     "betweenCantTell": "More than one change was recorded in that stretch, so Compy can't tell which one mattered.",
     "nothing": "Compy can't narrow it down from this recovery.",
-    "next": "If it runs rough again, press Something's wrong again and Compy will say whether that session was rough or in the usual range, or that it can't tell yet.",
+    "next": "If it runs rough again, press Check my PC again and Compy will say whether that session was rough or in the usual range, or that it can't tell yet.",
     "notProven": "This is what the recorded sessions show. It doesn't prove why it got better.",
     "gapGameFiles": "{{game}}'s files changed",
     "gapProgram": "A program was installed"

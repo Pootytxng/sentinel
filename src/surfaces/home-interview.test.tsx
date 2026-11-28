@@ -396,14 +396,17 @@ describe("the interview's flag (compy_home_interview — DEFAULT ON, \"0\" opts 
     expect(action(), "an unmeasured finding is a dead end").not.toBeNull();
   });
 
-  it("quotes a real reading when it has one, and says MEASURED only then (law 2)", async () => {
+  it("quotes a real reading when it has one, and says it READ it, never MEASURED (law 2; owner ruling 2026-11-28)", async () => {
     renderHome({ rooms: liveRooms, recs: [rec({ id: "safe-ok" })], isAppliable: () => true });
     openInterview();
     fireEvent.click(answerNamed(Q.start.choices.find((c) => c.unsure)!.label));
-    // readiness is live in baseProps → the sweep is measured and quotes the check count.
+    // readiness is live in baseProps → the sweep READ the checks (no play measured) and quotes the count.
     await waitFor(() =>
-      expect(document.querySelector(".hi-level")?.getAttribute("data-level")).toBe("measured"),
+      expect(document.querySelector(".hi-level")?.getAttribute("data-level")).toBe("read"),
     );
+    expect(document.querySelector(".hi-level")?.textContent).toMatch(/Read from your PC/);
+    // The evidence heading on the same card must not contradict the chip (self-review 2026-11-28).
+    expect(document.querySelector(".hi-evidence-title")?.textContent).not.toMatch(/measured/i);
     const lines = Array.from(document.querySelectorAll(".hi-evidence-list li")).map(
       (n) => n.textContent,
     );

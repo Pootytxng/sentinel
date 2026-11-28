@@ -135,7 +135,7 @@ describe("mapping table: every old serialized value has a row", () => {
   });
 
   it("FindingLevel and Provenance", () => {
-    const find: Record<(typeof FINDING_LEVEL_VALUES)[number], Mapped> = { measured: src("measured"), likely: str("possible"), unknown: CANT };
+    const find: Record<(typeof FINDING_LEVEL_VALUES)[number], Mapped> = { measured: src("measured"), read: src("read"), likely: str("possible"), unknown: CANT };
     for (const v of FINDING_LEVEL_VALUES) expect(fromFindingLevel(v), v).toEqual(find[v]);
     const prov: Record<(typeof PROVENANCE_VALUES)[number], Mapped> = { verified: src("read"), "measured-signal": src("measured-once"), "expected-impact": src("general") };
     for (const v of PROVENANCE_VALUES) expect(fromProvenance(v), v).toEqual(prov[v]);
@@ -158,7 +158,8 @@ const OLD = {
   wordFromBand: (band: string | null | undefined): OldWord => (band === "high" || band === "medium" ? "likely" : "unknown"),
   wordFromRow: (basis: string | undefined, band: string | null | undefined): OldWord => (basis === "measured" ? OLD.wordFromBand(band) : "known"),
   wordFromProvenance: (p: string): OldWord => (p === "verified" ? "known" : p === "measured-signal" ? "measured" : p === "expected-impact" ? "expected" : "unknown"),
-  wordFromFinding: (level: string): OldWord => level as OldWord,
+  // "read" is new (owner ruling 2026-11-28): a fact Compy read is the old word Known.
+  wordFromFinding: (level: string): OldWord => (level === "read" ? "known" : (level as OldWord)),
 };
 
 describe("confidence-word.ts through the mappers is byte-identical to the frozen old implementation", () => {

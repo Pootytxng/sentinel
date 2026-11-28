@@ -184,10 +184,11 @@ export function fromPatternBand(_band: ConfidenceBand | null | undefined): Mappe
 
 /** home-interview-data.ts `FindingLevel`. "unknown" there means "no evidence", not "Compy tried to
  *  read and failed", so it is "can't tell", not source `unread` (the design table says unread: wrong). */
-export const FINDING_LEVEL_VALUES = ["measured", "likely", "unknown"] as const satisfies readonly FindingLevel[];
+export const FINDING_LEVEL_VALUES = ["measured", "read", "likely", "unknown"] as const satisfies readonly FindingLevel[];
 export function fromFindingLevel(level: FindingLevel): Mapped {
   switch (level) {
     case "measured": return source("measured");
+    case "read": return source("read");
     case "likely": return possible;
     case "unknown": return CANT_TELL;
   }
