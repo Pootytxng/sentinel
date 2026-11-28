@@ -13,7 +13,8 @@
 //
 // PAYOFF (measured, never a verdict):
 //   * the anchor is when the step was TAKEN where Compy can tell (the user answered "Did this help?"
-//     on a record of the same kind with this same reading), else when Compy FIRST SHOWED it here
+//     on a record of the same kind with this same reading and, outside App crash / App hang, the same
+//     faulting module), else when Compy FIRST SHOWED it here
 //     (stored locally, together with the stutter baseline it was shown against);
 //   * a crash step counts records of the same kind after the anchor (same `tag`; for App crash and
 //     App hang also the same faulting app): any → "came back"; none over at least
@@ -88,6 +89,10 @@ export type CareStep =
       app: string | null;
       /** The faulting app as Windows named it, for the copy; null where `app` is null. */
       appLabel: string | null;
+      /** Lower-cased faulting module for kinds other than App crash / App hang (a GPU timeout names its
+       *  driver); null where none is named. A "Did this help?" answer anchors the step only from a
+       *  record naming the same one (moduleOf), so an amdkmdag answer never anchors an nvlddmkm step. */
+      module: string | null;
       consistentWith: string;
       /** The stable reading key (blackbox.rs rule); the feedback anchor matches on it, never on prose. */
       rule: string | null;
@@ -143,6 +148,12 @@ export function sameKind(i: CrashIncident, step: { kind: string; app: string | n
   if (i.tag !== step.kind) return false;
   return !APP_KINDS.has(step.kind) || appOf(i) === step.app;
 }
+/** The faulting module (lower-cased) of a record whose kind is not matched by app; null for App crash
+ *  / App hang (the app is their match) and where Windows named none. Used only for the "taken" anchor:
+ *  the payoff still counts every record of the kind, since its line names the kind, not the module. */
+export function moduleOf(i: CrashIncident): string | null {
+  return APP_KINDS.has(i.tag) ? null : (i.receipt?.faulting_module ?? "").toLowerCase() || null;
+}
 
 /** Pure: the NEWEST crash record that carries an assessment — the one the Care step is drawn from
  *  (rule 1 above), and the one the Lab rig picks a part from (P7-rig-care). null when none does. */
@@ -175,6 +186,7 @@ export function pickCareStep(
       kind: inc.tag,
       app,
       appLabel: app ? (inc.receipt?.faulting_app ?? null) : null,
+      module: moduleOf(inc),
       consistentWith: a.consistent_with,
       rule: a.rule ?? legacyRuleOf(a.consistent_with),
       statement: a.statement ?? null,
@@ -319,8 +331,9 @@ export function anchorFor(step: CareStep, incidents: CrashIncident[] = [], now: 
             e &&
             sameReading(e, step) &&
             Number.isFinite(at) &&
-            // The answer's own record (keyed by its `when`) must be of the same kind.
-            incidents.some((inc) => inc.when === e.when && sameKind(inc, step))
+            // The answer's own record (keyed by its `when`) must be of the same kind, and name the same
+            // faulting module (e7): the rule key alone would let one driver's answer anchor another's step.
+            incidents.some((inc) => inc.when === e.when && sameKind(inc, step) && moduleOf(inc) === step.module)
           ) {
             return { at, basis: "taken" };
           }

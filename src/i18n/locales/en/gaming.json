@@ -528,6 +528,7 @@
     "codeLabel": "Code",
     "rawLabel": "Raw",
     "whatThisPointsTo": "What this points to",
+    "whatTheRecordShows": "What the record shows",
     "knownIssue": {
       "label": "Known issue on record",
       "matchedLine": "This matches a known issue the manufacturer has published.",
