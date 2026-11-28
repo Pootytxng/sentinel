@@ -129,6 +129,28 @@ describe("B: Applied & history before the ledger is read", () => {
     expect(container.textContent).not.toContain(LEDGER_READ_FAILED);
   });
 
+  // e2 review r1 F2: a refresh that fails after a good read leaves the earlier rows on screen. The
+  // read state must withhold the empty claim only, never the rows or their Undo. A pin: no Undo was
+  // gated by e2; this fails if a later change hides rows while `ledgerRead` is set.
+  it("read failed AFTER a good read → the rows and every Undo stay, no 'Nothing active'", async () => {
+    const row = {
+      id: "c1",
+      rec_id: "game-mode",
+      rec_title: "Game Mode",
+      applied_at: "2026-11-20T18:00:00Z",
+      snapshot: null,
+      status: "applied",
+      is_still_active: true,
+      active_check: "on",
+    } as unknown as LabFastPathProps["changes"][number];
+    const onRollback = vi.fn();
+    const { container } = await mount({ ledgerRead: "failed", changes: [row], onRollback });
+    const undo = Array.from(ledger(container).querySelectorAll<HTMLButtonElement>(".fix-ghost-rollback"));
+    expect(undo).toHaveLength(1);
+    expect(undo[0].disabled).toBe(false);
+    expect(container.textContent).not.toContain(NOTHING_ACTIVE);
+  });
+
   it("the tuning-tools-off face (ChangesFace) passes the same read state to the same ledger", async () => {
     const { container } = await mount({ ledgerRead: "pending" }, "changes");
     const face = container.querySelector<HTMLElement>('[data-testid="lab-changes-ledger"]')!;

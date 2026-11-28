@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { LEDGER_RETRY_MS, ledgerRetryDelay, settleLedgerRead, useLedgerReadRetry } from "./applied-changes-retry";
+import { LEDGER_RETRY_MS, ledgerReadState, ledgerRetryDelay, settleLedgerRead, useLedgerReadRetry } from "./applied-changes-retry";
 import type { AppliedChange } from "../types";
 
 const rows = [{ id: "c1" }] as unknown as AppliedChange[];
@@ -128,5 +128,18 @@ describe("useLedgerReadRetry", () => {
     await tick(120000);
     expect(read).toHaveBeenCalledTimes(1);
     expect(onRead).not.toHaveBeenCalled();
+  });
+});
+
+// e2 review r1 F1: App passes ledgerReadState({ read: changesRead, failed: changesReadFailed }) to the
+// Lab's ledger views. Named fields so the two booleans cannot be swapped at the call site (review r2).
+// Break check: make "pending" win over "failed" (or return undefined while unread) and a row here fails.
+// Not covered: deleting the prop in App.tsx (no source guard, by the no-new-guards rule).
+describe("ledgerReadState", () => {
+  it("unread → pending; read → undefined; failed → failed, before or after a good read", () => {
+    expect(ledgerReadState({ read: false, failed: false })).toBe("pending");
+    expect(ledgerReadState({ read: true, failed: false })).toBeUndefined();
+    expect(ledgerReadState({ read: false, failed: true })).toBe("failed");
+    expect(ledgerReadState({ read: true, failed: true })).toBe("failed");
   });
 });

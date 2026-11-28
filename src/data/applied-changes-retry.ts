@@ -90,3 +90,11 @@ export function settleLedgerRead(
     if (!landed && current()) onFailed();
   });
 }
+
+/** e2 review r1 F1: what the ledger views may say about App's own read of the list. A failed read wins
+ *  over "not read yet" (a refresh that failed after an earlier good read is still a failed read: the
+ *  rows on screen may be stale, so "Nothing active" must not be said either). `undefined` = read and
+ *  current, so the views may state what the list holds, including that it is empty. */
+export function ledgerReadState({ read, failed }: { read: boolean; failed: boolean }): "pending" | "failed" | undefined {
+  return failed ? "failed" : read ? undefined : "pending";
+}

@@ -51,7 +51,7 @@ import {
   useTuningTools,
   type SlotRead,
 } from "./data/tuning-tools";
-import { settleLedgerRead, useLedgerReadRetry } from "./data/applied-changes-retry";
+import { ledgerReadState, settleLedgerRead, useLedgerReadRetry } from "./data/applied-changes-retry";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
@@ -2000,7 +2000,7 @@ function App() {
                   changes={changes}
                   // e2: the ledger says "not read yet" / "couldn't read" instead of "Nothing active"
                   // until get_applied_changes has answered (the same two states the rail footer shows).
-                  ledgerRead={changesReadFailed ? "failed" : changesRead ? undefined : "pending"}
+                  ledgerRead={ledgerReadState({ read: changesRead, failed: changesReadFailed })}
                   busyId={busyId}
                   activeChangeFor={findActiveChangeForRec}
                   onToggleRec={(recId) => {
