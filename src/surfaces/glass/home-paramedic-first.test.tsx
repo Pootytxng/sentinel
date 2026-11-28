@@ -6,13 +6,15 @@
 // "No readiness score or grade on Home" is pinned where the ring lived, in home-console.test.tsx
 // (HomeGlass, the summary page, never had one). Home is composed the way App composes it: HomeGlass
 // with TrustMoment in its latestChange slot.
-//  3. e9 (card at 720): while the card is open, the rest of Home folds under the card's own row in a short window.
+//  3. e9 (card at 720): while the card is open, the rest of Home folds under the card's own row in a short window;
+//     the crash banner and the first-win journey (TrustMoment, FirstWin) never fold (review r1 F1).
 //     jsdom has no layout: the fold rule is read from glass-rooms.css and matched against this DOM; the real
 //     geometry at 1280x720 was not measured.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
+import type { ReactNode } from "react";
 import type { AppliedChange } from "../../types";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -37,6 +39,7 @@ import "../../i18n";
 import type { GameReadiness, PendingCareIncident, Recommendation, SessionSummary } from "../../types";
 import { HomeGlass } from "./HomeGlass";
 import { TrustMoment } from "../TrustMoment";
+import { FirstWin } from "../FirstWin";
 
 beforeEach(() => localStorage.clear());
 afterEach(cleanup);
@@ -95,7 +98,7 @@ const care: PendingCareIncident = {
   summary: "Elden Ring closed unexpectedly",
 };
 
-function home(sessions: SessionSummary[], pendingCare: PendingCareIncident | null = null) {
+function home(sessions: SessionSummary[], pendingCare: PendingCareIncident | null = null, latestChange?: ReactNode) {
   const { container } = render(
     <HomeGlass
       readiness={readiness()}
@@ -109,7 +112,7 @@ function home(sessions: SessionSummary[], pendingCare: PendingCareIncident | nul
       onRunCheck={vi.fn()}
       onSeeChecks={vi.fn()}
       onOpenDetails={vi.fn()}
-      latestChange={<TrustMoment recs={[REC]} changes={[]} isAppliable={() => true} onChanged={vi.fn()} />}
+      latestChange={latestChange ?? <TrustMoment recs={[REC]} changes={[]} isAppliable={() => true} onChanged={vi.fn()} />}
     />,
   );
   return container;
@@ -198,17 +201,43 @@ describe("e9: while the card is open, the rest of Home folds under one row (shor
   }
   const row = (card: HTMLElement) => within(card).getByRole("button", { name: "The rest of this page" });
 
-  it("the fold lives in the short-window media query, and only a folded card gets the taller cap", () => {
+  // The short-window query's own block: from "@media" to the first "}" at column 0 after it (review r1 F5).
+  const mediaAt = css.indexOf("@media (max-height: 899.98px)");
+  const mediaBlock = mediaAt < 0 ? "" : css.slice(mediaAt, css.indexOf("\n}", mediaAt) + 2);
+  // A rule in that block that sets `prop: value` for a selector holding `has`: its selector, run on the DOM.
+  const esc = (s: string) => s.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&");
+  const ruleFor = (has: string, prop: string) => {
+    const m = new RegExp("\\n\\s*([^{}\\n]*" + esc(has) + "[^{}\\n]*?)\\s*\\{\\s*" + esc(prop)).exec(mediaBlock);
+    return m ? m[1] : null;
+  };
+
+  it("the fold lives inside the short-window media query, and only a folded card gets the taller cap", () => {
     expect(rule).not.toBeNull();
-    const media = css.indexOf("@media (max-height: 899.98px)");
-    expect(media).toBeGreaterThan(-1);
-    expect(css.indexOf(rule![0])).toBeGreaterThan(media);
-    expect(css.slice(media)).toMatch(/\.gl-para-card\[data-home-fold="folded"\] \{\s*--para-card-max: clamp\(260px, calc\(100vh - 240px\), 520px\);/);
-    // Outside that query the row is never drawn: a tall window keeps e8's layout.
-    expect(css.slice(0, media)).toMatch(/\.gl-para-homefold \{\s*display: none;\s*\}/);
+    expect(mediaBlock).not.toBe("");
+    expect(mediaBlock).toContain(rule![0].trim());
+    expect(mediaBlock).toMatch(/\.gl-para-card\[data-home-fold="folded"\] \{[^}]*--para-card-max: clamp\(260px, calc\(100vh - 240px - var\(--para-keep-banner\) - var\(--para-keep-journey\)\), 520px\);/);
+    // Outside that query the row is never drawn: a taller page area keeps e8's layout.
+    expect(css.slice(0, mediaAt)).toMatch(/\.gl-para-homefold \{\s*display: none;\s*\}/);
   });
 
-  it("open: everything after the card but the crash banner folds; the row shows it again, its text unchanged", async () => {
+  // review r1 F2: what stays after the card takes its height out of the folded cap.
+  it("the folded cap makes room for the crash banner and for the first-win journey only when they follow the card", async () => {
+    const keepBanner = ruleFor(":has(~ .gl-banner)", "--para-keep-banner: 84px;");
+    const keepJourney = ruleFor(":has(~ :is(.trust-moment, .first-win))", "--para-keep-journey: 161px;");
+    expect(keepBanner).not.toBeNull();
+    expect(keepJourney).not.toBeNull();
+    home([session], care);
+    let card = await openCard();
+    expect(document.querySelector(keepBanner!)).toBe(card);
+    expect(document.querySelector(keepJourney!)).toBe(card);
+    cleanup();
+    home([session], null, <></>);
+    card = await openCard();
+    expect(document.querySelector(keepBanner!)).toBeNull();
+    expect(document.querySelector(keepJourney!)).toBeNull();
+  });
+
+  it("open: the tiles and the lower half fold, the crash banner and the first-win journey stay; the row shows the rest again, its text unchanged", async () => {
     const c = home([session], care);
     const tiles = c.querySelector<HTMLElement>(".gl-kpis")!;
     const lower = c.querySelector<HTMLElement>(".gl-lower")!;
@@ -222,12 +251,14 @@ describe("e9: while the card is open, the rest of Home folds under one row (shor
     expect(card.getAttribute("data-home-fold")).toBe("folded");
     const room = c.querySelector<HTMLElement>(".gl-room")!;
     const after = [...room.children].slice([...room.children].indexOf(card) + 1);
-    expect(folded()).toEqual(after.filter((el) => el !== banner));
-    expect(folded()).toEqual(expect.arrayContaining([tiles, lower]));
-    expect(folded().some((el) => el.contains(c.querySelector(".trust-moment")))).toBe(true);
-    expect(folded()).not.toContain(banner);
+    const trust = c.querySelector<HTMLElement>(".trust-moment")!;
+    expect(after).toEqual(expect.arrayContaining([banner, tiles, lower, trust]));
+    expect(folded()).toEqual([tiles, lower]);
+    expect(folded().some((el) => el.contains(banner) || el.contains(trust))).toBe(false);
     expect(row(card).getAttribute("aria-expanded")).toBe("false");
-    expect(within(card).getByText("Folded while this is open")).toBeTruthy();
+    // review r1 F4: the note is the row's description while it shows.
+    const note = within(card).getByText("Folded while this is open");
+    expect(row(card).getAttribute("aria-describedby")).toBe(note.id);
 
     fireEvent.click(row(card));
     expect(row(card).getAttribute("aria-expanded")).toBe("true");
@@ -275,5 +306,39 @@ describe("e9: while the card is open, the rest of Home folds under one row (shor
     card = await openCard();
     expect(card.getAttribute("data-home-fold")).toBe("folded");
     expect(row(card).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  // review r1 F1: the first-win journey's live apply/undo status is never folded away while the card is open.
+  it("TrustMoment's live demo status stays out of the fold, still a live region", async () => {
+    const c = home([session]);
+    fireEvent.click(screen.getByRole("button", { name: /watch it work/i }));
+    const trust = c.querySelector<HTMLElement>(".trust-moment")!;
+    const live = await within(trust).findByRole("status");
+    expect(live.getAttribute("aria-live")).toBe("polite");
+    await openCard();
+    expect(folded()).toEqual(expect.arrayContaining([c.querySelector(".gl-kpis"), c.querySelector(".gl-lower")]));
+    expect(folded().some((el) => el.contains(trust))).toBe(false);
+    expect(within(trust).getByRole("status")).toBe(live);
+  });
+
+  it("FirstWin's verdict status stays out of the fold, still a live region", async () => {
+    const active: AppliedChange = {
+      id: "c-9",
+      rec_id: "game-mode",
+      rec_title: "Game Mode",
+      applied_at: "2026-10-24T01:00:00Z",
+      snapshot: null,
+      status: "applied",
+      is_still_active: true,
+    };
+    const c = home([session], null, <FirstWin changes={[active]} onChanged={vi.fn()} />);
+    const win = c.querySelector<HTMLElement>(".first-win")!;
+    fireEvent.click(win.querySelector<HTMLButtonElement>(".fw-btn-primary")!);
+    const verdict = await within(win).findByRole("status");
+    expect(verdict.getAttribute("aria-live")).toBe("polite");
+    await openCard();
+    expect(folded()).toEqual(expect.arrayContaining([c.querySelector(".gl-kpis"), c.querySelector(".gl-lower")]));
+    expect(folded().some((el) => el.contains(win))).toBe(false);
+    expect(within(win).getByRole("status")).toBe(verdict);
   });
 });

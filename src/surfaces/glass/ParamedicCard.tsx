@@ -2087,8 +2087,10 @@ export function ParamedicCard({
   const [lookAsking, setLookAsking] = useState(false);
   // e9: in a short window (glass-rooms.css, max-height 899.98px) the open card folds the rest of Home under one
   // row, "The rest of this page", so the answer gets the room and nothing hides below the fold unannounced. The row
-  // shows it again; closing the card brings Home back and the next open folds it again.
+  // shows it again; closing the card brings Home back and the next open folds it again. The crash banner and the
+  // first-win journey (live apply/undo status) are never folded (review r1 F1).
   const [homeShown, setHomeShown] = useState(false);
+  const foldNoteId = useId();
   // Bumped when the card is closed or asks anew, so an answer to an earlier ask is dropped.
   const gen = useRef(0);
   const doorRef = useRef<HTMLButtonElement>(null);
@@ -2447,11 +2449,11 @@ export function ParamedicCard({
           the accessibility tree together and comes back unchanged. */}
       {open && (
         <div className="gl-para-homefold" data-testid="paramedic-home-fold">
-          <button type="button" className="gl-para-fold-btn" aria-expanded={homeShown} onClick={() => setHomeShown((s) => !s)}>
+          <button type="button" className="gl-para-fold-btn" aria-expanded={homeShown} aria-describedby={homeShown ? undefined : foldNoteId} onClick={() => setHomeShown((s) => !s)}>
             <Chevron />
             {t("paramedic.card.restOfPage")}
           </button>
-          {!homeShown && <span className="gl-para-homefold-note">{t("paramedic.card.restOfPageFolded")}</span>}
+          {!homeShown && <span id={foldNoteId} className="gl-para-homefold-note">{t("paramedic.card.restOfPageFolded")}</span>}
         </div>
       )}
     </section>
