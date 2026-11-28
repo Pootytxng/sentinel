@@ -1,6 +1,7 @@
 import { Term } from "../design/Term";
 import { withTerms } from "../design/with-terms";
 import { ConfidenceWord } from "../design/ConfidenceWord";
+import { confidenceWordText, wordFromBand } from "../data/confidence-word";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -230,16 +231,12 @@ const COMPARABILITY_KEY: Record<Comparability, string> = {
 const comparabilityLabel = (c: Comparability, t: TFunction): string =>
   t(`optimize.whatChangedPanel.comparability.${COMPARABILITY_KEY[c]}`);
 
-// Expert-only confidence-ceiling wording (a BAND, never a number — METHODOLOGY §10). Static map
-// (enum key → i18n key suffix): a new backend variant surfaces as a TS error here.
-const CONF_LIMIT_KEY: Record<SessionComparability["confidence_limit"], string> = {
-  unknown: "unknown",
-  low: "low",
-  medium: "medium",
-  high: "high",
-};
+// Expert-only ceiling wording (a BAND, never a number — METHODOLOGY §10). D3 slice 4 (e5b): said in
+// the shared strength words through the same mapper as the hypothesis rows (wordFromBand): high and
+// medium are "Possible" (a hypothesis here never reaches Most likely, design question 2), low and
+// unknown "Not enough to say yet". Was "Confidence capped at" + Unknown/Low/Medium/High.
 const confLimitLabel = (c: SessionComparability["confidence_limit"], t: TFunction): string =>
-  t(`optimize.whatChangedPanel.confLimit.${CONF_LIMIT_KEY[c]}`);
+  confidenceWordText(wordFromBand(c), t);
 
 // The comparison-basis banner (Tasks F + G). Stated up front, before the headline's cause talk:
 // the verdict band + WHY (the prose `reasons`, plus `missing_context` — the conditions we couldn't
@@ -290,7 +287,7 @@ function ComparabilityDetail({ c, expert }: { c: SessionComparability; expert: b
       {expert && (
         <div className="wcp-compare-row">
           <span className="wcp-compare-key">
-            {t("optimize.whatChangedPanel.confidenceCappedAt")}
+            {t("optimize.whatChangedPanel.strongestItCanBe")}
           </span>
           <span className="wcp-compare-val">{confLimitLabel(c.confidence_limit, t)}</span>
         </div>

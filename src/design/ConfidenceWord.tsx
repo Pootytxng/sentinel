@@ -3,7 +3,7 @@ import { Term } from "./Term";
 import { confidenceHintKey, confidenceWordText, isMeasuredRow, wordFromBand, wordFromPattern, wordFromRow } from "../data/confidence-word";
 import type { ConfidenceBand, PriorityBasis } from "../types";
 
-/** P7-confidence, review 2026-10-28: a band's word ("Likely", "Unknown") with its one-line hint in the
+/** P7-confidence, review 2026-10-28: a band's word ("Possible", "Not enough to say yet") with its one-line hint in the
  *  in-app tooltip (`Term tip`), never a native `title` on text that already shows its label (#677,
  *  self-review rubric 12). The raw band stays on `data-confidence` for the technical layer. */
 export function ConfidenceWord({ band }: { band: ConfidenceBand | "high" | "medium" | "low" | null | undefined }) {
@@ -29,8 +29,9 @@ export function PatternConfidence({ band }: { band: ConfidenceBand | "high" | "m
 }
 
 /** A priority row's word. A fact Compy read from Windows or the hardware (a plan, a setting, a driver
- *  age) is "Known" with the note "Effect on FPS not measured", never "Likely": nothing measured what
- *  it does to this PC's frame rate. Only a row whose basis is "measured" takes the band's word. */
+ *  age) is "Read from your PC" (was "Known" until e5b) with the note "Effect on FPS not measured",
+ *  never a strength: nothing measured what it does to this PC's frame rate. Only a row whose basis is
+ *  "measured" takes the band's word. */
 export function RowConfidence({ basis, band }: { basis: PriorityBasis | undefined; band: ConfidenceBand | "high" | "medium" | "low" | null | undefined }) {
   const { t } = useTranslation();
   const word = wordFromRow(basis, band);

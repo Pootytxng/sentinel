@@ -418,8 +418,8 @@ describe("HomeV2 — priorities rows", () => {
     // The fixture's first row rests on a measurement, so it keeps "biggest limiter" (owner rule 2026-11-20).
     expect(screen.getByText("biggest limiter")).toBeTruthy();
     // The second row is a fact Compy read: "Known" + its note, never "Likely". The word is a glossed Term
-    // inside the [data-confidence] wrapper (self-review 2026-10-28).
-    expect(screen.getByText("Known").closest("[data-confidence]")?.getAttribute("data-confidence")).toBe("medium");
+    // inside the [data-confidence] wrapper (self-review 2026-10-28). e5b: the word is "Read from your PC".
+    expect(screen.getByText("Read from your PC").closest("[data-confidence]")?.getAttribute("data-confidence")).toBe("medium");
     expect(screen.getByText("Effect on FPS not measured")).toBeTruthy();
     expect(screen.queryByText("Likely")).toBeNull();
     fireEvent.click(screen.getAllByRole("button", { name: "See in Lab" })[0]);
@@ -431,7 +431,7 @@ describe("HomeV2 — priorities rows", () => {
     const fact = { ...priorities, limiters: [{ ...priorities.limiters[0], basis: "fact" as const }] };
     mount({ priorities: fact });
     expect(screen.queryByText("biggest limiter")).toBeNull();
-    expect(screen.getByText("Known")).toBeTruthy();
+    expect(screen.getByText("Read from your PC")).toBeTruthy();
     expect(screen.getByText("Effect on FPS not measured")).toBeTruthy();
   });
 

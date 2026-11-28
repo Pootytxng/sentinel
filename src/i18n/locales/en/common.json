@@ -128,7 +128,7 @@
   "provenance": {
     "verified": "Verified",
     "measuredSignal": "Measured elsewhere",
-    "expectedImpact": "Expected"
+    "expectedImpact": "Not measured on your PC"
   },
   "trustSwitch": {
     "working": "Working…",
@@ -172,18 +172,10 @@
     "measured": "Measured on this PC, before and after.",
     "measuredOnce": "One before-and-after comparison on this PC.",
     "possible": "The evidence points this way, but it is not confirmed and Compy has no second, independent support for it.",
-    "likely": "The reading is measured; what it means here is inferred from the evidence, not proven.",
+    "likely": "The evidence points here more than anywhere else, but it is not confirmed.",
     "expected": "From how Windows works, not measured on this PC.",
     "unknown": "Not enough evidence yet to say.",
     "pattern": "Measured across your recorded sessions. It describes a trend in the numbers, not a cause."
-  },
-  "confidenceWord": {
-    "known": "Known",
-    "measuredOnce": "Measured once",
-    "measuredTimes_other": "Measured {{count}} times",
-    "likely": "Likely",
-    "expected": "Expected",
-    "unknown": "Unknown"
   },
   "source": {
     "read": "Read from your PC",
@@ -192,6 +184,8 @@
     "general": "Not measured on your PC",
     "unread": "Couldn't read"
   },
+  "measuredTimes_other": "Measured {{count}} times",
+  "notEnoughYet": "Not enough to say yet",
   "strength": {
     "possible": "Possible",
     "mostLikely": "Most likely"

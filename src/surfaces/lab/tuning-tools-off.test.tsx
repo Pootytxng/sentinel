@@ -246,7 +246,8 @@ describe("E1 first-run: the Test strip on a brand-new PC", () => {
     await flush();
     const proven = screen.getByTestId("lc-reading-proven");
     expect(proven.querySelector(".ag-v")!.textContent).toBe("0");
-    expect(proven.textContent).toContain("nothing proved yet");
+    // e5b (D3 S11): the tile is "Kept after a test", and at 0 it says "nothing kept yet".
+    expect(proven.textContent).toContain("nothing kept yet");
     expect(proven.querySelector(".ag-tag")).toBeNull();
     const noise = screen.getByTestId("lc-reading-noise");
     expect(noise.querySelector(".ag-tag-ny")).not.toBeNull();
@@ -258,7 +259,7 @@ describe("E1 first-run: the Test strip on a brand-new PC", () => {
     renderConsole();
     await flush();
     const proven = screen.getByTestId("lc-reading-proven");
-    expect(proven.textContent).not.toContain("nothing proved yet");
+    expect(proven.textContent).not.toContain("nothing kept yet");
     expect(proven.querySelector(".ag-tag-ny")).not.toBeNull();
   });
 });

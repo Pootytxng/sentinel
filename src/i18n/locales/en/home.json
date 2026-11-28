@@ -295,8 +295,8 @@
       },
       "wantFps": {
         "sentence": "Compy can test that on this PC: one session as it is now, one with a single change, and the change stays only if your game measured better.",
-        "sentenceNoJourney": "Compy can show you the starter changes it knows about. It has not measured them on your game, so any gain is expected, not proven.",
-        "sentenceToolsOff": "Compy's before-and-after testing is one of its tuning tools, which are off (Settings → Tuning tools). The starter changes it knows about have not been measured on your game, so any gain is expected, not proven."
+        "sentenceNoJourney": "Compy can show you the starter changes it knows about. It has not measured them on your game, so Compy can't tell yet whether they help it.",
+        "sentenceToolsOff": "Compy's before-and-after testing is one of its tuning tools, which are off (Settings → Tuning tools). The starter changes it knows about have not been measured on your game, so Compy can't tell yet whether they help it."
       },
       "wantMonitor": {
         "sentence": "Compy can put your frame rate on screen while you play and keep a summary of the run, so “it felt smoother” becomes a number you can check."

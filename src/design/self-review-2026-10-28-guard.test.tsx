@@ -108,9 +108,10 @@ describe("self-review 2026-10-28 guards", () => {
     // counted form "Measured N times" for the same word) inside a Term carrying the shared hint for
     // that same word. u3-focus (2026-11-21) moved the label into a `label` const for the counted form;
     // the word, the key family and the hint are unchanged, and nothing else may supply the label.
+    // e5b: the older word list is gone; the counted form is common.measuredTimes.
     expect(bench).toMatch(/<Term tip=\{t\(confidenceHintKey\(word\)\)\}>\{label\}<\/Term>/);
     expect(bench).toMatch(
-      /const label =\s*word === "measured" && comparisons >= 2\s*\? t\("common\.confidenceWord\.measuredTimes", \{ count: comparisons \}\)\s*: t\(confidenceWordKey\(word\)\);/,
+      /const label =\s*word === "measured" && comparisons >= 2\s*\? t\("common\.measuredTimes", \{ count: comparisons \}\)\s*: t\(confidenceWordKey\(word\)\);/,
     );
     expect(bench).not.toContain("confidenceCopy");
     // P5-realplay: a real-play summary row says its word through BenchWord too ("Likely": sessions played

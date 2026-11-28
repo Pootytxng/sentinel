@@ -28,7 +28,7 @@ import "./StutterCompare.css";
 //   * comparable - the engine's own comparability gate (comparability.rs `derive`) reads the pair as
 //                  comparable or partially comparable. A not-comparable or unjudgeable pair is not a
 //                  good baseline, and the next steady candidate is tried.
-// Whatever the report lists changed between the two; none of it is a proven cause, and the
+// Whatever the report lists changed between the two; none of it is shown to be the cause, and the
 // section says so.
 
 /** Steady earlier sessions tried, newest first, before Compy says it has no good one. Each try is

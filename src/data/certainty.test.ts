@@ -28,7 +28,7 @@ import {
   type SourcedValue,
   type Strength,
 } from "./certainty";
-import { wordFromBand, wordFromFinding, wordFromProvenance, wordFromRow } from "./confidence-word";
+import { confidenceWordKey, wordFromBand, wordFromFinding, wordFromProvenance, wordFromRow } from "./confidence-word";
 
 // D3 vocabulary, slice 1. The Rust enums keep their serde names (no wire change); these tests pin
 // that every serialized value the Rust side can emit has a mapper row, and that the rules of the
@@ -172,10 +172,12 @@ describe("confidence-word.ts through the mappers is byte-identical to the frozen
   ] as const;
   const bases = [undefined, ...rustVariants("priorities.rs", "Basis", "kebab-case")] as ("fact" | "measured" | undefined)[];
   const locales = join("src", "i18n", "locales");
-  // D3 slice 3: Possible and Measured are kept under the shared keys; every word must resolve to a real string.
+  // D3 slice 3: Possible and Measured are kept under the shared keys; slice 4 (e5b) moved every other
+  // word there too (confidenceWordKey). Every word must resolve to a real string.
   const text = (loc: string, w: string): string => {
-    const c = JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as { confidenceWord: Record<string, string>; source: Record<string, string>; strength: Record<string, string> };
-    const s = w === "possible" ? c.strength.possible : w === "measured" ? c.source.measured : c.confidenceWord[w];
+    const c = JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as unknown;
+    const path = confidenceWordKey(w as never).replace(/^common\./, "").split(".");
+    const s = path.reduce<unknown>((o, k) => (o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined), c);
     if (typeof s !== "string" || s === "") throw new Error(`${loc}: no string for the word "${w}"`);
     return s;
   };

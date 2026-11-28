@@ -3,10 +3,12 @@
 // through the shared vocabulary (common.strength.possible, common.source.measured). A feature test.
 //
 // What must hold:
-//   - no word a user sees changed, in English or Chinese (every expected word is written out here);
+//   - every word a user sees is written out here, in English and Chinese;
 //   - no level changed: every band, basis and finding level gets the word it got before this slice;
-//   - nothing in scope still asks the older list for "possible" or "measured", and those two keys are gone;
-//   - the words this slice left alone on purpose (Known, Expected, Unknown) still come from the older list.
+//   - nothing in scope still asks the older list for a word.
+// D3 slice 4 (e5b) moved the last three words to the shared vocabulary and deleted the older list
+// (common.confidenceWord.*): Known is now "Read from your PC" (common.source.read), Expected "Not
+// measured on your PC" (common.source.general), Unknown "Not enough to say yet" (common.notEnoughYet).
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { readFileSync } from "fs";
@@ -28,8 +30,8 @@ const SUPPORTED = (b: (typeof BANDS)[number]) => b === "high" || b === "medium";
 
 /** Every word as it is shown, written out. `likely` is in the type but no screen in scope can produce it. */
 const TEXT: Record<Lang, Record<Exclude<Word, "likely">, string>> = {
-  en: { possible: "Possible", measured: "Measured", measuredOnce: "Measured once", known: "Known", expected: "Expected", unknown: "Unknown" },
-  "zh-CN": { possible: "有可能", measured: "已实测", measuredOnce: "仅测得一次", known: "已知", expected: "预期", unknown: "未知" },
+  en: { possible: "Possible", measured: "Measured", measuredOnce: "Measured once", known: "Read from your PC", expected: "Not measured on your PC", unknown: "Not enough to say yet" },
+  "zh-CN": { possible: "有可能", measured: "已实测", measuredOnce: "仅测得一次", known: "从你的电脑读取", expected: "未在你的电脑上实测", unknown: "还不足以下结论" },
 };
 const NOTE: Record<Lang, string> = { en: "Effect on FPS not measured", "zh-CN": "对 FPS 的影响未实测" };
 const TOP: Record<Lang, string> = { en: "Most likely", "zh-CN": "最有可能" };
@@ -38,25 +40,23 @@ const src = (...p: string[]) => readFileSync(join("src", ...p), "utf8");
 
 describe("confidenceWordText: one helper spells every shown word", () => {
   for (const loc of LANGS)
-    it(`${loc}: each word is the text it was before this slice`, async () => {
+    it(`${loc}: each word is the text written out above`, async () => {
       await i18n.changeLanguage(loc);
       for (const [w, text] of Object.entries(TEXT[loc])) expect(confidenceWordText(w as Word, i18n.t), `${loc}/${w}`).toBe(text);
+      // The type's "likely" (no band mapper produces it) is the top strength word, never a bare "Likely".
+      expect(confidenceWordText("likely", i18n.t), `${loc}/likely`).toBe(TOP[loc]);
     });
 
-  it("Possible and Measured come from the shared keys; the older list no longer carries them", () => {
+  it("every word comes from the shared keys; the older list is gone (e5b)", () => {
     for (const loc of LANGS) {
       const c = common(loc);
       expect(c.strength.possible, loc).toBe(TEXT[loc].possible);
       expect(c.source.measured, loc).toBe(TEXT[loc].measured);
       expect(c.source.measuredOnce, loc).toBe(TEXT[loc].measuredOnce);
-      expect(Object.keys(c.confidenceWord).sort(), loc).toEqual(["expected", "known", "likely", "measuredOnce", "measuredTimes_other", "unknown"]);
-    }
-  });
-
-  it("Known, Expected and Unknown still come from the older list (left for their own slice)", () => {
-    for (const loc of LANGS) {
-      const c = common(loc);
-      expect([c.confidenceWord.known, c.confidenceWord.expected, c.confidenceWord.unknown], loc).toEqual([TEXT[loc].known, TEXT[loc].expected, TEXT[loc].unknown]);
+      expect(c.source.read, loc).toBe(TEXT[loc].known);
+      expect(c.source.general, loc).toBe(TEXT[loc].expected);
+      expect(c.notEnoughYet as unknown as string, loc).toBe(TEXT[loc].unknown);
+      expect(c.confidenceWord, loc).toBeUndefined();
     }
   });
 
@@ -83,7 +83,10 @@ describe("confidenceWordText: one helper spells every shown word", () => {
     expect(body).toMatch(/case "possible":\s*return strengthWord\("possible", t\);/);
     expect(body).toMatch(/case "measured":\s*return sourceWord\("measured", t\);/);
     expect(body).toMatch(/case "measuredOnce":\s*return sourceWord\("measured-once", t\);/);
+    expect(body).toMatch(/case "known":\s*return sourceWord\("read", t\);/);
+    expect(body).toMatch(/case "expected":\s*return sourceWord\("general", t\);/);
     expect(body).toMatch(/default:\s*return t\(confidenceWordKey\(w\)\);/);
+    expect(text, "the older list is not built any more").not.toMatch(/common\.confidenceWord\./);
   });
 });
 

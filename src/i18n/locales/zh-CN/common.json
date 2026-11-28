@@ -122,7 +122,7 @@
   "provenance": {
     "verified": "已验证",
     "measuredSignal": "别处实测",
-    "expectedImpact": "预期"
+    "expectedImpact": "未在你的电脑上实测"
   },
   "trustSwitch": {
     "working": "处理中…",
@@ -166,18 +166,10 @@
     "possible": "证据指向这个方向，但尚未确认，Compy 也没有第二个独立的依据。",
     "known": "Compy 直接在这台电脑上读到的。",
     "measured": "在这台电脑上前后实测过。",
-    "likely": "读数是实测的；它在这里意味着什么是根据证据推断的，并未证实。",
+    "likely": "证据最指向这里，但尚未确认。",
     "expected": "来自 Windows 的工作原理，未在这台电脑上实测。",
     "unknown": "证据还不够，无法下结论。",
     "pattern": "来自你已记录的会话的实测数据。它描述数字中的趋势，不是原因。"
-  },
-  "confidenceWord": {
-    "measuredOnce": "仅测得一次",
-    "measuredTimes_other": "已测 {{count}} 次",
-    "known": "已知",
-    "likely": "较可能",
-    "expected": "预期",
-    "unknown": "未知"
   },
   "source": {
     "read": "从你的电脑读取",
@@ -186,6 +178,8 @@
     "general": "未在你的电脑上实测",
     "unread": "未能读取"
   },
+  "measuredTimes_other": "已测 {{count}} 次",
+  "notEnoughYet": "还不足以下结论",
   "strength": {
     "possible": "有可能",
     "mostLikely": "最有可能"

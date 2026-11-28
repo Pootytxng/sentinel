@@ -885,7 +885,9 @@ describe("Check", () => {
     let row = (await screen.findByText("Power plan isn't performance-oriented")).closest(".check-row")!;
     expect(labels()).toContain("Worth a look");
     expect(labels()).not.toContain("Limiters we measured");
-    expect(row.textContent).toContain("Known");
+    // e5b (D3 §3): the fact's word is the source "Read from your PC" (was "Known").
+    expect(row.textContent).toContain("Read from your PC");
+    expect(row.textContent).not.toMatch(/\bKnown\b/);
     expect(row.textContent).toContain("Effect on FPS not measured");
     expect(row.textContent).not.toMatch(/Likely/);
     unmount();

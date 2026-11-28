@@ -325,16 +325,17 @@ describe("Home limiter tile — a fact is Known, never Likely, never 'holding FP
   it("a fact row reads Known + 'Effect on FPS not measured' under 'Worth a look'", () => {
     home({ sessions: [], priorities: row({ basis: "fact" }) });
     expect(screen.getByRole("region", { name: "Worth a look" })).toBe(tile());
-    expect(tile().querySelector(".gl-chip")!.textContent).toBe("Known");
+    // e5b (D3 §3): the fact's word is the source "Read from your PC" (was "Known").
+    expect(tile().querySelector(".gl-chip")!.textContent).toBe("Read from your PC");
     expect(tile().textContent).toContain("Effect on FPS not measured");
-    expect(tile().textContent).not.toMatch(/Likely|Measured|Expected|holding FPS back/);
+    expect(tile().textContent).not.toMatch(/Likely|Measured|Expected|Known|holding FPS back/);
     expect(tile().textContent).toContain("Power plan is set to save power");
   });
 
   it("a row with no basis (older data) is treated as a fact, never as a measurement", () => {
     home({ sessions: [], priorities: row({}) });
     expect(screen.getByRole("region", { name: "Worth a look" })).toBe(tile());
-    expect(tile().querySelector(".gl-chip")!.textContent).toBe("Known");
+    expect(tile().querySelector(".gl-chip")!.textContent).toBe("Read from your PC");
   });
 
   it("a measured row keeps 'What's holding FPS back', its band's word, and no 'not measured' note", () => {
@@ -350,9 +351,9 @@ describe("Home limiter tile — a fact is Known, never Likely, never 'holding FP
     try {
       home({ sessions: [], priorities: row({ basis: "fact" }) });
       expect(tile().querySelector("h2")!.textContent).toBe("值得一看");
-      expect(tile().querySelector(".gl-chip")!.textContent).toBe("已知");
+      expect(tile().querySelector(".gl-chip")!.textContent).toBe("从你的电脑读取");
       expect(tile().textContent).toContain("对 FPS 的影响未实测");
-      expect(tile().textContent).not.toMatch(/较可能|拖慢/);
+      expect(tile().textContent).not.toMatch(/较可能|拖慢|已知/);
     } finally {
       await i18n.changeLanguage("en");
     }

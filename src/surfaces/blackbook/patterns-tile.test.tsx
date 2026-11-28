@@ -57,7 +57,8 @@ describe("History's pattern rows: the strength words the product retired never a
   it("a supported pattern says Measured, an unsupported one Unknown, and no row says Likely", async () => {
     const { container } = await open();
     const tags = [...container.querySelectorAll(".bpt-card-conf")].map((n) => n.textContent);
-    expect(tags).toEqual(["Measured", "Measured", "Unknown"]);
+    // e5b (D3 §3): an unsupported pattern says "Not enough to say yet" (was the retired tag "Unknown").
+    expect(tags).toEqual(["Measured", "Measured", "Not enough to say yet"]);
     expect(container.textContent).not.toMatch(RETIRED);
     // The raw band stays on the chip for the technical layer.
     expect([...container.querySelectorAll(".bpt-card-conf [data-confidence]")].map((n) => n.getAttribute("data-confidence"))).toEqual([
@@ -71,7 +72,7 @@ describe("History's pattern rows: the strength words the product retired never a
     await i18n.changeLanguage("zh-CN");
     const { container } = await open();
     const tags = [...container.querySelectorAll(".bpt-card-conf")].map((n) => n.textContent);
-    expect(tags).toEqual(["已实测", "已实测", "未知"]);
+    expect(tags).toEqual(["已实测", "已实测", "还不足以下结论"]);
     expect(container.textContent).not.toMatch(RETIRED);
   });
 

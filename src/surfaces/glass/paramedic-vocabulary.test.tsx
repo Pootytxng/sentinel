@@ -94,9 +94,9 @@ describe("the shared how-sure words (common.source / common.strength)", () => {
     const zh = locale("zh-CN", "common.json");
     expect((zh.source as Tree).measured).toBe("已实测");
     // D3 slice 3: the older list's "measured" moved to this key, so there is one key as well as one word.
-    expect((zh.confidenceWord as Tree).measured).toBeUndefined();
-    // Same for "Measured once": one zh wording in the app, not two.
-    expect((zh.source as Tree).measuredOnce).toBe((zh.confidenceWord as Tree).measuredOnce);
+    // Slice 4 (e5b) deleted the older list, so "Measured once" has one key and one zh wording too.
+    expect(zh.confidenceWord).toBeUndefined();
+    expect((zh.source as Tree).measuredOnce).toBe("仅测得一次");
   });
 
   it("the paramedic locale files no longer carry the moved tags, and keep the four the card owns", () => {

@@ -148,7 +148,8 @@ describe("the Care view compares on a stutter arrival", () => {
       { baselineStartedAt: "2026-10-20T10:00:00Z", currentStartedAt: "2026-10-24T10:00:00Z" },
     ]);
     expect(screen.getByText(/Your latest Valorant session vs your last steady one/)).toBeInTheDocument();
-    expect(screen.getByText(/none of it is a proven cause/)).toBeInTheDocument();
+    // e5b: the "compared" line keeps its caveat without the retired word "proven".
+    expect(screen.getByText(/none of it is shown to be the cause/)).toBeInTheDocument();
     // The cause heading itself carries the tag, not only the section.
     const cause = screen.getByText("Possible reason");
     // e5a r1 (F2): the cause tag is "Not shown to be the cause" (hypotheses are ranked, not listed by

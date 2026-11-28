@@ -127,9 +127,9 @@
     }
   },
   "labConsole": {
-    "provenLabel": "Proven",
-    "provenNoteSome": "verified before and after",
-    "provenNoteNone": "nothing proved yet",
+    "provenLabel": "Kept after a test",
+    "provenNoteSome": "measured before and after",
+    "provenNoteNone": "nothing kept yet",
     "noiseFloorLabel": "Noise floor",
     "noiseFloorNote": "a change must beat this to count",
     "noiseFloorNoteGame": "{{game}} · a change must beat this to count",
@@ -449,7 +449,7 @@
         "verdict": "Verdict",
         "notJudged": "not judged",
         "assumedBand": "Band it was judged on",
-        "confidence": "Confidence",
+        "confidence": "Verdict level, as recorded",
         "baselineAvg": "Before, average",
         "afterAvg": "After, average",
         "baselineLow": "Before, 1% low",
@@ -677,7 +677,7 @@
     },
     "simVerdict": {
       "worthTesting": "Worth testing",
-      "plausibleUnproven": "Plausible — unproven",
+      "plausibleUnproven": "Might help — not tested yet",
       "insufficientEvidence": "Unknown — measure it to find out",
       "unlikelyToMatter": "Unlikely to matter",
       "alreadyConfigured": "Already configured",

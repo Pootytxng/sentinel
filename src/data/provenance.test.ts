@@ -9,7 +9,8 @@ describe("provenance wording (honesty doctrine)", () => {
   it("uses the same one-word chip label everywhere (no per-surface drift)", () => {
     expect(PROVENANCE_LABEL.verified).toBe("Verified");
     expect(PROVENANCE_LABEL["measured-signal"]).toBe("Measured elsewhere");
-    expect(PROVENANCE_LABEL["expected-impact"]).toBe("Expected");
+    // e5b (D3 §3): expected-impact is the source "Not measured on your PC" (was "Expected", a retired word).
+    expect(PROVENANCE_LABEL["expected-impact"]).toBe("Not measured on your PC");
   });
 
   // D4: the chip label is an i18n key, so a zh-CN screen shows Chinese, and switching back is English.
@@ -21,7 +22,7 @@ describe("provenance wording (honesty doctrine)", () => {
     } finally {
       await i18n.changeLanguage("en");
     }
-    expect(tiers.map((p) => PROVENANCE_LABEL[p])).toEqual(["Verified", "Measured elsewhere", "Expected"]);
+    expect(tiers.map((p) => PROVENANCE_LABEL[p])).toEqual(["Verified", "Measured elsewhere", "Not measured on your PC"]);
   });
 
   it("the Verified note never claims an unmeasured performance gain", () => {

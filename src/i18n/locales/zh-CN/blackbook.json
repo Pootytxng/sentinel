@@ -310,7 +310,7 @@
     "readoutEmpty": "还没有调校数据。先在 Adrenalin 里降压,然后在「实时」的对局总结里启用一条基线——Compy 会持续观察温度有没有下降、帧数有没有保住。",
     "recentLabel": "近期对局——峰值温度与稳定性",
     "showMeTheWay": "带我看看怎么做",
-    "unknownGame": "未知",
+    "unknownGame": "未知游戏",
     "smoothness": {
       "smooth": "流畅",
       "someDips": "偶有卡顿",

@@ -3039,7 +3039,7 @@ describe("P5-learned: what Compy learned on this PC", () => {
       "Put Trim Windows visual effects back: the frame rate moved around too much to tell.",
     );
     expect(screen.getByTestId("exp-summary-lesson")).toHaveTextContent(
-      "Aniimo swings a lot between sessions on your PC; Compy needs steadier sessions to judge. · Unknown",
+      "Aniimo swings a lot between sessions on your PC; Compy needs steadier sessions to judge. · Not enough to say yet",
     );
     // A too-noisy Trial judged nothing, so none of its stored deltas is shown.
     expect(panel).not.toHaveTextContent("15.5");

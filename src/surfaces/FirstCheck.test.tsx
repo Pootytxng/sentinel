@@ -326,7 +326,7 @@ describe("FirstCheck rows rest on what Compy has (review M4)", () => {
     await screen.findByText("First on the list");
     const conf = Array.from(container.querySelectorAll(".fc-rest-conf")).map((e) => e.textContent ?? "");
     expect(conf).toHaveLength(2);
-    expect(conf[0]).toContain("Known");
+    expect(conf[0]).toContain("Read from your PC"); // e5b: was "Known" (D3 §3)
     expect(conf[0]).toContain("Effect on FPS not measured");
     expect(conf[1]).toContain("Possible");
     expect(conf[1]).not.toContain("Likely");

@@ -622,7 +622,7 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     expect(strip.textContent).not.toContain("Avg FPS");
     expect(strip.textContent).not.toContain("1% low");
     const readingLabel = (i: number) => reading(i).querySelector(".ag-label span")!.textContent;
-    expect(readingLabel(0)).toBe("Proven");
+    expect(readingLabel(0)).toBe("Kept after a test"); // e5b: was "Proven" (D3 §3, S11)
     expect(readingLabel(1)).toBe("Noise floor");
     expect(readingLabel(2)).toBe("Instruments read");
     expect(readingLabel(3)).toBe("Starter stack");

@@ -20,7 +20,9 @@ export type ConfidenceWord = "known" | "measured" | "measuredOnce" | "possible" 
 // two-axis mappers in certainty.ts (`from…` -> Mapped -> this word). Screens still see only the five
 // words; the new tags arrive in slice 2. confidence-word.test.ts pins old-vs-new output.
 function legacyWord(m: Mapped): ConfidenceWord {
-  if (m.axis === "strength") return "likely";
+  // e5b: a strength keeps its own rung (no Possible may read as the top one); no mapper that uses
+  // legacyWord produces a strength today, so no output changes.
+  if (m.axis === "strength") return m.strength === "possible" ? "possible" : "likely";
   if (m.axis === "cant-tell") return "unknown";
   switch (m.source) {
     case "read": return "known";
@@ -94,18 +96,35 @@ export function wordFromFinding(level: FindingLevel): ConfidenceWord {
   return shownWord(fromFindingLevel(level));
 }
 
-/** The i18n key of a word, for every word: Possible and Measured are kept under the shared keys since D3
- *  slice 3 (the same keys certainty-words.ts spells), the rest under the older list. No input builds a key
- *  that does not exist. */
-export const confidenceWordKey = (w: ConfidenceWord): string =>
-  w === "possible" ? "common.strength.possible" : w === "measured" ? "common.source.measured" : `common.confidenceWord.${w}`;
+/** The i18n key of a word, for every word. D3 slice 4 (e5b): every word is spelled by the shared
+ *  vocabulary (design §3): Known is the source "Read from your PC", Expected the source "Not measured
+ *  on your PC", Likely the strength "Most likely" (no band mapper produces it), and Unknown is the
+ *  plain "Not enough to say yet" (no strength is a sentence, never a rung). The older
+ *  "confidenceWord" list in common.json is gone. No input builds a key that does not exist. */
+export const confidenceWordKey = (w: ConfidenceWord): string => {
+  switch (w) {
+    case "known":
+      return "common.source.read";
+    case "measured":
+      return "common.source.measured";
+    case "measuredOnce":
+      return "common.source.measuredOnce";
+    case "possible":
+      return "common.strength.possible";
+    case "likely":
+      return "common.strength.mostLikely";
+    case "expected":
+      return "common.source.general";
+    case "unknown":
+      return "common.notEnoughYet";
+  }
+};
 
 /** D3 slice 3: the text a word is SHOWN as, for every screen that tags a conclusion with one of these
- *  words (What changed, Hardware, History's patterns, the Home interview, a measured priority row).
+ *  words (What changed, Hardware, History's patterns, the Home interview, a priority row).
  *  A word the shared vocabulary has is spelled by certainty-words.ts, so it reads the same here as on
- *  the Something's-wrong card: "possible" is the strength Possible, "measured" and "measuredOnce" are
- *  the sources Measured and Measured once. The other words (Known, Expected, Unknown) are not in the
- *  shared vocabulary as tags and keep their older keys until their own slice.
+ *  the Something's-wrong card. e5b: Known, Expected and Likely are spelled from the shared list too
+ *  (Read from your PC, Not measured on your PC, Most likely), and Unknown says "Not enough to say yet".
  *  This spells a word; it decides none. Which word a band, row or level gets is the functions above. */
 export function confidenceWordText(w: ConfidenceWord, t: TFunction): string {
   switch (w) {
@@ -115,6 +134,10 @@ export function confidenceWordText(w: ConfidenceWord, t: TFunction): string {
       return sourceWord("measured", t);
     case "measuredOnce":
       return sourceWord("measured-once", t);
+    case "known":
+      return sourceWord("read", t);
+    case "expected":
+      return sourceWord("general", t);
     default:
       return t(confidenceWordKey(w));
   }

@@ -807,8 +807,9 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     expect(row).not.toBeNull();
     expect(row.textContent).toContain("C: drive is 87% full");
     // Owner rule 2026-11-20: the fixture row (no basis, like older data) is a fact Compy read, so it reads
-    // "Known" + "Effect on FPS not measured", never "Likely"; the band stays on data-confidence.
-    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Known");
+    // "Read from your PC" (e5b; was "Known") + "Effect on FPS not measured", never "Likely"; the band
+    // stays on data-confidence.
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Read from your PC");
     expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Effect on FPS not measured");
     expect(row.querySelector(".hc-limiter-tag")!.textContent).not.toContain("Likely");
     expect(row.querySelector(".hc-limiter-label")!.textContent).toBe("worth a look");

@@ -491,16 +491,10 @@
       "notComparable": "Not directly comparable",
       "unknown": "Not enough comparable evidence"
     },
-    "confLimit": {
-      "unknown": "Unknown",
-      "low": "Low",
-      "medium": "Medium",
-      "high": "High"
-    },
     "howComparable": "How comparable these are",
     "whatDiffered": "What differed",
     "comparedOn": "Compared on",
-    "confidenceCappedAt": "Confidence capped at",
+    "strongestItCanBe": "Strongest it can be",
     "whatChangedTag": "What changed?",
     "headlineDefault": "WHAT CHANGED? · vs your previous {{game}} session",
     "noiseFloor": "noise floor +{{rise}}% / -{{fall}}%",

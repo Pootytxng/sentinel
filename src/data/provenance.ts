@@ -11,8 +11,8 @@ import i18n from "../i18n";
 
 export type Provenance = "verified" | "measured-signal" | "expected-impact";
 
-// D4: the chip label's i18n key (common.provenance.*; en text unchanged: Verified / Measured
-// elsewhere / Expected), so a zh-CN screen no longer shows the English word.
+// D4: the chip label's i18n key (common.provenance.*; en text: Verified / Measured elsewhere /
+// Not measured on your PC, the last was "Expected" until e5b), so a zh-CN screen shows Chinese.
 const PROVENANCE_LABEL_KEY: Record<Provenance, string> = {
   verified: "common.provenance.verified",
   "measured-signal": "common.provenance.measuredSignal",

@@ -127,9 +127,9 @@
     }
   },
   "labConsole": {
-    "provenLabel": "已验证",
-    "provenNoteSome": "前后对比已验证",
-    "provenNoteNone": "目前还没有验证结果",
+    "provenLabel": "测试后保留",
+    "provenNoteSome": "前后都实测过",
+    "provenNoteNone": "还没有保留的改动",
     "noiseFloorLabel": "噪声基线",
     "noiseFloorNote": "改动必须超过此幅度才算数",
     "noiseFloorNoteGame": "{{game}} · 改动必须超过此幅度才算数",
@@ -443,7 +443,7 @@
         "verdict": "判定",
         "notJudged": "未判定",
         "assumedBand": "判定所用的波动范围",
-        "confidence": "置信度",
+        "confidence": "判定等级（按记录）",
         "baselineAvg": "之前，平均",
         "afterAvg": "之后，平均",
         "baselineLow": "之前，1% low",
@@ -665,7 +665,7 @@
     },
     "simVerdict": {
       "worthTesting": "值得一试",
-      "plausibleUnproven": "有可能——尚未证实",
+      "plausibleUnproven": "可能有帮助——尚未测试",
       "insufficientEvidence": "未知——实测一下便知",
       "unlikelyToMatter": "影响可能不大",
       "alreadyConfigured": "已配置",

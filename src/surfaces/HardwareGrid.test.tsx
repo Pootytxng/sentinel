@@ -501,14 +501,15 @@ describe("HardwareGrid component-evidence highlight (§4H)", () => {
     state.evidence = { components: [memEvi({ confidence: "low" })], sessions_considered: 2 };
     const { container } = render(<HardwareGrid hw={baseHw()} model={baseModel()} />);
 
-    // A low band is not enough to lean on: "Unknown" (§26), raw band kept.
+    // A low band is not enough to lean on (§26), raw band kept. e5b (D3 §3): said as "Not enough to
+    // say yet", no longer the retired tag "Unknown".
     const evi = await waitFor(() => {
       const el = container.querySelector(".hw-evi");
       expect(el).not.toBeNull();
       return el!;
     });
     const band = evi.querySelector(".hw-evi-band [data-confidence]")!;
-    expect(band.textContent).toBe("Unknown");
+    expect(band.textContent).toBe("Not enough to say yet");
     expect(band.getAttribute("data-confidence")).toBe("low");
     expect(evi?.classList.contains("hw-evi-low")).toBe(true);
     expect(evi?.classList.contains("hw-evi-medium")).toBe(false);

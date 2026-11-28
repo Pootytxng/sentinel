@@ -410,7 +410,9 @@ describe("answers land on the journey that answers them", () => {
     for (const trials of [null, { armed: false, judged: 0 }]) {
       const f = find("wantFps", { ...RICH, trials });
       expect(f.action.kind === "station" ? f.action.station : f.action.kind).toBe("optimize");
-      expect(f.sentence).toMatch(/expected, not proven/);
+      // e5b: the caveat stays ("can't tell yet whether they help"), without the retired word "proven".
+      expect(f.sentence).toMatch(/has not measured them on your game|have not been measured on your game/);
+      expect(f.sentence).toMatch(/can't tell yet whether they help/);
     }
   });
 

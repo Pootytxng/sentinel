@@ -459,16 +459,10 @@
       "notComparable": "不可直接比较",
       "unknown": "可比较的证据不足"
     },
-    "confLimit": {
-      "unknown": "未知",
-      "low": "低",
-      "medium": "中",
-      "high": "高"
-    },
     "howComparable": "可比程度",
     "whatDiffered": "有何不同",
     "comparedOn": "比较依据",
-    "confidenceCappedAt": "置信度上限为",
+    "strongestItCanBe": "最多只能到",
     "whatChangedTag": "发生了什么变化?",
     "headlineDefault": "发生了什么变化? · 对比你上一局 {{game}}",
     "noiseFloor": "噪声下限 +{{rise}}% / -{{fall}}%",

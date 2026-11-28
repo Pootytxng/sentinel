@@ -30,7 +30,8 @@ describe("shared confidence words never say a retired strength word", () => {
         seen.add(container.textContent ?? "");
         cleanup();
       }
-      expect([...seen].sort()).toEqual(loc === "en" ? ["Possible", "Unknown"] : ["有可能", "未知"].sort());
+      // e5b (D3 §3): a band that is not enough says "Not enough to say yet" (was the retired tag "Unknown").
+      expect([...seen].sort()).toEqual(loc === "en" ? ["Not enough to say yet", "Possible"] : ["有可能", "还不足以下结论"].sort());
     });
 
     it(`${loc}: RowConfidence (Home, Check, First check rows) says Known, Possible or Unknown`, async () => {

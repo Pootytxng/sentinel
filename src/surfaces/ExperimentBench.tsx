@@ -376,8 +376,8 @@ function simVerdictCopy(t: Translate): Record<string, { label: string; blocked: 
 }
 
 // Review 2026-10-28 (P7-confidence): the one shared vocabulary, never "confidence: medium". A
-// simulator estimate is engineering reasoning (Expected); a Trial result is a measurement (Measured);
-// low or unknown evidence is Unknown.
+// simulator estimate is engineering reasoning (shown "Not measured on your PC" since e5b); a Trial
+// result is a measurement (Measured once); low or unknown evidence says "Not enough to say yet".
 // Self-review r2 2026-10-28: the word carries the shared gloss, like every other confidence word.
 // P5-realplay: a real-play result is a supported inference from sessions played however the owner
 // played (Likely), never a controlled measurement, and never High.
@@ -390,7 +390,7 @@ function BenchWord({ c, kind, comparisons = 1 }: { c: Confidence; kind: BenchKin
   const word: ConfidenceWord = wordFromBench(kind, c, comparisons);
   const label =
     word === "measured" && comparisons >= 2
-      ? t("common.confidenceWord.measuredTimes", { count: comparisons })
+      ? t("common.measuredTimes", { count: comparisons })
       : t(confidenceWordKey(word));
   return <Term tip={t(confidenceHintKey(word))}>{label}</Term>;
 }

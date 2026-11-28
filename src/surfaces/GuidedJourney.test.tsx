@@ -1243,7 +1243,7 @@ describe("P5-realplay: the change stays on while you play", () => {
     expect(await receiptRows()).toMatchObject({
       "Way of measuring": "real-play",
       Verdict: "improved",
-      Confidence: "medium",
+      "Verdict level, as recorded": "medium",
       "Sessions without it": "3",
       "Sessions with it": "3",
       "Spread between sessions, 1% low": "±1.1%",
@@ -1326,8 +1326,9 @@ describe("P5-realplay: the change stays on while you play", () => {
       real_play: { before: [OLD, ...AS_IS].map(numbers), with: [1, 2].map((i) => numbers(session(ago(10 * i), 5400))) },
     };
     for (const [lang, see, rows] of [
-      ["en", "See the result", { verdict: "Verdict", confidence: "Confidence", word: "not judged" }],
-      ["zh-CN", "查看结果", { verdict: "判定", confidence: "置信度", word: "未判定" }],
+      // e5b: the receipt's raw-band row is "Verdict level, as recorded" (was "Confidence", a retired word).
+      ["en", "See the result", { verdict: "Verdict", confidence: "Verdict level, as recorded", word: "not judged" }],
+      ["zh-CN", "查看结果", { verdict: "判定", confidence: "判定等级（按记录）", word: "未判定" }],
     ] as const) {
       cleanup();
       resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });

@@ -21,7 +21,7 @@ export const VERDICT_GLOSSARY: readonly VerdictGlossaryRow[] = [
     verdict: "real",
     chip: "Real",
     definition:
-      "It actually does something. A measurable or well-proven effect on your games — worth doing.",
+      "It actually does something. A measurable or well-documented effect on your games — worth doing.",
   },
   {
     verdict: "placebo",
