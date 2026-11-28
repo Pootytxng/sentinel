@@ -1582,7 +1582,8 @@ function App() {
   // renders exactly one face, inline, in the shell below.
   //
   // The rail that survived the prune: railFor's `ground` arm, which filters the check + fix ids out
-  // of HOME_RAIL and leaves Health · Live · History · Test. Both args are now constants (the flags
+  // of HOME_RAIL and leaves Health · Games · Problems · Live · History · Test (Games and Problems
+  // joined in the glass redesign, 2026-10-30). Both args are now constants (the flags
   // they used to read are gone), so this is computed once and shared by the shell rail and the Home
   // dock — they were always required to agree, and now they cannot drift.
   const rail = railFor(true, true);
