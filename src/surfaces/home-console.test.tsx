@@ -180,6 +180,7 @@ const props: {
   readiness: GameReadiness | null;
   priorities: Priorities | null;
   sessions: SessionSummary[];
+  sessionsRead?: "pending" | "failed";
   changes: AppliedChange[];
   onRunCheck: () => void;
   onSeeInFix: () => void;
