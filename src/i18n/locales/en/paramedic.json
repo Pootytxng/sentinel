@@ -202,11 +202,11 @@
       "undone": "Compy changed “{{title}}” on {{when}}, and it was undone on {{undone}}.",
       "undoneNoDate": "Compy changed “{{title}}” on {{when}}, and it has since been undone.",
       "undoHint": "Changes that History lists as applied can be undone there.",
-      "offNowSeen": "Compy's last check with none of its settings flagged off: {{seen}}. Its first check that flagged one off: {{noticed}}.",
+      "offNowSeen": "Compy's last check that could read its settings and flagged none off: {{seen}}. Its first check that flagged one off: {{noticed}}.",
       "offNowNoticed": "Compy's first check that flagged one of its settings off: {{noticed}}.",
       "offNowTitles_one": "Off now, though Compy's history still lists it as applied: {{titles}}.",
       "offNowTitles_other": "Off now, though Compy's history still lists them as applied: {{titles}}.",
-      "offNowAmbiguous": "Compy flagged a setting it applied as off in this period, but its last check before that was before the period, so when it changed isn't known.",
+      "offNowAmbiguous": "Compy flagged a setting it applied as off in this period. Its last check before that which could read its settings and flagged none off was before the period, so when it changed isn't known.",
       "offNowItem": "“{{title}}”",
       "offNowUnnamed": "The check didn't keep which one.",
       "offNowLine": "{{when}} {{which}}"

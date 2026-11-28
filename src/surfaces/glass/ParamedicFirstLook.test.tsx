@@ -1686,7 +1686,7 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
     expect(rowsOf("first-look-off-now")).toHaveLength(1);
     expect(rowsOf("first-look-off-now")[0]).toMatch(
       new RegExp(
-        `^Compy's last check with none of its settings flagged off: [A-Z][a-z]{2} \\d+.*\\. Its first check that flagged one off: [A-Z][a-z]{2} \\d+.*\\. Off now, though Compy's history still lists it as applied: “${TRIM}”\\.$`,
+        `^Compy's last check that could read its settings and flagged none off: [A-Z][a-z]{2} \\d+.*\\. Its first check that flagged one off: [A-Z][a-z]{2} \\d+.*\\. Off now, though Compy's history still lists it as applied: “${TRIM}”\\.$`,
       ),
     );
     // r2 M1: a setting kept as set outside Compy is off but never flagged (readiness.rs), so the row says what the
@@ -1710,7 +1710,7 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
     const row = rows[0];
     expect(row).toMatch(new RegExp(`Off now, though Compy's history still lists them as applied: “${TRIM}”, “${LATER}”\\.$`));
     // Each of the notice's times appears once in the row, and no time sits beside a title.
-    expect(row.match(/Compy's last check with none of its settings flagged off:/g)).toHaveLength(1);
+    expect(row.match(/Compy's last check that could read its settings and flagged none off:/g)).toHaveLength(1);
     expect(row.match(/Its first check that flagged one off:/g)).toHaveLength(1);
     expect(row).not.toMatch(new RegExp(`“${LATER}”[^“]*\\d`));
     expect(row).not.toMatch(/saw it on|noticed it off/);
@@ -1747,7 +1747,7 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
     await lookWith({ drifts: [offDrift({ last_ready_at: "2026-11-10T09:00:00Z" })] }, gameAnswer());
     expect(within(screen.getByTestId("first-look-off-now")).queryAllByRole("listitem")).toHaveLength(0);
     expect(screen.getByTestId("first-look-off-now-ambiguous").textContent).toBe(
-      "Compy flagged a setting it applied as off in this period, but its last check before that was before the period, so when it changed isn't known.",
+      "Compy flagged a setting it applied as off in this period. Its last check before that which could read its settings and flagged none off was before the period, so when it changed isn't known.",
     );
     expect(screen.queryByTestId("first-look-nothing")).toBeNull();
     cleanup();
@@ -1847,12 +1847,23 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
       expect(within(off).getByText("Compy 开启过、现在未开启的设置")).toBeTruthy();
       expect(rowsOf("first-look-off-now")[0]).toMatch(
         new RegExp(
-          `^Compy 最后一次没有标出未开启设置的检查：.+。首次标出其中一项未开启的检查：.+。现在未开启，但 Compy 的历史里仍列为已应用：“${TRIM}”。$`,
+          `^Compy 最后一次能读到设置且没有标出未开启项的检查：.+。首次标出其中一项未开启的检查：.+。现在未开启，但 Compy 的历史里仍列为已应用：“${TRIM}”。$`,
         ),
       );
       expect(off.textContent).not.toMatch(/之外|已关闭/);
       expect(rowsOf("first-look-compy")[0]).toMatch(/^Compy 在 .+ 更改了“Enable Windows Game Mode”，并已在 .+ 被撤销。$/);
       for (const tag of screen.getAllByTestId("first-look-not-cause")) expect(tag.textContent).toBe("未证实是原因");
+      // r3 N1(b): the line for a notice whose timing isn't known, in zh-CN.
+      cleanup();
+      engine.diagnose = noSessions();
+      render(<ParamedicCard noGames drifts={[offDrift({ last_ready_at: "2026-11-10T09:00:00Z" })]} />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
+      fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
+      await pick("这周", gameAnswer());
+      expect(screen.getByTestId("first-look-off-now-ambiguous").textContent).toBe(
+        "Compy 在这段时间里标出它开启过的某项设置未开启。在那之前，它最后一次能读到设置且没有标出未开启项的检查早于这段时间，所以不知道它是什么时候变的。",
+      );
     } finally {
       await i18n.changeLanguage("en");
     }
