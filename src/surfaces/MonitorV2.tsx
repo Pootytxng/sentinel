@@ -10,6 +10,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { MonitorConsole } from "./MonitorConsole";
 import { monitorVerdict } from "./monitor-v2-data";
+import type { SessionsReadState } from "../lib/session-metrics";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "../i18n";
 import "./monitor-v2.css";
@@ -40,7 +41,11 @@ import "./monitor-v2.css";
 type Segment = "sessions" | "live";
 
 // Same props App passes to <Play> / <Monitor>, minus `view`/`onFpsActive`/`v2` (this shell drives them).
-type Props = Omit<ComponentProps<typeof Play>, "view" | "onFpsActive" | "v2">;
+// e3 review r1 F2: `sessionsRead` is REQUIRED here (App is the caller), so a dropped prop fails tsc
+// instead of every empty session line quietly reading as "none yet". Play keeps it optional.
+type Props = Omit<ComponentProps<typeof Play>, "view" | "onFpsActive" | "v2" | "sessionsRead"> & {
+  sessionsRead: SessionsReadState;
+};
 
 export function MonitorV2(props: Props) {
   const { t } = useTranslation();

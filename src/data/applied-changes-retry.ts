@@ -82,12 +82,26 @@ export function settleLedgerRead(
   onRead: (changes: AppliedChange[]) => void,
   onFailed: () => void,
 ): Promise<void> {
+  return settleListRead(read, current, onRead, onFailed).then(() => undefined);
+}
+
+/** e3 review r1 F2: the same settle rule for any list App reads through `run` (the session list uses
+ *  it), resolving to whatever `read` resolved to, so App's refresh can still hand the list on (the
+ *  priority ranking reads it). Landed → `onRead`; nothing landed and current → `onFailed`; nothing
+ *  landed and superseded → nothing. */
+export function settleListRead<T, R>(
+  read: (set: (value: T) => void) => Promise<R>,
+  current: () => boolean,
+  onRead: (value: T) => void,
+  onFailed: () => void,
+): Promise<R> {
   let landed = false;
-  return read((changes) => {
+  return read((value) => {
     landed = true;
-    onRead(changes);
-  }).then(() => {
+    onRead(value);
+  }).then((r) => {
     if (!landed && current()) onFailed();
+    return r;
   });
 }
 

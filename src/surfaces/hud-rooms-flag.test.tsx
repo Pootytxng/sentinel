@@ -101,6 +101,7 @@ const ROOMS: {
         <MonitorV2
           active
           sessions={[session]}
+          sessionsRead={undefined}
           sessionsSeenAt=""
           priorities={null}
           recs={[]}

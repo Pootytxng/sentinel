@@ -765,10 +765,12 @@ export function MonitorConsole({
               Do not move it behind a condition; vendor-honesty-line-guard.test.ts now pins the
               RENDER PATH, not just the nesting. */}
           <p className="mc-ev-coverage">
-            {/* e3: the words live in monitor.monitorConsole.gpuCoverage (en + zh-CN); the guard reads
-                the English wording from the en locale and pins these three keys here. */}
+            {/* e3: the words live in monitor.monitorConsole.gpuCoverage (en + zh-CN); the guard pins
+                each vendor's status in both locales and these three keys here. */}
             <span className="coverage-note">
-              {t("monitor.monitorConsole.gpuCoverage.label")}{" "}
+              {t("monitor.monitorConsole.gpuCoverage.label")}
+              {/* review r1 F6: a full-width colon (zh-CN "：") carries its own space; a ":" needs one. */}
+              {t("monitor.monitorConsole.gpuCoverage.label").endsWith("：") ? null : " "}
               <strong>{t("monitor.monitorConsole.gpuCoverage.amd")}</strong>{" "}
               {t("monitor.monitorConsole.gpuCoverage.rest")}
             </span>

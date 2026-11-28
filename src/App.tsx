@@ -51,7 +51,7 @@ import {
   useTuningTools,
   type SlotRead,
 } from "./data/tuning-tools";
-import { ledgerReadState, settleLedgerRead, useLedgerReadRetry } from "./data/applied-changes-retry";
+import { ledgerReadState, settleLedgerRead, settleListRead, useLedgerReadRetry } from "./data/applied-changes-retry";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
@@ -950,16 +950,19 @@ function App() {
     const recsP = run<Recommendation[]>("get_recommendations", setRecs);
     const startupP = run<StartupEntry[]>("get_startup_entries", setStartup);
     const readinessP = run<GameReadiness>("get_game_readiness", setReadiness);
-    const sessionsP = run<SessionSummary[]>("get_session_summaries", (s) => {
-      setSessions(s);
-      setSessionsRead(true);
-      setSessionsReadFailed(false);
-    }).then((s) => {
-      // e3: `run` resolves undefined on a rejection (and has surfaced it); only the current refresh's
-      // failure marks the list unreadable — a superseded one leaves it to the newer refresh.
-      if (s === undefined && current()) setSessionsReadFailed(true);
-      return s;
-    });
+    // e3: settled like the ledger read (settleListRead, tested): a landed list marks it read; only the
+    // current refresh's rejection marks it unreadable — a superseded one leaves it to the newer refresh.
+    // It still resolves to the list (or undefined), which the priority ranking below reads.
+    const sessionsP = settleListRead(
+      (set: (s: SessionSummary[]) => void) => run<SessionSummary[]>("get_session_summaries", set),
+      current,
+      (s) => {
+        setSessions(s);
+        setSessionsRead(true);
+        setSessionsReadFailed(false);
+      },
+      () => setSessionsReadFailed(true),
+    );
     const prioritiesP = Promise.all([readinessP, recsP, startupP, sessionsP])
       .then(([readiness, recommendations, startup, sessions]) => {
         // If ANY of the four probes failed, its own run() catch already surfaced the REAL error.

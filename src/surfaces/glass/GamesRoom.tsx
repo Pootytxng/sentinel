@@ -303,8 +303,9 @@ export function GamesRoom({
   onOpenTest,
 }: {
   sessions: SessionSummary[];
-  /** e3: App's read of `sessions` ("pending" / "failed"; absent = read). */
-  sessionsRead?: SessionsReadState;
+  /** e3: App's read of `sessions` ("pending" / "failed"; undefined = read). Required (review r1 F2), so
+   *  a caller that drops it fails tsc instead of quietly saying "No games yet". */
+  sessionsRead: SessionsReadState;
   /** A game a Health card asked to open (one-time delivery from App). */
   focusKey?: string | null;
   onOpenLive: () => void;

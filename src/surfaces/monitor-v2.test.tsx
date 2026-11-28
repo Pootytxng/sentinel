@@ -127,6 +127,7 @@ function mount(over: Partial<Parameters<typeof MonitorV2>[0]> = {}) {
   const props = {
     active: true,
     sessions: [session()],
+    sessionsRead: undefined,
     sessionsSeenAt: "",
     priorities: null,
     recs: [],

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { LEDGER_RETRY_MS, ledgerReadState, ledgerRetryDelay, settleLedgerRead, useLedgerReadRetry } from "./applied-changes-retry";
+import { LEDGER_RETRY_MS, ledgerReadState, ledgerRetryDelay, settleLedgerRead, settleListRead, useLedgerReadRetry } from "./applied-changes-retry";
 import type { AppliedChange } from "../types";
 
 const rows = [{ id: "c1" }] as unknown as AppliedChange[];
@@ -26,6 +26,61 @@ describe("settleLedgerRead", () => {
     await settleLedgerRead(run(outcome, isCurrent), () => isCurrent, onRead, onFailed);
     expect(onRead).toHaveBeenCalledTimes(reads);
     expect(onFailed).toHaveBeenCalledTimes(fails);
+  });
+});
+
+// e3 review r1 F2: App's session-list read goes through settleListRead (same `run` semantics) and
+// still hands the list on to the priority ranking. This drives App's own two flags through it and
+// reads them back with ledgerReadState, so the state the session views get is pinned end to end.
+// Break check: make settleListRead skip `onFailed` (or call it on a superseded refresh) and the
+// "rejected" rows fail; make it drop the resolved value and the "hands the list on" check fails.
+describe("settleListRead (App's session-list read)", () => {
+  const list = [{ started_at: "s1" }];
+  const run = (outcome: "ok" | "reject", isCurrent: boolean) => (set: (v: typeof list) => void): Promise<typeof list | undefined> =>
+    outcome === "ok"
+      ? Promise.resolve(list).then((v) => {
+          if (isCurrent) set(v);
+          return v;
+        })
+      : Promise.resolve(undefined);
+  // App's flags, as App sets them: a landed list → read, not failed; a current rejection → failed.
+  const app = () => {
+    const s = { read: false, failed: false };
+    const settle = (outcome: "ok" | "reject", isCurrent: boolean) =>
+      settleListRead(run(outcome, isCurrent), () => isCurrent, () => {
+        s.read = true;
+        s.failed = false;
+      }, () => {
+        s.failed = true;
+      });
+    return { s, settle, state: () => ledgerReadState(s) };
+  };
+  it("before any read: pending", () => {
+    expect(app().state()).toBe("pending");
+  });
+  it("a current read lands: read (undefined), and the list is handed on", async () => {
+    const a = app();
+    await expect(a.settle("ok", true)).resolves.toBe(list);
+    expect(a.state()).toBeUndefined();
+  });
+  it("a current read rejected: failed, and the ranking gets undefined", async () => {
+    const a = app();
+    await expect(a.settle("reject", true)).resolves.toBeUndefined();
+    expect(a.state()).toBe("failed");
+  });
+  it("a superseded read, landed or rejected, changes nothing", async () => {
+    const a = app();
+    await a.settle("reject", false);
+    await a.settle("ok", false);
+    expect(a.state()).toBe("pending");
+  });
+  it("rejected after an earlier good read: failed; a later good read clears it", async () => {
+    const a = app();
+    await a.settle("ok", true);
+    await a.settle("reject", true);
+    expect(a.state()).toBe("failed");
+    await a.settle("ok", true);
+    expect(a.state()).toBeUndefined();
   });
 });
 

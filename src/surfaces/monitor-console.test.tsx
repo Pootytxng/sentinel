@@ -860,7 +860,8 @@ describe("MonitorConsole - e3: the GPU coverage line follows the language", () =
       const zh = mount();
       await waitFor(() => expect(zh.container.querySelector(".coverage-note")).not.toBeNull());
       const line = zh.container.querySelector(".coverage-note")!.textContent!;
-      expect(line).toContain("GPU 传感器覆盖");
+      // Review r1 F6: the full-width colon carries its own space, so none is added after it.
+      expect(line).toContain("GPU 传感器覆盖：AMD — 已验证");
       expect(line).not.toContain("coverage");
       for (const v of ["AMD", "NVIDIA", "Intel"]) expect(line).toContain(v);
     } finally {

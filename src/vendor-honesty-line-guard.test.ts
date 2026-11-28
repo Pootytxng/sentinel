@@ -34,23 +34,39 @@ const HOST = join("src", "surfaces", "MonitorConsole.tsx");
 describe("GPU vendor-honesty line (LOCKED rule #5)", () => {
   // e3 (first-run remainder): the sentence moved from an English literal in MonitorConsole into
   // monitor.monitorConsole.gpuCoverage (en + zh-CN), so a Chinese reader gets it too. The exact
-  // English wording is now pinned where it lives (the en locale), the zh-CN line must name all three
-  // vendors, and the coverage-note span must render those three keys and nothing in their place.
+  // English wording is now pinned where it lives (the en locale), the zh-CN wording is pinned the same
+  // way (review r1 F1), and the coverage-note span must render those three keys and nothing in their place.
   const COVERAGE_KEYS = ["label", "amd", "rest"] as const;
   const coverage = (lang: string) =>
     (JSON.parse(read("src", "i18n", "locales", lang, "monitor.json")) as {
       monitorConsole: { gpuCoverage: Record<(typeof COVERAGE_KEYS)[number], string> };
     }).monitorConsole.gpuCoverage;
 
-  it("carries the exact three-vendor wording", () => {
-    const en = coverage("en");
-    const norm = COVERAGE_KEYS.map((k) => en[k]).join(" ").replace(/\s+/g, " ");
-    expect(norm).toContain("AMD — verified");
-    expect(norm).toContain("NVIDIA — implemented, not yet hardware-verified");
-    expect(norm).toContain("Intel — planned");
-    const zh = COVERAGE_KEYS.map((k) => coverage("zh-CN")[k]).join(" ");
-    for (const vendor of ["AMD", "NVIDIA", "Intel"]) expect(zh, `zh-CN coverage line names ${vendor}`).toContain(vendor);
-  });
+  // e3 review r1 F1: pin the HONESTY in both languages, not only the vendor names. Each vendor's part
+  // of the sentence (split on "·") must carry its exact status, and a "verified" word may stand only
+  // in AMD's part (en: outside "not yet hardware-verified"; zh-CN: 已验证 only for AMD).
+  const part = (sentence: string, vendor: string) => sentence.split("·").find((p) => p.includes(vendor)) ?? "";
+  const STATUS = {
+    en: { AMD: "AMD — verified", NVIDIA: "NVIDIA — implemented, not yet hardware-verified", Intel: "Intel — planned" },
+    "zh-CN": { AMD: "AMD — 已验证", NVIDIA: "NVIDIA — 已实现，尚未经过硬件验证", Intel: "Intel — 计划中" },
+  } as const;
+
+  for (const lang of ["en", "zh-CN"] as const) {
+    it(`carries the exact three-vendor wording (${lang})`, () => {
+      const c = coverage(lang);
+      const norm = COVERAGE_KEYS.map((k) => c[k]).join(" ").replace(/\s+/g, " ");
+      for (const vendor of ["AMD", "NVIDIA", "Intel"] as const) {
+        expect(part(norm, vendor), `${lang}: ${vendor}'s status`).toContain(STATUS[lang][vendor]);
+      }
+      if (lang === "en") {
+        expect(part(norm, "NVIDIA").replace("not yet hardware-verified", ""), "en: NVIDIA called verified").not.toMatch(/verified/i);
+        expect(part(norm, "Intel"), "en: Intel called verified").not.toMatch(/verified/i);
+      } else {
+        expect(part(norm, "NVIDIA"), "zh-CN: NVIDIA called verified (已验证)").not.toContain("已验证");
+        expect(part(norm, "Intel"), "zh-CN: Intel called verified").not.toContain("验证");
+      }
+    });
+  }
 
   it("renders the three coverage keys inside the coverage-note span", () => {
     const span = /className="coverage-note">([\s\S]*?)<\/span>/.exec(stripComments(read(HOST)));

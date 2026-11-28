@@ -45,7 +45,9 @@ describe("monitorVerdict", () => {
     expect(monitorVerdict([], t, "pending")).toEqual({ headline: "common.sessionsRead.pending" });
     expect(monitorVerdict([], t, "failed")).toEqual({ headline: "common.sessionsRead.failed" });
     // A list that holds a session is graded as before, whatever the newest read did.
-    expect(monitorVerdict([session()], t, "failed").headline).not.toBe("common.sessionsRead.failed");
+    expect(monitorVerdict([session()], t, "failed").headline).toBe(
+      T(`${K}smoothHeadline`, { game: "valorant", fps: 240 }),
+    );
   });
 
   it("single smooth session → smoothHeadline with prettified game + rounded avg fps", () => {

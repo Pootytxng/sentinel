@@ -519,7 +519,7 @@ describe("GL-empty F5/F6 — legible small print, and the lane's soft foot on ev
 describe("Games (glass redesign)", () => {
   it("with no measured session, says so and offers Live", () => {
     const onOpenLive = vi.fn();
-    render(<GamesRoom sessions={[]} onOpenLive={onOpenLive} onOpenTest={vi.fn()} />);
+    render(<GamesRoom sessions={[]} sessionsRead={undefined} onOpenLive={onOpenLive} onOpenTest={vi.fn()} />);
     expect(screen.getByText(/No games yet/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Open Live" }));
     expect(onOpenLive).toHaveBeenCalled();
@@ -543,6 +543,7 @@ describe("Games (glass redesign)", () => {
     render(
       <GamesRoom
         sessions={[session({}), session({ started_at: "2026-10-28T20:00:00Z", low1_fps_est: 0 })]}
+        sessionsRead={undefined}
         onOpenLive={vi.fn()}
         onOpenTest={vi.fn()}
         focusKey="eldenring.exe"
@@ -555,11 +556,11 @@ describe("Games (glass redesign)", () => {
   });
 
   it("never prints the room's name as its h1 (the top bar has it) and has no sub line (desk review 2026-10-30)", () => {
-    render(<GamesRoom sessions={[session({})]} onOpenLive={vi.fn()} onOpenTest={vi.fn()} />);
+    render(<GamesRoom sessions={[session({})]} sessionsRead={undefined} onOpenLive={vi.fn()} onOpenTest={vi.fn()} />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).not.toBe("Games");
     expect(document.querySelector(".gl-sub")).toBeNull();
     cleanup();
-    render(<GamesRoom sessions={[session({})]} onOpenLive={vi.fn()} onOpenTest={vi.fn()} focusKey="eldenring.exe" />);
+    render(<GamesRoom sessions={[session({})]} sessionsRead={undefined} onOpenLive={vi.fn()} onOpenTest={vi.fn()} focusKey="eldenring.exe" />);
     expect(document.querySelector(".gl-sub")).toBeNull();
   });
 });
