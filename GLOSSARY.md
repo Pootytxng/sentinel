@@ -21,15 +21,15 @@ _Avoid_: customer, tester (unless it really is a tester build)
 ### The three layers
 
 **Layer**:
-One of Compy's three capability tiers, built and shipped in order: the Paramedic, Game knowledge, the Tuning Bay.
+One of Compy's three capability tiers, built and shipped in order: the Paramedic, Game-specific knowledge, the Tuning Bay.
 
 **Paramedic**:
 Layer 1 and Compy's headline: the one flow that goes from "something is wrong" to "did the fix work".
 _Avoid_: optimizer, one-click boost
 
-**Game knowledge**:
+**Game-specific knowledge**:
 Layer 2: the known issues of the game being played that apply to this user's hardware and driver.
-_Avoid_: game profiles, presets
+_Avoid_: game profiles, presets, game knowledge
 
 **Tuning Bay**:
 Layer 3: a separate, opt-in space for tinkerers, with low-risk toggles and BIOS and overclock walkthroughs. Compy guides firmware steps; it never changes firmware.
