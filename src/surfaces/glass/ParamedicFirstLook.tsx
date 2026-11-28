@@ -331,23 +331,34 @@ export function undoneInWindow(changes: AppliedChange[] | null | undefined, a: P
 }
 
 /** e6: the notice that settings Compy applied read off now, from the live drift list Home names them from, when Compy
- *  noticed it inside the window. ONE row per notice: its two times are the notice's (when the check first found one
- *  off, and when it last found none off), not any one title's, because a title can go off later on a standing notice
- *  and the list the card reads has no time per title (review r1 F1). The titles are listed with no time each; none
- *  kept is the unnamed row. Left out, as the engine leaves it out (paramedic.rs `ambiguous`): a notice last found
- *  fine before the window, since when it changed isn't recorded. An unreadable check is not listed. */
+ *  noticed it inside the window. ONE row per notice: its two times are the notice's (the first check that flagged one
+ *  off, and the last check that flagged none: a setting the user kept as set outside Compy is off but never flagged,
+ *  readiness.rs), not any one title's, because a title can go off later on a standing notice and the list the card
+ *  reads has no time per title (review r1 F1, r2 M1). The titles are listed with no time each; none kept is the
+ *  unnamed row. A notice whose last unflagged check is before the window is not listed as a change in it, by the same
+ *  rule the diagnosis uses (paramedic.rs `ambiguous`): `offNowAmbiguous` says so in one line instead. An unreadable
+ *  check is not listed. */
 export type OffNow = { titles: string[]; seen: string | null; noticed: string };
 
-export function offNowInWindow(drifts: Drift[] | null | undefined, a: ParamedicFirstLook): OffNow[] {
+/** The applied-changes notices the first look may speak of: readable, and flagged inside the window. */
+function offNowNotices(drifts: Drift[] | null | undefined, a: ParamedicFirstLook): { d: Drift; ready: number | null; from: number }[] {
   const from = instant(a.told.from);
   const to = instant(a.told.to);
   if (!drifts || from === null || to === null || !a.changes_listed) return [];
   return drifts
     .filter((d) => d.id === "applied-changes" && d.unreadable_now !== true && inWindow(instant(d.noticed_at), from, to))
-    .filter((d) => {
-      const ready = instant(d.last_ready_at);
-      return ready === null || ready >= from;
-    })
+    .map((d) => ({ d, ready: instant(d.last_ready_at), from }));
+}
+
+/** r2 S1: a notice flagged inside the window whose last unflagged check is before it: when it changed isn't known. */
+export function offNowAmbiguous(drifts: Drift[] | null | undefined, a: ParamedicFirstLook): boolean {
+  return offNowNotices(drifts, a).some((n) => n.ready !== null && n.ready < n.from);
+}
+
+export function offNowInWindow(drifts: Drift[] | null | undefined, a: ParamedicFirstLook): OffNow[] {
+  return offNowNotices(drifts, a)
+    .filter((n) => n.ready === null || n.ready >= n.from)
+    .map((n) => n.d)
     .map((d) => ({
       titles: (d.titles ?? []).map((x) => x.trim()).filter(Boolean),
       seen: instant(d.last_ready_at) !== null ? (d.last_ready_at as string) : null,
@@ -1004,7 +1015,9 @@ export function ParamedicFirstLook({
     .sort((x, y) => y.at - x.at)
     .map((x) => x.c);
   const offNow = offNowInWindow(drifts, a);
-  const empty = a.touch_games.length === 0 && otherRows.length === 0 && compyAll.length === 0 && offNow.length === 0;
+  // r2 S1: flagged in the window, but when it changed isn't known: neither listed as a change nor "no dated change".
+  const offAmbiguous = offNowAmbiguous(drifts, a);
+  const empty = a.touch_games.length === 0 && otherRows.length === 0 && compyAll.length === 0 && offNow.length === 0 && !offAmbiguous;
   const touchLimits = a.limits.filter((l) => inGroup(l) && (l.kind === "driver" || l.kind === "windows-update" || l.kind === "game-update"));
   const programLimits = a.limits.filter((l) => inGroup(l) && l.kind === "programs");
   const open = a.touch_games.slice(0, ROWS_OPEN);
@@ -1135,16 +1148,21 @@ export function ParamedicFirstLook({
               {compyAll.some((c) => !c.undone) && <p className="gl-para-note">{t("paramedic.firstLook.compy.undoHint")}</p>}
             </div>
           )}
-          {offNow.length > 0 && (
+          {(offNow.length > 0 || offAmbiguous) && (
             <div role="group" aria-label={t("paramedic.firstLook.group.offNow")} data-testid="first-look-off-now">
               <p>
                 <strong>{t("paramedic.firstLook.group.offNow")}</strong> {notCause}
               </p>
-              {offRows(offOpen)}
+              {offNow.length > 0 && offRows(offOpen)}
               {offRest.length > 0 && (
                 <Fold title={t("paramedic.firstLook.group.more", { n: offRest.length })} testid="first-look-off-now-more">
                   {offRows(offRest)}
                 </Fold>
+              )}
+              {offAmbiguous && (
+                <p className="gl-para-note" data-testid="first-look-off-now-ambiguous">
+                  {t("paramedic.firstLook.compy.offNowAmbiguous")}
+                </p>
               )}
             </div>
           )}

@@ -1686,10 +1686,12 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
     expect(rowsOf("first-look-off-now")).toHaveLength(1);
     expect(rowsOf("first-look-off-now")[0]).toMatch(
       new RegExp(
-        `^Compy's check last found none of the settings Compy applied off at [A-Z][a-z]{2} \\d+.*, and first found one off at [A-Z][a-z]{2} \\d+.*\\. Off now, with no undo of it in Compy's history: “${TRIM}”\\.$`,
+        `^Compy's last check with none of its settings flagged off: [A-Z][a-z]{2} \\d+.*\\. Its first check that flagged one off: [A-Z][a-z]{2} \\d+.*\\. Off now, though Compy's history still lists it as applied: “${TRIM}”\\.$`,
       ),
     );
-    expect(group.textContent).not.toMatch(/outside Compy|no record of turning it off/);
+    // r2 M1: a setting kept as set outside Compy is off but never flagged (readiness.rs), so the row says what the
+    // check flagged, never that it found none off. r2 M2: the history's newest record says applied, not "no undo".
+    expect(group.textContent).not.toMatch(/outside Compy|no record of turning it off|found none|none of the settings .* off at|no undo/);
     expect(within(group).getByTestId("first-look-not-cause").textContent).toBe("Not shown to be the cause");
     expect(screen.queryByTestId("first-look-nothing")).toBeNull();
     // It is not a change Compy made: it is not in that group.
@@ -1706,28 +1708,52 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
     const rows = rowsOf("first-look-off-now");
     expect(rows).toHaveLength(1);
     const row = rows[0];
-    expect(row).toMatch(new RegExp(`Off now, with no undo of them in Compy's history: “${TRIM}”, “${LATER}”\\.$`));
+    expect(row).toMatch(new RegExp(`Off now, though Compy's history still lists them as applied: “${TRIM}”, “${LATER}”\\.$`));
     // Each of the notice's times appears once in the row, and no time sits beside a title.
-    expect(row.match(/last found none of the settings Compy applied off at/g)).toHaveLength(1);
-    expect(row.match(/first found one off at/g)).toHaveLength(1);
+    expect(row.match(/Compy's last check with none of its settings flagged off:/g)).toHaveLength(1);
+    expect(row.match(/Its first check that flagged one off:/g)).toHaveLength(1);
     expect(row).not.toMatch(new RegExp(`“${LATER}”[^“]*\\d`));
     expect(row).not.toMatch(/saw it on|noticed it off/);
     cleanup();
     await lookWith({ drifts: [offDrift({ titles: [], applied_at: [], last_ready_at: null })] }, gameAnswer());
     expect(rowsOf("first-look-off-now")).toEqual([
-      expect.stringMatching(/^Compy's check first found a setting Compy applied off at [A-Z][a-z]{2} \d+.*\. The check didn't keep which one\.$/),
+      expect.stringMatching(/^Compy's first check that flagged one of its settings off: [A-Z][a-z]{2} \d+.*\. The check didn't keep which one\.$/),
     ]);
   });
 
-  // r1 F2 (2): as the engine (paramedic.rs `ambiguous`): noticed in the window but last found fine before it, when it
-  // changed isn't recorded, so it is not listed. Last found fine exactly at the window's start is inside it.
-  // Break check: drop the last-ready filter in `offNowInWindow` and the first case lists a row.
-  it("leaves out a notice last found fine before the window, as the engine does", async () => {
+  // r2 M2: Compy applied it before the window, undid it inside, applied it again, and it is off now. The ledger keeps
+  // the undone row (append-only) and "Changes Compy made" lists that undo; the off-now row must not say there is no
+  // undo, only that the newest record still says applied (history.rs summarize_checked: newest row per rec decides).
+  // Break check: put back "with no undo of it in Compy's history" and this fails.
+  it("an undo, then a re-apply, then off: the card lists the undo, and the off-now row never says 'no undo'", async () => {
+    const changes = [
+      ledger(TRIM, "2026-11-01T10:00:00Z", { rolled_back_at: "2026-11-14T08:00:00Z" }),
+      ledger(TRIM, "2026-11-15T10:00:00Z", { status: "applied", is_still_active: false, active_check: "off", rolled_back_at: null }),
+    ];
+    await lookWith({ drifts: [offDrift()], changes }, gameAnswer({ compy_changes: [compy(TRIM, "2026-11-15T10:00:00Z")] }));
+    const compyRows = rowsOf("first-look-compy");
+    expect(compyRows.some((r) => new RegExp(`^Compy changed “${TRIM}” on .*, and it was undone on `).test(r))).toBe(true);
+    const off = rowsOf("first-look-off-now")[0];
+    expect(off).toContain(`Off now, though Compy's history still lists it as applied: “${TRIM}”.`);
+    expect(off).not.toMatch(/no undo/);
+  });
+
+  // r1 F2 (2) / r2 S1: by the same rule the diagnosis uses (paramedic.rs `ambiguous`): flagged in the window, but its
+  // last unflagged check is before the window, so when it changed isn't known. It is not listed as a change, and one
+  // line says so in place of "no dated change". A last unflagged check exactly at the window's start is inside it.
+  // Break check: drop the last-ready filter in `offNowInWindow` and the first case lists a row; drop the ambiguous line
+  // and the first case shows "no dated change".
+  it("a notice last unflagged before the window: no row, one line that when it changed isn't known, not 'no dated change'", async () => {
     await lookWith({ drifts: [offDrift({ last_ready_at: "2026-11-10T09:00:00Z" })] }, gameAnswer());
-    expect(screen.queryByTestId("first-look-off-now")).toBeNull();
+    expect(within(screen.getByTestId("first-look-off-now")).queryAllByRole("listitem")).toHaveLength(0);
+    expect(screen.getByTestId("first-look-off-now-ambiguous").textContent).toBe(
+      "Compy flagged a setting it applied as off in this period, but its last check before that was before the period, so when it changed isn't known.",
+    );
+    expect(screen.queryByTestId("first-look-nothing")).toBeNull();
     cleanup();
     await lookWith({ drifts: [offDrift({ last_ready_at: "2026-11-12T12:00:00Z" })] }, gameAnswer());
-    expect(screen.getByTestId("first-look-off-now")).toBeTruthy();
+    expect(rowsOf("first-look-off-now")).toHaveLength(1);
+    expect(screen.queryByTestId("first-look-off-now-ambiguous")).toBeNull();
   });
 
   // r1 F4: the window is (from, to], as the engine's. Break check: make `inWindow` `>=` and the first case lists a row;
@@ -1821,7 +1847,7 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
       expect(within(off).getByText("Compy 开启过、现在未开启的设置")).toBeTruthy();
       expect(rowsOf("first-look-off-now")[0]).toMatch(
         new RegExp(
-          `^Compy 的检查在 .+ 最后一次读到 Compy 开启过的设置中没有一项未开启，并在 .+ 首次发现其中有一项未开启。现在未开启、且 Compy 的历史里没有撤销记录的：“${TRIM}”。$`,
+          `^Compy 最后一次没有标出未开启设置的检查：.+。首次标出其中一项未开启的检查：.+。现在未开启，但 Compy 的历史里仍列为已应用：“${TRIM}”。$`,
         ),
       );
       expect(off.textContent).not.toMatch(/之外|已关闭/);
