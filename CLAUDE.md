@@ -71,7 +71,7 @@ GitHub Issues in `Pootytxng/sentinel` (gh CLI); `docs/QUEUE.md` stays the work l
 Default seven labels, kept separate from the `lane:*` / `gate:*` labels. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
-Single-context (root `GLOSSARY.md`, `docs/adr/` once they exist; ARCHITECTURE_LOCKS acts as the ADRs until then). See `docs/agents/domain.md`.
+Single-context: root `GLOSSARY.md`; `docs/adr/` once the first ADR is written (ARCHITECTURE_LOCKS acts as the ADRs until then). See `docs/agents/domain.md`.
 
 ### External peers
 `auto`: the hardened Claude or Codex adapter, chosen from host metadata. See `docs/agents/cross-model.json`.
