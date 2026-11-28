@@ -16,7 +16,7 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - Pass: 6 of 10 independently accepted answers AND Phase 5 on 3 or more outside PCs including a non-AMD GPU. 3-5 of 10: fix the top three points where a human had to step in, and rerun. Under 3 of 10: stop.
 
 ## NOW (in flight, each on its own branch)
-- Desk build on the owner's PC: ec5bae0e (installed and runtime-proved 2026-11-22)
+- Desk build on the owner's PC: 978fb586 (installed and runtime-proved 2026-11-28)
 
 ## NEXT (in order)
 Phase 1 exit first (owner ruling 2026-11-26; `docs/product/ROADMAP.md` Phase 1). Already met and not re-queued: first look S4 and S5 (adfd664c); `home.json` in the wording scan (478f8d42); no "Check again" before an answer and the Re-run band wording (both under Done, 2026-11-20).
@@ -30,7 +30,7 @@ Phase 1 exit first (owner ruling 2026-11-26; `docs/product/ROADMAP.md` Phase 1).
 - [ ] Measure the e9 fold on an installed build (e9 review r1 F7): with the Something's-wrong card open on a long answer, at 1280x720 and at a page area just under and at 900 px high, with and without a pending crash record and with TrustMoment or FirstWin showing: the card's real height and the kept items' bottoms against the window (the arithmetic in the Card row above is from y 177, a ~70 px banner and FirstWin's 147 px, none measured with e9)
 - [x] The app says three things about what leaves the PC: the app half is already true and consistent (checked 2026-11-28 at 52d4ce43). `receipts_gate()` and `case_intelligence_gate()` return false, so the signed update check is the only network call, and the footer, Settings → About and the setup tour all say so. The site lines are the owner's (below)
 - [x] tauri.conf.json description drops "safe" (checked 2026-11-27 at 833cbe64: neither description holds the word)
-- [ ] Phase 1 exit check: install current main on the desk (ec5bae0e predates the d10-d12, D6, b13 and a10 landings), then the look-only run as a brand-new user; the Home headline decision is under "Waiting on the owner"
+- [ ] Phase 1 exit check: current main 978fb586 is on the desk (installed 2026-11-28); still to do: the look-only run as a brand-new user; the Home headline decision is under "Waiting on the owner"
 Then, in this order (owner ruling 2026-11-26):
 - [ ] Tester build: free, invite-only, unsigned, through the existing release transaction (`docs/RELEASE_TRANSACTION.md`), on the owner's explicit publish GO. Target 2026-12-07, conditional on the Phase 1 exit
 - [ ] Watch-only first sessions with the named testers: every point where a human had to step in is written down
@@ -102,6 +102,7 @@ Rest of NEXT (order unchanged):
 - Coordinator defaults the owner may overturn: ship date: none set (owner ruling 2026-11-26: 2026-12-11 is not a v1.0 or paid launch; `docs/product/ROADMAP.md` still shows the old target); v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee"; a strength above the lowest needs two independent supports and no contradicting evidence (in the Paramedic's code and now the Problems room's; not yet written in the constitution); the full health check shows no score ring (removed 2026-11-20, one revert restores it).
 
 ## Done (newest first)
+- 2026-11-28 - desk build 978fb586 installed and stamped (installed over ec5bae0e)
 - 2026-11-28 - Agent-machinery diet: removed the multi-session coordination layer (claims, leases, folder ownership, carriers, disposition records, the work-train and work-control docs, 351 receipt files). Product locks, the mutation boundary, the game rule and the push check are unchanged. The hook half is `docs/agent-diet-2026-11-28.patch`, applied by the owner's one command.
 - 2026-11-26 - Owner ruling recorded at the top of this file. Closed two owner questions: "is 2026-12-11 a free invite-only beta rather than a paid launch" (decided: not a v1.0 or paid launch; the next release is the free invite-only tester build) and "pricing" (deferred: undecided and unscheduled; `_train\m2-business-memo.md` and project doc `claude/CONSUMER_PANEL_2026-11-20.md` stay as references)
 - 2026-11-22 - desk build ec5bae0e installed and stamped (installed over fc01eff9)
@@ -171,6 +172,7 @@ Rest of NEXT (order unchanged):
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-28 desk-install session 9: built and installed main 978fb586 over ec5bae0e, proved at runtime, stamped in RELEASE_STATE; no look-only run.
 - 2026-11-28 diet session: cut the multi-session agent machinery (line counts in the PR), wrote the hook-removal patch and its apply script for the owner.
 - 2026-11-27 queue session (docs/QUEUE.md only): recorded the owner ruling of 2026-11-26, moved the Phase 1 exit items to the top of NEXT after checking them against main 833cbe64, closed the 2026-12-11 and pricing questions. No code, no build, no other file.
 - 2026-11-22 desk-install session 8: built and installed main ec5bae0e over fc01eff9, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1122a.
@@ -180,5 +182,3 @@ Rest of NEXT (order unchanged):
 - 2026-11-21 session: landed the game-claims correction, export redaction, grouped crash records, first-look running-now, power-plan and hardware-sweep safety fixes (listed under Done; each reviewed, each through the push check). Install of current main and look-only checks blocked at 06:00 PT (PC not idle); installed build is still 4115e40e. g2-handles and n1-drift in review; d1s1-capture parked.
 - 2026-11-20 desk-install session 4: built and installed main 4115e40e, proved at runtime, stamped in RELEASE_STATE; look-only checks (new-user sandbox, then real data) in _train\view-1120e.
 - 2026-11-20 afternoon session: landed 0cc3a30e, fec63809, cb8afffe, abbad9bc, b8f782d7 (each reviewed, each through the push check). Look-only check of 5f4cad34 on the owner's data ran (_train\view-1120d\report-2.md); the brand-new-user half did NOT run (owner came back to the PC). Affordance baseline re-recorded: the score ring's entries and the header button retired by the coordinator, reported to the owner, reversible.
-- 2026-11-20 desk-install session 3: built and installed main 5f4cad34, proved at runtime, stamped in RELEASE_STATE; look-only checks of the Home card (real data and new-user sandbox) in _train\view-1120d.
-- 2026-11-20 desk-install session 2: built and installed main dd799c62, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120c.
