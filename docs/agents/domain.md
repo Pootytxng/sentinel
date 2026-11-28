@@ -21,7 +21,7 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 - **`docs/ARCHITECTURE_LOCKS.md`**: plays the role `docs/adr/` plays elsewhere. Treat a lock as an ADR you may not silently override; crossing one needs the owner.
 - **`src-tauri/CLAUDE.md`**: read-only half of the Rust module map.
 
-Two live vocabulary rules: the product is **Compy**, not Sentinel (the repo, crate and pre-2026-06-04 history still say `sentinel`, which is expected), and user-facing room names are **Health · Live · History · Test**, never the nav ids `home`/`play`/`learn`/`lab`.
+Two live vocabulary rules: the product is **Compy**, not Sentinel (the repo, crate and pre-2026-06-04 history still say `sentinel`, which is expected), and the user-facing room names are the rail labels: **Health · Games · Problems · Live · History · Test** (source: `HOME_RAIL` in `src/design/homeRail.ts`, via `railFor(true, true)`), never the nav ids `home`/`play`/`learn`/`lab`. Retired names (Home, Monitor, Blackbook, Lab, and Check/Tune/Optimize as rooms) are guarded by `src/room-name-copy-guard.test.ts`.
 
 ## File structure
 
