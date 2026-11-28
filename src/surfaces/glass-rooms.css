@@ -865,3 +865,49 @@
   gap: 8px;
   padding: 0 12px 12px;
 }
+/* e9 (card at 720): when the page area (the webview viewport) is under 900 px high, the open card folds the
+   rest of Home under its own one-line row, "The rest of this page", which shows it again. Folded: the game
+   tiles (or the "no games" block) and the lower half. Never folded (review r1 F1): the crash banner and the
+   first-win journey (TrustMoment, FirstWin), which carry live apply/undo status and undo-failed errors.
+   While folded the card may grow to the page area less 240 px for the header and the card top, less ~84 px
+   when the crash banner follows it and ~161 px when TrustMoment or FirstWin does (their height plus the
+   room's 14 px gap; FirstWin was measured at 147 px in #225, the banner's ~70 px is estimated from its
+   padding and two lines), so what stays is not pushed under the window (review r1 F2). 520 px stays the
+   ceiling, 260 px the floor. A taller page area keeps e8's layout: no row, nothing folded. No motion is
+   added. Real geometry was not measured: check it on the next installed-build look. */
+:root[data-v2="on"] .gl-para-homefold {
+  display: none;
+}
+@media (max-height: 899.98px) {
+  :root[data-v2="on"] .gl-para-homefold {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    margin-top: 8px;
+    padding-top: 4px;
+    border-top: 1px solid var(--v2-line);
+  }
+  :root[data-v2="on"] .gl-para-homefold .gl-para-fold-btn {
+    width: auto;
+  }
+  :root[data-v2="on"] .gl-para-homefold-note {
+    color: var(--v2-muted);
+    font-size: var(--type-label);
+  }
+  :root[data-v2="on"] .gl-para-card[data-home-fold="folded"] {
+    --para-keep-banner: 0px;
+    --para-keep-journey: 0px;
+    --para-card-max: clamp(260px, calc(100vh - 240px - var(--para-keep-banner) - var(--para-keep-journey)), 520px);
+  }
+  :root[data-v2="on"] .gl-para-card[data-home-fold="folded"]:has(~ .gl-banner) {
+    --para-keep-banner: 84px;
+  }
+  :root[data-v2="on"] .gl-para-card[data-home-fold="folded"]:has(~ :is(.trust-moment, .first-win)) {
+    --para-keep-journey: 161px;
+  }
+  :root[data-v2="on"] .gl-room[data-room="home"] > .gl-para-card[data-home-fold="folded"] ~ :not(.gl-banner, .trust-moment, .first-win) {
+    display: none;
+  }
+}
