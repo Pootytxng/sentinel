@@ -1577,7 +1577,7 @@ describe("HomeConsole — the symptom cards and the rescue row match the comp", 
     const entry = c.querySelector(".hc-care-entry")!;
     expect(entry.querySelector(".hc-care-ico svg"), "the life ring is missing").not.toBeNull();
     // P6-door: the one Care door is named for the user's situation, not for the station.
-    expect(entry.querySelector(".hc-care-label")!.textContent).toBe("Something's wrong");
+    expect(entry.querySelector(".hc-care-label")!.textContent).toBe("Check my PC");
     expect(entry.querySelector(".hc-care-symptom")!.textContent).toBe(
       "It crashes, freezes or stutters and I don't know why",
     );

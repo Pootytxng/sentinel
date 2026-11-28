@@ -298,6 +298,16 @@ Fields may be added with backwards-compatible defaults where appropriate. Removi
 read an older persisted change is a rollback-breaking migration and is forbidden without an explicit
 compatibility plan.
 
+The ledger keeps one backup copy, `history.json.bak`, written only after a successful save of
+`history.json` from the same validated bytes; a backup failure never fails a save and is reported.
+The backup is restored only when `history.json` is missing or does not parse, only by the load that
+holds the MutationRoot capability, never over an existing file, and every restore leaves
+`history.json.restored` and a support-evidence record. A parseable `history.json` always wins.
+Readers may show the backup's rows but never write. Any path that clears history removes
+`history.json`, `.bak` and `.restored` (with their working files) in one step, the main file last,
+and refuses while a `.corrupt` set-aside exists, because it may hold the only record needed to undo
+a change (owner ruling 2026-11-28; `data_clear.rs` `LEDGER_DELETE_ORDER`, `LEDGER_SET_ASIDE`).
+
 `AppliedAction`, `RollbackAction`, and `Snapshot` are additive compatibility enums: new variants may
 be added; shipped serialized variants are never renamed or removed unless a backwards-compatible
 mapping preserves the ability to deserialize and actually roll back every supported historical entry.

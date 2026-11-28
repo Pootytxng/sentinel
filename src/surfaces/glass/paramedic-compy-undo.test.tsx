@@ -103,7 +103,7 @@ const openAll = () => {
 const show = async (findings: F[], changes: AppliedChange[], undo = vi.fn<(r: string, i: string, e: string) => Promise<CardUndoResult>>()) => {
   answer.value = diagnosis(findings);
   const view = render(<ParamedicCard drifts={[]} changes={changes} undoCompyChange={undo} />);
-  fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+  fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
   await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
   openAll();
   return { undo, view };
@@ -151,9 +151,9 @@ describe("B10: Undo this Compy change on the card", () => {
   it.each([
     ["failed", null, true],
     ["cancelled", null, true],
-    ["trial", "A Trial is running, or Compy can't tell whether one is, so it didn't undo anything. Check Test, then press Something's wrong again.", true],
-    ["changed", "This changed since the card was drawn, so Compy didn't undo anything. Press Something's wrong again.", true],
-    ["unread", "Compy couldn't read its change list just now, so it didn't undo anything. Press Something's wrong again.", true],
+    ["trial", "A Trial is running, or Compy can't tell whether one is, so it didn't undo anything. Check Test, then press Check my PC again.", true],
+    ["changed", "This changed since the card was drawn, so Compy didn't undo anything. Press Check my PC again.", true],
+    ["unread", "Compy couldn't read its change list just now, so it didn't undo anything. Press Check my PC again.", true],
     ["unrecorded", "The undo worked on Windows, but Compy couldn't save it to its history, so Applied & history may still list this change. Check the setting in Windows if unsure.", false],
   ] as const)("a press that came back %s: no 'Undone' line", async (kind, line, buttonStays) => {
     const undo = vi.fn<(r: string, i: string, e: string) => Promise<CardUndoResult>>().mockResolvedValue({ kind });
@@ -173,7 +173,7 @@ describe("B10: Undo this Compy change on the card", () => {
     await show([compyFinding("likely")], [rec({ status: "rolled_back", rolled_back_at: at, active_check: null })]);
     const when = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(at));
     expect(screen.getByTestId("paramedic-undo-compy-done").textContent).toBe(
-      `Undone on ${when}: “${GM}”. Play Game A once the way you usually do, then press Something's wrong again.`,
+      `Undone on ${when}: “${GM}”. Play Game A once the way you usually do, then press Check my PC again.`,
     );
     expect(screen.queryByTestId("paramedic-undo-compy")).toBeNull();
   });
@@ -184,7 +184,7 @@ describe("B10: Undo this Compy change on the card", () => {
     await show([compyFinding("likely")], [rec({ status: "rolled_back", rolled_back_at: "2026-11-22T09:30:00Z", active_check: null })]);
     expect(screen.getByTestId("paramedic-undo-compy-done")).toBeTruthy();
     expect(document.body.textContent).not.toContain("Undo the newest one");
-    expect(document.body.textContent).not.toContain("Play Game A once, then press Something's wrong again.");
+    expect(document.body.textContent).not.toContain("Play Game A once, then press Check my PC again.");
   });
 
   it("while the change is open, the row keeps its steps beside the button", async () => {
@@ -207,7 +207,7 @@ describe("B10: Undo this Compy change on the card", () => {
   // Review r1 FIX 3: every line but rough carries B10's own next step, word for word (rough needs none: the change is
   // off and the game is still rough). Break checks: drop the compy-undone-rough case from evidenceLine -> the line is
   // missing, fails; drop the next step from compyUndoneBetween -> fails.
-  const NEXT = " Play Game A once the way you usually do, then press Something's wrong again.";
+  const NEXT = " Play Game A once the way you usually do, then press Check my PC again.";
   it.each([
     ["compy-undone-rough", "measured", { at: AT, count: "1" }, true, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A still ran rough on ${day(AT)}.`],
     ["compy-undone-rough", "measured", { at: AT, count: "2" }, true, `“${GM}” was undone on ${dayTime(UNDONE)}, and Game A still ran rough in 2 sessions since, the first on ${day(AT)}.`],
@@ -238,7 +238,7 @@ describe("B10: Undo this Compy change on the card", () => {
     const line = { kind: "unknown" as const, code: "compy-undone-between", args: { title: GM, undone: UNDONE, count: "2" }, against: false, source: "sessions" };
     answer.value = { ...diagnosis([{ ...f, evidence: [...f.evidence, line] }]), state: { kind: "cant-tell", why: { kind: "recovery-unclear", partial: false, one_clear: true, cap_changed: false } } };
     render(<ParamedicCard drifts={[]} changes={[undoneRec()]} undoCompyChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
     openAll();
     expect(document.body.textContent).toContain(
@@ -277,7 +277,7 @@ describe("B10: Undo this Compy change on the card", () => {
       await i18n.changeLanguage("zh-CN");
       await waitFor(() =>
         expect(document.body.textContent).toContain(
-          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销，此后 Game A 有 2 次游戏表现在平时的范围内，最近一次在 ${zDay(AT)}。之后的游戏时间太短，或 Compy 没能测量到足够的部分，所以 Compy 还不能说它已恢复到平时的范围。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`,
+          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销，此后 Game A 有 2 次游戏表现在平时的范围内，最近一次在 ${zDay(AT)}。之后的游戏时间太短，或 Compy 没能测量到足够的部分，所以 Compy 还不能说它已恢复到平时的范围。照平时的方式玩一次 Game A，然后再按一次“检查我的电脑”。`,
         ),
       );
     } finally {
@@ -319,7 +319,7 @@ describe("B10: Undo this Compy change on the card", () => {
       await i18n.changeLanguage("zh-CN");
       await waitFor(() =>
         expect(document.body.textContent).toContain(
-          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后 Game A 测量充分的游戏中，至少有一次并不明确在平时的范围内，所以 Compy 暂时还无法判断。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`,
+          `“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后 Game A 测量充分的游戏中，至少有一次并不明确在平时的范围内，所以 Compy 暂时还无法判断。照平时的方式玩一次 Game A，然后再按一次“检查我的电脑”。`,
         ),
       );
     } finally {
@@ -341,7 +341,7 @@ describe("B10: Undo this Compy change on the card", () => {
       await i18n.changeLanguage("en");
       await show([withLine("compy-undone-unread", "unknown", { count: "2" })], [undoneRec()]);
       await i18n.changeLanguage("zh-CN");
-      await waitFor(() => expect(document.body.textContent).toContain(`“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后记录到 2 次 Game A 的游戏，但时间太短，或 Compy 没能测量到足够的部分，所以 Compy 没有可以判断的读数。照平时的方式玩一次 Game A，然后再按一次“出问题了”。`));
+      await waitFor(() => expect(document.body.textContent).toContain(`“${GM}”已于 ${zDayTime(UNDONE)} 撤销。此后记录到 2 次 Game A 的游戏，但时间太短，或 Compy 没能测量到足够的部分，所以 Compy 没有可以判断的读数。照平时的方式玩一次 Game A，然后再按一次“检查我的电脑”。`));
     } finally {
       await i18n.changeLanguage("en");
     }
@@ -355,7 +355,7 @@ describe("B10: Undo this Compy change on the card", () => {
   it("no ledger list or no undo from App: nothing is offered", async () => {
     answer.value = diagnosis([compyFinding("likely")]);
     render(<ParamedicCard drifts={[]} changes={null} undoCompyChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
     openAll();
     expect(screen.queryByTestId("paramedic-undo-compy")).toBeNull();

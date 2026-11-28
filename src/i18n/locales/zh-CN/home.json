@@ -4,7 +4,7 @@
       "eyebrow": "主机诊断"
     },
     "care": {
-      "label": "出了问题",
+      "label": "检查我的电脑",
       "open": "打开",
       "notice": {
         "aria": "Compy 注意到的情况",
@@ -303,7 +303,7 @@
       "sub": "一次一个问题，都用大白话。",
       "back": "上一步",
       "startOver": "重新开始",
-      "evidenceTitle": "Compy 实测到的",
+      "evidenceTitle": "Compy 发现的",
       "noEvidence": "Compy 还没有实测过这一项。下面的按钮就是去测它的。",
       "applying": "正在应用…",
       "stepAria": "问答进度",

@@ -122,7 +122,7 @@ const WHOLE_PC = "Another game, or the whole PC";
 async function toThePicker(d: ParamedicDiagnosis = noSessions(), props: { noGames?: boolean; games?: RecordedGame[] } = { noGames: true }) {
   engine.diagnose = d;
   render(<ParamedicCard {...props} />);
-  fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+  fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
   await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
 }
 
@@ -144,7 +144,7 @@ describe("the card with no games (the question step)", () => {
     render(<ParamedicCard noGames />);
     expect(screen.getByTestId("paramedic")).toBeTruthy();
     expect(screen.getByText("A game running badly or crashing? Compy can look at what changed on this PC.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Something's wrong" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Check my PC" })).toBeTruthy();
     expect(engine.calls).toHaveLength(0);
   });
 
@@ -201,7 +201,7 @@ describe("the card with no games (the question step)", () => {
   it("history that answers is not interrogated: the measured flow is unchanged and no question appears", async () => {
     engine.diagnose = diagnosis({ kind: "nothing-wrong", sessions_checked: 4 });
     render(<ParamedicCard />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.getByText("Nothing looks wrong")).toBeTruthy());
     expect(screen.queryByTestId("first-look")).toBeNull();
     expect(screen.queryByText("When did it start?")).toBeNull();
@@ -482,7 +482,7 @@ describe("the answer", () => {
     try {
       engine.diagnose = noSessions();
       render(<ParamedicCard noGames />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "是从什么时候开始的？" })).toBeTruthy());
@@ -780,7 +780,7 @@ describe("the first look for a picked game", () => {
       engine.diagnose = noSessions();
       engine.steam = steamList([]);
       render(<ParamedicCard games={recorded} />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
       await pick("这周", gameAnswer());
@@ -985,7 +985,7 @@ describe("changes Compy made", () => {
     try {
       engine.diagnose = noSessions();
       render(<ParamedicCard noGames />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await pick("这周", gameAnswer({ facts: [fact("monitor-refresh", { now: "60", max: "250" })], compy_changes: [compy("Tweak", "2026-11-18T10:00:00Z")] }));
@@ -1130,7 +1130,7 @@ describe("first-look review r1", () => {
       engine.diagnose = noSessions();
       engine.steam = steamList([]);
       render(<ParamedicCard noGames />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await pick("这周", gameAnswer({ facts: [fact("drive-health", { drive: "WD Blue", health: "Warning" })] }));
@@ -1318,7 +1318,7 @@ describe("running right now (S4)", () => {
     try {
       engine.diagnose = noSessions();
       render(<ParamedicCard noGames />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "是从什么时候开始的？" })).toBeTruthy());
@@ -1329,7 +1329,7 @@ describe("running right now (S4)", () => {
       engine.calls.length = 0;
       engine.diagnose = noSessions();
       render(<ParamedicCard noGames />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "是从什么时候开始的？" })).toBeTruthy());
@@ -1494,7 +1494,7 @@ describe("the crash records before and after the earliest change (S5)", () => {
         engine.steam = steamList([]);
         engine.diagnose = noSessions();
         render(<ParamedicCard games={recorded} />);
-        fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+        fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
         await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
         fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
         await pick("这周", gameAnswer({ crashes: crashes(split) }));
@@ -1525,7 +1525,7 @@ describe("what Compy can't tell yet rests on the sessions it recorded", () => {
     engine.diagnose = diagnosis({ kind: "nothing-wrong", sessions_checked: 4 });
     engine.steam = steamList([]);
     render(<ParamedicCard games={recorded} />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Something else? Answer a few questions" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Something else? Answer a few questions" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
@@ -1623,7 +1623,7 @@ describe("what Compy can't tell yet rests on the sessions it recorded", () => {
       engine.diagnose = noSessions();
       engine.steam = steamList([]);
       render(<ParamedicCard games={recorded} />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
       await pick("这周", gameAnswer({ recorded: rec({}) }));
@@ -1670,7 +1670,7 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
   async function lookWith(props: { drifts?: Drift[] | null; changes?: AppliedChange[] | null }, a: FirstLookAnswer) {
     engine.diagnose = noSessions();
     render(<ParamedicCard noGames {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: WHOLE_PC }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
@@ -1839,7 +1839,7 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
       engine.diagnose = noSessions();
       const changes = [ledger("Enable Windows Game Mode", "2026-11-01T10:00:00Z", { rolled_back_at: "2026-11-19T08:00:00Z" })];
       render(<ParamedicCard noGames drifts={[offDrift()]} changes={changes} />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await pick("这周", gameAnswer());
@@ -1857,7 +1857,7 @@ describe("e6: settings Compy applied that are off now, and changes undone inside
       cleanup();
       engine.diagnose = noSessions();
       render(<ParamedicCard noGames drifts={[offDrift({ last_ready_at: "2026-11-10T09:00:00Z" })]} />);
-      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      fireEvent.click(screen.getByRole("button", { name: "检查我的电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await pick("这周", gameAnswer());

@@ -194,9 +194,11 @@ describe("on the screens, in both languages", () => {
       await i18n.changeLanguage(loc);
       const bare = { recsLoaded: false, safeStackReady: 0, fastPathWired: false, activeChanges: 0, sessionCount: 0, lastSession: null, readiness: null, gpuTempC: null, rooms: ["play", "learn", "lab"] };
       const played = { ...bare, sessionCount: 1, lastSession: { game: "Valorant", avgFps: 142.3, low1: 98.4, peakTempC: 61 } };
-      const want = { measured: TEXT[loc].measured, likely: TEXT[loc].possible, unknown: TEXT[loc].unknown };
+      const want = { measured: TEXT[loc].measured, read: TEXT[loc].known, likely: TEXT[loc].possible, unknown: TEXT[loc].unknown };
       const levels = new Set<string>();
-      for (const facts of [bare, played])
+      // recsLoaded reaches the "read" level (owner ruling 2026-11-28: Read from your PC).
+      const listed = { ...played, recsLoaded: true };
+      for (const facts of [bare, played, listed])
         for (const id of INTERVIEW_FINDINGS) {
           const f = interviewFinding(id, facts as unknown as InterviewFacts, i18n.t);
           expect(f.levelLabel, `${id}/${f.level}`).toBe(want[f.level]);
@@ -204,6 +206,7 @@ describe("on the screens, in both languages", () => {
         }
       // Not vacuous: the fixtures reach more than one level.
       expect(levels.size, [...levels].join(",")).toBeGreaterThanOrEqual(2);
+      expect(levels.has("read"), [...levels].join(",")).toBe(true);
     });
   }
 });

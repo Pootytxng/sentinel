@@ -223,9 +223,19 @@ describe("LAW 2 — never claim unmeasured", () => {
       expect(f.level, `${id} claims it MEASURED a crash it never read`).not.toBe("measured");
       expect(f.evidence.length, `${id} shows no supporting evidence at all`).toBeGreaterThan(0);
     }
-    // …and the sweep, whose reading IS the readiness check, does earn it.
-    expect(find("sweep", RICH).level).toBe("measured");
+    // …and the sweep, whose answer IS the readiness check, says it READ it: a setting check is not play
+    // Compy measured (owner ruling 2026-11-28, d12 review F3).
+    expect(find("sweep", RICH).level).toBe("read");
     expect(find("sweep", { ...RICH, readiness: null }).level).toBe("likely");
+  });
+
+  it("the three findings that rest on a setting check or a loaded list say Read from your PC, never Measured", () => {
+    for (const id of ["sweep", "wantFps", "slowAlways"] as const) {
+      const f = find(id, RICH);
+      expect(f.level, id).toBe("read");
+      expect(f.levelLabel, id).toBe("Read from your PC");
+      expect(f.levelLabel, id).not.toMatch(/measured/i);
+    }
   });
 });
 

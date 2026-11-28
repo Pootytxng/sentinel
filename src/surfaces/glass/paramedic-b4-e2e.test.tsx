@@ -40,7 +40,7 @@ async function show(stage: Stage, reverted: { rec_id: string; title: string }[])
       <ParamedicCard drifts={stage.drifts} reverted={reverted} onChanged={vi.fn()} />
     </ConfirmProvider>,
   );
-  fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+  fireEvent.click(screen.getByRole("button", { name: "Check my PC" }));
   await waitFor(() => expect(screen.queryAllByTestId("paramedic-candidate").length).toBeGreaterThan(0));
   openAll();
 }

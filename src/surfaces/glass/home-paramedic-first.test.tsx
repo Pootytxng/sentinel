@@ -1,5 +1,5 @@
 // Home's first screen puts the Paramedic first (owner decision, constitution A38). Pins:
-//  1. the Paramedic's "Something's wrong" is the one primary action on Home, new user or not, with or without
+//  1. the Paramedic's "Check my PC" is the one primary action on Home, new user or not, with or without
 //     the crash banner, and it comes before everything else on the page;
 //  2. "Watch it work" is still on Home (the feature stays) but is a quiet button, not primary, in the
 //     offer and after the demo finishes.
@@ -126,7 +126,7 @@ describe("Home puts the Paramedic first", () => {
   it("no history, no crash banner: the Paramedic entry is the only primary action, and it comes first", () => {
     const c = home([]);
     const paramedic = screen.getByTestId("paramedic");
-    const door = within(paramedic).getByRole("button", { name: "Something's wrong" });
+    const door = within(paramedic).getByRole("button", { name: "Check my PC" });
     expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
     // Nothing but the header comes before it, so it is in the first screenful, not under the fold.
     expect(c.querySelector(".gl-head")!.nextElementSibling).toBe(paramedic);
@@ -138,7 +138,7 @@ describe("Home puts the Paramedic first", () => {
   it("with history and no crash banner: the same single primary, in the same place", () => {
     const c = home([session]);
     const paramedic = screen.getByTestId("paramedic");
-    const door = within(paramedic).getByRole("button", { name: "Something's wrong" });
+    const door = within(paramedic).getByRole("button", { name: "Check my PC" });
     expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
     expect(c.querySelector(".gl-head")!.nextElementSibling).toBe(paramedic);
   });
@@ -148,7 +148,7 @@ describe("Home puts the Paramedic first", () => {
   it("with a crash banner showing, there is still exactly one primary action, and the Paramedic door still comes first", () => {
     const c = home([session], care);
     const paramedic = screen.getByTestId("paramedic");
-    const door = within(paramedic).getByRole("button", { name: "Something's wrong" });
+    const door = within(paramedic).getByRole("button", { name: "Check my PC" });
     expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
     const find = within(c.querySelector<HTMLElement>(".gl-banner")!).getByRole("button", { name: "Find out why" });
     expect(find.matches(PRIMARY)).toBe(false);
@@ -157,7 +157,7 @@ describe("Home puts the Paramedic first", () => {
 
   it("with a crash banner and no history, the same single primary", () => {
     const c = home([], care);
-    const door = within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" });
+    const door = within(screen.getByTestId("paramedic")).getByRole("button", { name: "Check my PC" });
     expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
   });
 
@@ -177,7 +177,7 @@ describe("Home puts the Paramedic first", () => {
     const gotIt = await screen.findByRole("button", { name: /got it/i }, { timeout: 8000 });
     expect(gotIt.className).toBe("tm-btn");
     expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([
-      within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" }),
+      within(screen.getByTestId("paramedic")).getByRole("button", { name: "Check my PC" }),
     ]);
   }, 15000);
 });
@@ -195,7 +195,7 @@ describe("e9: while the card is open, the rest of Home folds under one row (shor
   // "Something else?" opens the questions, which is an open card.
   async function openCard() {
     const card = screen.getByTestId("paramedic");
-    fireEvent.click(within(card).getByRole("button", { name: "Something's wrong" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Check my PC" }));
     fireEvent.click(await within(card).findByRole("button", { name: "Something else? Answer a few questions" }));
     return card;
   }
@@ -293,7 +293,7 @@ describe("e9: while the card is open, the rest of Home folds under one row (shor
     expect(card.hasAttribute("data-home-fold")).toBe(false);
     expect(screen.queryByTestId("paramedic-home-fold")).toBeNull();
     expect(folded()).toEqual([]);
-    expect(document.activeElement).toBe(within(card).getByRole("button", { name: "Something's wrong" }));
+    expect(document.activeElement).toBe(within(card).getByRole("button", { name: "Check my PC" }));
   });
 
   it("closing brings Home back, and the next open folds it again", async () => {

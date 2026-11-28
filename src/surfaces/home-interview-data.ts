@@ -410,10 +410,12 @@ const TUNING_TOOL_STATIONS: readonly LabStationKey[] = ["optimize", "benchmark",
 /**
  * The level chip. Three words, in descending strength, and the strength is EARNED:
  *  - `measured` — Compy has a reading that answers the question the user just asked.
+ *  - `read`     — Compy read a setting or a list on this PC that answers it, but measured no play
+ *                 (owner ruling 2026-11-28: the chip says "Read from your PC", never "Measured").
  *  - `likely`   — Compy has related evidence that points somewhere, but has not measured this.
  *  - `unknown`  — Compy has nothing yet. The card says so and the action goes and measures.
  */
-export type FindingLevel = "measured" | "likely" | "unknown";
+export type FindingLevel = "measured" | "read" | "likely" | "unknown";
 
 export type InterviewAction =
   /** The audited one-tap safe stack. MUTATES — always carries `undo` (law 4). */
@@ -540,13 +542,15 @@ export function interviewFinding(
   let action: InterviewAction;
   /** True when the evidence collected below MEASURES the thing that was just asked about. */
   let direct = false;
+  /** True when the evidence is a setting check or a loaded list Compy READ, not play it measured. */
+  let read = false;
 
   switch (id) {
     case "sweep": {
       readinessLine();
       stackLine();
       changesLine();
-      direct = facts.readiness != null;
+      read = facts.readiness != null;
       sentence = k("sweep.sentence");
       action = fastPathOr(runCheck());
       break;
@@ -564,7 +568,7 @@ export function interviewFinding(
       stackLine();
       readinessLine();
       testedLine();
-      direct = facts.recsLoaded;
+      read = facts.recsLoaded;
       if (toolsOff) {
         // D6: the journey and the Optimize switches are tuning tools; with them off the answer says where
         // they are and offers the one-tap starter stack when it is ready, otherwise a fresh check.
@@ -635,7 +639,7 @@ export function interviewFinding(
     case "slowAlways": {
       stackLine();
       readinessLine();
-      direct = facts.recsLoaded;
+      read = facts.recsLoaded;
       sentence = k("slowAlways.sentence");
       action = fastPathOr(station("diagnostics", "lab", k("act.diagnostics")));
       break;
@@ -732,7 +736,7 @@ export function interviewFinding(
 
   // LAW 2, mechanically. The chip is computed from what was actually collected — it is never a
   // literal in any branch above, so no future branch can hand-write a confidence it did not earn.
-  const level: FindingLevel = ev.length === 0 ? "unknown" : direct ? "measured" : "likely";
+  const level: FindingLevel = ev.length === 0 ? "unknown" : direct ? "measured" : read ? "read" : "likely";
 
   return {
     id,
