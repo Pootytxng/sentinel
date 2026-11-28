@@ -1676,6 +1676,34 @@ describe("ParamedicCard: temperature and crash history", () => {
     }
   });
 
+  // e13 review r2. Break check: word "crashes-partial-elsewhere" with the plain partial key -> the "found none" checks fail.
+  it("a partial read beside the other-folder line never says 'found none for the game', in English and Chinese", async () => {
+    const d = () =>
+      answerOf([background()], {
+        unknowns: ["crashes-partial-elsewhere"],
+        seen: [{ id: "game-crashes-elsewhere", args: { n: "1", exe: "game.exe", folder: String.raw`D:\Old`, partial: "true" } }],
+      });
+    await ask(d());
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain("Compy could only read some of Windows' crash records.");
+    expect(checked()).not.toMatch(/found none/);
+    cleanup();
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      answer.value = d();
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      expect(checked()).toContain("Compy 只读到了 Windows 崩溃记录的一部分。");
+      expect(checked()).not.toContain("其中没有找到");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   // e13 review r1 F3. Break check: drop the partial key choice in seenLine -> both sentences lose "at least" and fail.
   it("a partial read gives the other-folder count as 'at least', in English and Chinese", async () => {
     const seen: ParamedicDiagnosis["seen"] = [{ id: "game-crashes-elsewhere", args: { n: "2", exe: "game.exe", folder: String.raw`D:\Old`, partial: "true" } }];

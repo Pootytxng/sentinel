@@ -713,6 +713,7 @@
     "crashesUnavailable": "{{game}} 以前是否意外关闭过（查看用时过长）",
     "crashesUnreadable": "{{game}} 以前是否意外关闭过（Windows 的崩溃记录读不了）",
     "crashesPartial": "Compy 只读到了 Windows 崩溃记录的一部分，其中没有找到 {{game}} 的崩溃。",
+    "crashesPartialElsewhere": "Compy 只读到了 Windows 崩溃记录的一部分。",
     "compyLedger": "Compy 刚才无法读取它自己的更改记录，所以无法说出哪一项变化最早。",
     "hardwareErrorsSlow": "Windows 是否记录了硬件错误（查看用时过长）",
     "hardwareErrorsUnread": "Windows 是否记录了硬件错误（Compy 没能读取 Windows 的日志）",

@@ -713,6 +713,7 @@
     "crashesUnavailable": "Whether {{game}} has closed unexpectedly before (looking took too long)",
     "crashesUnreadable": "Whether {{game}} has closed unexpectedly before (Windows' crash records couldn't be read)",
     "crashesPartial": "Compy could only read some of Windows' crash records, and found none for {{game}} in those.",
+    "crashesPartialElsewhere": "Compy could only read some of Windows' crash records.",
     "compyLedger": "Compy couldn't read its own record of changes just now, so it can't say which change came first.",
     "hardwareErrorsSlow": "Whether Windows recorded hardware errors (looking took too long)",
     "hardwareErrorsUnread": "Whether Windows recorded hardware errors (Compy couldn't read Windows' log)",

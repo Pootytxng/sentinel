@@ -719,6 +719,43 @@ describe("the first look for a picked game", () => {
     expect(screen.getByTestId("first-look-crashes-elsewhere").textContent).toContain(String.raw`Windows has 1 crash record of a program named robrun.exe`);
   });
 
+  // e13 review r2. Break checks: drop the partial branch in elsewhereSentence -> the "at least" lookups fail; word
+  // "partial-elsewhere" with the plain partial key -> the "found none" checks fail.
+  it("on a partial read the other-folder line says 'at least' and the limit beside it never says 'found none', in English and Chinese", async () => {
+    const partly = () =>
+      gameAnswer({ crashes_elsewhere: { n: "2", exe: "robrun.exe", folder: String.raw`D:\Old`, partial: "true" }, limits: [{ kind: "crashes", code: "partial-elsewhere", args: {} }], read_all: false });
+    await look(partly());
+    expect(screen.getByTestId("first-look-crashes-elsewhere").textContent).toBe(
+      String.raw`Windows' crash records that Compy could read include at least 2 records of a program named robrun.exe that ran from another folder (D:\Old), so Compy didn't count them here.`,
+    );
+    openLimits();
+    const limits = screen.getByTestId("first-look-limits").textContent ?? "";
+    expect(limits).toContain("Compy could only read some of Windows' crash records.");
+    expect(limits).not.toMatch(/found none/);
+    cleanup();
+    await i18n.changeLanguage("zh-CN");
+    try {
+      engine.steam = steamList([]);
+      engine.diagnose = noSessions();
+      render(<ParamedicCard games={recorded} />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
+      fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "是从什么时候开始的？" })).toBeTruthy());
+      await pick("这周", partly());
+      expect(screen.getByTestId("first-look-crashes-elsewhere").textContent).toBe(
+        String.raw`Compy 能读到的 Windows 崩溃记录中，至少有 2 条名为 robrun.exe 的程序的记录，该程序是从另一个文件夹（D:\Old）运行的，所以 Compy 没有将其计入此处。`,
+      );
+      const fold = screen.getByRole("button", { name: "Compy 没能看到的" });
+      if (fold.getAttribute("aria-expanded") === "false") fireEvent.click(fold);
+      const zhLimits = screen.getByTestId("first-look-limits").textContent ?? "";
+      expect(zhLimits).toContain("Compy 只读到了 Windows 崩溃记录的一部分。");
+      expect(zhLimits).not.toContain("其中没有找到");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("a graphics mod whose loader file is dated in the window sits under 'Changes that touch games', in the measured flow's words, with its dates", async () => {
     await look(gameAnswer({ touch_games: [modRow({ settings: "2026-11-19T10:00:00Z" })] }), "This week");
     const row = within(screen.getByTestId("first-look-touch")).getByRole("listitem");

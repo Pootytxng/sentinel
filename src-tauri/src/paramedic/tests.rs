@@ -5769,7 +5769,10 @@ mod temperature_and_crashes {
         assert!(crash_line(&d).is_none());
         // A partial read: the count is a lower bound, and the args say so (the card words it "at least").
         let part = CrashRead::Read(CrashHistory { crashes: vec![at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Old\G"))], listed: true, partial: true });
-        assert_eq!(elsewhere(&with_crashes(part, false)).expect("said").get("partial").map(String::as_str), Some("true"));
+        let pd = with_crashes(part, false);
+        assert_eq!(elsewhere(&pd).expect("said").get("partial").map(String::as_str), Some("true"));
+        // r2: and the couldn't-see line beside it never says "found none for the game".
+        assert!(pd.unknowns.contains(&"crashes-partial-elsewhere") && !pd.unknowns.contains(&"crashes-partial"), "{:?}", pd.unknowns);
         // Equal times: the shorter folder is the example.
         let d = with_crashes(history(vec![at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"D:\Long\Folder")), at("g", "2026-10-03T08:00:00Z", Some(false), Some(r"E:\G"))]), false);
         assert_eq!(elsewhere(&d).expect("said")["folder"], r"E:\G");

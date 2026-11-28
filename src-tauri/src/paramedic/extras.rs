@@ -158,6 +158,7 @@ pub(super) fn detect_crashes(c: &Ctx, out: &mut Out) {
             };
             let ledger_unreadable = matches!(c.inp.compy_applies, CompyApplies::Unreadable);
             let earliest = earliest_dated_change(windows, in_period.iter().map(|(t, _)| *t));
+            let elsewhere = crashes_elsewhere(h, CrashMatch::Program(game));
             match crash_outcome(h, CrashMatch::Program(game), earliest.map(|e| e.at)) {
                 CrashOutcome::Line(l) => {
                     out.see("game-crashes", &l.args);
@@ -179,15 +180,17 @@ pub(super) fn detect_crashes(c: &Ctx, out: &mut Out) {
                         out.see("game-crash-signature", &args);
                     }
                 }
-                // No count line to carry the limit: say what could not be seen.
+                // No count line to carry the limit: say what could not be seen. e13 r2: beside records of the program
+                // name from another folder it never adds "found none for the game" (that folder may be the game's own,
+                // through an 8.3 name or a junction).
                 CrashOutcome::NoneCounted { partial } => {
                     if partial {
-                        out.unknown("crashes-partial");
+                        out.unknown(if elsewhere.is_some() { "crashes-partial-elsewhere" } else { "crashes-partial" });
                     }
                 }
             }
             // e13: reports of the same program name from another folder are said, never dropped silently.
-            if let Some(e) = crashes_elsewhere(h, CrashMatch::Program(game)) {
+            if let Some(e) = elsewhere {
                 out.see("game-crashes-elsewhere", &e.args());
             }
         }

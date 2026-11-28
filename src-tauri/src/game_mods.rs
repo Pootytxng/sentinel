@@ -1659,9 +1659,10 @@ pub(crate) fn compare_form(p: &Path) -> String {
     } else {
         joined
     };
-    // ASCII case only: NTFS always folds it, so it can never make two different folders equal. Folding beyond ASCII
-    // (`Ü`/`ü`, but also the Kelvin sign and `k`, or `ẞ` and `ß`, which NTFS keeps apart) is left out, so such a
-    // spelling reads as another folder rather than as the game's own.
+    // ASCII case only. Compy treats ASCII case as the same, which matches NTFS's default; a folder made
+    // case-sensitive (per directory, e.g. for WSL) is the rare exception, where two names differing only in ASCII
+    // case are two folders. Folding beyond ASCII (`Ü`/`ü`, but also the Kelvin sign and `k`, or `ẞ` and `ß`, which
+    // NTFS keeps apart) is left out, so such a spelling reads as another folder rather than as the game's own.
     joined.to_ascii_lowercase()
 }
 

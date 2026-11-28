@@ -834,6 +834,9 @@ function unknownLine(code: string, { t, game, startRecord }: Ctx): string | null
       return t("paramedic.unknown.crashesUnreadable", { game });
     case "crashes-partial":
       return t("paramedic.unknown.crashesPartial", { game });
+    // e13 r2: beside records of the program name from another folder: no "found none for the game".
+    case "crashes-partial-elsewhere":
+      return t("paramedic.unknown.crashesPartialElsewhere");
     case "compy-ledger-unreadable":
       return t("paramedic.unknown.compyLedger");
     case "startup-programs":

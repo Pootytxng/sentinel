@@ -504,7 +504,12 @@ fn crashes_part(game: &GameCtx, crashes: &CrashRead, out: &mut FirstLook) {
                     out.crashes = Some(Crashes { args: l.args.into_iter().collect(), signature_module: module, signature_before: before, change_kind, split });
                 }
                 // Not "no crashes": some reports were not read.
-                CrashOutcome::NoneCounted { partial: true } => out.limits.push(limit("crashes", "partial", &[])),
+                // e13 r2: beside records of the program name from another folder, the limit never adds "found none
+                // for the game" (that folder may be the game's own, through an 8.3 name or a junction).
+                CrashOutcome::NoneCounted { partial: true } => {
+                    let code = if out.crashes_elsewhere.is_some() { "partial-elsewhere" } else { "partial" };
+                    out.limits.push(limit("crashes", code, &[]));
+                }
                 // "No crash record for the game" only when no record of its program name came from another folder
                 // either: an 8.3 name or a junction can make the game's own folder look like another one.
                 CrashOutcome::NoneCounted { partial: false } => out.crashes_none = out.crashes_elsewhere.is_none(),
@@ -1832,6 +1837,13 @@ mod tests {
         // None from another folder: nothing extra.
         let a = with_crashes(history(vec![crash("robrun.exe", "2026-11-01T10:00:00Z", Some(true))], false), read(vec![]));
         assert!(a.crashes_elsewhere.is_none());
+        // r2: a partial read with only other-folder records: the limit never says "found none for the game"; with
+        // nothing of the name at all it still does.
+        let a = with_crashes(history(vec![away("2026-11-02T10:00:00Z", r"D:\Old\RobRun")], true), read(vec![]));
+        assert_eq!(a.crashes_elsewhere.as_ref().and_then(|e| e.get("partial")).map(String::as_str), Some("true"));
+        assert!(has_limit(&a, "crashes", "partial-elsewhere") && !has_limit(&a, "crashes", "partial") && !a.crashes_none, "{:?}", a.limits);
+        let a = with_crashes(history(vec![], true), read(vec![]));
+        assert!(has_limit(&a, "crashes", "partial") && !has_limit(&a, "crashes", "partial-elsewhere"));
     }
 
     fn found_mod(name: &'static str, strong: bool, loader: bool, first: Option<&str>, settings: Option<&str>) -> crate::paramedic::mods::ModFound {

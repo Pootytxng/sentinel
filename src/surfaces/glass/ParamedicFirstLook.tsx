@@ -528,6 +528,9 @@ function limitLine(l: ParamedicLimit, t: T, dates: Dates, game?: string | null):
         return t("paramedic.unknown.crashesUnreadable", { game: g });
       case "partial":
         return t("paramedic.unknown.crashesPartial", { game: g });
+      // e13 r2: beside records of the program name from another folder: no "found none for the game".
+      case "partial-elsewhere":
+        return t("paramedic.unknown.crashesPartialElsewhere");
       case "no-folder":
         return t("paramedic.firstLook.limit.crashesNoFolder", { game: g });
       case "reader-failed":
