@@ -1772,6 +1772,49 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(screen.queryByTestId("paramedic-more")).toBeNull();
   });
 
+  // e8: the questions ("Which game?", "When did it start?") scroll in the same region and had no hint at all.
+  it("more below: the questions view gets the same 'More below' strip while text is hidden below, kept hidden at the end", async () => {
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    fireEvent.click(link() as HTMLElement);
+    await waitFor(() => expect(picker()).toBeTruthy());
+    const region = scrollRegion();
+    expect(region.contains(picker())).toBe(true);
+    sizes(region, { scrollHeight: 900, clientHeight: 448, scrollTop: 0 });
+    fireEvent.scroll(region);
+    const strip = screen.getByTestId("paramedic-more");
+    expect(strip.textContent).toBe("More below");
+    expect(strip.getAttribute("data-shown")).toBe("true");
+    expect(region.contains(strip)).toBe(false);
+    expect(strip.parentElement).toBe(region.parentElement);
+    sizes(region, { scrollHeight: 900, clientHeight: 448, scrollTop: 448 });
+    fireEvent.scroll(region);
+    expect(screen.getByTestId("paramedic-more").getAttribute("data-shown")).toBe("false");
+    expect((screen.getByTestId("paramedic-more") as HTMLElement).style.visibility).toBe("hidden");
+    sizes(region, { scrollHeight: 300, clientHeight: 448, scrollTop: 0 });
+    fireEvent.scroll(region);
+    expect(screen.queryByTestId("paramedic-more")).toBeNull();
+  });
+
+  it("more below: questions opened before any answer (first check still running) are measured when they appear, with no scroll", async () => {
+    answer.gate = new Promise<void>(() => {});
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(link()).toBeTruthy());
+    const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+    const tall = (v: number) => ({ configurable: true, get(this: HTMLElement) { return this.classList.contains("gl-para-scroll") ? v : 0; } });
+    Object.defineProperty(proto, "scrollHeight", tall(900));
+    Object.defineProperty(proto, "clientHeight", tall(448));
+    try {
+      fireEvent.click(link() as HTMLElement);
+      await waitFor(() => expect(picker()).toBeTruthy());
+      await waitFor(() => expect(screen.getByTestId("paramedic-more").getAttribute("data-shown")).toBe("true"));
+    } finally {
+      delete proto.scrollHeight;
+      delete proto.clientHeight;
+    }
+  });
+
   it("the hint and every chevron are at least 16 px, in the body ink, and a hint never takes a click or a height", () => {
     const svgSize = (selector: string) => px(rule(selector), "width");
     expect(svgSize(':root[data-v2="on"] .gl-para-caret svg')).toBeGreaterThanOrEqual(16);
@@ -1808,7 +1851,9 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(rule(':root[data-v2="on"] .gl-para-scroll')).toMatch(/scrollbar-gutter:\s*stable/);
     const card = rule(':root[data-v2="on"] .gl-para-card');
     expect(card).toMatch(/max-height:\s*var\(--para-card-max\)/);
-    expect(card).toMatch(/--para-card-max:\s*520px/);
+    // e8: the cap follows the window (opened at 520 px it pushed the rest of Home off a 968 px window), with a floor
+    // so the answer still has room, and never above the old 520 px. jsdom has no layout: this pins the rule only.
+    expect(card).toMatch(/--para-card-max:\s*clamp\(260px,\s*40vh,\s*520px\)/);
     expect(card).not.toMatch(/(?:^|[;\s])(?:min-)?height:/);
     expect(rule(':root[data-v2="on"] .gl-para-answer')).toMatch(/flex:\s*0 1 auto/);
     expect(rule(':root[data-v2="on"] .v2-content:has(.gl-room[data-room="home"])')).toMatch(/scrollbar-gutter:\s*stable/);
@@ -1927,22 +1972,45 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
   });
 
   // p4: focus stays on the toggle that opened a row, so the old "an open disclosure keeps Escape" rule left Escape dead
-  // for the rest of the visit. An inline section is not a layer: Escape closes the card, focus returns to the bar's button.
-  it("Escape closes the card after a row inside it was opened, from its toggle and from its own text", async () => {
+  // for the rest of the visit. e8: Escape is never dead: from inside an open row (its toggle or its own text) it closes
+  // that row first, focus back on its toggle; the next Escape closes the card, focus back on the bar's button.
+  it("Escape inside an opened row closes the row first (focus on its toggle), then the card, from its toggle and from its own text", async () => {
     await ask(base);
     await waitFor(() => expect(rows().length).toBe(1));
+    const card = () => screen.getByTestId("paramedic");
     const btn = within(rows()[0]).getByRole("button");
     fireEvent.click(btn);
     expect(btn.getAttribute("aria-expanded")).toBe("true");
     btn.focus();
     fireEvent.keyDown(btn, { key: "Escape" });
-    expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Your graphics driver changed from 1.0 to 2.0.")).toBeNull();
+    expect(card().getAttribute("data-open")).toBe("true");
+    expect(document.activeElement).toBe(btn);
+    fireEvent.keyDown(btn, { key: "Escape" });
+    expect(card().getAttribute("data-open")).toBe("false");
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
     cleanup();
     await ask(base);
     await waitFor(() => expect(rows().length).toBe(1));
-    fireEvent.click(within(rows()[0]).getByRole("button"));
+    const toggle = within(rows()[0]).getByRole("button");
+    fireEvent.click(toggle);
     fireEvent.keyDown(screen.getByText("Your graphics driver changed from 1.0 to 2.0."), { key: "Escape" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(card().getAttribute("data-open")).toBe("true");
+    expect(document.activeElement).toBe(toggle);
+    fireEvent.keyDown(toggle, { key: "Escape" });
+    expect(card().getAttribute("data-open")).toBe("false");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+  });
+
+  it("Escape with a row open but the focus outside it (on the answer region) closes the card, not the row", async () => {
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    fireEvent.click(within(rows()[0]).getByRole("button"));
+    const region = scrollRegion();
+    region.focus();
+    fireEvent.keyDown(region, { key: "Escape" });
     expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
   });

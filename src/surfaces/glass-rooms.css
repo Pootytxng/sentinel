@@ -674,8 +674,10 @@
 }
 
 /* ── Paramedic card (F3): the open card fits ~520 px; rows are one line; the rest scrolls inside. ── */
+/* e8: the cap also follows the window: 40% of its height, never under 260 px, never over 520 px (288 px at
+   1280x720, 387 px at 968 px high), so the open card pushes the rest of Home less far down a short window. */
 :root[data-v2="on"] .gl-para-card {
-  --para-card-max: 520px;
+  --para-card-max: clamp(260px, 40vh, 520px);
   display: flex;
   flex-direction: column;
   max-height: var(--para-card-max);
