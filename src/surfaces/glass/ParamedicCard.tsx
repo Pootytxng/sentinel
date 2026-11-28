@@ -822,6 +822,9 @@ function unknownLine(code: string, { t, game, startRecord }: Ctx): string | null
       return t("paramedic.unknown.modsNoFolder", { game });
     case "mods-folder-unreadable":
       return t("paramedic.unknown.modsFolderUnreadable", { game });
+    // e14: a read in the folder never came back in time, so Compy couldn't finish looking: never "no mods".
+    case "mods-drive-no-answer":
+      return t("paramedic.unknown.modsDriveNoAnswer", { game });
     case "mods-partial":
       return t("paramedic.unknown.modsPartial", { game });
     case "mods-unavailable":

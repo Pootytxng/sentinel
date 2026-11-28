@@ -20,9 +20,11 @@
 //!   restore or re-download resets it, so it is NOT when the mod arrived), and "the mod's own log or
 //!   cache file was last written on {last_log_write}" (nothing stronger: it is when something last
 //!   wrote that file). Never "installed on", "added on", "active", "running", or "caused".
-//! - Calling: every scan is synchronous and cannot be pre-empted (a first directory read on a sleeping
-//!   disk or a network share can take longer than the budget). Call it from a blocking context
-//!   (`spawn_blocking`), never the UI or an async thread. When wiring, serialise a DTO built from
+//! - Calling: every scan blocks its caller and one OS read cannot be pre-empted (a directory read on a
+//!   sleeping disk or a network share can take far longer than the budget). So each public scan runs on a
+//!   worker and its caller waits at most the budget plus `DRIVE_ANSWER_GRACE`: late is `DriveDidNotAnswer`,
+//!   and a folder whose earlier worker has not come back gets no second one (`bounded`). Call it from a
+//!   blocking context (`spawn_blocking`), never the UI or an async thread. When wiring, serialise a DTO built from
 //!   `ModScan::verdict()`, not `ModScan` itself: `found` empty on its own is not "no mods".
 //! - No result is "no mods" except `ModScan::verdict()` = `NoKnownMod`, which means "none of the mods
 //!   Compy knows were found in the folders it checked" (`coverage` says which).
@@ -60,6 +62,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
 /// Hard time budget for one folder scan unless the caller passes another.
@@ -293,6 +296,15 @@ pub(crate) enum ModUnreadable {
     NotInSteam,
     /// Steam's own lookup could not be completed (reason from `change_sources`).
     Steam(UnreadableReason),
+    /// A read in the folder did not come back within the scan's budget plus `DRIVE_ANSWER_GRACE` (a sleeping
+    /// disk, a NAS, a mapped drive whose server is gone), or an earlier scan of the same folder has not come
+    /// back although its caller's wait has ended. Whatever it saw is dropped: never "no mods". (`bounded`)
+    DriveDidNotAnswer,
+    /// An earlier scan of the same folder is still running and its caller's wait has not ended yet: Compy is
+    /// still looking there, so nothing is said about the drive. (`bounded`)
+    StillScanning,
+    /// The scan's worker thread could not be started, or stopped without an answer.
+    ScanFailed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -361,6 +373,12 @@ pub(crate) enum Verdict<'a> {
 impl ModScan {
     fn unreadable(why: ModUnreadable, coverage: Coverage) -> ModScan {
         ModScan { status: ScanStatus::Unreadable(why), found: Vec::new(), coverage }
+    }
+
+    /// A scan that could not look, for the paramedic's DTO tests.
+    #[cfg(test)]
+    pub(crate) fn could_not_scan(why: ModUnreadable) -> ModScan {
+        ModScan::unreadable(why, Coverage::root_only())
     }
 
     pub(crate) fn verdict(&self) -> Verdict<'_> {
@@ -1416,7 +1434,78 @@ fn scan_with_deadline(root: &Path, deadline: Instant, exe_folder: bool) -> ModSc
 /// looked at: for an install root use `scan_install_folder`.
 #[cfg_attr(not(test), allow(dead_code))] // the command scans an install folder or an image folder; tests scan a bare folder
 pub(crate) fn scan_game_folder(root: &Path, budget: Duration) -> ModScan {
-    scan_with_deadline(root, deadline_after(budget), true)
+    let deadline = deadline_after(budget);
+    let r = root.to_path_buf();
+    bounded(root, deadline, move || scan_with_deadline(&r, deadline, true))
+}
+
+/// Grace after a scan's own deadline before its caller stops waiting for it. The walk checks its deadline
+/// between directory reads, but ONE read of a sleeping USB disk, a NAS or a mapped drive whose server is gone can
+/// block inside Windows far past it (tens of seconds, or until the drive answers at all), which used to hold the
+/// paramedic's mods slot (and the other-games helper) for as long, so every later press read "took too long". The
+/// same 250 ms as the Steam lookup's `change_sources::STEAM_HARD_MARGIN`: a scan that stops on its own budget is
+/// never cut off by thread start-up, and the card is not held up.
+pub(crate) const DRIVE_ANSWER_GRACE: Duration = Duration::from_millis(250);
+
+/// Folders (`compare_form`) whose scan runs on a worker right now, including one whose caller stopped waiting,
+/// each with the moment its caller's wait ends (past it, the worker is overdue: its drive did not answer in time).
+static IN_FLIGHT: Mutex<Vec<(String, Instant)>> = Mutex::new(Vec::new());
+
+/// Runs `scan` (a scan of `root`) on its own thread and waits until `deadline` plus `DRIVE_ANSWER_GRACE`. Late
+/// is `DriveDidNotAnswer`, never "no mods". While a worker for the same folder has not come back, no second one
+/// is started, so repeated presses cannot pile threads up on a drive that never answers: at most one parked
+/// worker per folder. That press answers at once: `StillScanning` while the earlier caller's wait has not ended
+/// (another surface may be scanning a drive that answers), `DriveDidNotAnswer` only once it has.
+///
+/// Thread bound: the thread is named "game-mods-scan", does read-only directory and file work only and is never
+/// joined. A parked worker ends when the OS call returns; it then frees its folder and sends into a dropped channel.
+fn bounded(root: &Path, deadline: Instant, scan: impl FnOnce() -> ModScan + Send + 'static) -> ModScan {
+    let wait = deadline.saturating_duration_since(Instant::now()).saturating_add(DRIVE_ANSWER_GRACE);
+    bounded_in(&IN_FLIGHT, compare_form(root), wait, scan)
+}
+
+/// Frees a folder in `IN_FLIGHT` (or a test's own list) when its worker ends, even by a panic.
+struct InFlight(&'static Mutex<Vec<(String, Instant)>>, String);
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        let mut held = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(i) = held.iter().position(|(k, _)| *k == self.1) {
+            held.swap_remove(i);
+        }
+    }
+}
+
+fn bounded_in(in_flight: &'static Mutex<Vec<(String, Instant)>>, key: String, wait: Duration, scan: impl FnOnce() -> ModScan + Send + 'static) -> ModScan {
+    let late = || ModScan::unreadable(ModUnreadable::DriveDidNotAnswer, Coverage::root_only());
+    {
+        let mut held = in_flight.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let now = Instant::now();
+        if let Some((_, overdue_at)) = held.iter().find(|(k, _)| *k == key) {
+            // Within the earlier caller's wait the drive may well be answering: only "still looking", never "didn't answer".
+            return if now < *overdue_at { ModScan::unreadable(ModUnreadable::StillScanning, Coverage::root_only()) } else { late() };
+        }
+        // Set before the worker starts, so a caller whose wait has run out always finds `now >= overdue_at`.
+        held.push((key.clone(), now.checked_add(wait).unwrap_or_else(|| now + Duration::from_secs(3600))));
+    }
+    let release = InFlight(in_flight, key);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let spawned = std::thread::Builder::new().name("game-mods-scan".into()).spawn(move || {
+        let release = release;
+        let answer = scan();
+        // Free the folder before answering, so asking again the moment the answer arrives starts a fresh scan.
+        drop(release);
+        let _ = tx.send(answer);
+    });
+    // A thread that could not start dropped its closure, and with it the folder's entry.
+    if spawned.is_err() {
+        return ModScan::unreadable(ModUnreadable::ScanFailed, Coverage::root_only());
+    }
+    match rx.recv_timeout(wait) {
+        Ok(scan) => scan,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => late(),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => ModScan::unreadable(ModUnreadable::ScanFailed, Coverage::root_only()),
+    }
 }
 
 /// What the search for the program's folder found, and every limit it hit.
@@ -1600,8 +1689,15 @@ fn merge(scans: Vec<ModScan>, extra: Vec<PartialReason>, coverage: Coverage) -> 
 /// Scan a game's install folder and the folder holding its exe (`exe` when known, otherwise up to
 /// four folders that hold a game-like program), one shared time budget. A program folder that was not
 /// located, or a search that hit a limit, makes the result `Partial`; `coverage` says what was looked at.
+/// A drive that does not answer in time is `DriveDidNotAnswer` (`bounded`).
 pub(crate) fn scan_install_folder(root: &Path, exe: Option<&str>, budget: Duration) -> ModScan {
     let deadline = deadline_after(budget);
+    let (r, e) = (root.to_path_buf(), exe.map(str::to_string));
+    bounded(root, deadline, move || install_scan(&r, e.as_deref(), deadline))
+}
+
+/// `scan_install_folder` on the calling thread, inside `deadline`.
+fn install_scan(root: &Path, exe: Option<&str>, deadline: Instant) -> ModScan {
     let want = exe.map(|e| e.trim().to_ascii_lowercase()).filter(|e| !e.is_empty());
     let (search, kind) = match &want {
         Some(w) => (find_dirs_holding(root, deadline, &|n| n == w.as_str(), 1, true), ExeSearch::ForProgram),
@@ -1700,11 +1796,17 @@ fn image_folder_under(root: &Path, image: &Path) -> Option<PathBuf> {
 /// known: no search at all. When the path is not under the install folder it is not trusted, and the
 /// program's file name is searched for instead (`scan_install_folder`).
 pub(crate) fn scan_for_image(root: &Path, image: &Path, budget: Duration) -> ModScan {
+    let deadline = deadline_after(budget);
+    let (r, i) = (root.to_path_buf(), image.to_path_buf());
+    bounded(root, deadline, move || image_scan(&r, &i, deadline))
+}
+
+/// `scan_for_image` on the calling thread, inside `deadline`.
+fn image_scan(root: &Path, image: &Path, deadline: Instant) -> ModScan {
     let Some(folder) = image_folder_under(root, image) else {
         let name = image.file_name().map(|n| n.to_string_lossy().into_owned());
-        return scan_install_folder(root, name.as_deref(), budget);
+        return install_scan(root, name.as_deref(), deadline);
     };
-    let deadline = deadline_after(budget);
     let same = compare_form(&folder) == compare_form(root);
     let mut scans = vec![scan_with_deadline(root, deadline, same)];
     if !same {
@@ -2805,6 +2907,178 @@ mod tests {
     fn running_out_of_time_before_any_file_is_unreadable_not_clean() {
         let src = mem(vec![("", vec![rf("a.ini")])]);
         assert_eq!(walk(&src, Instant::now(), MAX_ENTRIES).err(), Some(ModUnreadable::TimedOutBeforeAnyEntry));
+    }
+
+    // ---- e14: a drive that never answers ---------------------------------------------------------
+
+    /// A directory source that blocks inside its first listing until the test lets it go, the way one read of a
+    /// sleeping disk or a dead network share blocks inside Windows past every deadline the walk checks. The third
+    /// value hears once the worker is inside that read, so a test never relies on how fast a thread starts.
+    fn stuck_drive() -> (impl Fn(&str, Instant, usize) -> RawListing + Send + 'static, std::sync::mpsc::Sender<()>, std::sync::mpsc::Receiver<()>) {
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let (entered_tx, entered) = std::sync::mpsc::channel::<()>();
+        let inside = Mutex::new((wait, entered_tx));
+        let src = move |_: &str, _: Instant, _: usize| -> RawListing {
+            let held = inside.lock().unwrap();
+            let _ = held.1.send(());
+            let _ = held.0.recv();
+            Ok(RawDir { entries: vec![rf("ReShade.ini")], had_errors: false, stopped: None })
+        };
+        (src, go, entered)
+    }
+
+    fn held_in(list: &Mutex<Vec<(String, Instant)>>, key: &str) -> bool {
+        list.lock().unwrap().iter().any(|(k, _)| k == key)
+    }
+
+    /// The real walk over a directory source, as `scan_with_deadline` reads it.
+    fn walk_scan(src: &dyn Fn(&str, Instant, usize) -> RawListing, deadline: Instant) -> ModScan {
+        match walk(src, deadline, MAX_ENTRIES) {
+            Ok(w) => ModScan { status: status_of(w.reasons), found: match_signatures(&w.listing), coverage: Coverage::root_only() },
+            Err(why) => ModScan::unreadable(why, Coverage::root_only()),
+        }
+    }
+
+    fn own_list() -> &'static Mutex<Vec<(String, Instant)>> {
+        Box::leak(Box::new(Mutex::new(Vec::new())))
+    }
+
+    fn free_within(list: &Mutex<Vec<(String, Instant)>>, limit: Duration) -> bool {
+        let until = Instant::now() + limit;
+        while Instant::now() < until {
+            if list.lock().unwrap().is_empty() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        false
+    }
+
+    #[test]
+    fn a_scan_on_a_drive_that_never_answers_lets_its_caller_go_at_the_deadline_and_says_so() {
+        // Break check: wait `wait * 100` in `bounded_in` and the caller is held 5 s instead (fails the bound below).
+        assert_eq!(DRIVE_ANSWER_GRACE, Duration::from_millis(250));
+        let list = own_list();
+        let (src, go, _) = stuck_drive();
+        // The walk's own deadline (10 ms) passes long before its one read comes back: only the bound lets go.
+        let walk_deadline = Instant::now() + Duration::from_millis(10);
+        let started = Instant::now();
+        let scan = bounded_in(list, r"\\nas\games\x".into(), Duration::from_millis(50), move || walk_scan(&src, walk_deadline));
+        let took = started.elapsed();
+        assert!(took >= Duration::from_millis(50) && took < Duration::from_millis(900), "{took:?}");
+        assert_eq!(scan.status, ScanStatus::Unreadable(ModUnreadable::DriveDidNotAnswer));
+        assert!(matches!(scan.verdict(), Verdict::CouldNotScan { reason: ModUnreadable::DriveDidNotAnswer }), "never no-known-mod: {scan:?}");
+        assert!(scan.found.is_empty());
+        // The public path waits its deadline plus the grace, and no longer.
+        let (src, go2, _) = stuck_drive();
+        let started = Instant::now();
+        let root = PathBuf::from(format!(r"\\nas-e14-{}\games\never", std::process::id()));
+        let scan = bounded(&root, Instant::now() + Duration::from_millis(20), move || walk_scan(&src, far()));
+        let took = started.elapsed();
+        assert!(took >= DRIVE_ANSWER_GRACE && took < Duration::from_millis(1000), "{took:?}");
+        assert_eq!(scan.status, ScanStatus::Unreadable(ModUnreadable::DriveDidNotAnswer));
+        // When the drive finally answers, the parked workers end and free their folders.
+        go.send(()).unwrap();
+        go2.send(()).unwrap();
+        assert!(free_within(list, Duration::from_secs(2)), "{:?}", list.lock().unwrap());
+        let key = compare_form(&root);
+        let until = Instant::now() + Duration::from_secs(2);
+        while held_in(&IN_FLIGHT, &key) && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(!held_in(&IN_FLIGHT, &key));
+    }
+
+    #[test]
+    fn a_second_look_while_the_first_caller_still_waits_is_still_looking_never_didnt_answer() {
+        // e14 review r1 F1: another surface (or the other-games helper) may be scanning a folder on a drive that
+        // answers. Break check: answer `late()` before `overdue_at` in `bounded_in` -> this says "didn't answer".
+        let list = own_list();
+        let (src, go, entered) = stuck_drive();
+        let key = r"f:\games\busy".to_string();
+        let k = key.clone();
+        let first = std::thread::spawn(move || bounded_in(list, k, Duration::from_secs(30), move || walk_scan(&src, far())));
+        // Wait until the first worker is inside its read (no reliance on how fast a thread starts).
+        entered.recv_timeout(Duration::from_secs(10)).expect("the first worker started its read");
+        let started = Instant::now();
+        let again = bounded_in(list, key.clone(), Duration::from_secs(5), || ModScan::unreadable(ModUnreadable::FolderMissing, Coverage::root_only()));
+        assert_eq!(again.status, ScanStatus::Unreadable(ModUnreadable::StillScanning));
+        assert!(started.elapsed() < Duration::from_secs(1), "the second look does not wait: {:?}", started.elapsed());
+        assert_eq!(list.lock().unwrap().len(), 1, "no second worker");
+        // The drive answers inside the first caller's wait: that caller gets the real scan, and the folder is free.
+        go.send(()).unwrap();
+        let first = first.join().unwrap();
+        assert_eq!((first.status.clone(), kinds(&first.found)), (ScanStatus::Complete, vec![ModKind::ReShade]));
+        assert!(list.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn repeated_scans_of_a_folder_whose_drive_never_answers_start_no_second_worker() {
+        // Break checks: drop the refusal of a held folder in `bounded_in` and every press parks another worker;
+        // answer `StillScanning` past `overdue_at` and these presses never say the drive didn't answer.
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let list = own_list();
+        let runs: &'static AtomicUsize = Box::leak(Box::new(AtomicUsize::new(0)));
+        let (src, go, entered) = stuck_drive();
+        let key = r"d:\games\asleep".to_string();
+        let first = bounded_in(list, key.clone(), Duration::from_millis(50), move || {
+            runs.fetch_add(1, Ordering::SeqCst);
+            walk_scan(&src, far())
+        });
+        assert_eq!(first.status, ScanStatus::Unreadable(ModUnreadable::DriveDidNotAnswer));
+        // The worker is inside its read before anything is counted (however slowly its thread started).
+        entered.recv_timeout(Duration::from_secs(10)).expect("the worker started its read");
+        // Five more presses while that worker is parked, after its caller's wait has ended: each says at once that
+        // the drive didn't answer, and none starts a worker.
+        let started = Instant::now();
+        for _ in 0..5 {
+            let again = bounded_in(list, key.clone(), Duration::from_secs(5), move || {
+                runs.fetch_add(1, Ordering::SeqCst);
+                ModScan::unreadable(ModUnreadable::FolderMissing, Coverage::root_only())
+            });
+            assert_eq!(again.status, ScanStatus::Unreadable(ModUnreadable::DriveDidNotAnswer));
+        }
+        assert!(started.elapsed() < Duration::from_secs(1), "no press waited: {:?}", started.elapsed());
+        assert_eq!((runs.load(Ordering::SeqCst), list.lock().unwrap().len()), (1, 1));
+        // Another folder is not held up by it.
+        let other = bounded_in(list, r"e:\games\awake".into(), Duration::from_secs(5), || walk_scan(&mem(vec![("", vec![rf("ReShade.ini")])]), far()));
+        assert_eq!(kinds(&other.found), vec![ModKind::ReShade]);
+        // The drive answers: the parked worker frees the folder and the next press scans afresh.
+        go.send(()).unwrap();
+        assert!(free_within(list, Duration::from_secs(2)), "{:?}", list.lock().unwrap());
+        let fresh = bounded_in(list, key, Duration::from_secs(5), move || {
+            runs.fetch_add(1, Ordering::SeqCst);
+            walk_scan(&mem(vec![("", vec![rf("ReShade.ini")])]), far())
+        });
+        assert_eq!((fresh.status, runs.load(Ordering::SeqCst)), (ScanStatus::Complete, 2));
+    }
+
+    #[test]
+    fn a_worker_that_dies_is_a_failed_scan_and_frees_its_folder() {
+        let list = own_list();
+        let scan = bounded_in(list, "k".into(), Duration::from_secs(5), || -> ModScan { panic!("a scan that dies") });
+        assert_eq!(scan.status, ScanStatus::Unreadable(ModUnreadable::ScanFailed));
+        assert!(list.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_fast_scan_through_the_bound_is_exactly_the_scan_on_the_calling_thread() {
+        // Break check: answer `late()` for `Ok` in `bounded_in` and every fast scan reads as a drive that didn't answer.
+        let root = temp_root("e14_fast");
+        put(&root, "Game.exe", b"MZ");
+        put(&root, "ReShade.ini", b"[GENERAL]\n");
+        put(&root, "ReShade64.dll", b"MZ");
+        put(&root, "bin/x/Other.exe", b"MZ");
+        let exe = root.join("Game.exe");
+        assert_eq!(scan_install_folder(&root, Some("Game.exe"), Duration::from_secs(10)), install_scan(&root, Some("Game.exe"), far()));
+        assert_eq!(scan_install_folder(&root, None, Duration::from_secs(10)), install_scan(&root, None, far()));
+        assert_eq!(scan_game_folder(&root, Duration::from_secs(10)), scan_with_deadline(&root, far(), true));
+        assert_eq!(scan_for_image(&root, &exe, Duration::from_secs(10)), image_scan(&root, &exe, far()));
+        let scan = scan_install_folder(&root, Some("Game.exe"), Duration::from_secs(10));
+        assert_eq!((scan.status.clone(), kinds(&scan.found)), (ScanStatus::Complete, vec![ModKind::ReShade]));
+        // The folder is free the moment its answer arrives.
+        assert!(!held_in(&IN_FLIGHT, &compare_form(&root)));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     // ---- merge, the exe search, verdict and coverage -------------------------------------------

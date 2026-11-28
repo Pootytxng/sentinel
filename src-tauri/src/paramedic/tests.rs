@@ -5089,6 +5089,8 @@ mod graphics_mods {
         };
         assert_eq!(unknowns(read(ModsVerdict::CouldNotScan(CouldNot::NoInstallFolder))), ["mods-no-folder"]);
         assert_eq!(unknowns(read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable))), ["mods-folder-unreadable"]);
+        // e14: a drive that didn't answer in time is its own line, never "the folder couldn't be read" or clean.
+        assert_eq!(unknowns(read(ModsVerdict::CouldNotScan(CouldNot::DriveDidNotAnswer))), ["mods-drive-no-answer"]);
         assert_eq!(unknowns(read(ModsVerdict::Partly(Vec::new()))), ["mods-partial"]);
         assert_eq!(unknowns(ModsRead::Unavailable("took-too-long")), ["mods-unavailable"]);
         // The pure engine on a fixture says nothing about mods either way.
@@ -5404,6 +5406,12 @@ mod graphics_mods {
         }
         let gone = root.join("not-there");
         assert_eq!(scan(&gone), read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable)));
+        // e14: the scan's own bound. Late is "the drive didn't answer"; a worker that could not run is a failed reader.
+        use crate::game_mods::{ModScan, ModUnreadable};
+        assert_eq!(mods::dto(&ModScan::could_not_scan(ModUnreadable::DriveDidNotAnswer)), read(ModsVerdict::CouldNotScan(CouldNot::DriveDidNotAnswer)));
+        assert_eq!(mods::dto(&ModScan::could_not_scan(ModUnreadable::ScanFailed)), ModsRead::Unavailable("reader-failed"));
+        // e14 r1: another scan of the folder still within its time is "looking took too long", never "didn't answer".
+        assert_eq!(mods::dto(&ModScan::could_not_scan(ModUnreadable::StillScanning)), ModsRead::Unavailable("took-too-long"));
         let _ = std::fs::remove_dir_all(root);
     }
 }

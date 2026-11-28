@@ -512,6 +512,8 @@ function limitLine(l: ParamedicLimit, t: T, dates: Dates, game?: string | null):
         return t("paramedic.unknown.modsNoFolder", { game: g });
       case "folder-unreadable":
         return t("paramedic.unknown.modsFolderUnreadable", { game: g });
+      case "drive-no-answer":
+        return t("paramedic.unknown.modsDriveNoAnswer", { game: g });
       case "partial":
         // A mod already found: what is unknown is whether there are other mods.
         return l.args.other === "true" ? t("paramedic.firstLook.limit.modsPartialOther", { game: g }) : t("paramedic.unknown.modsPartial", { game: g });

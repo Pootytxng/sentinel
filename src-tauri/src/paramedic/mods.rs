@@ -40,6 +40,9 @@ pub(crate) enum CouldNot {
     NoInstallFolder,
     /// The folder was missing, unreadable, or the scan ran out of time before it listed anything.
     FolderUnreadable,
+    /// A read in the folder did not come back in time (its drive did not answer), or an earlier scan of the
+    /// same folder has not come back although its caller's wait has ended: Compy couldn't finish looking there.
+    DriveDidNotAnswer,
 }
 
 /// One mod's recorded facts, reduced from `ModFinding`. Names are the module's fixed display names.
@@ -105,6 +108,11 @@ pub(crate) fn dto(scan: &ModScan) -> ModsRead {
         ScanVerdict::CouldNotScan { reason } => ModsVerdict::CouldNotScan(match reason {
             ModUnreadable::FolderMissing | ModUnreadable::FolderUnreadable | ModUnreadable::TimedOutBeforeAnyEntry => CouldNot::FolderUnreadable,
             ModUnreadable::NoProcessName | ModUnreadable::NotInSteam | ModUnreadable::Steam(_) => CouldNot::NoInstallFolder,
+            ModUnreadable::DriveDidNotAnswer => CouldNot::DriveDidNotAnswer,
+            // Another scan of this folder is still within its time: the existing "looking took too long" line.
+            ModUnreadable::StillScanning => return ModsRead::Unavailable("took-too-long"),
+            // The scan's own worker could not run: the reader failed, like a reader thread that died.
+            ModUnreadable::ScanFailed => return ModsRead::Unavailable("reader-failed"),
         }),
     })
 }
@@ -193,6 +201,7 @@ pub(super) fn detect(c: &Ctx, out: &mut Out) {
         ModsRead::Read(ModsVerdict::NoKnownMod) => out.ruled_out("graphics-mod", &[]),
         ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::NoInstallFolder)) => out.unknown("mods-no-folder"),
         ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable)) => out.unknown("mods-folder-unreadable"),
+        ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::DriveDidNotAnswer)) => out.unknown("mods-drive-no-answer"),
         ModsRead::Read(ModsVerdict::Found(found)) => found_mods(c, out, found),
         ModsRead::Read(ModsVerdict::Partly(found)) => {
             found_mods(c, out, found);

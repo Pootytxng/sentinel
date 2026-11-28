@@ -1327,6 +1327,33 @@ describe("ParamedicCard: graphics mods in the game's folder", () => {
     expect(document.body.textContent).toContain("Whether Game A's folder has a graphics mod");
   });
 
+  // e14: a read in the game's folder never came back in time (a sleeping disk, a NAS, a mapped drive that's gone).
+  // Break check: drop the "mods-drive-no-answer" case in unknownLine -> neither language shows the line.
+  it("e14: a drive that didn't answer in time is said plainly in English and Chinese, and never as no mods", async () => {
+    const d = answerOf([find("background-load", { fix: steps("background-load") })], { unknowns: ["mods-drive-no-answer"] });
+    const i18n = (await import("../../i18n")).default;
+    const show = async () => {
+      answer.value = d;
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: i18n.t("paramedic.door.button") }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      return document.body.textContent ?? "";
+    };
+    const en = await show();
+    expect(en).toContain("Whether Game A's folder has a graphics mod (the drive it's on didn't answer in time, so Compy couldn't finish looking there)");
+    expect(en).not.toMatch(/No known graphics mod|no mods\b|couldn't be read/i);
+    cleanup();
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const zh = await show();
+      expect(zh).toContain("Game A 的文件夹里有没有图形 mod（它所在的磁盘没有及时响应，所以 Compy 没能查完那里）");
+      expect(zh).not.toContain(i18n.t("paramedic.checked.graphicsMod", { game: "Game A" }));
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("another game's mod files are said on the cross-game evidence", async () => {
     const driver = find("gpu-driver-change", {
       confidence: "possible",

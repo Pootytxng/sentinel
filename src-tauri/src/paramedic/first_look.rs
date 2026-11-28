@@ -427,6 +427,7 @@ fn mods_part(game: &GameCtx, mods: &ModsRead, t0: Option<DateTime<Utc>>, now: Da
         ModsRead::Read(ModsVerdict::NoKnownMod) => out.mods_none = true,
         ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::NoInstallFolder)) => out.limits.push(limit("mods", "no-folder", &[])),
         ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable)) => out.limits.push(limit("mods", "folder-unreadable", &[])),
+        ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::DriveDidNotAnswer)) => out.limits.push(limit("mods", "drive-no-answer", &[])),
         ModsRead::Read(ModsVerdict::Found(found)) => mod_rows(found, t0, now, out),
         ModsRead::Read(ModsVerdict::Partly(found)) => {
             mod_rows(found, t0, now, out);
@@ -1903,6 +1904,9 @@ mod tests {
         assert!(!a.mods_none && has_limit(&a, "mods", "no-folder"));
         let a = with_mods(ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable)));
         assert!(!a.mods_none && has_limit(&a, "mods", "folder-unreadable"));
+        // e14: a drive that didn't answer in time is its own limit, never "none".
+        let a = with_mods(ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::DriveDidNotAnswer)));
+        assert!(!a.mods_none && has_limit(&a, "mods", "drive-no-answer"));
         let a = with_mods(ModsRead::Unavailable("took-too-long"));
         assert!(!a.mods_none && has_limit(&a, "mods", "took-too-long"));
     }
