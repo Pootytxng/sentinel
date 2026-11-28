@@ -10,6 +10,8 @@ import {
   falseEquivalenceClaims,
   LINEAGE_ROW_CAPS,
   embeddedStampTokens,
+  markedStampTokens,
+  STAMP_MARKER_PREFIX,
   extractCitations,
   ownerDecisionsSection,
   validateOwnerDecisionVersions,
@@ -715,5 +717,46 @@ describe("check (9): the Bottom line is read, not merely counted", () => {
       }),
       ({ stale }) => expect(stale).toHaveLength(0),
     );
+  });
+});
+
+// Builds from 2026-11-28 wrap the hash in COMPY_BUILD_STAMP[...] (lib.rs BUILD_STAMP_MARKER), so the
+// installed-stamp check reads one value instead of resolving every hex run in a 30 MB exe.
+describe("marked build-stamp extraction", () => {
+  it("reads the hash out of the marker, once, however many copies the binary holds", () => {
+    expect(markedStampTokens("\0COMPY_BUILD_STAMP[e989943d]\0 ... COMPY_BUILD_STAMP[e989943d]")).toEqual(["e989943d"]);
+  });
+
+  it("ignores loose hex runs: only the marker counts", () => {
+    expect(markedStampTokens("c7c60d3 a1be896 COMPY_BUILD_STAMP[ff0ce65f] 4ca909f8")).toEqual(["ff0ce65f"]);
+  });
+
+  it("finds nothing in an older build, so the caller falls back to the loose scan", () => {
+    expect(markedStampTokens("COMPY_GIT_HASH\0c7c60d3\0release")).toEqual([]);
+  });
+
+  it("refuses a marker whose inside is not a short lowercase hash", () => {
+    expect(markedStampTokens("COMPY_BUILD_STAMP[ABC1234]")).toEqual([]);
+    expect(markedStampTokens("COMPY_BUILD_STAMP[abc12]")).toEqual([]);
+    expect(markedStampTokens("COMPY_BUILD_STAMP[a1be896fb5853f72]")).toEqual([]);
+    expect(markedStampTokens("COMPY_BUILD_STAMP[nogit]")).toEqual([]);
+  });
+
+  it("returns every distinct marked hash so the caller can refuse an ambiguous one", () => {
+    expect(markedStampTokens("COMPY_BUILD_STAMP[c7c60d3] COMPY_BUILD_STAMP[a1be896]").sort()).toEqual(["a1be896", "c7c60d3"]);
+  });
+
+  it("a nogit marker yields no hash, and the check sees the prefix so it skips instead of falling back", () => {
+    const exe = "\0COMPY_BUILD_STAMP[nogit]\0 c7c60d3 ";
+    expect(markedStampTokens(exe)).toEqual([]);
+    expect(exe.includes(STAMP_MARKER_PREFIX)).toBe(true);
+  });
+
+  it("the script's marker prefix is the one lib.rs bakes in", () => {
+    const lib = readFileSync(join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), "src-tauri", "src", "lib.rs"), "utf8");
+    const baked = lib.match(/macro_rules! build_stamp_prefix \{\s*\(\) => \{\s*"([^"]+)"/);
+    expect(baked?.[1]).toBe(STAMP_MARKER_PREFIX);
+    expect(new RegExp(`^${STAMP_MARKER_PREFIX.replace("[", "\\[")}[0-9a-f]{7}\\]$`).test(`${STAMP_MARKER_PREFIX}c7c60d3]`)).toBe(true);
+    expect(markedStampTokens(`${STAMP_MARKER_PREFIX}c7c60d3]`)).toEqual(["c7c60d3"]);
   });
 });

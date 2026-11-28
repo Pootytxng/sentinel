@@ -189,6 +189,20 @@ export function embeddedStampTokens(text) {
   return [...new Set(text.match(run) ?? [])];
 }
 
+// Builds from 2026-11-28 on also carry the hash inside a marker only the stamp uses
+// (`COMPY_BUILD_STAMP[<hash>]`, lib.rs `BUILD_STAMP_MARKER`). When the marker is present it is the
+// answer and the loose scan above is not consulted; older builds have no marker and fall back to it.
+// A marker whose inside is not a hash (a `nogit` build) must NOT fall back: the loose scan could then
+// name a stray hex run as the stamp. The caller skips instead.
+export const STAMP_MARKER_PREFIX = "COMPY_BUILD_STAMP[";
+export function markedStampTokens(text) {
+  const marked = new RegExp(
+    `COMPY_BUILD_STAMP\\[([0-9a-f]{${STAMP_MIN_HEX},${STAMP_MAX_HEX}})\\]`,
+    "g",
+  );
+  return [...new Set([...text.matchAll(marked)].map((m) => m[1]))];
+}
+
 // --- file resolution -----------------------------------------------------------------------------
 const SEARCH_DIRS = ["src", "src-tauri/src", "src-tauri", "docs", "scripts"];
 const SKIP = new Set(["node_modules", "target", "dist", "dist-web", "dist-site", ".git", "worktrees", "archive"]);
@@ -417,7 +431,8 @@ function checkCurrentState(root, docLines, { machine }) {
   // a file in the tree. It was enforced by nothing while LOOKING enforced, which is worse than an absent
   // anchor. It then drifted the same way again: the 2026-08-03 local ship at `c7c60d3` re-stamped the
   // desk and left the anchor on the published `a1be896`. The stamp is READABLE offline, so this reads it
-  // rather than guessing: scan the installed exe for delimited 7-hex tokens and keep the ones git
+  // rather than guessing: read the COMPY_BUILD_STAMP[...] marker (builds from 2026-11-28), else scan
+  // the installed exe for delimited 7-12 hex tokens, and keep the ones git
   // resolves to a commit, which lets a mismatch name the real value instead of merely rejecting the
   // claimed one. Skipped — never failed — whenever the answer is genuinely unknowable here: no installed
   // exe (CI, another machine), no/shallow git history, or a scan that is empty or ambiguous.
@@ -451,12 +466,21 @@ function checkCurrentState(root, docLines, { machine }) {
     notes.push("STATE-SKIP       owner_installed_stamp: no full git history to resolve an embedded stamp — anchor left unverified");
   } else {
     let tokens = null;
-    try { tokens = embeddedStampTokens(readFileSync(INSTALLED_EXE).toString("latin1")); } catch { /* unreadable → skip */ }
+    let marked = [];
+    let markerWithoutHash = false;
+    try {
+      const exeText = readFileSync(INSTALLED_EXE).toString("latin1");
+      marked = markedStampTokens(exeText);
+      markerWithoutHash = !marked.length && exeText.includes(STAMP_MARKER_PREFIX);
+      tokens = marked.length || markerWithoutHash ? marked : embeddedStampTokens(exeText);
+    } catch { /* unreadable → skip */ }
     const stamps = tokens === null ? [] : gitCommitsAmong(tokens);
     if (tokens === null) {
       notes.push("STATE-SKIP       owner_installed_stamp: installed compy.exe is not readable here — anchor left unverified");
+    } else if (markerWithoutHash) {
+      notes.push("STATE-SKIP       owner_installed_stamp: installed compy.exe has a build-stamp marker with no git hash in it (built without git?) — anchor left unverified");
     } else if (stamps.length !== 1) {
-      notes.push(`STATE-SKIP       owner_installed_stamp: ${stamps.length} of ${tokens.length} embedded tokens resolve to a commit (need exactly 1) — anchor left unverified`);
+      notes.push(`STATE-SKIP       owner_installed_stamp: ${stamps.length} of ${tokens.length} ${marked.length ? "marked" : "embedded"} tokens resolve to a commit (need exactly 1) — anchor left unverified`);
     } else if (stamps[0] !== installedStamp) {
       stateFail.push(`INSTALLED-STAMP-DRIFT: STATE:owner_installed_stamp ${installedStamp} != the stamp embedded in the installed compy.exe (${stamps[0]}) — the build on the owner's desk is not the one CURRENT STATE names; re-stamp it to \`${stamps[0]}\` (and reconcile the owner-installed row with it)`);
     }

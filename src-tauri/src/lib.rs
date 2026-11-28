@@ -1101,9 +1101,29 @@ fn format_build_stamp(hash: &str, dirty: bool, debug: bool) -> String {
     )
 }
 
+/// The hash wrapped in a marker only it carries, so a scan of compy.exe finds exactly one stamp
+/// instead of guessing among every hex-looking run (scripts/verify-release-state.mjs, check 7).
+/// The prefix is written once, here; verify-release-state-guard.test.mjs pins the script to it.
+macro_rules! build_stamp_prefix {
+    () => {
+        "COMPY_BUILD_STAMP["
+    };
+}
+const BUILD_STAMP_PREFIX: &str = build_stamp_prefix!();
+const BUILD_STAMP_MARKER: &str = concat!(build_stamp_prefix!(), env!("COMPY_GIT_HASH"), "]");
+
+/// The hash read back out of the marker. `black_box` keeps the whole marker in the binary: without
+/// it the compiler may keep only the hash it needs.
+fn stamp_hash_from_marker(marker: &str) -> &str {
+    marker
+        .strip_prefix(BUILD_STAMP_PREFIX)
+        .and_then(|rest| rest.strip_suffix(']'))
+        .unwrap_or(marker)
+}
+
 pub(crate) fn build_stamp() -> String {
     format_build_stamp(
-        env!("COMPY_GIT_HASH"),
+        stamp_hash_from_marker(std::hint::black_box(BUILD_STAMP_MARKER)),
         env!("COMPY_GIT_DIRTY") == "1",
         cfg!(debug_assertions),
     )
@@ -2787,6 +2807,17 @@ mod safety_tests {
         let mut out = std::io::Cursor::new(vec![b'x'; 300_000]);
         relay_output(&mut out, Broken);
         assert_eq!(out.position(), 300_000, "everything is read so the child never blocks");
+    }
+
+    // §C build stamp: the marker is what scripts/verify-release-state.mjs scans compy.exe for.
+    #[test]
+    fn build_stamp_marker_wraps_the_baked_hash() {
+        assert_eq!(
+            BUILD_STAMP_MARKER,
+            format!("COMPY_BUILD_STAMP[{}]", env!("COMPY_GIT_HASH"))
+        );
+        assert_eq!(stamp_hash_from_marker(BUILD_STAMP_MARKER), env!("COMPY_GIT_HASH"));
+        assert_eq!(stamp_hash_from_marker("COMPY_BUILD_STAMP[ab12cd3]"), "ab12cd3");
     }
 
     // §C build stamp: the format is the contract both surfaces (About + dev title) render.
