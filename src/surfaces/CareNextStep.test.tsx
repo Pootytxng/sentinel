@@ -703,7 +703,7 @@ describe("a reworded reading keeps its earlier 'Did this help?' answers", () => 
     const dl = container.querySelector(".bb-next-receipt")!;
     const rows = Object.fromEntries([...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
     expect(rows["Consistent with"]).toBe(
-      "Windows recorded a graphics-driver timeout. In the session running at the time, Compy measured the GPU peaking at 88°C. That is about the same as this card's typical peak of 86°C in 5 earlier sessions of this game with no crash record (within 5°C). Compy can't tell whether heat played a part.",
+      "Windows recorded a graphics-driver timeout. In the session running at the time, Compy measured the GPU peaking at 88°C. That is about the same as this card's typical peak of 86°C in 5 earlier sessions of this game for which Compy found no crash record (within 5°C). Compy can't tell whether heat played a part.",
     );
   });
 });

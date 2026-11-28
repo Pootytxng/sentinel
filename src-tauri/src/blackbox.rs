@@ -450,8 +450,8 @@ pub(crate) struct Assessment {
     /// The session's peak GPU temperature (°C) a `*Peak` statement quotes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) temp_c: Option<u32>,
-    /// e10: how `temp_c` sits against this card's earlier sessions of the same game with no crash
-    /// record ([`peak_vs_usual`]). Set exactly when `temp_c` is; the surface words it after the statement.
+    /// e10: how `temp_c` sits against this card's earlier sessions of the same game for which Compy found no
+    /// crash record ([`peak_vs_usual`]). Set exactly when `temp_c` is; the surface words it after the statement.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) temp_vs_usual: Option<PeakVsUsual>,
 }
@@ -504,11 +504,11 @@ pub(crate) fn peak_reference_eligible(s: &SessionSummary) -> bool {
 }
 
 /// e10: the crash session's GPU peak against this card's USUAL peak: the rounded median of the peaks of its
-/// earlier sessions of the same game that the card would judge, that have no crash record Compy could have
-/// seen, with the Paramedic card's own lines (`TEMP_SAME_C` / `TEMP_HOTTER_C`, its "ran hotter than usual"
-/// comparison) and minimum (`PEAK_BASELINE_MIN` sessions, the newest `PEAK_BASELINE_MAX`). Not applied: the
-/// card's frame-rule flag (a rough session that did not crash still counts). A measured outcome never says
-/// heat caused anything; too few sessions, or anything Compy couldn't read, is "can't tell".
+/// earlier sessions of the same game that the card would judge and for which Compy found no crash record (in
+/// what the logs still hold: Compy doesn't read how far back that is), with the Paramedic card's own lines
+/// (`TEMP_SAME_C` / `TEMP_HOTTER_C`, its "ran hotter than usual" comparison) and minimum (`PEAK_BASELINE_MIN`
+/// sessions, the newest `PEAK_BASELINE_MAX`). Not applied: the card's frame-rule flag (a rough session that
+/// did not crash still counts). A measured outcome never says heat caused anything; too few sessions, or anything Compy couldn't read, is "can't tell".
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 pub(crate) enum PeakVsUsual {
@@ -538,16 +538,18 @@ pub(crate) enum PeakUnreadable {
     LogUnread,
     /// Windows' Reliability history was not read this time.
     ReliabilityUnread,
-    /// e10 r2: there are enough earlier sessions, but they are older than the period the crash scan covers
-    /// (a capped read's cut, `judgeable_from`), so Compy can't tell whether they had a crash record.
+    /// e10 r2/r3: there are enough earlier sessions, but some or all of them are older than the period the
+    /// crash scan covers (a capped read's cut, `judgeable_from`), so Compy can't tell whether they had a crash
+    /// record, and without them fewer than `PEAK_BASELINE_MIN` are left.
     BeforeScan,
 }
 
 /// e10: the comparison for one record. `None` when the record carries no peak (nothing to compare).
-/// "No crash record" is said of a session only where the scan could have seen one (r1 F3): the System log
-/// was read (`coverage.read_ok`) and so was the Reliability history (`coverage.reliability_read`); the
-/// session started inside the period the crash scan covers (r2 F1): the crash queries ask for no start
-/// time, so an uncapped scan covers every session, and a capped read covers from its cut on
+/// A session counts as one "for which Compy found no crash record" only where (r1 F3): the System log was
+/// read (`coverage.read_ok`) and so was the Reliability history (`coverage.reliability_read`); the session
+/// started inside the period the crash scan covers (r2 F1): the crash queries ask for no start time, so an
+/// uncapped scan covers every session as far back as each log still holds records (Compy doesn't read how
+/// far that is, r3), and a capped read covers from its cut on
 /// (`judgeable_from`, the latest such cut); no record in `ctx` falls inside it (its start up to
 /// `VITALS_GRACE_SECS` after its end, the window `correlate_vitals` and the card's hardware-record match
 /// use); and no unexpected-shutdown or blue-screen record (Windows writes both at the next start, so they
@@ -591,7 +593,8 @@ pub(crate) fn peak_vs_usual(
             .any(|(t, k)| next_boot(*k) && *t >= start && !starts.iter().any(|o| *o > start && *o <= *t))
     };
     // r2 F1: the period the crash scan covers. Its queries ask for no start time, so only a capped read
-    // narrows it: from that read's cut on. None: no read was cut, every session is inside it.
+    // narrows it: from that read's cut on. None: no read was cut, every session is inside it, as far back as
+    // each log still holds records (Compy doesn't read how far that is; the words say "found no crash record").
     let covered_from = coverage.judgeable_from;
     // The card's reference sessions of this game on this card, before the crash session, with a reading.
     let mut usable: Vec<(DateTime<Utc>, u32)> = Vec::new();
@@ -657,7 +660,7 @@ fn session_window(s: &SessionSummary) -> Option<(DateTime<Utc>, DateTime<Utc>)> 
 /// e10: the evidence line that says how the peak sits against the usual one (English, like every
 /// evidence line; the translated sentence is the surface's `peakVsUsual` key).
 fn usual_evidence(cmp: PeakVsUsual) -> String {
-    let of = |u: u32, n: u32| format!("this card's typical peak of {u}°C in {n} earlier sessions of this game with no crash record");
+    let of = |u: u32, n: u32| format!("this card's typical peak of {u}°C in {n} earlier sessions of this game for which Compy found no crash record");
     match cmp {
         PeakVsUsual::Hotter { usual_c, sessions } => format!("That is more than 10°C above {}", of(usual_c, sessions)),
         PeakVsUsual::Higher { usual_c, sessions } => {
@@ -666,14 +669,14 @@ fn usual_evidence(cmp: PeakVsUsual) -> String {
         PeakVsUsual::Same { usual_c, sessions } => format!("That is within 5°C of {}", of(usual_c, sessions)),
         PeakVsUsual::Lower { usual_c, sessions } => format!("That is below {}", of(usual_c, sessions)),
         PeakVsUsual::TooFew { sessions } => format!(
-            "Compy needs at least 3 earlier sessions of this game on this card, each long enough for it to judge, with a temperature reading and no crash record, to compare that peak with, and has {sessions}"
+            "Compy needs at least 3 earlier sessions of this game on this card, each long enough for it to judge, with a temperature reading and for which it found no crash record, to compare that peak with, and has {sessions}"
         ),
         PeakVsUsual::Unreadable { why } => match why {
             PeakUnreadable::CardUnknown => "Compy's record of this session doesn't say which graphics card or game it was, so it can't compare that peak with the card's other sessions".into(),
             PeakUnreadable::ShortSession => "This session was too short, or too little of it was measured, for Compy to compare its peak with this card's other sessions".into(),
             PeakUnreadable::LogUnread => "Compy couldn't read the Windows System log this time, so it can't tell which earlier sessions had no crash record".into(),
             PeakUnreadable::ReliabilityUnread => "Compy couldn't read Windows' Reliability history this time, so it can't tell which earlier sessions had no crash record".into(),
-            PeakUnreadable::BeforeScan => "This card's earlier sessions of this game are older than the period Compy's crash scan covers, so it can't tell whether they had a crash record".into(),
+            PeakUnreadable::BeforeScan => "Some or all of this card's earlier sessions of this game are older than the period Compy's crash scan covers, so it can't tell whether they had a crash record, and without them it has fewer than 3 to compare with".into(),
         },
     }
 }
@@ -704,7 +707,8 @@ fn peak_next_step(cmp: Option<PeakVsUsual>) -> NextStep {
             HEAD,
             "Compy can't tell yet whether this peak is usual for this card: it compares a crash session's peak with \
              at least 3 earlier sessions of the same game on the same card, each at least 5 minutes long and mostly \
-             measured, with a temperature reading and no crash record. Playing with Compy recording adds them. A \
+             measured, with a temperature reading and for which it found no crash record. Playing with Compy \
+             recording adds them. A \
              temperature overlay during the game shows the same reading live.",
         ),
         Some(PeakVsUsual::Unreadable { why }) => match why {
@@ -731,8 +735,9 @@ fn peak_next_step(cmp: Option<PeakVsUsual>) -> NextStep {
             ),
             PeakUnreadable::BeforeScan => NextStep::safe(
                 "Compy can't compare this peak",
-                "This card's earlier sessions of this game are older than the period Compy's crash scan covers, so it \
-                 can't tell whether they had a crash record, and it can't compare this peak with them.",
+                "Some or all of this card's earlier sessions of this game are older than the period Compy's crash scan \
+                 covers, so it can't tell whether they had a crash record, and without them it has fewer than 3 to \
+                 compare this peak with.",
             ),
         },
     }
@@ -4230,6 +4235,9 @@ mod blackbox_tests {
         assert!(a.consistent_with.contains("can't tell whether heat played a part"), "{}", a.consistent_with);
         assert!(!a.consistent_with.to_lowercase().contains("caused"));
         assert!(a.evidence.iter().any(|e| e.contains("more than 10°C above this card's typical peak of 72°C in 3 earlier")), "{:?}", a.evidence);
+        // r3 F1: what Compy found, never that the sessions had no crash.
+        assert!(a.evidence.iter().any(|e| e.contains("for which Compy found no crash record")), "{:?}", a.evidence);
+        assert!(!a.evidence.iter().any(|e| e.contains("with no crash record")), "{:?}", a.evidence);
         assert!(a.next_step.detail.contains("airflow") && a.next_step.detail.contains("not a known fix"), "{}", a.next_step.detail);
         assert!(a.next_step.reversible && !a.next_step.research_only);
         let wire = serde_json::to_value(a.temp_vs_usual).unwrap();
@@ -4360,6 +4368,10 @@ mod blackbox_tests {
         // A cut on June 2: June 1 is outside, June 2 and 3 inside; 2 + 1 outside is enough sessions, so it says why.
         let cut2 = SystemLogCoverage::new(true, Some(utc("2026-06-02T00:00:00Z"))).with_reliability(true);
         assert_eq!(peak_vs_usual(&inc, one, &sessions, cut2), unreadable(PeakUnreadable::BeforeScan));
+        // r3 F2: both cases (all three before the cut, or only June 1) get one sentence true of each.
+        let before = PeakVsUsual::Unreadable { why: PeakUnreadable::BeforeScan };
+        assert!(usual_evidence(before).starts_with("Some or all of this card's earlier sessions"), "{}", usual_evidence(before));
+        assert!(peak_next_step(Some(before)).detail.starts_with("Some or all of"));
         // The Reliability history was not read: can't tell.
         let no_rel = SystemLogCoverage::new(true, None).with_reliability(false);
         assert_eq!(peak_vs_usual(&inc, one, &sessions, no_rel), unreadable(PeakUnreadable::ReliabilityUnread));

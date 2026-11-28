@@ -790,7 +790,7 @@ export type CrashAssessment = {
   subject?: string;
   /** The session's peak GPU temperature (°C) a `*-peak` statement quotes. */
   temp_c?: number;
-  /** e10: how `temp_c` sits against this card's earlier sessions of the same game with no crash record
+  /** e10: how `temp_c` sits against this card's earlier sessions of the same game for which Compy found no crash record
    *  (blackbox.rs `PeakVsUsual`). Absent on records from a build before it: worded as "not compared". */
   temp_vs_usual?: PeakVsUsual;
   consistent_with: string; // "consistent with…" — never "the cause is…"

@@ -189,32 +189,32 @@ describe("BlackBox surface (v2 triage UI)", () => {
     [
       "hotter",
       { outcome: "hotter", usual_c: 72, sessions: 3 },
-      "That is more than 10°C above this card's typical peak of 72°C in 3 earlier sessions of this game with no crash record. A peak hotter than usual is not shown to be the cause: Compy can't tell whether heat played a part.",
-      "这比这张显卡在该游戏中 3 次没有崩溃记录的较早会话里的典型峰值 72°C 高出 10°C 以上。比平时更热未证实是原因：Compy 无法判断发热是否起了作用。",
+      "That is more than 10°C above this card's typical peak of 72°C in 3 earlier sessions of this game for which Compy found no crash record. A peak hotter than usual is not shown to be the cause: Compy can't tell whether heat played a part.",
+      "这比这张显卡在该游戏中 3 次 Compy 未发现崩溃记录的较早会话里的典型峰值 72°C 高出 10°C 以上。比平时更热未证实是原因：Compy 无法判断发热是否起了作用。",
     ],
     [
       "higher",
       { outcome: "higher", usual_c: 80, sessions: 4 },
-      "That is 8°C above this card's typical peak of 80°C in 4 earlier sessions of this game with no crash record: higher, but not by the more than 10°C Compy counts as hotter than usual. Compy can't tell whether heat played a part.",
-      "这比这张显卡在该游戏中 4 次没有崩溃记录的较早会话里的典型峰值 80°C 高 8°C：偏高，但没有达到 Compy 认定为“比平时更热”的 10°C 以上。Compy 无法判断发热是否起了作用。",
+      "That is 8°C above this card's typical peak of 80°C in 4 earlier sessions of this game for which Compy found no crash record: higher, but not by the more than 10°C Compy counts as hotter than usual. Compy can't tell whether heat played a part.",
+      "这比这张显卡在该游戏中 4 次 Compy 未发现崩溃记录的较早会话里的典型峰值 80°C 高 8°C：偏高，但没有达到 Compy 认定为“比平时更热”的 10°C 以上。Compy 无法判断发热是否起了作用。",
     ],
     [
       "same",
       { outcome: "same", usual_c: 86, sessions: 5 },
-      "That is about the same as this card's typical peak of 86°C in 5 earlier sessions of this game with no crash record (within 5°C). Compy can't tell whether heat played a part.",
-      "这与这张显卡在该游戏中 5 次没有崩溃记录的较早会话里的典型峰值 86°C 大致相同（相差不超过 5°C）。Compy 无法判断发热是否起了作用。",
+      "That is about the same as this card's typical peak of 86°C in 5 earlier sessions of this game for which Compy found no crash record (within 5°C). Compy can't tell whether heat played a part.",
+      "这与这张显卡在该游戏中 5 次 Compy 未发现崩溃记录的较早会话里的典型峰值 86°C 大致相同（相差不超过 5°C）。Compy 无法判断发热是否起了作用。",
     ],
     [
       "lower",
       { outcome: "lower", usual_c: 95, sessions: 3 },
-      "That is below this card's typical peak of 95°C in 3 earlier sessions of this game with no crash record. Compy can't tell whether heat played a part.",
-      "这低于这张显卡在该游戏中 3 次没有崩溃记录的较早会话里的典型峰值 95°C。Compy 无法判断发热是否起了作用。",
+      "That is below this card's typical peak of 95°C in 3 earlier sessions of this game for which Compy found no crash record. Compy can't tell whether heat played a part.",
+      "这低于这张显卡在该游戏中 3 次 Compy 未发现崩溃记录的较早会话里的典型峰值 95°C。Compy 无法判断发热是否起了作用。",
     ],
     [
       "too few",
       { outcome: "too-few", sessions: 2 },
-      "To compare it, Compy needs at least 3 earlier sessions of this game on this card, each at least 5 minutes long and mostly measured, with a temperature reading and no crash record, and it has 2. So it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
-      "要做对比，Compy 至少需要这张显卡在该游戏中 3 次较早的会话，每次至少 5 分钟且大部分被测到，有温度读数且没有崩溃记录，目前只有 2 次。所以它无法判断这个峰值对这张显卡来说是否正常，也无法判断发热是否起了作用。",
+      "To compare it, Compy needs at least 3 earlier sessions of this game on this card, each at least 5 minutes long and mostly measured, with a temperature reading, and for which Compy found no crash record, and it has 2. So it can't tell whether that peak is usual for this card, and it can't tell whether heat played a part.",
+      "要做对比，Compy 至少需要这张显卡在该游戏中 3 次较早的会话，每次至少 5 分钟且大部分被测到，有温度读数且 Compy 未发现崩溃记录，目前只有 2 次。所以它无法判断这个峰值对这张显卡来说是否正常，也无法判断发热是否起了作用。",
     ],
     // e10 r1 (F2-F4): each thing that kept the comparison from being made is said in plain words.
     [
@@ -244,8 +244,8 @@ describe("BlackBox surface (v2 triage UI)", () => {
     [
       "unreadable: older than the period the crash scan covers",
       { outcome: "unreadable", why: "before-scan" },
-      "This card's earlier sessions of this game are older than the period Compy's crash scan covers, so it can't tell whether they had a crash record. So it can't compare that peak, and it can't tell whether heat played a part.",
-      "这张显卡在该游戏中之前的会话早于 Compy 这次崩溃扫描覆盖的时段，所以无法判断那些会话是否有崩溃记录。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+      "Some or all of this card's earlier sessions of this game are older than the period Compy's crash scan covers, so Compy can't tell whether they had a crash record, and without them it has fewer than 3 to compare with. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "这张显卡在该游戏中之前的部分或全部会话早于 Compy 这次崩溃扫描覆盖的时段，所以无法判断那些会话是否有崩溃记录；去掉它们后，可对比的会话不足 3 次。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
     ],
     [
       "unreadable with no reason given",
