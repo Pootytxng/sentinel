@@ -53,6 +53,7 @@ import type {
 import type { GpuVendor } from "./walkthroughs";
 import type { HardwareInfo } from "../App";
 import "./lab-console.css";
+import type { SessionsReadState } from "../lib/session-metrics";
 
 /** Which control opened a station, kept as an identity because the control unmounts while it is open. */
 type Opener = "primary" | "verdict" | LabStationKey;
@@ -218,6 +219,9 @@ export function LabConsole({
   const [bench, setBench] = useState<BenchmarkState | null>(() => peekProbe("benchmark-state") ?? null);
   const [latency, setLatency] = useState<LatencyReport | null>(() => peekProbe("latency-diag") ?? null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  // `sessions` is [] before its read answers and after it fails: the tuning evidence is not judged
+  // off that (TuningInstrument shows the read line instead). undefined = read.
+  const [sessionsRead, setSessionsRead] = useState<SessionsReadState>("pending");
   const [armed, setArmed] = useState<ArmedComparison | null>(null);
   const [latestCmp, setLatestCmp] = useState<ComparisonResult | null>(null);
   const [postComparability, setPostComparability] = useState<PostComparability[] | null>(null);
@@ -249,7 +253,15 @@ export function LabConsole({
     invoke<ScoreboardView>("get_scoreboard").then(setScoreboard).catch(() => {});
     invoke<TrialState>("get_trial_state").then(setTrial).catch(() => {});
     if (tuningGuide) {
-      invoke<SessionSummary[]>("get_session_summaries").then(setSessions).catch(() => {});
+      invoke<SessionSummary[]>("get_session_summaries")
+        .then((s) => {
+          setSessions(s);
+          setSessionsRead(undefined);
+        })
+        .catch((e) => {
+          console.error("[compy] Lab session list read failed", e);
+          setSessionsRead("failed");
+        });
       invoke<ArmedComparison | null>("get_armed_comparison").then(setArmed).catch(() => {});
       invoke<ComparisonResult | null>("get_latest_comparison").then(setLatestCmp).catch(() => {});
       // CR-tuning-comparability: which later sessions can be judged against the tune's baseline session.
@@ -561,6 +573,7 @@ export function LabConsole({
             measurement={measurement}
             recentSessions={sessions.slice(0, 5)}
             evidence={tuningEvidenceVerdict}
+            sessionsRead={sessionsRead}
           />
         ) : null;
       case "blackbox":
