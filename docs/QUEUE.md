@@ -37,7 +37,7 @@ Then, in this order (owner ruling 2026-11-26):
 - [ ] A week of ordinary play on each tester PC (ROADMAP Phase 5)
 - [ ] 2026-12-22 review against the pass rule in the owner ruling
 Rest of NEXT (order unchanged):
-- [ ] Stronger "Clear play history" apply-gap fix: the lock-order guard edit (scripts/store-lock-order-guard.test.mjs, stronger or differently shaped, never looser) plus design 3.3, approved (owner ruling 2026-11-28); its own branch and an independent review before it lands
+- [ ] Stronger "Clear play history" apply-gap fix: built on branch `claude/clear-history-ledger-lock` (owner ruling 2026-11-28, design 3.3 amended). For a Trial-gate file, delete_rows holds the ledger lock through the read, the delete and the after-delete check, so no plain apply can land in between; the lock-order guard got stronger (exactly two named sites). Lands after a non-Claude review.
 - [ ] Per-machine install into Program Files (owner ruling 2026-11-28): the per-user install folder itself is user-writable
 - [ ] Owner capture checks (`_train\g3-owner-capture-checks.md`)
 - [ ] Capture slice 2

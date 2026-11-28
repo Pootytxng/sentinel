@@ -1074,7 +1074,27 @@ describe("D6: the clear takes one store lock at a time, plus the one declared ne
   it("nothing in data_clear takes the History lock except through history::lock_ledger", () => {
     const src = code("data_clear");
     expect(src).not.toMatch(/lock_history\s*\(/);
-    expect([...src.matchAll(/lock_ledger\s*\(/g)]).toHaveLength(1);
+    // Exactly two sites (owner ruling 2026-11-28, design 3.3 amended), each one named, each one inside the
+    // Trial gate: clear_everything_at (pinned above) and delete_rows for a Trial-gate file. A third, or one
+    // anywhere else, fails here.
+    expect([...src.matchAll(/lock_ledger\s*\(/g)]).toHaveLength(2);
+    expect([...fnBody(src, "pub(crate) fn clear_everything_at(").matchAll(/history::lock_ledger\s*\(/g)]).toHaveLength(1);
+    expect([...fnBody(src, "fn delete_rows(").matchAll(/history::lock_ledger\s*\(/g)]).toHaveLength(1);
+  });
+
+  it("delete_rows takes the ledger lock only for a Trial-gate file, inside the closure the Trial gate runs", () => {
+    const body = fnBody(code("data_clear"), "fn delete_rows(");
+    const closure = body.search(/let\s+mut\s+run\s*=\s*\|\|\s*\{/);
+    const cond = body.search(/let\s+_ledger\s*=\s*if\s+gate\s*==\s*Gate::Experiment\s*\{\s*match\s+crate::history::lock_ledger\s*\(\)/);
+    const read = body.search(/why\.extend\(trial_gate_refusals\(root\)\)/);
+    const del = body.search(/delete_one\(root,\s*&d\.rel\)/);
+    const gated = body.search(/gates\.with_gate\(gate,\s*d\.store,\s*&mut\s+run\)/);
+    for (const [name, at] of Object.entries({ closure, cond, read, del, gated })) expect(at, name).toBeGreaterThanOrEqual(0);
+    // Experiment -> History, the declared nesting: the lock is taken inside the closure with_gate runs while
+    // holding the Trial lock, before the read that decides and the delete, never after them.
+    expect(closure < cond && cond < read && read < del && del < gated).toBe(true);
+    // A bare "let _ =" would drop the guard at once and hold nothing.
+    expect(body).not.toMatch(/let\s+_\s*=\s*crate::history::lock_ledger/);
   });
 
   it("execute_everything_ledger_phase cannot be called without the ledger guard", () => {
