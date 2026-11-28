@@ -539,6 +539,10 @@ pub(crate) enum PeakUnreadable {
     CardUnknown,
     /// The crash session is shorter than the card judges, or too little of it was measured.
     ShortSession,
+    /// e11: the recorder's read-only flag (`session_boundary::suspected_splice`, read with no crash marks, as the
+    /// card and the reference set read it) says the crash session may hold two games, so its peak may be the
+    /// other game's. Never says it did hold two.
+    MaybeTwoGames,
     /// The Windows System log was not read this time.
     LogUnread,
     /// Windows' Reliability history was not read this time.
@@ -580,6 +584,9 @@ pub(crate) fn peak_vs_usual(
     };
     if !peak_judgeable(crash_session) {
         return unreadable(Why::ShortSession);
+    }
+    if matches!(crate::session_boundary::suspected_splice(crash_session, &[]), crate::session_boundary::Splice::Suspected(_)) {
+        return unreadable(Why::MaybeTwoGames);
     }
     if !coverage.read_ok {
         return unreadable(Why::LogUnread);
@@ -679,6 +686,7 @@ fn usual_evidence(cmp: PeakVsUsual) -> String {
         PeakVsUsual::Unreadable { why } => match why {
             PeakUnreadable::CardUnknown => "Compy's record of this session doesn't say which graphics card or game it was, so it can't compare that peak with the card's other sessions".into(),
             PeakUnreadable::ShortSession => "This session was too short, or too little of it was measured, for Compy to compare its peak with this card's other sessions".into(),
+            PeakUnreadable::MaybeTwoGames => "Compy's record of the session this crash fell in may hold two games, so it can't tell which game the peak came from, and it can't compare that peak with this card's other sessions".into(),
             PeakUnreadable::LogUnread => "Compy couldn't read the Windows System log this time, so it can't tell which earlier sessions had no crash record".into(),
             PeakUnreadable::ReliabilityUnread => "Compy couldn't read Windows' Reliability history this time, so it can't tell which earlier sessions had no crash record".into(),
             PeakUnreadable::BeforeScan => "Some or all of this card's earlier sessions of this game are older than the period Compy's crash scan covers, so it can't tell whether they had a crash record, and without them it has fewer than 3 to compare with".into(),
@@ -727,6 +735,12 @@ fn peak_next_step(cmp: Option<PeakVsUsual>) -> NextStep {
                 "This session was shorter than 5 minutes, or too little of it was measured, so its peak can't be \
                  compared with this card's full sessions. Compy can't tell from this peak whether the card ran hotter \
                  than usual.",
+            ),
+            PeakUnreadable::MaybeTwoGames => NextStep::safe(
+                "Compy can't compare this peak",
+                "Compy's record of the session this crash fell in may hold two games, so it can't tell which game \
+                 this peak came from, and it can't compare it with this card's other sessions. Compy can't tell \
+                 from this peak whether the card ran hotter than usual.",
             ),
             PeakUnreadable::LogUnread => NextStep::safe(
                 LATER,
@@ -4337,6 +4351,27 @@ mod blackbox_tests {
     }
 
     #[test]
+    fn e11_a_crash_session_that_may_hold_two_games_is_not_compared() {
+        // Three ordinary earlier sessions, and the crash session is an older row (no recorded end) whose readings
+        // stop for 200 s and come back at half the level: its 88°C peak may be the other game's.
+        let pts = |from: u32, to: u32, fps: f64| -> Vec<(u32, f64)> { (from..to).step_by(10).map(|t| (t, fps)).collect() };
+        let mut sessions = e10_sessions(&[Some(70), Some(72), Some(74)], 88);
+        sessions.last_mut().unwrap().fps_series = [pts(0, 1500, 200.0), pts(1700, 3600, 100.0)].concat();
+        let inc = e10_timeout(Some(88));
+        let a = assess_with(&inc, std::slice::from_ref(&inc), log_read(), &sessions).expect("fires");
+        assert_eq!(a.temp_vs_usual, unreadable(PeakUnreadable::MaybeTwoGames));
+        assert_eq!(serde_json::to_value(a.temp_vs_usual).unwrap(), serde_json::json!({ "outcome": "unreadable", "why": "maybe-two-games" }));
+        assert!(a.consistent_with.contains("can't tell whether heat played a part"), "{}", a.consistent_with);
+        assert!(a.evidence.iter().any(|e| e.contains("may hold two games")), "{:?}", a.evidence);
+        // Never "hotter than usual", and the step says what is missing, never that playing more helps.
+        assert!(!a.next_step.detail.contains("airflow") && !a.next_step.detail.contains("Playing"), "{}", a.next_step.detail);
+        assert!(a.next_step.detail.contains("can't tell"), "{}", a.next_step.detail);
+        // The same series on a row that records why it ended is one game by construction: it is compared.
+        sessions.last_mut().unwrap().ended = Some(crate::session_boundary::SessionEnd::CaptureStopped);
+        assert_eq!(peak_vs_usual(&inc, std::slice::from_ref(&inc), &sessions, log_read()), Some(PeakVsUsual::Hotter { usual_c: 72, sessions: 3 }));
+    }
+
+    #[test]
     fn e10_r1_a_crash_session_too_short_to_judge_is_cant_tell_never_no_reason_to_cool() {
         let mut sessions = e10_sessions(&[Some(84), Some(86), Some(88)], 86);
         sessions.last_mut().unwrap().duration_secs = 120;
@@ -4447,6 +4482,7 @@ mod blackbox_tests {
         let whys = [
             (PeakUnreadable::CardUnknown, "which graphics card or game"),
             (PeakUnreadable::ShortSession, "shorter than 5 minutes"),
+            (PeakUnreadable::MaybeTwoGames, "may hold two games"),
             (PeakUnreadable::LogUnread, "couldn't read the Windows System log"),
             (PeakUnreadable::ReliabilityUnread, "couldn't read Windows' Reliability history"),
             (PeakUnreadable::BeforeScan, "older than the period Compy's crash scan covers"),

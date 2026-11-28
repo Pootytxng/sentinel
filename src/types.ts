@@ -776,7 +776,7 @@ export type AssessmentStatement =
 /** e10 (blackbox.rs `PeakVsUsual`): a crash session's GPU peak against this card's usual one, the
  *  Paramedic card's lines (more than 10°C above: hotter; within 5°C: about the same), minimum (3) and
  *  which sessions count (the card's judgeable ones). `why` (r1) says what kept the comparison from being made. */
-export type PeakUnreadable = "card-unknown" | "short-session" | "log-unread" | "reliability-unread" | "before-scan";
+export type PeakUnreadable = "card-unknown" | "short-session" | "maybe-two-games" | "log-unread" | "reliability-unread" | "before-scan";
 export type PeakVsUsual =
   | { outcome: "hotter" | "higher" | "same" | "lower"; usual_c: number; sessions: number }
   | { outcome: "too-few"; sessions: number }

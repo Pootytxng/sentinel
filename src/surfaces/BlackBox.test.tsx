@@ -229,6 +229,14 @@ describe("BlackBox surface (v2 triage UI)", () => {
       "That session was shorter than 5 minutes, or too little of it was measured, so Compy can't compare its peak with this card's full sessions, and it can't tell whether heat played a part.",
       "那次会话不到 5 分钟，或者测到的部分太少，所以 Compy 无法把它的峰值与这张显卡的完整会话做对比，也无法判断发热是否起了作用。",
     ],
+    // e11: the crash session itself may hold two games, so its peak may be the other game's. Break check: drop
+    // "maybe-two-games" from UNREADABLE_KEY -> both rows render the general "couldn't read enough" sentence and fail.
+    [
+      "unreadable: the crash session may hold two games",
+      { outcome: "unreadable", why: "maybe-two-games" },
+      "Compy's record of the session this crash fell in may hold two games, so it can't tell which game the peak came from. So it can't compare that peak, and it can't tell whether heat played a part.",
+      "这次崩溃所在的会话记录可能包含两款游戏，所以 Compy 无法判断这个峰值来自哪款游戏。因此它无法对比这个峰值，也无法判断发热是否起了作用。",
+    ],
     [
       "unreadable: System log not read",
       { outcome: "unreadable", why: "log-unread" },

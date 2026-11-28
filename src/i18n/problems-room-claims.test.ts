@@ -161,7 +161,7 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
       expect(zhGaming.blackBox.assessStatement[key]).toMatch(/\{\{compare\}\}$/);
     }
     const variants = [
-      "hotter", "higher", "same", "lower", "tooFew", "cardUnknown", "shortSession", "logUnread", "reliabilityUnread",
+      "hotter", "higher", "same", "lower", "tooFew", "cardUnknown", "shortSession", "maybeTwoGames", "logUnread", "reliabilityUnread",
       "beforeScan", "unreadable", "notCompared",
     ] as const;
     expect(Object.keys(enGaming.blackBox.assessStatement.peakVsUsual).sort()).toEqual([...variants].sort());
