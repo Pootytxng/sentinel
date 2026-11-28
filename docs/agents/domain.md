@@ -14,7 +14,7 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 
 ## The domain docs that already exist
 
-`GLOSSARY.md` and `docs/adr/` don't exist yet. Until they do, project vocabulary and decisions live here; read these first and defer to them:
+`GLOSSARY.md` holds the project vocabulary. `docs/adr/` doesn't exist yet; until it does, decisions live in the documents below. Where the glossary and these documents disagree, these win and the glossary gets fixed:
 
 - **`CLAUDE.md`** (auto-loaded): product brief, locked safety rules, module map. **`docs/RELEASE_STATE.md`** is authoritative on what is built and released; **`docs/QUEUE.md`** is the work list.
 - **`docs/PRODUCT_CONSTITUTION.md`**: product identity; §38 wins over earlier sections.
