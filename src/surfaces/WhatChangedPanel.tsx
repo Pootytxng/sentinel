@@ -318,7 +318,7 @@ export function WhatChangedReportView({
   expert: boolean;
   /** Overrides the "vs your previous X session" head line — the investigator names both picks. */
   headline?: string;
-  /** P6-stutter: a tag set beside each cause heading ("not proven cause"), so a surface that must
+  /** P6-stutter: a tag set beside each cause heading ("Not shown to be the cause"), so a surface that must
    *  not read as a diagnosis can say so on the cause itself. Absent = unchanged. */
   causeTag?: string;
   /** BACKLOG:236 — resolves `next_action_rec_id` against the LIVE ledger. All three below are

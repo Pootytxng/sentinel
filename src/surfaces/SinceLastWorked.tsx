@@ -17,7 +17,7 @@ import "./SinceLastWorked.css";
 // last clean session by changed_before's rules, honest about how far back the crash scan reaches;
 // with none, the list says so and lists no window. Every drift still open is shown either way
 // ("Still drifted now"), because Check's and Home's drift pointers lead here. Read-only: no IPC, no write, no button that changes
-// anything. Correlation in time only — the list is tagged "not proven cause".
+// anything. Correlation in time only — the list is tagged "Not shown to be the cause".
 
 /** Rows shown before the rest collapse into "and N earlier". */
 export const MAX_SINCE_ROWS = 40;

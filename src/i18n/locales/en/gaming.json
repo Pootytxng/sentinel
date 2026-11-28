@@ -317,7 +317,7 @@
       "sinceClean": "Since your last session with no crash on record ({{game}}, {{date}}) and up to this incident:",
       "sinceMeasured": "Since your last measured session ({{game}}, {{date}}) and up to this incident. Compy can't call that session clean: it had a crash or freeze of its own, or it's older than the crash records Compy read:",
       "noSession": "No session was recorded before this, so Compy has nothing earlier to compare against and can't say what changed.",
-      "notProven": "Listed by when it happened",
+      "notProven": "Not shown to be the cause",
       "observedBetween": "noticed between {{from}} and {{to}}",
       "category": {
         "compy-changes": "Compy changes",
@@ -382,7 +382,7 @@
     },
     "sinceWorked": {
       "title": "Since it last worked",
-      "notProven": "Listed by when it happened",
+      "notProven": "Not shown to be the cause",
       "since": "What Compy recorded since your last session with no crash on record started ({{game}}, {{date}}), newest first:",
       "nothing": "Compy hasn't recorded anything since then.",
       "noSession": "Compy hasn't recorded a finished session yet, so it can't say when this PC last worked.",

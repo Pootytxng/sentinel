@@ -263,6 +263,32 @@ describe("debrief comparison card words (e5a)", () => {
         await i18n.changeLanguage("en");
       }
     });
+
+  // e5a r1 (F3): the improved line says what one measured pair shows, with neither "signal" nor
+  // "guarantee" (CLAUDE.md never uses that word). Break check: put "a real signal, not a guarantee"
+  // (or 真实信号，但不保证) back in monitor.sessionDebrief.improvedSub -> fails in that locale.
+  for (const lang of ["en", "zh-CN"] as const)
+    it(`${lang}: an improved result's line has no signal or guarantee word`, async () => {
+      await i18n.changeLanguage(lang);
+      try {
+        harness.comparison = { ...cmp, verdict: "improved", after_low1_fps: 112.3, delta_low1_pct: 10.7 };
+        const { container } = render(
+          <ConfirmProvider>
+            <SessionDebrief s={debriefSession} priorities={null} recs={[]} apply={vi.fn()} busyId={null} onExport={vi.fn()} changes={[row(true)]} rollback={vi.fn()} />
+          </ConfirmProvider>,
+        );
+        await waitFor(() => expect(container.querySelector('[data-testid="cmp-card"]')).not.toBeNull());
+        const card = [...container.querySelectorAll('[data-testid="cmp-card"] .cmp-sub')].map((el) => el.textContent).join(" ");
+        expect(card).toContain(
+          lang === "en"
+            ? "a real difference here, though it may not hold for every game or session."
+            : "这是这里实测到的真实差异，但不一定对每款游戏、每次会话都成立。",
+        );
+        expect(card).not.toMatch(/signal|guarantee|信号|保证/i);
+      } finally {
+        await i18n.changeLanguage("en");
+      }
+    });
 });
 
 describe("details sheet's Roll back", () => {

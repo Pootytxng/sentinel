@@ -254,7 +254,7 @@
     "noChangeSub": "这点差异小于这台设备自身场次之间的正常波动。若说这是一次提升，那就是在骗人。",
     "improvedHeadlinePre": "实测提升 {{pct}}%，基于你的 ",
     "improvedHeadlineEmph": "1% 最低帧",
-    "improvedSub": "在 {{game}} 中，这台设备连续两次会话都测得高于自身噪声的提升——这是真实信号，但不保证对每款游戏、每次会话都成立。是你应用了它；是 Compy 测量了它。",
+    "improvedSub": "在 {{game}} 中，这台设备连续两次会话都测得高于自身噪声的提升——这是这里实测到的真实差异，但不一定对每款游戏、每次会话都成立。是你应用了它；是 Compy 测量了它。",
     "regressedHeadline": "这次改动让情况变差了",
     "regressedSubPre": "你在 {{game}} 中的 ",
     "regressedSubEmph1": "1% 最低帧",

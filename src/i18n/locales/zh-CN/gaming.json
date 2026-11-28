@@ -313,7 +313,7 @@
       "sinceClean": "从你上一次没有崩溃记录的会话({{game}},{{date}})到这次事件为止:",
       "sinceMeasured": "从你上一次测量过的会话({{game}},{{date}})到这次事件为止。Compy 无法确认那次会话是正常的:它本身出现过崩溃或卡死,或者早于 Compy 读取到的崩溃记录:",
       "noSession": "这之前没有记录到任何会话,Compy 没有更早的数据可以对比,无法说明发生了什么变化。",
-      "notProven": "按发生时间列出",
+      "notProven": "未证实是原因",
       "observedBetween": "在 {{from}} 到 {{to}} 之间发现",
       "category": {
         "compy-changes": "Compy 的更改",
@@ -370,7 +370,7 @@
     },
     "sinceWorked": {
       "title": "自上次正常以来",
-      "notProven": "按发生时间列出",
+      "notProven": "未证实是原因",
       "since": "自你上一次没有崩溃记录的会话({{game}},{{date}})开始以来,Compy 记录到的事项,最新的在前:",
       "nothing": "从那以后 Compy 没有记录到任何事项。",
       "noSession": "Compy 还没有记录到一次结束的会话,所以无法说明这台电脑上次正常是什么时候。",

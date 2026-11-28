@@ -551,7 +551,8 @@ function AssessmentBlock({
   const mapped = fromBlackboxStrength(a.strength);
   const strength = mapped.axis === "strength" ? mapped.strength : null;
   return (
-    <div className={`bb-assess bb-assess-${a.strength}`}>
+    // e5a r1 (F4): the box's emphasis follows the mapped strength too, so it never reads louder than its word.
+    <div className={`bb-assess bb-assess-${strength ? strengthWire(strength) : "none"}`} data-testid="bb-assess">
       <div className="bb-assess-head">
         <span className="bb-assess-label">{t("gaming.blackBox.whatThisPointsTo")}</span>
         {strength && (

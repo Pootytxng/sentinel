@@ -7,6 +7,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import { readFileSync } from "fs";
 import { join } from "path";
 import { BlackBox } from "./BlackBox";
+import i18n from "../i18n";
 import { pickStutterPair, stutterLessonRule, MAX_GOOD_CANDIDATES } from "./StutterCompare";
 import { LibraryContext } from "./library-context";
 import { CARE_ARRIVAL_KEY } from "./care-arrival";
@@ -150,12 +151,33 @@ describe("the Care view compares on a stutter arrival", () => {
     expect(screen.getByText(/none of it is a proven cause/)).toBeInTheDocument();
     // The cause heading itself carries the tag, not only the section.
     const cause = screen.getByText("Possible reason");
-    // e5a (D3): the tag is "Listed by when it happened". Break check: put "not proven cause" back in
+    // e5a r1 (F2): the cause tag is "Not shown to be the cause" (hypotheses are ranked, not listed by
+    // time). Break check: put "Listed by when it happened" or "not proven cause" back in
     // gaming.blackBox.changedBefore.notProven -> this fails.
-    expect(cause.parentElement?.textContent).toMatch(/Listed by when it happened/);
+    expect(cause.parentElement?.textContent).toMatch(/Not shown to be the cause/);
+    const tags = [...document.querySelectorAll(".wcp-cause-tag, .bb-stutter-tag")].map((el) => el.textContent);
+    expect(tags.length).toBeGreaterThanOrEqual(2); // the section head and the leading cause
+    for (const tag of tags) expect(tag).toBe("Not shown to be the cause");
     // One-shot: the flag is spent, and no Monitor/Benchmark command was used.
     expect(localStorage.getItem(CARE_ARRIVAL_KEY)).toBeNull();
     expect(cmds().every((c) => ["get_session_summaries", "what_changed_between"].includes(c))).toBe(true);
+  });
+
+  // e5a r1 (F2): the same tags in zh-CN. Break check: put 按发生时间列出 back in zh-CN
+  // gaming.blackBox.changedBefore.notProven -> this fails.
+  it("zh-CN: the section head and the cause heading carry 未证实是原因", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      h.sessions = [sess("2026-10-20T10:00:00Z"), sess("2026-10-24T10:00:00Z", { fps_series: UNEVEN })];
+      localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+      render(<BlackBox />);
+      expect(await screen.findByText("ENGINE HEADLINE 2026-10-20T10:00:00Z")).toBeInTheDocument();
+      const tags = [...document.querySelectorAll(".wcp-cause-tag, .bb-stutter-tag")].map((el) => el.textContent);
+      expect(tags.length).toBeGreaterThanOrEqual(2);
+      for (const tag of tags) expect(tag).toBe("未证实是原因");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   // Self-review 2026-10-28 (P7-route): the stutter section is the answer to the question the user

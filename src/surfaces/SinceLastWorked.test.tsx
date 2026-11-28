@@ -94,15 +94,30 @@ describe("Since it last worked (P6-timeline)", () => {
   it("lists incidents, Compy changes, drift, observed changes and sessions newest first, from the last clean session", async () => {
     const list = await scan(REPORT);
     expect(within(list).getByText(/What Compy recorded since your last session with no crash on record started \(Elden Ring,/)).toBeInTheDocument();
-    // e5a (D3): the tag says the list is ordered by time. Break check: put "listed by time, not proven
-    // cause" back in gaming.blackBox.sinceWorked.notProven -> this fails.
-    expect(within(list).getByText("Listed by when it happened")).toBeInTheDocument();
+    // e5a r1 (F1): the list keeps its cause caveat, without the retired word "proven" (the order is
+    // already said by "newest first"). Break check: drop the tag from SinceLastWorked, or put
+    // "Listed by when it happened" / "listed by time, not proven cause" back -> this fails.
+    expect(within(list).getByText("Not shown to be the cause")).toBeInTheDocument();
+    expect(list.textContent).not.toMatch(/proven|listed by when/i);
     const rows = within(list).getAllByRole("listitem");
     expect(rows.map((r) => r.getAttribute("data-kind"))).toEqual(["incident", "observed", "drift", "session", "compy"]);
     expect(rows[0]).toHaveTextContent("Elden Ring stopped working and closed");
     expect(rows[1]).toHaveTextContent(/noticed between/);
     expect(rows[4]).toHaveTextContent(/Trim Windows visual effects · since undone/);
     expect(within(list).queryByText("An older crash")).not.toBeInTheDocument();
+  });
+
+  // e5a r1 (F1): the same caveat in zh-CN. Break check: put 按发生时间列出 back in zh-CN
+  // gaming.blackBox.sinceWorked.notProven -> this fails.
+  it("zh-CN: the list carries 未证实是原因", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const list = await scan(REPORT);
+      expect(within(list).getByText("未证实是原因")).toBeInTheDocument();
+      expect(list.textContent).not.toContain("按发生时间列出");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("says so when no session can be called clean, and lists nothing", async () => {

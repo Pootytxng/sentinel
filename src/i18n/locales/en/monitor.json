@@ -254,7 +254,7 @@
     "noChangeSub": "The difference is smaller than this rig's own session-to-session noise. Claiming a win here would be lying.",
     "improvedHeadlinePre": "Measured improvement — {{pct}}% on your ",
     "improvedHeadlineEmph": "1% low",
-    "improvedSub": "Measured on this rig, in {{game}}, above its own noise across these two sessions — a real signal, not a guarantee for every game or session. You applied it; Compy measured it.",
+    "improvedSub": "Measured on this rig, in {{game}}, above its own noise across these two sessions — a real difference here, though it may not hold for every game or session. You applied it; Compy measured it.",
     "regressedHeadline": "This made it worse here",
     "regressedSubPre": "Your ",
     "regressedSubEmph1": "1% low",

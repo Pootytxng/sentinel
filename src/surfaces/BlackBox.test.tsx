@@ -180,6 +180,9 @@ describe("BlackBox surface (v2 triage UI)", () => {
           fireEvent.click(screen.getByRole("button", { name: i18n.t("gaming.blackBox.scanButton") }));
           const tag = await screen.findByTestId("bb-strength");
           expect(tag.textContent).toBe(loc === "en" ? "Possible" : "有可能");
+          // e5a r1 (F4): the box's emphasis follows the word. Break check: put bb-assess-${a.strength}
+          // back in BlackBox.tsx -> the partial/strong boxes lose bb-assess-possible and fail.
+          expect(screen.getByTestId("bb-assess").className).toBe("bb-assess bb-assess-possible");
           const body = document.body.textContent || "";
           expect(body).not.toMatch(loc === "en" ? /most likely|signal/i : /最有可能|信号/);
         } finally {
@@ -639,8 +642,7 @@ const item = (category: string, status: string, extra: Record<string, unknown> =
 }) as unknown as NonNullable<CrashIncident["changed_before"]>["items"][number];
 
 describe("BlackBox — Changed before this (P6-changed)", () => {
-  it("lists every category since the last clean session, each tagged as listed by when it happened", async () => {
-    reportMock.value = {
+  const sidumpReport = (): BlackBoxReport => ({
       incidents: [
         sidumpIncident({
           anchor_kind: "clean",
@@ -666,7 +668,10 @@ describe("BlackBox — Changed before this (P6-changed)", () => {
         }),
       ],
       skipped_sources: [],
-    };
+    });
+
+  it("lists every category since the last clean session, each tagged as not shown to be the cause", async () => {
+    reportMock.value = sidumpReport();
     const { container } = render(<BlackBox />);
     scan();
     expect(await screen.findByText("Changed before this")).toBeInTheDocument();
@@ -676,10 +681,11 @@ describe("BlackBox — Changed before this (P6-changed)", () => {
     }
     const rows = container.querySelectorAll(".bb-changed-item");
     expect(rows).toHaveLength(6);
-    // e5a (D3): the tag says how the list is ordered, not that an item is an unproven cause. Break
-    // check: put "not proven cause" back in gaming.blackBox.changedBefore.notProven -> both lines fail.
-    rows.forEach((row) => expect(row.textContent).toContain("Listed by when it happened"));
-    rows.forEach((row) => expect(row.textContent).not.toMatch(/proven/i));
+    // e5a r1 (F1): every row keeps a cause caveat, without the retired word "proven" (the rows are
+    // categories in a fixed order, so a time-order tag would not be true). Break checks: drop the tag
+    // from ChangedBeforeRow, or put "Listed by when it happened" / "not proven cause" back -> fails.
+    rows.forEach((row) => expect(row.textContent).toContain("Not shown to be the cause"));
+    rows.forEach((row) => expect(row.textContent).not.toMatch(/proven|listed by when/i));
     expect(screen.getByText("Trim Windows visual effects rolled back", { exact: false })).toBeInTheDocument();
     // Unread evidence reads as unknown — never as "No change".
     for (const cat of ["windows-build", "power-plan", "drift"]) {
@@ -689,6 +695,24 @@ describe("BlackBox — Changed before this (P6-changed)", () => {
     }
     expect(container.querySelector('[data-category="driver"]')!.textContent).toMatch(/No change: Compy read the same thing/);
     expect(container.textContent).not.toMatch(/caused|because|root cause/i);
+  });
+
+  // e5a r1 (F1): the same caveat in zh-CN on every row. Break check: drop the tag from ChangedBeforeRow,
+  // or put 按发生时间列出 back in zh-CN gaming.blackBox.changedBefore.notProven -> fails.
+  it("zh-CN: every Changed-before row carries 未证实是原因", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      reportMock.value = sidumpReport();
+      const { container } = render(<BlackBox />);
+      fireEvent.click(screen.getByRole("button", { name: i18n.t("gaming.blackBox.scanButton") }));
+      await screen.findAllByText(i18n.t("gaming.blackBox.changedBefore.title"));
+      const rows = container.querySelectorAll(".bb-changed-item");
+      expect(rows).toHaveLength(6);
+      rows.forEach((row) => expect(row.textContent).toContain("未证实是原因"));
+      rows.forEach((row) => expect(row.textContent).not.toContain("按发生时间列出"));
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("says so when there was no session before the incident, and lists nothing", async () => {

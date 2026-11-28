@@ -159,7 +159,7 @@
   color: var(--ix-text-3);
 }
 
-/* P6-changed: "Changed before this". Every row carries the "not proven cause" tag. */
+/* P6-changed: "Changed before this". Every row carries the "Not shown to be the cause" tag. */
 .bb-changed {
   display: flex;
   flex-direction: column;
@@ -333,8 +333,9 @@
 
 /* ── Black Box v2 — triage block (only rendered when the backend gate populated `assessment`). ──
    "Consistent with…" framing, a strength WORD (never a percentage), the evidence, and ONE reversible
-   next step. Strength is shown by EMPHASIS, not a traffic-light palette (we have no success/warn token,
-   and "Strong" here means strong SIGNAL, not "good"). Instrument tokens only — no new hexes. */
+   next step. Strength is shown by EMPHASIS, not a traffic-light palette (we have no success/warn token).
+   e5a: the box follows the MAPPED strength (certainty.ts fromBlackboxStrength), so every band, the
+   reserved strong/partial included, gets the muted Possible box. Instrument tokens only — no new hexes. */
 .bb-assess {
   border: 1px solid color-mix(in srgb, var(--ix-accent) 32%, var(--ix-border));
   border-radius: var(--ix-radius);
@@ -344,7 +345,7 @@
   flex-direction: column;
   gap: 9px;
 }
-.bb-assess-weak {
+.bb-assess-possible {
   border-color: var(--ix-border);
 }
 .bb-assess-head {
