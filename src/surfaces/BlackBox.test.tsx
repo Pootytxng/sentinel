@@ -54,6 +54,7 @@ function assessedIncident(): CrashIncident {
       detail: "Display driver amdkmdag stopped responding and has recovered.",
     },
     assessment: {
+      rule: "graphics-driver",
       consistent_with: "your graphics driver (amdkmdag) repeatedly timing out",
       strength: "weak", // repeats of one Windows record are one kind of evidence (p1-claims)
       evidence: [
@@ -133,7 +134,10 @@ describe("BlackBox surface (v2 triage UI)", () => {
     reportMock.value = { incidents: [appCrashIncident()], skipped_sources: [] };
     render(<BlackBox />);
     scan();
-    await screen.findByText("What this points to");
+    // e7: a reading that says the record can't tell is headed by what the record shows, never by a
+    // promise of where it points. Break check: put back the single "What this points to" heading.
+    await screen.findByText("What the record shows");
+    expect(screen.queryByText("What this points to")).not.toBeInTheDocument();
     expect(screen.getByTestId("bb-strength").textContent).toBe("Possible");
     expect(screen.queryByText("Most likely")).not.toBeInTheDocument();
     expect(
