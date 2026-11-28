@@ -31,6 +31,7 @@
       "other": "其他变化",
       "looksOff": "这台电脑上看起来不对劲的地方",
       "compy": "Compy 做过的更改",
+      "offNow": "Compy 开启过、现在已关闭的设置",
       "looksOffNote": "这些是 Compy 刚刚在这台电脑上读到的。Compy 还没有测量过其中任何一项是否会影响游戏的运行。"
     },
     "change": {
@@ -200,7 +201,11 @@
       "applied": "Compy 在 {{when}} 更改了“{{title}}”。",
       "undone": "Compy 在 {{when}} 更改了“{{title}}”，并已在 {{undone}} 被撤销。",
       "undoneNoDate": "Compy 在 {{when}} 更改了“{{title}}”，之后已被撤销。",
-      "undoHint": "“历史”里列为已应用的更改，可以在那里撤销。"
+      "undoHint": "“历史”里列为已应用的更改，可以在那里撤销。",
+      "offNowSeen": "Compy 开启过的设置“{{title}}”已不再开启，Compy 没有关闭它的记录。Compy 在 {{seen}} 最后一次看到它是开启的，并在 {{noticed}} 发现它已关闭。",
+      "offNowNoticed": "Compy 开启过的设置“{{title}}”已不再开启，Compy 没有关闭它的记录。Compy 在 {{noticed}} 发现它已关闭。",
+      "offNowUnnamedSeen": "Compy 开启过的某项设置已不再开启，Compy 没有关闭它的记录。Compy 在 {{seen}} 最后一次看到它是开启的，并在 {{noticed}} 发现它已关闭。",
+      "offNowUnnamedNoticed": "Compy 开启过的某项设置已不再开启，Compy 没有关闭它的记录。Compy 在 {{noticed}} 发现它已关闭。"
     },
     "fact": {
       "monitorRefresh": "你的主显示器正以 {{now}} Hz 运行；在当前分辨率下它支持 {{max}} Hz。",
@@ -377,8 +382,8 @@
     "ramSinceUnread": "Compy 没有 {{date}} 那次 {{game}} 游戏的内存读数。",
     "driftApplied": "Compy 自己的检查发现，它开启过的某项设置现在已不再开启。",
     "driftPower": "Compy 注意到电源计划现在是 Windows 设计用来节省电力的计划。",
-    "driftAppliedNamed_one": "Compy 自己的检查发现，它开启过的某项设置已不再开启。现在已关闭：{{titles}}。",
-    "driftAppliedNamed_other": "Compy 自己的检查发现，它开启过的某项设置已不再开启。现在已关闭：{{titles}}。",
+    "driftAppliedNamed_one": "Compy 自己的检查发现，它开启过的设置已不再开启。现在已关闭：{{titles}}。",
+    "driftAppliedNamed_other": "Compy 自己的检查发现，它开启过的设置已不再开启。现在已关闭：{{titles}}。",
     "driftSeenThenOff": "Compy 在 {{seen}} 最后一次看到它是开启的，并在 {{noticed}} 发现它已关闭。",
     "driftSeenThenChanged": "Compy 在 {{seen}} 最后一次看到它没有变化，并在 {{noticed}} 发现它变了。",
     "driftOther": "Compy 注意到它监视的某项设置变了。",

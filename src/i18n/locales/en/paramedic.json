@@ -31,6 +31,7 @@
       "other": "Other changes",
       "looksOff": "What looks off on this PC",
       "compy": "Changes Compy made",
+      "offNow": "Settings Compy applied that are off now",
       "looksOffNote": "Compy read these on this PC just now. It hasn't measured whether any of them changes how a game runs."
     },
     "change": {
@@ -200,7 +201,11 @@
       "applied": "Compy changed “{{title}}” on {{when}}.",
       "undone": "Compy changed “{{title}}” on {{when}}, and it was undone on {{undone}}.",
       "undoneNoDate": "Compy changed “{{title}}” on {{when}}, and it has since been undone.",
-      "undoHint": "Changes that History lists as applied can be undone there."
+      "undoHint": "Changes that History lists as applied can be undone there.",
+      "offNowSeen": "“{{title}}”, a setting Compy applied, is no longer on, and Compy has no record of turning it off. Compy last saw it on at {{seen}} and noticed it off at {{noticed}}.",
+      "offNowNoticed": "“{{title}}”, a setting Compy applied, is no longer on, and Compy has no record of turning it off. Compy noticed it off at {{noticed}}.",
+      "offNowUnnamedSeen": "A setting Compy applied is no longer on, and Compy has no record of turning it off. Compy last saw it on at {{seen}} and noticed it off at {{noticed}}.",
+      "offNowUnnamedNoticed": "A setting Compy applied is no longer on, and Compy has no record of turning it off. Compy noticed it off at {{noticed}}."
     },
     "fact": {
       "monitorRefresh": "Your main monitor is running at {{now}} Hz; at this resolution it supports {{max}} Hz.",
@@ -378,7 +383,7 @@
     "driftApplied": "Compy's own check found a setting it applied is no longer on.",
     "driftPower": "Compy noticed the power plan is now one Windows designed to save power.",
     "driftAppliedNamed_one": "Compy's own check found that “{{titles}}”, a setting Compy applied, is no longer on.",
-    "driftAppliedNamed_other": "Compy's own check found a setting it applied was no longer on. Off now: {{titles}}.",
+    "driftAppliedNamed_other": "Compy's own check found that settings Compy applied are no longer on. Off now: {{titles}}.",
     "driftSeenThenOff": "Compy last saw it on at {{seen}} and noticed it off at {{noticed}}.",
     "driftSeenThenChanged": "Compy last saw it unchanged at {{seen}} and noticed the change at {{noticed}}.",
     "driftOther": "Compy noticed a setting it watches had changed.",

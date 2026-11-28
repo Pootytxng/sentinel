@@ -7,7 +7,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import type { ParamedicDiagnosis, ParamedicLimit } from "../../types";
+import type { AppliedChange, Drift, ParamedicDiagnosis, ParamedicLimit } from "../../types";
 import { useDates } from "./GamesRoom";
 
 type T = ReturnType<typeof useTranslation>["t"];
@@ -299,6 +299,64 @@ function compyText(c: CompyChange, t: T, dates: Dates): string {
   return c.undone_at
     ? t("paramedic.firstLook.compy.undone", { title: c.title, when, undone: dates.dayTime(c.undone_at) })
     : t("paramedic.firstLook.compy.undoneNoDate", { title: c.title, when });
+}
+
+const instant = (s: string | null | undefined): number | null => {
+  if (!s) return null;
+  const n = new Date(s).getTime();
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Inside the window the engine read: after `from`, up to `to` (the engine's own `(t0, now]`). */
+const inWindow = (at: number | null, from: number, to: number): at is number => at !== null && at > from && at <= to;
+
+/** e6: Compy's own changes made BEFORE the window and undone inside it, from the ledger list the card already has.
+ *  The engine lists only changes made inside the window (with their undo); these are the rest. A change the engine
+ *  already listed (same title, same time) is not listed twice. Null ledger (not read): none, and nothing is claimed. */
+export function undoneInWindow(changes: AppliedChange[] | null | undefined, a: ParamedicFirstLook): CompyChange[] {
+  const from = instant(a.told.from);
+  const to = instant(a.told.to);
+  if (!changes || from === null || to === null || !a.changes_listed) return [];
+  // The engine's stamps are whole seconds (`told.from` too), so a change is matched to the second, and one made in
+  // the second `from` names is checked against the engine's list rather than dropped by both.
+  const sec = (n: number) => Math.floor(n / 1000);
+  const listed = new Set(a.compy_changes.map((c) => `${c.title}\u0000${sec(instant(c.at) ?? NaN)}`));
+  return changes
+    .filter((c) => c.status === "rolled_back" && c.rec_title.trim() !== "" && inWindow(instant(c.rolled_back_at), from, to))
+    .filter((c) => {
+      const applied = instant(c.applied_at);
+      return applied !== null && sec(applied) <= sec(from) && !listed.has(`${c.rec_title.trim()}\u0000${sec(applied)}`);
+    })
+    .map((c) => ({ title: c.rec_title.trim(), at: c.applied_at, undone: true, undone_at: c.rolled_back_at ?? null }));
+}
+
+/** e6: a setting Compy applied that reads off now, from the live drift list Home names it from, when Compy noticed it
+ *  off inside the window. One row per title; no title kept is the unnamed row. An unreadable check is not listed. */
+export type OffNow = { title: string | null; seen: string | null; noticed: string };
+
+export function offNowInWindow(drifts: Drift[] | null | undefined, a: ParamedicFirstLook): OffNow[] {
+  const from = instant(a.told.from);
+  const to = instant(a.told.to);
+  if (!drifts || from === null || to === null || !a.changes_listed) return [];
+  return drifts
+    .filter((d) => d.id === "applied-changes" && d.unreadable_now !== true && inWindow(instant(d.noticed_at), from, to))
+    .flatMap((d): OffNow[] => {
+      const seen = instant(d.last_ready_at) !== null ? (d.last_ready_at as string) : null;
+      const titles = (d.titles ?? []).map((x) => x.trim()).filter(Boolean);
+      return titles.length > 0 ? titles.map((title) => ({ title, seen, noticed: d.noticed_at })) : [{ title: null, seen, noticed: d.noticed_at }];
+    });
+}
+
+function offNowText(o: OffNow, t: T, dates: Dates): string {
+  const noticed = dates.dayTime(o.noticed);
+  if (o.title) {
+    return o.seen
+      ? t("paramedic.firstLook.compy.offNowSeen", { title: o.title, seen: dates.dayTime(o.seen), noticed })
+      : t("paramedic.firstLook.compy.offNowNoticed", { title: o.title, noticed });
+  }
+  return o.seen
+    ? t("paramedic.firstLook.compy.offNowUnnamedSeen", { seen: dates.dayTime(o.seen), noticed })
+    : t("paramedic.firstLook.compy.offNowUnnamedNoticed", { noticed });
 }
 
 /** The readings a "couldn't read" line can name. */
@@ -701,10 +759,16 @@ export function ParamedicFirstLook({
   games = [],
   elsewhere = false,
   onAsking,
+  drifts,
+  changes,
 }: {
   measured?: FirstLookMeasured;
   games?: RecordedGame[];
   elsewhere?: boolean;
+  /** e6: the card's live drift list (null/undefined = not loaded: nothing is said from it). */
+  drifts?: Drift[] | null;
+  /** e6: the card's ledger list (null/undefined = not read: nothing is said from it). */
+  changes?: AppliedChange[] | null;
   /** Told whether the card is still asking ("Which game?", "When did it start?") or has an answer or an outcome to show. */
   onAsking?: (asking: boolean) => void;
 } = {}) {
@@ -923,7 +987,14 @@ export function ParamedicFirstLook({
   // Definition and Store-app updates are daily routine: they are counted inside the limits fold, not listed.
   const minor = a.other_changes.find((c) => c.id === "updates-minor");
   const otherRows = a.other_changes.filter((c) => c.id !== "updates-minor");
-  const empty = a.touch_games.length === 0 && otherRows.length === 0 && a.compy_changes.length === 0;
+  // e6: Compy's own changes, with those made before the window and undone inside it (from the card's ledger list),
+  // newest first by the time that falls inside the window; and its settings noticed off inside the window.
+  const eventAt = (c: CompyChange, early: boolean) => instant(early ? c.undone_at : c.at) ?? 0;
+  const compyAll = [...a.compy_changes.map((c) => ({ c, at: eventAt(c, false) })), ...undoneInWindow(changes, a).map((c) => ({ c, at: eventAt(c, true) }))]
+    .sort((x, y) => y.at - x.at)
+    .map((x) => x.c);
+  const offNow = offNowInWindow(drifts, a);
+  const empty = a.touch_games.length === 0 && otherRows.length === 0 && compyAll.length === 0 && offNow.length === 0;
   const touchLimits = a.limits.filter((l) => inGroup(l) && (l.kind === "driver" || l.kind === "windows-update" || l.kind === "game-update"));
   const programLimits = a.limits.filter((l) => inGroup(l) && l.kind === "programs");
   const open = a.touch_games.slice(0, ROWS_OPEN);
@@ -939,8 +1010,21 @@ export function ParamedicFirstLook({
   const settingsOnly = gameName ? a.mods_settings_only : [];
   const factsOpen = a.facts.slice(0, ROWS_OPEN);
   const factsRest = a.facts.slice(ROWS_OPEN);
-  const compyOpen = a.compy_changes.slice(0, ROWS_OPEN);
-  const compyRest = a.compy_changes.slice(ROWS_OPEN);
+  const compyOpen = compyAll.slice(0, ROWS_OPEN);
+  const compyRest = compyAll.slice(ROWS_OPEN);
+  const offOpen = offNow.slice(0, ROWS_OPEN);
+  const offRest = offNow.slice(ROWS_OPEN);
+  // The shared words beside a list of changes: listed by time only, none of them shown to be the cause.
+  const notCause = <span className="gl-row-sub" data-testid="first-look-not-cause">{t("gaming.blackBox.changedBefore.notProven")}</span>;
+  const offRows = (rows: OffNow[]) => (
+    <ul className="gl-para-lines" data-testid="first-look-off-now-rows">
+      {rows.map((o, i) => (
+        <li key={`${o.noticed}-${o.title ?? ""}-${i}`}>
+          <p>{offNowText(o, t, dates)}</p>
+        </li>
+      ))}
+    </ul>
+  );
   const factRows = (rows: FirstLookFact[]) => (
     <ul className="gl-para-lines" data-testid="first-look-facts">
       {rows.map((f, i) => {
@@ -1027,10 +1111,10 @@ export function ParamedicFirstLook({
       <RunningNow r={a.running_now} game={gameName} t={t} />
       {a.changes_listed && (
         <>
-          {a.compy_changes.length > 0 && (
+          {compyAll.length > 0 && (
             <div role="group" aria-label={t("paramedic.firstLook.group.compy")} data-testid="first-look-compy">
               <p>
-                <strong>{t("paramedic.firstLook.group.compy")}</strong>
+                <strong>{t("paramedic.firstLook.group.compy")}</strong> {notCause}
               </p>
               {compyRows(compyOpen)}
               {compyRest.length > 0 && (
@@ -1038,7 +1122,20 @@ export function ParamedicFirstLook({
                   {compyRows(compyRest)}
                 </Fold>
               )}
-              {a.compy_changes.some((c) => !c.undone) && <p className="gl-para-note">{t("paramedic.firstLook.compy.undoHint")}</p>}
+              {compyAll.some((c) => !c.undone) && <p className="gl-para-note">{t("paramedic.firstLook.compy.undoHint")}</p>}
+            </div>
+          )}
+          {offNow.length > 0 && (
+            <div role="group" aria-label={t("paramedic.firstLook.group.offNow")} data-testid="first-look-off-now">
+              <p>
+                <strong>{t("paramedic.firstLook.group.offNow")}</strong> {notCause}
+              </p>
+              {offRows(offOpen)}
+              {offRest.length > 0 && (
+                <Fold title={t("paramedic.firstLook.group.more", { n: offRest.length })} testid="first-look-off-now-more">
+                  {offRows(offRest)}
+                </Fold>
+              )}
             </div>
           )}
           {(open.length > 0 || noneTouch.length > 0 || touchLimits.length > 0 || touchNotes) && (

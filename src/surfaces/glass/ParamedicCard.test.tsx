@@ -2559,9 +2559,29 @@ describe("ParamedicCard: the drift suspect names the setting the way Home does",
 
   it("with several settings off it says they are off now and gives no single date", async () => {
     const text = await open([drift({ titles: [TITLE, "Enable Windows Game Mode"], applied_at: ["2026-11-15T13:45:00Z", "2026-11-15T13:44:00Z"] })]);
-    expect(text).toContain(`Compy's own check found a setting it applied was no longer on. Off now: ${TITLE}, Enable Windows Game Mode.`);
+    // e6: several titles are "settings ... are", never "a setting ... was" over a list of two or more.
+    expect(text).toContain(`Compy's own check found that settings Compy applied are no longer on. Off now: ${TITLE}, Enable Windows Game Mode.`);
+    expect(text).not.toContain("found a setting it applied was no longer on");
     expect(text).not.toContain("these settings Compy applied");
     expect(text).not.toContain("You turned it on with Compy on");
+  });
+
+  // e6: zh-CN has one plural form, so one sentence serves one title and several: it must not say "a certain one" (某项).
+  it("in Chinese, several titles read as settings, not as one setting", async () => {
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      answer.value = { ...base, why_first: null, findings: [suspect(FOUND)] };
+      render(<ParamedicCard drifts={[drift({ titles: [TITLE, "Enable Windows Game Mode"], applied_at: ["", ""] })] as never} />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      const text = screen.getByTestId("paramedic").textContent ?? "";
+      expect(text).toContain(`Compy 自己的检查发现，它开启过的设置已不再开启。现在已关闭：${TITLE}, Enable Windows Game Mode。`);
+      expect(text).not.toContain("它开启过的某项设置已不再开启。现在已关闭");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("the list not loaded (undefined or null) is 'couldn't read which setting it was', never 'isn't recorded'", async () => {

@@ -36,7 +36,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import "../../i18n";
 import i18n from "../../i18n";
-import type { ParamedicDiagnosis } from "../../types";
+import type { AppliedChange, Drift, ParamedicDiagnosis } from "../../types";
 import type { CompyChange, FirstLookChange, FirstLookCrashSplit, FirstLookFact, ParamedicFirstLook as FirstLookAnswer, RecordedGame, SteamGames } from "./ParamedicFirstLook";
 import { ParamedicCard } from "./ParamedicCard";
 
@@ -1629,6 +1629,161 @@ describe("what Compy can't tell yet rests on the sessions it recorded", () => {
       await pick("这周", gameAnswer({ recorded: rec({}) }));
       expect(screen.getByTestId("first-look-cant-tell-body").textContent).toBe(zh.recorded_other.replace("{{count}}", "20").replace("{{game}}", "ROB RUN"));
       expect(screen.getByTestId("first-look-cant-tell").textContent).not.toContain(zh.body);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
+
+// e6 (QUEUE "first look: drift notices and changes undone inside the window"): from what the card already has (the
+// live drift list and the ledger list), the first look lists a setting Compy applied that Compy noticed off inside the
+// window, and a change Compy made before the window and undone inside it. Both lists carry the shared words "Not shown
+// to be the cause". Nothing outside the window, nothing unread and nothing twice. The Paramedic strings never say
+// "outside Compy" (f2fc65b6: Compy can't see who turned it off), so the row says what the records show: no longer on,
+// and no record of Compy turning it off.
+describe("e6: settings Compy applied that are off now, and changes undone inside the window", () => {
+  const TRIM = "Trim Windows visual effects";
+  const offDrift = (over: Partial<Drift> = {}): Drift => ({
+    id: "applied-changes",
+    label: "Compy changes were turned back off",
+    detail: "",
+    noticed_at: "2026-11-18T09:00:00Z",
+    unreadable_now: false,
+    value_now: null,
+    last_ready_at: "2026-11-17T09:00:00Z",
+    last_ready_value: null,
+    titles: [TRIM],
+    applied_at: [""],
+    ...over,
+  });
+  const ledger = (rec_title: string, applied_at: string, over: Partial<AppliedChange> = {}): AppliedChange => ({
+    id: `${rec_title}-${applied_at}`,
+    rec_id: rec_title.toLowerCase().replace(/\s+/g, "-"),
+    rec_title,
+    applied_at,
+    snapshot: null,
+    status: "rolled_back",
+    is_still_active: false,
+    rolled_back_at: null,
+    ...over,
+  });
+  async function lookWith(props: { drifts?: Drift[] | null; changes?: AppliedChange[] | null }, a: FirstLookAnswer) {
+    engine.diagnose = noSessions();
+    render(<ParamedicCard noGames {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: WHOLE_PC }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
+    await pick("This week", a);
+  }
+  const rowsOf = (id: string) => within(screen.getByTestId(id)).getAllByRole("listitem").map((n) => n.textContent ?? "");
+
+  // Break check: drop `offNow` from the page (or from `empty`) and this fails: no group, and "no dated change" shows.
+  it("names a setting Compy noticed off inside the window, with both times, under its own heading and the shared words", async () => {
+    await lookWith({ drifts: [offDrift()] }, gameAnswer());
+    const group = screen.getByTestId("first-look-off-now");
+    expect(within(group).getByText("Settings Compy applied that are off now")).toBeTruthy();
+    expect(rowsOf("first-look-off-now")).toHaveLength(1);
+    expect(rowsOf("first-look-off-now")[0]).toMatch(
+      new RegExp(
+        `^“${TRIM}”, a setting Compy applied, is no longer on, and Compy has no record of turning it off\\. Compy last saw it on at [A-Z][a-z]{2} \\d+.* and noticed it off at [A-Z][a-z]{2} \\d+.*\\.$`,
+      ),
+    );
+    expect(group.textContent).not.toMatch(/outside Compy/);
+    expect(within(group).getByTestId("first-look-not-cause").textContent).toBe("Not shown to be the cause");
+    expect(screen.queryByTestId("first-look-nothing")).toBeNull();
+    // It is not a change Compy made: it is not in that group.
+    expect(screen.queryByTestId("first-look-compy")).toBeNull();
+  });
+
+  // Break check: name every title from `titles` only when it is non-empty, or drop the `seen` test, and the unnamed
+  // and no-last-seen sentences change.
+  it("one row per title; no title kept is the unnamed row; no last-seen time is the noticed-only sentence", async () => {
+    await lookWith({ drifts: [offDrift({ titles: [TRIM, "Enable Windows Game Mode"], applied_at: ["", ""] })] }, gameAnswer());
+    const two = rowsOf("first-look-off-now");
+    expect(two).toHaveLength(2);
+    expect(two[1]).toMatch(/^“Enable Windows Game Mode”, a setting Compy applied, is no longer on, and Compy has no record of turning it off\./);
+    cleanup();
+    await lookWith({ drifts: [offDrift({ titles: [], applied_at: [], last_ready_at: null })] }, gameAnswer());
+    expect(rowsOf("first-look-off-now")).toEqual([
+      expect.stringMatching(/^A setting Compy applied is no longer on, and Compy has no record of turning it off\. Compy noticed it off at [A-Z][a-z]{2} \d+.*\.$/),
+    ]);
+  });
+
+  // Break check: drop the window, unreadable or id test in `offNowInWindow` and one of these lists a row.
+  it("lists nothing noticed before the window, an unreadable check, another watched setting, an unloaded list, or 'always'", async () => {
+    const cases: { drifts: Drift[] | null | undefined; a?: FirstLookAnswer }[] = [
+      { drifts: [offDrift({ noticed_at: "2026-11-01T09:00:00Z" })] },
+      { drifts: [offDrift({ unreadable_now: true })] },
+      { drifts: [offDrift({ id: "monitor-refresh", titles: [], value_now: "60 Hz" })] },
+      { drifts: null },
+      { drifts: undefined },
+      { drifts: [offDrift()], a: gameAnswer({ told: { since: "always", from: null, to: "2026-11-20T12:00:00Z", hours: null }, changes_listed: false }) },
+    ];
+    for (const c of cases) {
+      cleanup();
+      await lookWith({ drifts: c.drifts }, c.a ?? gameAnswer());
+      expect(screen.queryByTestId("first-look-off-now"), JSON.stringify(c.drifts)).toBeNull();
+    }
+  });
+
+  // Break check: drop `undoneInWindow` from `compyAll` and the Game Mode row is missing; drop the "already listed" test
+  // and Tweak A shows twice; drop the `applied <= from` test and "Inside" (made inside the window: the engine's to list)
+  // is listed from the ledger.
+  it("adds Compy's changes made before the window and undone inside it, newest first, never twice, with the shared words", async () => {
+    const changes = [
+      ledger("Enable Windows Game Mode", "2026-11-01T10:00:00Z", { rolled_back_at: "2026-11-19T08:00:00Z" }),
+      ledger("Old undo", "2026-11-01T10:00:00Z", { rolled_back_at: "2026-11-05T08:00:00Z" }),
+      ledger("Still on", "2026-11-01T10:00:00Z", { status: "applied", is_still_active: true }),
+      ledger("Inside", "2026-11-15T10:00:00Z", { rolled_back_at: "2026-11-16T08:00:00Z" }),
+      // Made in the very second the window starts: the engine (whole seconds) listed it, so the ledger does not again.
+      ledger("Tweak A", "2026-11-12T12:00:00.400Z", { rolled_back_at: "2026-11-19T09:00:00Z" }),
+    ];
+    await lookWith({ changes }, gameAnswer({ compy_changes: [compy("Tweak A", "2026-11-12T12:00:00Z", { undone: true, undone_at: "2026-11-19T09:00:00Z" })] }));
+    const rows = rowsOf("first-look-compy");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatch(/^Compy changed “Enable Windows Game Mode” on [A-Z][a-z]{2} \d+.*, and it was undone on [A-Z][a-z]{2} \d+/);
+    expect(rows[1]).toMatch(/^Compy changed “Tweak A” on /);
+    const group = screen.getByTestId("first-look-compy");
+    expect(group.textContent).not.toMatch(/Old undo|Still on|Inside/);
+    expect(within(group).getByTestId("first-look-not-cause").textContent).toBe("Not shown to be the cause");
+    // Every listed change is undone: no "can be undone there" line.
+    expect(within(group).queryByText("Changes that History lists as applied can be undone there.")).toBeNull();
+  });
+
+  // Break check: list from `changes` when it is null, or ignore `changes_listed`, and a row appears here.
+  it("a ledger list not read, or 'always', adds nothing; an undo alone is a finding, not 'no dated change'", async () => {
+    const undo = [ledger("Enable Windows Game Mode", "2026-11-01T10:00:00Z", { rolled_back_at: "2026-11-19T08:00:00Z" })];
+    await lookWith({ changes: null }, gameAnswer());
+    expect(screen.queryByTestId("first-look-compy")).toBeNull();
+    cleanup();
+    await lookWith({ changes: undo }, gameAnswer({ told: { since: "always", from: null, to: "2026-11-20T12:00:00Z", hours: null }, changes_listed: false }));
+    expect(screen.queryByTestId("first-look-compy")).toBeNull();
+    cleanup();
+    await lookWith({ changes: undo }, gameAnswer());
+    expect(screen.getByTestId("first-look-compy")).toBeTruthy();
+    expect(screen.queryByTestId("first-look-nothing")).toBeNull();
+  });
+
+  // Break check: put the zh-CN offNow strings back to English, or the shared tag to another word, and this fails.
+  it("says the same in Chinese", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      engine.diagnose = noSessions();
+      const changes = [ledger("Enable Windows Game Mode", "2026-11-01T10:00:00Z", { rolled_back_at: "2026-11-19T08:00:00Z" })];
+      render(<ParamedicCard noGames drifts={[offDrift()]} changes={changes} />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
+      fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
+      await pick("这周", gameAnswer());
+      const off = screen.getByTestId("first-look-off-now");
+      expect(within(off).getByText("Compy 开启过、现在已关闭的设置")).toBeTruthy();
+      expect(rowsOf("first-look-off-now")[0]).toMatch(
+        new RegExp(`^Compy 开启过的设置“${TRIM}”已不再开启，Compy 没有关闭它的记录。Compy 在 .+ 最后一次看到它是开启的，并在 .+ 发现它已关闭。$`),
+      );
+      expect(off.textContent).not.toMatch(/之外/);
+      expect(rowsOf("first-look-compy")[0]).toMatch(/^Compy 在 .+ 更改了“Enable Windows Game Mode”，并已在 .+ 被撤销。$/);
+      for (const tag of screen.getAllByTestId("first-look-not-cause")) expect(tag.textContent).toBe("未证实是原因");
     } finally {
       await i18n.changeLanguage("en");
     }

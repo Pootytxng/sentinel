@@ -2355,14 +2355,14 @@ export function ParamedicCard({
           >
             <div className="gl-para-body" aria-live="polite">
               {showQuestions ? (
-                <ParamedicFirstLook key={`questions-${round}`} games={games} elsewhere onAsking={setLookAsking} />
+                <ParamedicFirstLook key={`questions-${round}`} games={games} elsewhere onAsking={setLookAsking} drifts={drifts} changes={changes} />
               ) : answer && ctx ? (
                 <>
                   {view.kind === "done" && view.prev && <SinceLast prev={view.prev} d={answer} ctx={ctx} />}
                   {/* No usable history: with no game recorded the first look is the whole answer; with a game that
                       has too few sessions it follows the measured "can't tell yet". */}
                   {!(answer.state.kind === "cant-tell" && answer.state.why.kind === "no-sessions") && <Answer d={answer} ctx={ctx} />}
-                  {firstLookApplies(answer) && <ParamedicFirstLook key={round} measured={firstLookMeasured(answer, ctx.game)} games={games} onAsking={setLookAsking} />}
+                  {firstLookApplies(answer) && <ParamedicFirstLook key={round} measured={firstLookMeasured(answer, ctx.game)} games={games} onAsking={setLookAsking} drifts={drifts} changes={changes} />}
                   {answer.mixed_sessions.length > 0 && (
                     <p className="gl-para-note" data-testid="paramedic-mixed">
                       {t("paramedic.problem.mixed", { count: answer.mixed_sessions.length, dates: answer.mixed_sessions.map((s) => dates.day(s)).join(", ") })}
